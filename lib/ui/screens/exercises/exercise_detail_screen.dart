@@ -346,11 +346,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(
-                Icons.error_outline,
-                color: Colors.orange,
-                size: 32,
-              ),
+              Icon(Icons.error_outline, color: Colors.orange, size: 32),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
