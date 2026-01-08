@@ -12,9 +12,6 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: go_hard_app
 
     steps:
     - name: Checkout code
@@ -54,7 +51,6 @@ jobs:
     needs: test
     defaults:
       run:
-        working-directory: go_hard_app
 
     steps:
     - name: Checkout code
@@ -92,7 +88,6 @@ jobs:
     needs: test
     defaults:
       run:
-        working-directory: go_hard_app
 
     steps:
     - name: Checkout code
@@ -130,7 +125,6 @@ jobs:
     needs: test
     defaults:
       run:
-        working-directory: go_hard_app
 
     steps:
     - name: Checkout code
