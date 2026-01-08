@@ -62,77 +62,58 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text('Exercise Details'), elevation: 0),
       body: Consumer<ExerciseDetailProvider>(
         builder: (context, provider, child) {
-          return CustomScrollView(
-            slivers: [
-              // App bar with video background
-              SliverAppBar(
-                expandedHeight: 250,
-                pinned: true,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: _buildHeaderVideo(provider.exercise),
-                ),
-              ),
+          // Loading state
+          if (provider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-              // Content
-              if (provider.isLoading)
-                const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (provider.errorMessage != null &&
-                  provider.errorMessage!.isNotEmpty)
-                SliverFillRemaining(
-                  child: _buildErrorState(provider.errorMessage!),
-                )
-              else if (provider.exercise != null)
-                _buildExerciseContent(provider.exercise!),
-            ],
-          );
+          // Error state
+          if (provider.errorMessage != null &&
+              provider.errorMessage!.isNotEmpty) {
+            return _buildErrorState(provider.errorMessage!);
+          }
+
+          // Content
+          if (provider.exercise != null) {
+            return _buildExerciseContent(provider.exercise!);
+          }
+
+          return const SizedBox.shrink();
         },
       ),
     );
   }
 
-  Widget _buildHeaderVideo(ExerciseTemplate? exercise) {
-    if (exercise?.videoUrl != null && exercise!.videoUrl!.isNotEmpty) {
-      // Initialize controller if needed
-      _initializeVideoController(exercise.videoUrl!);
+  Widget _buildYouTubePlayer(String videoUrl) {
+    // Initialize controller if needed
+    _initializeVideoController(videoUrl);
 
-      if (_youtubeController != null) {
-        return YoutubePlayer(
-          controller: _youtubeController!,
-          showVideoProgressIndicator: true,
-          progressIndicatorColor: Theme.of(context).colorScheme.primary,
-          bottomActions: [
-            CurrentPosition(),
-            ProgressBar(
-              isExpanded: true,
-              colors: ProgressBarColors(
-                playedColor: Theme.of(context).colorScheme.primary,
-                handleColor: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            RemainingDuration(),
-            FullScreenButton(),
-          ],
-        );
-      }
+    if (_youtubeController == null) {
+      return const SizedBox.shrink();
     }
 
-    // Placeholder when no video is available
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
-          ],
-        ),
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: YoutubePlayer(
+        controller: _youtubeController!,
+        showVideoProgressIndicator: true,
+        progressIndicatorColor: Theme.of(context).colorScheme.primary,
+        bottomActions: [
+          CurrentPosition(),
+          ProgressBar(
+            isExpanded: true,
+            colors: ProgressBarColors(
+              playedColor: Theme.of(context).colorScheme.primary,
+              handleColor: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          RemainingDuration(),
+          FullScreenButton(),
+        ],
       ),
-      child: const Icon(Icons.fitness_center, size: 80, color: Colors.white),
     );
   }
 
@@ -170,82 +151,92 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
   }
 
   Widget _buildExerciseContent(ExerciseTemplate exercise) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Exercise Name
-            Text(
-              exercise.name,
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Video player at the top (if available)
+          if (exercise.videoUrl != null && exercise.videoUrl!.isNotEmpty)
+            _buildYouTubePlayer(exercise.videoUrl!),
 
-            // Badges
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+          // Content with padding
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (exercise.category != null)
-                  CategoryBadge(category: exercise.category),
-                if (exercise.muscleGroup != null)
-                  _buildInfoBadge(
-                    exercise.muscleGroup!,
-                    Colors.blue,
-                    Icons.accessibility_new,
+                // Exercise Name
+                Text(
+                  exercise.name,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
-                if (exercise.equipment != null)
-                  _buildInfoBadge(
-                    exercise.equipment!,
-                    Colors.purple,
-                    Icons.fitness_center,
+                ),
+                const SizedBox(height: 16),
+
+                // Badges
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (exercise.category != null)
+                      CategoryBadge(category: exercise.category),
+                    if (exercise.muscleGroup != null)
+                      _buildInfoBadge(
+                        exercise.muscleGroup!,
+                        Colors.blue,
+                        Icons.accessibility_new,
+                      ),
+                    if (exercise.equipment != null)
+                      _buildInfoBadge(
+                        exercise.equipment!,
+                        Colors.purple,
+                        Icons.fitness_center,
+                      ),
+                    if (exercise.difficulty != null)
+                      _buildInfoBadge(
+                        exercise.difficulty!,
+                        _getDifficultyColor(exercise.difficulty!),
+                        _getDifficultyIcon(exercise.difficulty!),
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                // Description
+                if (exercise.description != null &&
+                    exercise.description!.isNotEmpty) ...[
+                  Text(
+                    'Description',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                if (exercise.difficulty != null)
-                  _buildInfoBadge(
-                    exercise.difficulty!,
-                    _getDifficultyColor(exercise.difficulty!),
-                    _getDifficultyIcon(exercise.difficulty!),
+                  const SizedBox(height: 8),
+                  Text(
+                    exercise.description!,
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
+                  const SizedBox(height: 24),
+                ],
+
+                // Instructions
+                if (exercise.instructions != null &&
+                    exercise.instructions!.isNotEmpty) ...[
+                  Text(
+                    'Instructions',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._buildInstructionsList(exercise.instructions!),
+                ],
               ],
             ),
-
-            const SizedBox(height: 24),
-
-            // Description
-            if (exercise.description != null &&
-                exercise.description!.isNotEmpty) ...[
-              Text(
-                'Description',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                exercise.description!,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            // Instructions
-            if (exercise.instructions != null &&
-                exercise.instructions!.isNotEmpty) ...[
-              Text(
-                'Instructions',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              ..._buildInstructionsList(exercise.instructions!),
-            ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
