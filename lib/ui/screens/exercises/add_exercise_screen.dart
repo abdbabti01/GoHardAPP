@@ -236,9 +236,9 @@ class _AddExerciseScreenState extends State<AddExerciseScreen> {
                   color: _getDifficultyColor(difficulty).withValues(alpha: 0.1),
                   border: Border(
                     bottom: BorderSide(
-                      color: _getDifficultyColor(difficulty).withValues(
-                        alpha: 0.2,
-                      ),
+                      color: _getDifficultyColor(
+                        difficulty,
+                      ).withValues(alpha: 0.2),
                       width: 1,
                     ),
                   ),
@@ -291,25 +291,29 @@ class _AddExerciseScreenState extends State<AddExerciseScreen> {
             AnimatedSize(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
-              child: isExpanded
-                  ? Column(
-                      children: exercises.map((exercise) {
-                        final isSelected = _selectedExerciseIds.contains(
-                          exercise.id,
-                        );
+              child:
+                  isExpanded
+                      ? Column(
+                        children:
+                            exercises.map((exercise) {
+                              final isSelected = _selectedExerciseIds.contains(
+                                exercise.id,
+                              );
 
-                        return ExerciseCard(
-                          exercise: exercise,
-                          onTap: () => _toggleExerciseSelection(exercise.id),
-                          trailing: Checkbox(
-                            value: isSelected,
-                            onChanged: (_) =>
-                                _toggleExerciseSelection(exercise.id),
-                          ),
-                        );
-                      }).toList(),
-                    )
-                  : const SizedBox.shrink(),
+                              return ExerciseCard(
+                                exercise: exercise,
+                                onTap:
+                                    () => _toggleExerciseSelection(exercise.id),
+                                trailing: Checkbox(
+                                  value: isSelected,
+                                  onChanged:
+                                      (_) =>
+                                          _toggleExerciseSelection(exercise.id),
+                                ),
+                              );
+                            }).toList(),
+                      )
+                      : const SizedBox.shrink(),
             ),
           ],
         );
