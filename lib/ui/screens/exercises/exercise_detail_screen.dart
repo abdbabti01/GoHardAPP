@@ -36,9 +36,9 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
         builder: (context, provider, child) {
           return CustomScrollView(
             slivers: [
-              // App bar with image background
+              // App bar with video background
               SliverAppBar(
-                expandedHeight: 200,
+                expandedHeight: 250,
                 pinned: true,
                 flexibleSpace: FlexibleSpaceBar(
                   title:
@@ -53,7 +53,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                             ),
                           )
                           : null,
-                  background: _buildHeaderImage(provider.exercise),
+                  background: _buildHeaderVideo(provider.exercise),
                 ),
               ),
 
@@ -76,36 +76,60 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
     );
   }
 
-  Widget _buildHeaderImage(ExerciseTemplate? exercise) {
-    if (exercise?.imageUrl != null && exercise!.imageUrl!.isNotEmpty) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.network(
-            exercise.imageUrl!,
-            fit: BoxFit.cover,
-            errorBuilder:
-                (context, error, stackTrace) => _buildPlaceholderImage(),
+  Widget _buildHeaderVideo(ExerciseTemplate? exercise) {
+    if (exercise?.videoUrl != null && exercise!.videoUrl!.isNotEmpty) {
+      final videoId = YoutubePlayer.convertUrlToId(exercise.videoUrl!);
+
+      if (videoId != null) {
+        final controller = YoutubePlayerController(
+          initialVideoId: videoId,
+          flags: const YoutubePlayerFlags(
+            autoPlay: false,
+            mute: false,
+            enableCaption: true,
+            showLiveFullscreenButton: false,
           ),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.7),
-                ],
+        );
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            YoutubePlayer(
+              controller: controller,
+              showVideoProgressIndicator: true,
+              progressIndicatorColor: Theme.of(context).colorScheme.primary,
+              bottomActions: [
+                CurrentPosition(),
+                ProgressBar(
+                  isExpanded: true,
+                  colors: ProgressBarColors(
+                    playedColor: Theme.of(context).colorScheme.primary,
+                    handleColor: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                RemainingDuration(),
+                FullScreenButton(),
+              ],
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.7),
+                  ],
+                  stops: const [0.6, 1.0],
+                ),
               ),
             ),
-          ),
-        ],
-      );
+          ],
+        );
+      }
     }
-    return _buildPlaceholderImage();
-  }
 
-  Widget _buildPlaceholderImage() {
+    // Placeholder when no video is available
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -219,20 +243,6 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
               ),
               const SizedBox(height: 12),
               ..._buildInstructionsList(exercise.instructions!),
-              const SizedBox(height: 24),
-            ],
-
-            // Video player
-            if (exercise.videoUrl != null && exercise.videoUrl!.isNotEmpty) ...[
-              Text(
-                'Video Tutorial',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              _buildYouTubePlayer(exercise.videoUrl!),
-              const SizedBox(height: 24),
             ],
           ],
         ),
@@ -334,61 +344,5 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       default:
         return Colors.grey;
     }
-  }
-
-  Widget _buildYouTubePlayer(String videoUrl) {
-    // Extract video ID from YouTube URL
-    final videoId = YoutubePlayer.convertUrlToId(videoUrl);
-
-    if (videoId == null) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.orange, size: 32),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Invalid video URL',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final controller = YoutubePlayerController(
-      initialVideoId: videoId,
-      flags: const YoutubePlayerFlags(
-        autoPlay: false,
-        mute: false,
-        enableCaption: true,
-        showLiveFullscreenButton: false,
-      ),
-    );
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: YoutubePlayer(
-        controller: controller,
-        showVideoProgressIndicator: true,
-        progressIndicatorColor: Theme.of(context).colorScheme.primary,
-        bottomActions: [
-          CurrentPosition(),
-          ProgressBar(
-            isExpanded: true,
-            colors: ProgressBarColors(
-              playedColor: Theme.of(context).colorScheme.primary,
-              handleColor: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-          RemainingDuration(),
-          FullScreenButton(),
-        ],
-      ),
-    );
   }
 }
