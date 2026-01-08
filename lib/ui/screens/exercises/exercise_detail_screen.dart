@@ -17,6 +17,9 @@ class ExerciseDetailScreen extends StatefulWidget {
 }
 
 class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
+  YoutubePlayerController? _youtubeController;
+  String? _currentVideoId;
+
   @override
   void initState() {
     super.initState();
@@ -27,6 +30,33 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
     await context.read<ExerciseDetailProvider>().loadExercise(
       widget.exerciseId,
     );
+  }
+
+  void _initializeVideoController(String videoUrl) {
+    final videoId = YoutubePlayer.convertUrlToId(videoUrl);
+
+    // Only create a new controller if the video ID changed
+    if (videoId != null && videoId != _currentVideoId) {
+      // Dispose of the old controller first
+      _youtubeController?.dispose();
+
+      _currentVideoId = videoId;
+      _youtubeController = YoutubePlayerController(
+        initialVideoId: videoId,
+        flags: const YoutubePlayerFlags(
+          autoPlay: false,
+          mute: false,
+          enableCaption: true,
+          showLiveFullscreenButton: false,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _youtubeController?.dispose();
+    super.dispose();
   }
 
   @override
@@ -66,21 +96,12 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
 
   Widget _buildHeaderVideo(ExerciseTemplate? exercise) {
     if (exercise?.videoUrl != null && exercise!.videoUrl!.isNotEmpty) {
-      final videoId = YoutubePlayer.convertUrlToId(exercise.videoUrl!);
+      // Initialize controller if needed
+      _initializeVideoController(exercise.videoUrl!);
 
-      if (videoId != null) {
-        final controller = YoutubePlayerController(
-          initialVideoId: videoId,
-          flags: const YoutubePlayerFlags(
-            autoPlay: false,
-            mute: false,
-            enableCaption: true,
-            showLiveFullscreenButton: false,
-          ),
-        );
-
+      if (_youtubeController != null) {
         return YoutubePlayer(
-          controller: controller,
+          controller: _youtubeController!,
           showVideoProgressIndicator: true,
           progressIndicatorColor: Theme.of(context).colorScheme.primary,
           bottomActions: [
