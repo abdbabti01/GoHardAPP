@@ -66,8 +66,188 @@ class Goal {
 
   Map<String, dynamic> toJson() => _$GoalToJson(this);
 
-  double get progressPercentage =>
-      targetValue > 0 ? (currentValue / targetValue * 100) : 0;
+  /// Determine if this is a decrease goal (lower is better) or increase goal (higher is better)
+  bool get isDecreaseGoal {
+    final type = goalType.toLowerCase();
+    return type.contains('weight') ||
+        type.contains('bodyfat') ||
+        type.contains('fat');
+  }
+
+  /// Get the starting value (first recorded value or current value at creation)
+  double get startValue {
+    // If we have progress history, get the earliest value
+    if (progressHistory != null && progressHistory!.isNotEmpty) {
+      final sorted =
+          progressHistory!.toList()
+            ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
+      return sorted.first.value;
+    }
+    // Otherwise, for decrease goals we start at current value
+    // For increase goals, we start at 0 or current value
+    return currentValue;
+  }
+
+  /// Calculate progress percentage correctly for both increase and decrease goals
+  double get progressPercentage {
+    if (isDecreaseGoal) {
+      // For weight loss: (start - current) / (start - target) * 100
+      // Example: Start 190, Current 180, Target 170
+      // Progress: (190 - 180) / (190 - 170) = 10 / 20 = 50%
+      final totalToLose = startValue - targetValue;
+      if (totalToLose <= 0) return 0;
+
+      final lostSoFar = startValue - currentValue;
+      return (lostSoFar / totalToLose * 100).clamp(0, 100);
+    } else {
+      // For increase goals: current / target * 100
+      // Example: Current 15, Target 20 = 75%
+      if (targetValue <= 0) return 0;
+      return (currentValue / targetValue * 100).clamp(0, 100);
+    }
+  }
+
+  /// Get progress description (e.g., "Lost 10 / 20 lb" or "15 / 20 workouts")
+  String getProgressDescription() {
+    if (isDecreaseGoal) {
+      final lost = startValue - currentValue;
+      final totalToLose = startValue - targetValue;
+      return 'Lost ${lost.toStringAsFixed(1)} / ${totalToLose.toStringAsFixed(1)} ${unit ?? ''}';
+    } else {
+      return '${currentValue.toStringAsFixed(1)} / ${targetValue.toStringAsFixed(1)} ${unit ?? ''}';
+    }
+  }
+
+  /// Get suggested increment for quick actions based on goal type and unit
+  List<double> get suggestedIncrements {
+    if (isDecreaseGoal) {
+      // For weight loss, suggest decrements
+      if (unit?.toLowerCase().contains('lb') ?? false) {
+        return [-0.5, -1, -2]; // Lose 0.5, 1, or 2 lbs
+      } else if (unit?.toLowerCase().contains('kg') ?? false) {
+        return [-0.2, -0.5, -1]; // Lose 0.2, 0.5, or 1 kg
+      } else {
+        return [-1, -2, -5]; // Generic decrements
+      }
+    } else {
+      // For increase goals
+      if (goalType.toLowerCase().contains('frequency') ||
+          (unit?.toLowerCase().contains('workout') ?? false)) {
+        return [1, 2, 3]; // Add 1, 2, or 3 workouts
+      } else {
+        return [1, 5, 10]; // Generic increments
+      }
+    }
+  }
+
+  /// Calculate progress rate (e.g., lbs/week, workouts/week)
+  /// Returns null if not enough data to calculate rate
+  double? getProgressRate() {
+    if (progressHistory == null || progressHistory!.length < 2) {
+      return null;
+    }
+
+    // Sort by date
+    final sorted =
+        progressHistory!.toList()
+          ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
+
+    // Get first and most recent progress entries
+    final firstEntry = sorted.first;
+    final lastEntry = sorted.last;
+
+    // Calculate time difference in weeks
+    final daysDiff =
+        lastEntry.recordedAt.difference(firstEntry.recordedAt).inDays;
+    if (daysDiff == 0) return null;
+    final weeksDiff = daysDiff / 7.0;
+
+    // Calculate value change
+    final valueDiff = lastEntry.value - firstEntry.value;
+
+    // Return rate per week
+    return valueDiff / weeksDiff;
+  }
+
+  /// Get smart suggestion based on progress trends
+  String? getProgressSuggestion() {
+    final rate = getProgressRate();
+    if (rate == null) {
+      // Not enough data yet
+      return 'Keep logging your progress to see personalized insights!';
+    }
+
+    final progress = progressPercentage;
+
+    // Calculate expected completion based on current rate
+    final daysElapsed = DateTime.now().difference(startDate).inDays;
+    if (daysElapsed == 0) return null;
+
+    if (isDecreaseGoal) {
+      // Weight loss suggestions
+      final remaining = currentValue - targetValue;
+
+      if (rate < 0) {
+        // Making progress (losing weight)
+        final absRate = rate.abs();
+        final weeklyRate = absRate;
+
+        if (progress >= 75) {
+          return '🎉 Amazing! You\'re ${progress.toStringAsFixed(0)}% there. Keep up the great work!';
+        } else if (weeklyRate > 0) {
+          final weeksRemaining = (remaining / weeklyRate).ceil();
+
+          if (targetDate != null) {
+            final targetWeeks =
+                targetDate!.difference(DateTime.now()).inDays / 7;
+
+            if (weeksRemaining <= targetWeeks * 1.1) {
+              return '✅ Great progress! Losing ${weeklyRate.toStringAsFixed(1)} ${unit ?? ''}/week. On track to reach your goal!';
+            } else {
+              final neededRate = remaining / targetWeeks;
+              return '💪 You\'re losing ${weeklyRate.toStringAsFixed(1)} ${unit ?? ''}/week. Try for ${neededRate.toStringAsFixed(1)} ${unit ?? ''}/week to hit your target date!';
+            }
+          } else {
+            return '📈 Steady progress! Losing ${weeklyRate.toStringAsFixed(1)} ${unit ?? ''}/week. About $weeksRemaining weeks to go!';
+          }
+        }
+      } else if (rate > 0) {
+        // Gaining weight (not good for weight loss goal)
+        return '⚠️ Weight is trending up. Review your nutrition and stay consistent with your plan!';
+      } else {
+        return '💡 Weight is stable. Consider adjusting your calorie intake to restart progress!';
+      }
+    } else {
+      // Increase goal suggestions (workout frequency, volume, etc.)
+      if (rate > 0) {
+        // Making progress
+        if (progress >= 75) {
+          return '🔥 Fantastic! You\'re ${progress.toStringAsFixed(0)}% complete. Almost there!';
+        } else if (rate > 0) {
+          final remaining = targetValue - currentValue;
+          final weeksRemaining = (remaining / rate).ceil();
+
+          if (targetDate != null) {
+            final targetWeeks =
+                targetDate!.difference(DateTime.now()).inDays / 7;
+
+            if (weeksRemaining <= targetWeeks * 1.1) {
+              return '✅ Excellent pace! Adding ${rate.toStringAsFixed(1)} ${unit ?? ''}/week. Right on track!';
+            } else {
+              final neededRate = remaining / targetWeeks;
+              return '💪 Currently ${rate.toStringAsFixed(1)} ${unit ?? ''}/week. Aim for ${neededRate.toStringAsFixed(1)} ${unit ?? ''}/week to hit your deadline!';
+            }
+          } else {
+            return '📈 Great momentum! Adding ${rate.toStringAsFixed(1)} ${unit ?? ''}/week. Keep it up!';
+          }
+        }
+      } else {
+        return '💡 Progress has slowed. Stay consistent and you\'ll get back on track!';
+      }
+    }
+
+    return null;
+  }
 
   Goal copyWith({
     int? id,

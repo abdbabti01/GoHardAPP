@@ -21,6 +21,10 @@ class NotificationService {
   static const int morningReminderId = 1;
   static const int eveningReminderId = 2;
 
+  /// Goal reminders start at ID 100
+  /// Each goal uses its goalId + 100 as the notification ID
+  static const int goalReminderBaseId = 100;
+
   /// Initialize notification service
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -127,6 +131,167 @@ class NotificationService {
       title: '🔥 Don\'t Break Your Streak!',
       body: 'You haven\'t worked out today. Even 15 minutes counts!',
       payload: 'evening_reminder',
+    );
+  }
+
+  /// Schedule goal progress reminder
+  /// Frequency: 'daily', 'every2days', 'every3days', 'weekly', 'biweekly'
+  Future<void> scheduleGoalReminder({
+    required int goalId,
+    required String goalName,
+    required String goalType,
+    required String frequency,
+    int hour = 18, // Default to 6 PM
+    int minute = 0,
+  }) async {
+    try {
+      final notificationId = goalReminderBaseId + goalId;
+      final title = '📊 Goal Progress Update';
+      final body = 'Time to log your progress for: $goalName';
+
+      // Parse frequency to days interval
+      final daysInterval = _parseFrequencyToDays(frequency);
+
+      if (daysInterval == 1) {
+        // Daily reminder - use matchDateTimeComponents
+        await _scheduleDailyNotification(
+          id: notificationId,
+          hour: hour,
+          minute: minute,
+          title: title,
+          body: body,
+          payload: 'goal_reminder:$goalId',
+        );
+      } else {
+        // Custom interval (every N days)
+        await _schedulePeriodicGoalNotification(
+          id: notificationId,
+          hour: hour,
+          minute: minute,
+          daysInterval: daysInterval,
+          title: title,
+          body: body,
+          payload: 'goal_reminder:$goalId',
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to schedule goal reminder: $e');
+    }
+  }
+
+  /// Parse frequency string to days interval
+  int _parseFrequencyToDays(String frequency) {
+    switch (frequency.toLowerCase()) {
+      case 'daily':
+        return 1;
+      case 'every2days':
+        return 2;
+      case 'every3days':
+        return 3;
+      case 'weekly':
+        return 7;
+      case 'biweekly':
+        return 14;
+      default:
+        return 7; // Default to weekly
+    }
+  }
+
+  /// Schedule a periodic notification for goals (every N days)
+  Future<void> _schedulePeriodicGoalNotification({
+    required int id,
+    required int hour,
+    required int minute,
+    required int daysInterval,
+    required String title,
+    required String body,
+    required String payload,
+  }) async {
+    try {
+      // Cancel existing notification with this ID
+      await _notifications.cancel(id);
+
+      // Create notification time for today
+      final now = tz.TZDateTime.now(tz.local);
+      var scheduledDate = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        hour,
+        minute,
+      );
+
+      // If the time has passed today, schedule for next interval
+      if (scheduledDate.isBefore(now)) {
+        scheduledDate = scheduledDate.add(Duration(days: daysInterval));
+      }
+
+      // Android notification details
+      const androidDetails = AndroidNotificationDetails(
+        'goal_progress_reminders',
+        'Goal Progress Reminders',
+        channelDescription: 'Reminders to update your fitness goals progress',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      );
+
+      // iOS notification details
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      // Schedule the notification
+      await _notifications.zonedSchedule(
+        id,
+        title,
+        body,
+        scheduledDate,
+        details,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+
+      // Note: For periodic notifications (every N days where N > 1),
+      // we'll need to reschedule after each notification fires.
+      // This is handled by the notification tap callback.
+    } catch (e) {
+      debugPrint('Failed to schedule periodic goal notification: $e');
+    }
+  }
+
+  /// Cancel goal reminder
+  Future<void> cancelGoalReminder(int goalId) async {
+    final notificationId = goalReminderBaseId + goalId;
+    await _notifications.cancel(notificationId);
+  }
+
+  /// Update goal reminder (cancel old and schedule new)
+  Future<void> updateGoalReminder({
+    required int goalId,
+    required String goalName,
+    required String goalType,
+    required String frequency,
+    int hour = 18,
+    int minute = 0,
+  }) async {
+    await cancelGoalReminder(goalId);
+    await scheduleGoalReminder(
+      goalId: goalId,
+      goalName: goalName,
+      goalType: goalType,
+      frequency: frequency,
+      hour: hour,
+      minute: minute,
     );
   }
 

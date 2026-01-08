@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'dart:math' as math;
 import '../../../providers/goals_provider.dart';
 import '../../../data/models/goal.dart';
 import '../../../data/models/goal_progress.dart';
+import '../../../core/services/notification_service.dart';
+import '../../../core/services/goal_reminder_preferences.dart';
 
 class GoalsScreen extends StatefulWidget {
   const GoalsScreen({super.key});
@@ -186,7 +187,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${goal.currentValue.toStringAsFixed(1)} / ${goal.targetValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
+                        goal.getProgressDescription(),
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey.shade600,
@@ -200,6 +201,16 @@ class _GoalsScreenState extends State<GoalsScreen> {
                   icon: Icon(Icons.more_vert, color: Colors.grey.shade600),
                   itemBuilder:
                       (context) => [
+                        const PopupMenuItem(
+                          value: 'reminder',
+                          child: Row(
+                            children: [
+                              Icon(Icons.notifications_outlined, size: 20),
+                              SizedBox(width: 12),
+                              Text('Set Reminder'),
+                            ],
+                          ),
+                        ),
                         const PopupMenuItem(
                           value: 'complete',
                           child: Row(
@@ -282,22 +293,20 @@ class _GoalsScreenState extends State<GoalsScreen> {
             // Quick Action Buttons
             Row(
               children: [
-                Expanded(
-                  child: _buildQuickActionButton(
-                    '+1',
-                    goalColor,
-                    () => _quickUpdateProgress(goal, 1),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildQuickActionButton(
-                    '+5',
-                    goalColor,
-                    () => _quickUpdateProgress(goal, 5),
-                  ),
-                ),
-                const SizedBox(width: 8),
+                ...goal.suggestedIncrements.take(2).map((increment) {
+                  final label =
+                      increment > 0 ? '+${increment.abs()}' : '$increment';
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _buildQuickActionButton(
+                        label,
+                        goalColor,
+                        () => _quickUpdateProgress(goal, increment),
+                      ),
+                    ),
+                  );
+                }).toList(),
                 Expanded(
                   child: _buildQuickActionButton(
                     'Custom',
@@ -307,6 +316,46 @@ class _GoalsScreenState extends State<GoalsScreen> {
                 ),
               ],
             ),
+
+            // AI Suggestion card
+            if (goal.getProgressSuggestion() != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      goalColor.withValues(alpha: 0.1),
+                      goalColor.withValues(alpha: 0.05),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: goalColor.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.lightbulb_outline, size: 20, color: goalColor),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        goal.getProgressSuggestion()!,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade800,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // Target date if set
             if (goal.targetDate != null) ...[
@@ -372,7 +421,6 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
   Widget _buildCompletedGoalCard(Goal goal) {
     final goalColor = Colors.green;
-    final goalIcon = _getGoalIcon(goal.goalType);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -539,7 +587,9 @@ class _GoalsScreenState extends State<GoalsScreen> {
   void _handleGoalAction(Goal goal, String action) async {
     final provider = context.read<GoalsProvider>();
 
-    if (action == 'complete') {
+    if (action == 'reminder') {
+      await _showReminderDialog(goal);
+    } else if (action == 'complete') {
       final confirmed = await _showConfirmDialog(
         'Complete Goal',
         'Mark this goal as completed?',
@@ -647,6 +697,230 @@ class _GoalsScreenState extends State<GoalsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showReminderDialog(Goal goal) async {
+    final prefs = GoalReminderPreferences();
+    final notificationService = NotificationService();
+
+    // Load current reminder settings
+    final currentSetting = await prefs.getReminderPreference(goal.id);
+
+    // Dialog state
+    bool reminderEnabled = currentSetting?.enabled ?? false;
+    String selectedFrequency = currentSetting?.frequency ?? 'weekly';
+    TimeOfDay selectedTime =
+        currentSetting != null
+            ? TimeOfDay(
+              hour: currentSetting.hour,
+              minute: currentSetting.minute,
+            )
+            : const TimeOfDay(hour: 18, minute: 0);
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setState) => AlertDialog(
+                  title: Row(
+                    children: [
+                      const Icon(Icons.notifications_active, size: 24),
+                      const SizedBox(width: 12),
+                      const Expanded(child: Text('Progress Reminder')),
+                    ],
+                  ),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Goal name
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            goal.goalType,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Enable/Disable switch
+                        SwitchListTile(
+                          title: const Text('Enable Reminder'),
+                          subtitle: const Text(
+                            'Get notified to update your progress',
+                          ),
+                          value: reminderEnabled,
+                          onChanged: (value) {
+                            setState(() {
+                              reminderEnabled = value;
+                            });
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Frequency selection (only shown when enabled)
+                        if (reminderEnabled) ...[
+                          const Text(
+                            'Frequency',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ...[
+                            'daily',
+                            'every2days',
+                            'every3days',
+                            'weekly',
+                            'biweekly',
+                          ].map(
+                            (freq) => RadioListTile<String>(
+                              title: Text(_getFrequencyDisplay(freq)),
+                              value: freq,
+                              groupValue: selectedFrequency,
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    selectedFrequency = value;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Time selection
+                          const Text(
+                            'Time',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ListTile(
+                            leading: const Icon(Icons.access_time),
+                            title: Text(
+                              selectedTime.format(context),
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                            trailing: const Icon(Icons.edit),
+                            onTap: () async {
+                              final time = await showTimePicker(
+                                context: context,
+                                initialTime: selectedTime,
+                              );
+                              if (time != null) {
+                                setState(() {
+                                  selectedTime = time;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        // Save reminder preference
+                        await prefs.saveReminderPreference(
+                          goalId: goal.id,
+                          frequency: selectedFrequency,
+                          hour: selectedTime.hour,
+                          minute: selectedTime.minute,
+                          enabled: reminderEnabled,
+                        );
+
+                        if (reminderEnabled) {
+                          // Request notification permissions if not granted
+                          final hasPermission =
+                              await notificationService.requestPermissions();
+                          if (!hasPermission && mounted) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Notification permissions not granted. Please enable in settings.',
+                                ),
+                              ),
+                            );
+                            Navigator.pop(context);
+                            return;
+                          }
+
+                          // Schedule the reminder
+                          await notificationService.scheduleGoalReminder(
+                            goalId: goal.id,
+                            goalName: goal.goalType,
+                            goalType: goal.goalType,
+                            frequency: selectedFrequency,
+                            hour: selectedTime.hour,
+                            minute: selectedTime.minute,
+                          );
+
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Reminder set: ${_getFrequencyDisplay(selectedFrequency)} at ${selectedTime.format(context)}',
+                              ),
+                            ),
+                          );
+                        } else {
+                          // Cancel the reminder
+                          await notificationService.cancelGoalReminder(goal.id);
+
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Reminder disabled')),
+                          );
+                        }
+
+                        if (!mounted) return;
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Save'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
+  String _getFrequencyDisplay(String frequency) {
+    switch (frequency.toLowerCase()) {
+      case 'daily':
+        return 'Daily';
+      case 'every2days':
+        return 'Every 2 days';
+      case 'every3days':
+        return 'Every 3 days';
+      case 'weekly':
+        return 'Weekly';
+      case 'biweekly':
+        return 'Every 2 weeks';
+      default:
+        return 'Weekly';
+    }
   }
 }
 
