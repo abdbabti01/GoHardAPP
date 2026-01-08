@@ -73,6 +73,7 @@ dependencies:
 
   # YouTube Player for Exercise Videos
   youtube_player_flutter: ^9.1.1
+  url_launcher: ^6.2.2
 
   # Audio Player for Workout Music
   just_audio: ^0.9.36

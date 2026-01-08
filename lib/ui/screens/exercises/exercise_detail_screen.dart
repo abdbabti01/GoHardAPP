@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../providers/exercise_detail_provider.dart';
 import '../../../data/models/exercise_template.dart';
 import '../../widgets/exercises/category_badge.dart';
@@ -19,6 +20,7 @@ class ExerciseDetailScreen extends StatefulWidget {
 class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
   YoutubePlayerController? _youtubeController;
   String? _currentVideoId;
+  bool _hasPlaybackError = false;
 
   @override
   void initState() {
@@ -41,6 +43,8 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       _youtubeController?.dispose();
 
       _currentVideoId = videoId;
+      _hasPlaybackError = false;
+
       _youtubeController = YoutubePlayerController(
         initialVideoId: videoId,
         flags: const YoutubePlayerFlags(
@@ -50,6 +54,13 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
           showLiveFullscreenButton: false,
         ),
       );
+
+      // Listen for errors (playback restrictions, etc.)
+      _youtubeController!.addListener(() {
+        if (_youtubeController!.value.hasError && mounted) {
+          setState(() => _hasPlaybackError = true);
+        }
+      });
     }
   }
 
@@ -95,12 +106,21 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       return const SizedBox.shrink();
     }
 
+    // Show fallback UI if there's a playback error
+    if (_hasPlaybackError) {
+      return _buildVideoFallback(videoUrl);
+    }
+
     return AspectRatio(
       aspectRatio: 16 / 9,
       child: YoutubePlayer(
         controller: _youtubeController!,
         showVideoProgressIndicator: true,
         progressIndicatorColor: Theme.of(context).colorScheme.primary,
+        onReady: () {
+          setState(() => _hasPlaybackError = false);
+        },
+        onEnded: (_) {},
         bottomActions: [
           CurrentPosition(),
           ProgressBar(
@@ -115,6 +135,69 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildVideoFallback(String videoUrl) {
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Card(
+        margin: EdgeInsets.zero,
+        color: Colors.grey.shade100,
+        child: InkWell(
+          onTap: () => _openInYouTube(videoUrl),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.play_circle_outline,
+                  size: 64,
+                  color: Colors.red.shade700,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Video Playback Restricted',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'The video owner has disabled playback on external apps',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => _openInYouTube(videoUrl),
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Open in YouTube'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openInYouTube(String videoUrl) async {
+    final uri = Uri.parse(videoUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not open YouTube')));
+      }
+    }
   }
 
   Widget _buildErrorState(String errorMessage) {
