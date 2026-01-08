@@ -41,18 +41,6 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                 expandedHeight: 250,
                 pinned: true,
                 flexibleSpace: FlexibleSpaceBar(
-                  title:
-                      provider.exercise != null
-                          ? Text(
-                            provider.exercise!.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              shadows: [
-                                Shadow(blurRadius: 8.0, color: Colors.black45),
-                              ],
-                            ),
-                          )
-                          : null,
                   background: _buildHeaderVideo(provider.exercise),
                 ),
               ),
@@ -91,39 +79,21 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
           ),
         );
 
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            YoutubePlayer(
-              controller: controller,
-              showVideoProgressIndicator: true,
-              progressIndicatorColor: Theme.of(context).colorScheme.primary,
-              bottomActions: [
-                CurrentPosition(),
-                ProgressBar(
-                  isExpanded: true,
-                  colors: ProgressBarColors(
-                    playedColor: Theme.of(context).colorScheme.primary,
-                    handleColor: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                RemainingDuration(),
-                FullScreenButton(),
-              ],
-            ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.7),
-                  ],
-                  stops: const [0.6, 1.0],
-                ),
+        return YoutubePlayer(
+          controller: controller,
+          showVideoProgressIndicator: true,
+          progressIndicatorColor: Theme.of(context).colorScheme.primary,
+          bottomActions: [
+            CurrentPosition(),
+            ProgressBar(
+              isExpanded: true,
+              colors: ProgressBarColors(
+                playedColor: Theme.of(context).colorScheme.primary,
+                handleColor: Theme.of(context).colorScheme.primary,
               ),
             ),
+            RemainingDuration(),
+            FullScreenButton(),
           ],
         );
       }
@@ -185,6 +155,15 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Exercise Name
+            Text(
+              exercise.name,
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+
             // Badges
             Wrap(
               spacing: 8,
