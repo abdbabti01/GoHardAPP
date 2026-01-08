@@ -31,15 +31,17 @@ enum Gender {
   }
 
   static Gender? fromString(String? value) {
-    if (value == null) return null;
-    switch (value) {
-      case 'Male':
+    if (value == null || value.isEmpty) return null;
+    final normalized = value.trim().toLowerCase();
+    switch (normalized) {
+      case 'male':
         return Gender.male;
-      case 'Female':
+      case 'female':
         return Gender.female;
-      case 'Other':
+      case 'other':
         return Gender.other;
-      case 'PreferNotToSay':
+      case 'prefernottosay':
+      case 'prefer not to say':
         return Gender.preferNotToSay;
       default:
         return null;
@@ -80,15 +82,16 @@ enum ExperienceLevel {
   }
 
   static ExperienceLevel? fromString(String? value) {
-    if (value == null) return null;
-    switch (value) {
-      case 'Beginner':
+    if (value == null || value.isEmpty) return null;
+    final normalized = value.trim().toLowerCase();
+    switch (normalized) {
+      case 'beginner':
         return ExperienceLevel.beginner;
-      case 'Intermediate':
+      case 'intermediate':
         return ExperienceLevel.intermediate;
-      case 'Advanced':
+      case 'advanced':
         return ExperienceLevel.advanced;
-      case 'Expert':
+      case 'expert':
         return ExperienceLevel.expert;
       default:
         return null;
@@ -134,17 +137,18 @@ enum FitnessGoal {
   }
 
   static FitnessGoal? fromString(String? value) {
-    if (value == null) return null;
-    switch (value) {
-      case 'WeightLoss':
+    if (value == null || value.isEmpty) return null;
+    final normalized = value.trim().toLowerCase().replaceAll(' ', '');
+    switch (normalized) {
+      case 'weightloss':
         return FitnessGoal.weightLoss;
-      case 'MuscleGain':
+      case 'musclegain':
         return FitnessGoal.muscleGain;
-      case 'Strength':
+      case 'strength':
         return FitnessGoal.strength;
-      case 'Endurance':
+      case 'endurance':
         return FitnessGoal.endurance;
-      case 'GeneralFitness':
+      case 'generalfitness':
         return FitnessGoal.generalFitness;
       default:
         return null;
@@ -175,7 +179,9 @@ enum UnitPreference {
   }
 
   static UnitPreference fromString(String? value) {
-    if (value == 'Imperial') return UnitPreference.imperial;
+    if (value == null || value.isEmpty) return UnitPreference.metric;
+    final normalized = value.trim().toLowerCase();
+    if (normalized == 'imperial') return UnitPreference.imperial;
     return UnitPreference.metric; // default
   }
 }
