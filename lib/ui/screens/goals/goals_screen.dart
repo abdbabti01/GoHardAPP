@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'dart:math' as math;
 import '../../../providers/goals_provider.dart';
 import '../../../data/models/goal.dart';
 import '../../../data/models/goal_progress.dart';
@@ -12,208 +13,326 @@ class GoalsScreen extends StatefulWidget {
   State<GoalsScreen> createState() => _GoalsScreenState();
 }
 
-class _GoalsScreenState extends State<GoalsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
+class _GoalsScreenState extends State<GoalsScreen> {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-
-    // Load goals data
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<GoalsProvider>().loadGoals();
     });
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final provider = context.watch<GoalsProvider>();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Goals'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Active', icon: Icon(Icons.flag)),
-            Tab(text: 'Completed', icon: Icon(Icons.check_circle)),
-          ],
-        ),
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.add),
+            icon: const Icon(Icons.add_circle_outline),
             onPressed: () => _showCreateGoalDialog(context),
             tooltip: 'Create Goal',
           ),
         ],
       ),
-      body:
-          provider.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : provider.errorMessage != null
-              ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.red,
+      body: Consumer<GoalsProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (provider.errorMessage != null) {
+            return _buildErrorState(provider);
+          }
+
+          if (provider.activeGoals.isEmpty && provider.completedGoals.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          return RefreshIndicator(
+            onRefresh: () => provider.loadGoals(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Active Goals Section
+                  if (provider.activeGoals.isNotEmpty) ...[
+                    _buildSectionHeader(
+                      'Active Goals',
+                      provider.activeGoals.length,
                     ),
-                    const SizedBox(height: 16),
-                    Text(provider.errorMessage!),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () => provider.loadGoals(),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
+                    ...provider.activeGoals.map(
+                      (goal) => _buildEnhancedGoalCard(goal),
                     ),
                   ],
-                ),
-              )
-              : TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildGoalsList(provider.activeGoals, true),
-                  _buildGoalsList(provider.completedGoals, false),
+
+                  // Completed Goals Section
+                  if (provider.completedGoals.isNotEmpty) ...[
+                    _buildSectionHeader(
+                      'Completed',
+                      provider.completedGoals.length,
+                    ),
+                    ...provider.completedGoals.map(
+                      (goal) => _buildCompletedGoalCard(goal),
+                    ),
+                  ],
+
+                  const SizedBox(height: 80),
                 ],
               ),
-    );
-  }
-
-  Widget _buildGoalsList(List<Goal> goals, bool isActive) {
-    if (goals.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isActive ? Icons.flag_outlined : Icons.check_circle_outline,
-              size: 64,
-              color: Colors.grey,
             ),
-            const SizedBox(height: 16),
-            Text(
-              isActive ? 'No active goals' : 'No completed goals',
-              style: const TextStyle(fontSize: 18, color: Colors.grey),
-            ),
-            if (isActive) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Tap + to create your first goal',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () => context.read<GoalsProvider>().loadGoals(),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: goals.length,
-        itemBuilder: (context, index) => _buildGoalCard(goals[index]),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildGoalCard(Goal goal) {
-    final progress = goal.progressPercentage.clamp(0.0, 100.0);
-    final dateFormat = DateFormat('MMM d, y');
+  Widget _buildSectionHeader(String title, int count) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              count.toString(),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+  Widget _buildEnhancedGoalCard(Goal goal) {
+    final progress = (goal.progressPercentage / 100).clamp(0.0, 1.0);
+    final goalColor = _getGoalColor(goal.goalType);
+    final goalIcon = _getGoalIcon(goal.goalType);
+    final streak = _calculateStreak(goal);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header with Icon and Menu
+            Row(
+              children: [
+                // Goal Icon with circular progress
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 70,
+                      height: 70,
+                      child: CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 6,
+                        backgroundColor: goalColor.withValues(alpha: 0.15),
+                        valueColor: AlwaysStoppedAnimation(goalColor),
+                      ),
+                    ),
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: goalColor.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(goalIcon, color: goalColor, size: 26),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                // Goal Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _formatGoalType(goal.goalType),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${goal.currentValue.toStringAsFixed(1)} / ${goal.targetValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Menu
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert, color: Colors.grey.shade600),
+                  itemBuilder:
+                      (context) => [
+                        const PopupMenuItem(
+                          value: 'complete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle_outline, size: 20),
+                              SizedBox(width: 12),
+                              Text('Mark Complete'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline,
+                                size: 20,
+                                color: Colors.red,
+                              ),
+                              SizedBox(width: 12),
+                              Text(
+                                'Delete',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                  onSelected: (value) => _handleGoalAction(goal, value),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Progress percentage and streak
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: Text(
-                    _formatGoalType(goal.goalType),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                Text(
+                  '${goal.progressPercentage.toStringAsFixed(0)}% Complete',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: goalColor,
                   ),
                 ),
-                if (goal.isCompleted)
-                  const Icon(Icons.check_circle, color: Colors.green)
-                else
-                  PopupMenuButton<String>(
-                    itemBuilder:
-                        (context) => [
-                          const PopupMenuItem(
-                            value: 'progress',
-                            child: Row(
-                              children: [
-                                Icon(Icons.add_circle_outline),
-                                SizedBox(width: 8),
-                                Text('Add Progress'),
-                              ],
-                            ),
+                if (streak > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('🔥', style: TextStyle(fontSize: 12)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$streak day${streak > 1 ? 's' : ''}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade700,
                           ),
-                          const PopupMenuItem(
-                            value: 'complete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.check_circle_outline),
-                                SizedBox(width: 8),
-                                Text('Mark Complete'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_outline, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text('Delete'),
-                              ],
-                            ),
-                          ),
-                        ],
-                    onSelected: (value) => _handleGoalAction(goal, value),
+                        ),
+                      ],
+                    ),
                   ),
               ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              '${goal.currentValue.toStringAsFixed(1)} / ${goal.targetValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
-              style: const TextStyle(fontSize: 16),
+
+            const SizedBox(height: 16),
+
+            // Quick Action Buttons
+            Row(
+              children: [
+                Expanded(
+                  child: _buildQuickActionButton(
+                    '+1',
+                    goalColor,
+                    () => _quickUpdateProgress(goal, 1),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildQuickActionButton(
+                    '+5',
+                    goalColor,
+                    () => _quickUpdateProgress(goal, 5),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildQuickActionButton(
+                    'Custom',
+                    goalColor,
+                    () => _showAddProgressDialog(goal),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: progress / 100,
-              backgroundColor: Colors.grey[300],
-              valueColor: AlwaysStoppedAnimation<Color>(
-                progress >= 100 ? Colors.green : Colors.blue,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${progress.toStringAsFixed(1)}% Complete',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
+
+            // Target date if set
             if (goal.targetDate != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Target: ${dateFormat.format(goal.targetDate!)}',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    size: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Target: ${DateFormat('MMM d, y').format(goal.targetDate!)}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  const Spacer(),
+                  Text(
+                    _getDaysRemaining(goal.targetDate!),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _getDaysRemainingColor(goal.targetDate!),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -222,38 +341,220 @@ class _GoalsScreenState extends State<GoalsScreen>
     );
   }
 
+  Widget _buildQuickActionButton(
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompletedGoalCard(Goal goal) {
+    final goalColor = Colors.green;
+    final goalIcon = _getGoalIcon(goal.goalType);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: goalColor.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.check_circle, color: goalColor, size: 26),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _formatGoalType(goal.goalType),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    'Completed ${DateFormat('MMM d').format(goal.completedAt!)}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getGoalColor(String goalType) {
+    switch (goalType.toLowerCase()) {
+      case 'weight':
+        return Colors.blue;
+      case 'workoutfrequency':
+        return Colors.purple;
+      case 'volume':
+        return Colors.orange;
+      case 'bodyfat':
+        return Colors.teal;
+      case 'exercise':
+        return Colors.red;
+      default:
+        return Colors.indigo;
+    }
+  }
+
+  IconData _getGoalIcon(String goalType) {
+    switch (goalType.toLowerCase()) {
+      case 'weight':
+        return Icons.monitor_weight;
+      case 'workoutfrequency':
+        return Icons.fitness_center;
+      case 'volume':
+        return Icons.trending_up;
+      case 'bodyfat':
+        return Icons.spa;
+      case 'exercise':
+        return Icons.sports_gymnastics;
+      default:
+        return Icons.flag;
+    }
+  }
+
   String _formatGoalType(String goalType) {
-    // Convert camelCase to Title Case with spaces
     return goalType
         .replaceAllMapped(RegExp(r'([A-Z])'), (match) => ' ${match.group(0)}')
         .trim();
   }
 
+  int _calculateStreak(Goal goal) {
+    // Simple streak calculation based on progress history
+    // In a real implementation, this would check consecutive days with progress
+    if (goal.progressHistory == null || goal.progressHistory!.isEmpty) {
+      return 0;
+    }
+
+    int streak = 0;
+    DateTime now = DateTime.now();
+
+    for (int i = 0; i < 30; i++) {
+      DateTime checkDate = now.subtract(Duration(days: i));
+      bool hasProgress = goal.progressHistory!.any((p) {
+        DateTime progressDate = p.recordedAt;
+        return progressDate.year == checkDate.year &&
+            progressDate.month == checkDate.month &&
+            progressDate.day == checkDate.day;
+      });
+
+      if (hasProgress) {
+        streak++;
+      } else if (i > 0) {
+        break;
+      }
+    }
+
+    return streak;
+  }
+
+  String _getDaysRemaining(DateTime targetDate) {
+    final now = DateTime.now();
+    final difference =
+        targetDate.difference(DateTime(now.year, now.month, now.day)).inDays;
+
+    if (difference < 0) {
+      return '${difference.abs()} days overdue';
+    } else if (difference == 0) {
+      return 'Due today!';
+    } else if (difference == 1) {
+      return '1 day left';
+    } else {
+      return '$difference days left';
+    }
+  }
+
+  Color _getDaysRemainingColor(DateTime targetDate) {
+    final difference = targetDate.difference(DateTime.now()).inDays;
+
+    if (difference < 0) return Colors.red;
+    if (difference <= 7) return Colors.orange;
+    return Colors.grey.shade600;
+  }
+
+  void _quickUpdateProgress(Goal goal, double increment) async {
+    final newValue = goal.currentValue + increment;
+
+    final progress = GoalProgress(
+      id: 0,
+      goalId: goal.id,
+      recordedAt: DateTime.now(),
+      value: newValue,
+      notes: 'Quick update +$increment',
+    );
+
+    final provider = context.read<GoalsProvider>();
+    final success = await provider.addProgress(goal.id, progress);
+
+    if (mounted && success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Progress updated: +$increment ${goal.unit ?? ''}'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
   void _handleGoalAction(Goal goal, String action) async {
     final provider = context.read<GoalsProvider>();
 
-    switch (action) {
-      case 'progress':
-        _showAddProgressDialog(goal);
-        break;
-      case 'complete':
-        final confirmed = await _showConfirmDialog(
-          'Complete Goal',
-          'Mark this goal as completed?',
-        );
-        if (confirmed == true && mounted) {
-          await provider.completeGoal(goal.id);
-        }
-        break;
-      case 'delete':
-        final confirmed = await _showConfirmDialog(
-          'Delete Goal',
-          'Are you sure you want to delete this goal?',
-        );
-        if (confirmed == true && mounted) {
-          await provider.deleteGoal(goal.id);
-        }
-        break;
+    if (action == 'complete') {
+      final confirmed = await _showConfirmDialog(
+        'Complete Goal',
+        'Mark this goal as completed?',
+      );
+      if (confirmed == true && mounted) {
+        await provider.completeGoal(goal.id);
+      }
+    } else if (action == 'delete') {
+      final confirmed = await _showConfirmDialog(
+        'Delete Goal',
+        'Are you sure you want to delete this goal?',
+      );
+      if (confirmed == true && mounted) {
+        await provider.deleteGoal(goal.id);
+      }
     }
   }
 
@@ -291,9 +592,66 @@ class _GoalsScreenState extends State<GoalsScreen>
       builder: (context) => AddProgressDialog(goal: goal),
     );
   }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.flag_outlined, size: 80, color: Colors.grey.shade300),
+            const SizedBox(height: 24),
+            const Text(
+              'No Goals Yet',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Set your first goal and start tracking your progress',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => _showCreateGoalDialog(context),
+              icon: const Icon(Icons.add),
+              label: const Text('Create Goal'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(GoalsProvider provider) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 64, color: Colors.red),
+          const SizedBox(height: 16),
+          Text(provider.errorMessage!),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => provider.loadGoals(),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-/// Dialog for creating a new goal
+// Import the dialog classes from the original goals_screen.dart
+// These remain unchanged
 class CreateGoalDialog extends StatefulWidget {
   const CreateGoalDialog({super.key});
 
@@ -345,8 +703,8 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
     setState(() => _isCreating = true);
 
     final goal = Goal(
-      id: 0, // Will be assigned by backend
-      userId: 0, // Will be assigned by backend
+      id: 0,
+      userId: 0,
       goalType: _goalTypeController.text.trim(),
       targetValue: double.parse(_targetValueController.text),
       currentValue: double.tryParse(_currentValueController.text) ?? 0,
@@ -513,7 +871,6 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
   }
 }
 
-/// Dialog for adding progress to a goal
 class AddProgressDialog extends StatefulWidget {
   final Goal goal;
 

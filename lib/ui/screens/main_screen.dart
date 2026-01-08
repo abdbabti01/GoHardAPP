@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'sessions/sessions_screen.dart';
 import 'exercises/exercises_screen.dart';
+import 'goals/goals_screen.dart';
 import 'chat/chat_list_screen.dart';
 import 'analytics/analytics_screen.dart';
 import 'profile/profile_screen.dart';
 
 /// Main screen wrapper with bottom navigation
-/// Provides 5-tab navigation: Workouts, Exercises, AI Assistant, Analytics, Profile
+/// Provides 6-tab navigation: Workouts, Exercises, Goals, AI Assistant, Analytics, Profile
 class MainScreen extends StatefulWidget {
   final int? initialTab;
 
@@ -23,6 +24,7 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = [
     const SessionsScreen(),
     const ExercisesScreen(),
+    const GoalsScreen(),
     const ChatListScreen(),
     const AnalyticsScreen(),
     const ProfileScreen(),
@@ -51,6 +53,7 @@ class _MainScreenState extends State<MainScreen> {
             label: 'Workouts',
           ),
           BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Exercises'),
+          BottomNavigationBarItem(icon: Icon(Icons.flag), label: 'Goals'),
           BottomNavigationBarItem(
             icon: Icon(Icons.smart_toy),
             label: 'AI Assistant',
