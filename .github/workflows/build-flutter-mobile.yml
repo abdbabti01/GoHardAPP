@@ -76,7 +76,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: android-apk-${{ github.run_number }}
-        path: go_hard_app/build/app/outputs/flutter-apk/app-release.apk
+        path: build/app/outputs/flutter-apk/app-release.apk
         retention-days: 30
 
   # Build Android App Bundle
@@ -111,7 +111,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: android-aab-${{ github.run_number }}
-        path: go_hard_app/build/app/outputs/bundle/release/app-release.aab
+        path: build/app/outputs/bundle/release/app-release.aab
         retention-days: 30
 
   # Build iOS (unsigned)
@@ -147,7 +147,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ios-ipa-unsigned-${{ github.run_number }}
-        path: go_hard_app/build/ios/iphoneos/app-unsigned.ipa
+        path: build/ios/iphoneos/app-unsigned.ipa
         retention-days: 30
 
   # Summary job
