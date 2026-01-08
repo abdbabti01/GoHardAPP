@@ -17,6 +17,7 @@ class ExercisesProvider extends ChangeNotifier {
 
   String? _selectedCategory;
   String? _selectedMuscleGroup;
+  String? _selectedDifficulty;
 
   StreamSubscription<bool>? _connectivitySubscription;
 
@@ -42,6 +43,7 @@ class ExercisesProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   String? get selectedCategory => _selectedCategory;
   String? get selectedMuscleGroup => _selectedMuscleGroup;
+  String? get selectedDifficulty => _selectedDifficulty;
 
   /// Get exercises grouped by difficulty level
   Map<String, List<ExerciseTemplate>> get exercisesByDifficulty {
@@ -100,6 +102,12 @@ class ExercisesProvider extends ChangeNotifier {
     _applyFilters();
   }
 
+  /// Filter by difficulty level
+  void filterByDifficulty(String? difficulty) {
+    _selectedDifficulty = difficulty;
+    _applyFilters();
+  }
+
   /// Apply current filters
   void _applyFilters() {
     _filteredExercises =
@@ -115,7 +123,12 @@ class ExercisesProvider extends ChangeNotifier {
               exercise.muscleGroup?.toLowerCase() ==
                   _selectedMuscleGroup?.toLowerCase();
 
-          return matchesCategory && matchesMuscleGroup;
+          bool matchesDifficulty =
+              _selectedDifficulty == null ||
+              exercise.difficulty?.toLowerCase() ==
+                  _selectedDifficulty?.toLowerCase();
+
+          return matchesCategory && matchesMuscleGroup && matchesDifficulty;
         }).toList();
 
     notifyListeners();
@@ -131,6 +144,7 @@ class ExercisesProvider extends ChangeNotifier {
   void clearFilters() {
     _selectedCategory = null;
     _selectedMuscleGroup = null;
+    _selectedDifficulty = null;
     _applyFilters();
   }
 
