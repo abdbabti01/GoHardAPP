@@ -306,7 +306,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                       ),
                     ),
                   );
-                }).toList(),
+                }),
                 Expanded(
                   child: _buildQuickActionButton(
                     'Custom',
@@ -841,6 +841,11 @@ class _GoalsScreenState extends State<GoalsScreen> {
                     ),
                     ElevatedButton(
                       onPressed: () async {
+                        // Capture context before async operations
+                        final navigator = Navigator.of(context);
+                        final messenger = ScaffoldMessenger.of(context);
+                        final timeString = selectedTime.format(context);
+
                         // Save reminder preference
                         await prefs.saveReminderPreference(
                           goalId: goal.id,
@@ -854,16 +859,16 @@ class _GoalsScreenState extends State<GoalsScreen> {
                           // Request notification permissions if not granted
                           final hasPermission =
                               await notificationService.requestPermissions();
-                          if (!hasPermission && mounted) {
+                          if (!hasPermission) {
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               const SnackBar(
                                 content: Text(
                                   'Notification permissions not granted. Please enable in settings.',
                                 ),
                               ),
                             );
-                            Navigator.pop(context);
+                            navigator.pop();
                             return;
                           }
 
@@ -878,25 +883,23 @@ class _GoalsScreenState extends State<GoalsScreen> {
                           );
 
                           if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Reminder set: ${_getFrequencyDisplay(selectedFrequency)} at ${selectedTime.format(context)}',
-                              ),
-                            ),
+                          final displayText =
+                              'Reminder set: ${_getFrequencyDisplay(selectedFrequency)} at $timeString';
+                          messenger.showSnackBar(
+                            SnackBar(content: Text(displayText)),
                           );
                         } else {
                           // Cancel the reminder
                           await notificationService.cancelGoalReminder(goal.id);
 
                           if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             const SnackBar(content: Text('Reminder disabled')),
                           );
                         }
 
                         if (!mounted) return;
-                        Navigator.pop(context);
+                        navigator.pop();
                       },
                       child: const Text('Save'),
                     ),
