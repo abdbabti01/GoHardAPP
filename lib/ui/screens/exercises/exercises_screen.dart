@@ -47,219 +47,247 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Consumer<ExercisesProvider>(
-        builder: (context, provider, child) {
-          return DraggableScrollableSheet(
-            initialChildSize: 0.7,
-            minChildSize: 0.5,
-            maxChildSize: 0.9,
-            expand: false,
-            builder: (context, scrollController) {
-              return SingleChildScrollView(
-                controller: scrollController,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header with clear all button
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder:
+          (context) => Consumer<ExercisesProvider>(
+            builder: (context, provider, child) {
+              return DraggableScrollableSheet(
+                initialChildSize: 0.7,
+                minChildSize: 0.5,
+                maxChildSize: 0.9,
+                expand: false,
+                builder: (context, scrollController) {
+                  return SingleChildScrollView(
+                    controller: scrollController,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Header with clear all button
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Filter Exercises',
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  provider.clearFilters();
+                                },
+                                child: const Text('Clear All'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Category Filter
                           Text(
-                            'Filter Exercises',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(fontWeight: FontWeight.bold),
+                            'Category',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
                           ),
-                          TextButton(
-                            onPressed: () {
-                              provider.clearFilters();
-                            },
-                            child: const Text('Clear All'),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _buildFilterChip(
+                                context,
+                                isSelected: provider.selectedCategory == null,
+                                label: 'All',
+                                onTap: () => provider.filterByCategory(null),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedCategory == 'Strength',
+                                label: 'Strength',
+                                onTap:
+                                    () => provider.filterByCategory('Strength'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedCategory == 'Cardio',
+                                label: 'Cardio',
+                                onTap:
+                                    () => provider.filterByCategory('Cardio'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedCategory == 'Flexibility',
+                                label: 'Flexibility',
+                                onTap:
+                                    () => provider.filterByCategory(
+                                      'Flexibility',
+                                    ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                      // Category Filter
-                      Text(
-                        'Category',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedCategory == null,
-                            label: 'All',
-                            onTap: () => provider.filterByCategory(null),
+                          // Muscle Group Filter
+                          Text(
+                            'Muscle Group',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
                           ),
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedCategory == 'Strength',
-                            label: 'Strength',
-                            onTap: () => provider.filterByCategory('Strength'),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == null,
+                                label: 'All',
+                                onTap: () => provider.filterByMuscleGroup(null),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == 'Chest',
+                                label: 'Chest',
+                                onTap:
+                                    () => provider.filterByMuscleGroup('Chest'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == 'Back',
+                                label: 'Back',
+                                onTap:
+                                    () => provider.filterByMuscleGroup('Back'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == 'Shoulders',
+                                label: 'Shoulders',
+                                onTap:
+                                    () => provider.filterByMuscleGroup(
+                                      'Shoulders',
+                                    ),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == 'Arms',
+                                label: 'Arms',
+                                onTap:
+                                    () => provider.filterByMuscleGroup('Arms'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == 'Legs',
+                                label: 'Legs',
+                                onTap:
+                                    () => provider.filterByMuscleGroup('Legs'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == 'Core',
+                                label: 'Core',
+                                onTap:
+                                    () => provider.filterByMuscleGroup('Core'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == 'Full Body',
+                                label: 'Full Body',
+                                onTap:
+                                    () => provider.filterByMuscleGroup(
+                                      'Full Body',
+                                    ),
+                              ),
+                            ],
                           ),
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedCategory == 'Cardio',
-                            label: 'Cardio',
-                            onTap: () => provider.filterByCategory('Cardio'),
-                          ),
-                          _buildFilterChip(
-                            context,
-                            isSelected:
-                                provider.selectedCategory == 'Flexibility',
-                            label: 'Flexibility',
-                            onTap: () => provider.filterByCategory('Flexibility'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                      // Muscle Group Filter
-                      Text(
-                        'Muscle Group',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedMuscleGroup == null,
-                            label: 'All',
-                            onTap: () => provider.filterByMuscleGroup(null),
+                          // Difficulty Filter
+                          Text(
+                            'Difficulty Level',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
                           ),
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedMuscleGroup == 'Chest',
-                            label: 'Chest',
-                            onTap: () => provider.filterByMuscleGroup('Chest'),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _buildFilterChip(
+                                context,
+                                isSelected: provider.selectedDifficulty == null,
+                                label: 'All',
+                                onTap: () => provider.filterByDifficulty(null),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedDifficulty == 'Beginner',
+                                label: 'Beginner',
+                                color: Colors.green,
+                                onTap:
+                                    () =>
+                                        provider.filterByDifficulty('Beginner'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedDifficulty ==
+                                    'Intermediate',
+                                label: 'Intermediate',
+                                color: Colors.orange,
+                                onTap:
+                                    () => provider.filterByDifficulty(
+                                      'Intermediate',
+                                    ),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedDifficulty == 'Advanced',
+                                label: 'Advanced',
+                                color: Colors.red,
+                                onTap:
+                                    () =>
+                                        provider.filterByDifficulty('Advanced'),
+                              ),
+                            ],
                           ),
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedMuscleGroup == 'Back',
-                            label: 'Back',
-                            onTap: () => provider.filterByMuscleGroup('Back'),
-                          ),
-                          _buildFilterChip(
-                            context,
-                            isSelected:
-                                provider.selectedMuscleGroup == 'Shoulders',
-                            label: 'Shoulders',
-                            onTap: () => provider.filterByMuscleGroup('Shoulders'),
-                          ),
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedMuscleGroup == 'Arms',
-                            label: 'Arms',
-                            onTap: () => provider.filterByMuscleGroup('Arms'),
-                          ),
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedMuscleGroup == 'Legs',
-                            label: 'Legs',
-                            onTap: () => provider.filterByMuscleGroup('Legs'),
-                          ),
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedMuscleGroup == 'Core',
-                            label: 'Core',
-                            onTap: () => provider.filterByMuscleGroup('Core'),
-                          ),
-                          _buildFilterChip(
-                            context,
-                            isSelected:
-                                provider.selectedMuscleGroup == 'Full Body',
-                            label: 'Full Body',
-                            onTap: () => provider.filterByMuscleGroup('Full Body'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                      // Difficulty Filter
-                      Text(
-                        'Difficulty Level',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedDifficulty == null,
-                            label: 'All',
-                            onTap: () => provider.filterByDifficulty(null),
-                          ),
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedDifficulty == 'Beginner',
-                            label: 'Beginner',
-                            color: Colors.green,
-                            onTap: () => provider.filterByDifficulty('Beginner'),
-                          ),
-                          _buildFilterChip(
-                            context,
-                            isSelected:
-                                provider.selectedDifficulty == 'Intermediate',
-                            label: 'Intermediate',
-                            color: Colors.orange,
-                            onTap: () =>
-                                provider.filterByDifficulty('Intermediate'),
-                          ),
-                          _buildFilterChip(
-                            context,
-                            isSelected: provider.selectedDifficulty == 'Advanced',
-                            label: 'Advanced',
-                            color: Colors.red,
-                            onTap: () => provider.filterByDifficulty('Advanced'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Apply button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                          // Apply button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text('Apply Filters'),
                             ),
                           ),
-                          child: const Text('Apply Filters'),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               );
             },
-          );
-        },
-      ),
+          ),
     );
   }
 
@@ -504,7 +532,8 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
 
           // Empty state
           if (provider.filteredExercises.isEmpty) {
-            final hasActiveFilters = provider.selectedCategory != null ||
+            final hasActiveFilters =
+                provider.selectedCategory != null ||
                 provider.selectedMuscleGroup != null ||
                 provider.selectedDifficulty != null;
 
