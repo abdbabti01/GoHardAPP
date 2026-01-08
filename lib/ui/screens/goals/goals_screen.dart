@@ -1145,12 +1145,10 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                   labelText: 'Goal Type',
                   prefixIcon: Icon(Icons.flag),
                 ),
-                items: _goalTypes.map((type) {
-                  return DropdownMenuItem(
-                    value: type,
-                    child: Text(type),
-                  );
-                }).toList(),
+                items:
+                    _goalTypes.map((type) {
+                      return DropdownMenuItem(value: type, child: Text(type));
+                    }).toList(),
                 onChanged: (value) {
                   setState(() {
                     _selectedGoalType = value;
@@ -1206,12 +1204,10 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                   labelText: 'Unit',
                   prefixIcon: Icon(Icons.straighten),
                 ),
-                items: _availableUnits.map((unit) {
-                  return DropdownMenuItem(
-                    value: unit,
-                    child: Text(unit),
-                  );
-                }).toList(),
+                items:
+                    _availableUnits.map((unit) {
+                      return DropdownMenuItem(value: unit, child: Text(unit));
+                    }).toList(),
                 onChanged: (value) {
                   if (value != null) {
                     setState(() => _selectedUnit = value);
@@ -1240,7 +1236,9 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const SizedBox(width: 40), // Align with InputDecorator content
+                    const SizedBox(
+                      width: 40,
+                    ), // Align with InputDecorator content
                     Icon(
                       Icons.lightbulb_outline,
                       size: 16,
