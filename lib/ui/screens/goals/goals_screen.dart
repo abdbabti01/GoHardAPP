@@ -938,22 +938,125 @@ class CreateGoalDialog extends StatefulWidget {
 
 class _CreateGoalDialogState extends State<CreateGoalDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _goalTypeController = TextEditingController();
   final _targetValueController = TextEditingController();
   final _currentValueController = TextEditingController();
-  final _unitController = TextEditingController();
 
-  String _timeFrame = 'weekly';
+  // Dropdown values
+  String? _selectedGoalType;
+  String _selectedUnit = 'lb';
   DateTime? _targetDate;
+  DateTime? _aiSuggestedDate;
   bool _isCreating = false;
+
+  // Common fitness goal types
+  final List<String> _goalTypes = [
+    'Weight Loss',
+    'Muscle Gain',
+    'Body Fat',
+    'Workout Frequency',
+    'Strength (Total Volume)',
+    'Cardiovascular Endurance',
+    'Flexibility',
+  ];
+
+  // Unit options based on goal type
+  List<String> get _availableUnits {
+    if (_selectedGoalType == null) return ['lb', 'kg'];
+
+    switch (_selectedGoalType!) {
+      case 'Weight Loss':
+      case 'Muscle Gain':
+        return ['lb', 'kg'];
+      case 'Body Fat':
+        return ['%'];
+      case 'Workout Frequency':
+        return ['workouts/week', 'workouts/month'];
+      case 'Strength (Total Volume)':
+        return ['lb', 'kg'];
+      case 'Cardiovascular Endurance':
+        return ['minutes', 'km', 'miles'];
+      case 'Flexibility':
+        return ['cm', 'inches'];
+      default:
+        return ['lb', 'kg'];
+    }
+  }
 
   @override
   void dispose() {
-    _goalTypeController.dispose();
     _targetValueController.dispose();
     _currentValueController.dispose();
-    _unitController.dispose();
     super.dispose();
+  }
+
+  void _calculateAISuggestedDate() {
+    if (_selectedGoalType == null) return;
+
+    final currentValue = double.tryParse(_currentValueController.text) ?? 0;
+    final targetValue = double.tryParse(_targetValueController.text);
+
+    if (targetValue == null || currentValue == 0) return;
+
+    final difference = (targetValue - currentValue).abs();
+    int daysToComplete = 90; // Default 3 months
+
+    // AI-suggested timelines based on goal type and realistic progress rates
+    switch (_selectedGoalType!) {
+      case 'Weight Loss':
+        // Healthy weight loss: 1-2 lbs/week
+        final weeksNeeded = difference / 1.5; // 1.5 lbs/week average
+        daysToComplete = (weeksNeeded * 7).ceil();
+        break;
+
+      case 'Muscle Gain':
+        // Realistic muscle gain: 0.5-1 lb/week for beginners
+        final weeksNeeded = difference / 0.75; // 0.75 lbs/week average
+        daysToComplete = (weeksNeeded * 7).ceil();
+        break;
+
+      case 'Body Fat':
+        // Healthy body fat loss: 0.5-1% per month
+        final monthsNeeded = difference / 0.75; // 0.75% per month
+        daysToComplete = (monthsNeeded * 30).ceil();
+        break;
+
+      case 'Workout Frequency':
+        // Build habit gradually
+        daysToComplete = 60; // 2 months to establish routine
+        break;
+
+      case 'Strength (Total Volume)':
+        // Progressive overload: 5-10% increase per month
+        final monthsNeeded = 6; // 6 months for significant strength gains
+        daysToComplete = monthsNeeded * 30;
+        break;
+
+      case 'Cardiovascular Endurance':
+        // Gradual cardio improvement
+        daysToComplete = 90; // 3 months typical
+        break;
+
+      case 'Flexibility':
+        // Flexibility takes time
+        daysToComplete = 120; // 4 months
+        break;
+    }
+
+    // Cap at 12 months, minimum 14 days
+    daysToComplete = daysToComplete.clamp(14, 365);
+
+    setState(() {
+      _aiSuggestedDate = DateTime.now().add(Duration(days: daysToComplete));
+      _targetDate = _aiSuggestedDate; // Auto-set to AI suggestion
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to value changes to recalculate AI suggestion
+    _targetValueController.addListener(_calculateAISuggestedDate);
+    _currentValueController.addListener(_calculateAISuggestedDate);
   }
 
   Future<void> _selectTargetDate() async {
@@ -977,16 +1080,26 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
       return;
     }
 
+    if (_selectedGoalType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a goal type'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isCreating = true);
 
     final goal = Goal(
       id: 0,
       userId: 0,
-      goalType: _goalTypeController.text.trim(),
+      goalType: _selectedGoalType!,
       targetValue: double.parse(_targetValueController.text),
       currentValue: double.tryParse(_currentValueController.text) ?? 0,
-      unit: _unitController.text.trim(),
-      timeFrame: _timeFrame,
+      unit: _selectedUnit,
+      timeFrame: null, // Removed - not needed for goal tracking
       startDate: DateTime.now(),
       targetDate: _targetDate,
       isActive: true,
@@ -1026,16 +1139,31 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextFormField(
-                controller: _goalTypeController,
+              DropdownButtonFormField<String>(
+                value: _selectedGoalType,
                 decoration: const InputDecoration(
                   labelText: 'Goal Type',
-                  hintText: 'e.g., Weight, BodyFat, WorkoutFrequency',
                   prefixIcon: Icon(Icons.flag),
                 ),
+                items: _goalTypes.map((type) {
+                  return DropdownMenuItem(
+                    value: type,
+                    child: Text(type),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedGoalType = value;
+                    // Reset unit to first available option when goal type changes
+                    if (value != null) {
+                      _selectedUnit = _availableUnits.first;
+                      _calculateAISuggestedDate();
+                    }
+                  });
+                },
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter a goal type';
+                  if (value == null) {
+                    return 'Please select a goal type';
                   }
                   return null;
                 },
@@ -1072,36 +1200,21 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _unitController,
+              DropdownButtonFormField<String>(
+                value: _selectedUnit,
                 decoration: const InputDecoration(
                   labelText: 'Unit',
-                  hintText: 'e.g., kg, %, workouts',
                   prefixIcon: Icon(Icons.straighten),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter a unit';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _timeFrame,
-                decoration: const InputDecoration(
-                  labelText: 'Time Frame',
-                  prefixIcon: Icon(Icons.calendar_today),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'daily', child: Text('Daily')),
-                  DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
-                  DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-                  DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
-                ],
+                items: _availableUnits.map((unit) {
+                  return DropdownMenuItem(
+                    value: unit,
+                    child: Text(unit),
+                  );
+                }).toList(),
                 onChanged: (value) {
                   if (value != null) {
-                    setState(() => _timeFrame = value);
+                    setState(() => _selectedUnit = value);
                   }
                 },
               ),
@@ -1110,7 +1223,7 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                 onTap: _selectTargetDate,
                 child: InputDecorator(
                   decoration: const InputDecoration(
-                    labelText: 'Target Date (optional)',
+                    labelText: 'Target Date',
                     prefixIcon: Icon(Icons.event),
                   ),
                   child: Text(
@@ -1123,6 +1236,29 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                   ),
                 ),
               ),
+              if (_aiSuggestedDate != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const SizedBox(width: 40), // Align with InputDecorator content
+                    Icon(
+                      Icons.lightbulb_outline,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'AI suggests: ${DateFormat('MMM d, y').format(_aiSuggestedDate!)} based on healthy progress rates',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

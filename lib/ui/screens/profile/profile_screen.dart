@@ -9,7 +9,6 @@ import '../../../routes/route_names.dart';
 import '../../../core/utils/unit_converter.dart';
 import '../../../core/constants/api_config.dart';
 import 'edit_profile_screen.dart';
-import '../goals/goals_screen.dart';
 import '../body_metrics/body_metrics_screen.dart';
 
 /// Profile screen for viewing user information and settings
@@ -388,23 +387,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const Divider(height: 24),
             ],
 
-            // Primary Goal
-            if (user?.primaryGoal != null) ...[
-              _buildInfoRow(
-                context,
-                Icons.track_changes,
-                'Primary Goal',
-                user!.primaryGoal!,
-              ),
-              const Divider(height: 24),
-            ],
-
-            // Goals
-            if (user?.goals != null && user!.goals!.isNotEmpty) ...[
-              _buildInfoRow(context, Icons.description, 'Goals', user.goals!),
-              const Divider(height: 24),
-            ],
-
             // Favorite Exercises
             if (user?.favoriteExercises != null &&
                 user!.favoriteExercises!.isNotEmpty) ...[
@@ -484,22 +466,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Card(
       child: Column(
         children: [
-          ListTile(
-            leading: Icon(
-              Icons.flag,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            title: const Text('Goals'),
-            subtitle: const Text('Track your fitness goals'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const GoalsScreen()),
-              );
-            },
-          ),
-          const Divider(height: 1),
           ListTile(
             leading: Icon(
               Icons.monitor_weight,
