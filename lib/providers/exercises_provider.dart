@@ -43,6 +43,26 @@ class ExercisesProvider extends ChangeNotifier {
   String? get selectedCategory => _selectedCategory;
   String? get selectedMuscleGroup => _selectedMuscleGroup;
 
+  /// Get exercises grouped by difficulty level
+  Map<String, List<ExerciseTemplate>> get exercisesByDifficulty {
+    final grouped = <String, List<ExerciseTemplate>>{
+      'Beginner': [],
+      'Intermediate': [],
+      'Advanced': [],
+    };
+
+    for (final exercise in _filteredExercises) {
+      final difficulty = exercise.difficulty ?? 'Beginner';
+      if (grouped.containsKey(difficulty)) {
+        grouped[difficulty]!.add(exercise);
+      } else {
+        grouped['Beginner']!.add(exercise);
+      }
+    }
+
+    return grouped;
+  }
+
   /// Load all exercise templates
   Future<void> loadExercises({bool showLoading = true}) async {
     if (_isLoading) return;

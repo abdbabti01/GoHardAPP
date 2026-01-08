@@ -20,6 +20,13 @@ class _AddExerciseScreenState extends State<AddExerciseScreen> {
   final Set<int> _selectedExerciseIds = {};
   bool _isAdding = false;
 
+  // Track expanded state for difficulty sections
+  final Map<String, bool> _expandedSections = {
+    'Beginner': true,
+    'Intermediate': true,
+    'Advanced': true,
+  };
+
   @override
   void initState() {
     super.initState();
@@ -190,6 +197,138 @@ class _AddExerciseScreenState extends State<AddExerciseScreen> {
       ).colorScheme.primary.withValues(alpha: 0.2),
       checkmarkColor: Theme.of(context).colorScheme.primary,
     );
+  }
+
+  /// Build exercise list organized by difficulty with collapsible sections
+  Widget _buildDifficultyOrganizedList(ExercisesProvider provider) {
+    final groupedExercises = provider.exercisesByDifficulty;
+    final difficulties = ['Beginner', 'Intermediate', 'Advanced'];
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.only(top: 8, bottom: 16),
+      itemCount: difficulties.length,
+      itemBuilder: (context, index) {
+        final difficulty = difficulties[index];
+        final exercises = groupedExercises[difficulty] ?? [];
+        final isExpanded = _expandedSections[difficulty] ?? true;
+
+        if (exercises.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Difficulty section header
+            InkWell(
+              onTap: () {
+                setState(() {
+                  _expandedSections[difficulty] = !isExpanded;
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: _getDifficultyColor(difficulty).withValues(alpha: 0.1),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: _getDifficultyColor(difficulty).withValues(
+                        alpha: 0.2,
+                      ),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getDifficultyColor(difficulty),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        difficulty.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${exercises.length} exercise${exercises.length == 1 ? '' : 's'}',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    AnimatedRotation(
+                      turns: isExpanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        Icons.keyboard_arrow_down,
+                        color: _getDifficultyColor(difficulty),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Collapsible exercise list
+            AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: isExpanded
+                  ? Column(
+                      children: exercises.map((exercise) {
+                        final isSelected = _selectedExerciseIds.contains(
+                          exercise.id,
+                        );
+
+                        return ExerciseCard(
+                          exercise: exercise,
+                          onTap: () => _toggleExerciseSelection(exercise.id),
+                          trailing: Checkbox(
+                            value: isSelected,
+                            onChanged: (_) =>
+                                _toggleExerciseSelection(exercise.id),
+                          ),
+                        );
+                      }).toList(),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Get color for difficulty level
+  Color _getDifficultyColor(String difficulty) {
+    switch (difficulty) {
+      case 'Beginner':
+        return Colors.green;
+      case 'Intermediate':
+        return Colors.orange;
+      case 'Advanced':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   @override
@@ -377,30 +516,10 @@ class _AddExerciseScreenState extends State<AddExerciseScreen> {
                   );
                 }
 
-                // Exercise list
+                // Exercise list organized by difficulty
                 return RefreshIndicator(
                   onRefresh: _handleRefresh,
-                  child: ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemCount: provider.filteredExercises.length,
-                    padding: const EdgeInsets.only(top: 8, bottom: 16),
-                    itemBuilder: (context, index) {
-                      final exercise = provider.filteredExercises[index];
-                      final isSelected = _selectedExerciseIds.contains(
-                        exercise.id,
-                      );
-
-                      return ExerciseCard(
-                        exercise: exercise,
-                        onTap: () => _toggleExerciseSelection(exercise.id),
-                        trailing: Checkbox(
-                          value: isSelected,
-                          onChanged:
-                              (_) => _toggleExerciseSelection(exercise.id),
-                        ),
-                      );
-                    },
-                  ),
+                  child: _buildDifficultyOrganizedList(provider),
                 );
               },
             ),
