@@ -290,31 +290,14 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
             const SizedBox(height: 16),
 
-            // Quick Action Buttons
-            Row(
-              children: [
-                ...goal.suggestedIncrements.take(2).map((increment) {
-                  final label =
-                      increment > 0 ? '+${increment.abs()}' : '$increment';
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _buildQuickActionButton(
-                        label,
-                        goalColor,
-                        () => _quickUpdateProgress(goal, increment),
-                      ),
-                    ),
-                  );
-                }),
-                Expanded(
-                  child: _buildQuickActionButton(
-                    'Custom',
-                    goalColor,
-                    () => _showAddProgressDialog(goal),
-                  ),
-                ),
-              ],
+            // Add Progress Button
+            SizedBox(
+              width: double.infinity,
+              child: _buildQuickActionButton(
+                'Add Progress',
+                goalColor,
+                () => _showAddProgressDialog(goal),
+              ),
             ),
 
             // AI Suggestion card
@@ -558,30 +541,6 @@ class _GoalsScreenState extends State<GoalsScreen> {
     if (difference < 0) return Colors.red;
     if (difference <= 7) return Colors.orange;
     return Colors.grey.shade600;
-  }
-
-  void _quickUpdateProgress(Goal goal, double increment) async {
-    final newValue = goal.currentValue + increment;
-
-    final progress = GoalProgress(
-      id: 0,
-      goalId: goal.id,
-      recordedAt: DateTime.now(),
-      value: newValue,
-      notes: 'Quick update +$increment',
-    );
-
-    final provider = context.read<GoalsProvider>();
-    final success = await provider.addProgress(goal.id, progress);
-
-    if (mounted && success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Progress updated: +$increment ${goal.unit ?? ''}'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-    }
   }
 
   void _handleGoalAction(Goal goal, String action) async {
