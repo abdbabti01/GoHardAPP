@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../../../providers/exercise_detail_provider.dart';
 import '../../../data/models/exercise_template.dart';
 import '../../widgets/exercises/category_badge.dart';
@@ -221,29 +222,17 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
               const SizedBox(height: 24),
             ],
 
-            // Video link
+            // Video player
             if (exercise.videoUrl != null && exercise.videoUrl!.isNotEmpty) ...[
-              Card(
-                child: ListTile(
-                  leading: Icon(
-                    Icons.play_circle_outline,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 32,
-                  ),
-                  title: const Text('Watch Video Tutorial'),
-                  subtitle: const Text('Learn proper form and technique'),
-                  trailing: const Icon(Icons.open_in_new),
-                  onTap: () {
-                    // Open video URL
-                    // In a real app, you would use url_launcher package
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Video URL: ${exercise.videoUrl}'),
-                      ),
-                    );
-                  },
-                ),
+              Text(
+                'Video Tutorial',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
+              const SizedBox(height: 12),
+              _buildYouTubePlayer(exercise.videoUrl!),
+              const SizedBox(height: 24),
             ],
           ],
         ),
@@ -345,5 +334,65 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       default:
         return Colors.grey;
     }
+  }
+
+  Widget _buildYouTubePlayer(String videoUrl) {
+    // Extract video ID from YouTube URL
+    final videoId = YoutubePlayer.convertUrlToId(videoUrl);
+
+    if (videoId == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(
+                Icons.error_outline,
+                color: Colors.orange,
+                size: 32,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Invalid video URL',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final controller = YoutubePlayerController(
+      initialVideoId: videoId,
+      flags: const YoutubePlayerFlags(
+        autoPlay: false,
+        mute: false,
+        enableCaption: true,
+        showLiveFullscreenButton: false,
+      ),
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: YoutubePlayer(
+        controller: controller,
+        showVideoProgressIndicator: true,
+        progressIndicatorColor: Theme.of(context).colorScheme.primary,
+        bottomActions: [
+          CurrentPosition(),
+          ProgressBar(
+            isExpanded: true,
+            colors: ProgressBarColors(
+              playedColor: Theme.of(context).colorScheme.primary,
+              handleColor: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          RemainingDuration(),
+          FullScreenButton(),
+        ],
+      ),
+    );
   }
 }

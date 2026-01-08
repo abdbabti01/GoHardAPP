@@ -71,6 +71,9 @@ dependencies:
   # Image Picker
   image_picker: ^1.0.7
 
+  # YouTube Player for Exercise Videos
+  youtube_player_flutter: ^9.1.1
+
   # Audio Player for Workout Music
   just_audio: ^0.9.36
   audio_service: ^0.18.12
