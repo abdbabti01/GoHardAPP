@@ -69,8 +69,11 @@ class Goal {
   /// Determine if this is a decrease goal (lower is better) or increase goal (higher is better)
   bool get isDecreaseGoal {
     final type = goalType.toLowerCase();
-    return type.contains('weight') ||
+    // Weight loss and body fat are decrease goals
+    // Muscle gain is an INCREASE goal
+    return (type.contains('weight') && type.contains('loss')) ||
         type.contains('bodyfat') ||
+        type.contains('body fat') ||
         type.contains('fat');
   }
 
@@ -106,13 +109,21 @@ class Goal {
     }
   }
 
-  /// Get progress description (e.g., "Lost 12.0 / 50.0 lb" or "5.0 / 20.0 workouts")
+  /// Get progress description (e.g., "Lost 12.0 / 50.0 lb" or "Gained 5.0 / 20.0 lb")
   String getProgressDescription() {
     if (isDecreaseGoal) {
       final goalAmount = currentValue - targetValue; // Total to lose
       return 'Lost ${totalProgress.toStringAsFixed(1)} / ${goalAmount.toStringAsFixed(1)} ${unit ?? ''}';
     } else {
-      return '${totalProgress.toStringAsFixed(1)} / ${targetValue.toStringAsFixed(1)} ${unit ?? ''}';
+      final type = goalType.toLowerCase();
+      // Check if it's a weight/muscle gain goal to show "Gained"
+      if (type.contains('weight') || type.contains('muscle')) {
+        final goalAmount = targetValue - currentValue; // Total to gain
+        return 'Gained ${totalProgress.toStringAsFixed(1)} / ${goalAmount.toStringAsFixed(1)} ${unit ?? ''}';
+      } else {
+        // For other goals (workouts, volume, etc.)
+        return '${totalProgress.toStringAsFixed(1)} / ${targetValue.toStringAsFixed(1)} ${unit ?? ''}';
+      }
     }
   }
 

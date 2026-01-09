@@ -120,6 +120,21 @@ class _GoalsScreenState extends State<GoalsScreen> {
     );
   }
 
+  bool _isWeightGoal(Goal goal) {
+    final type = goal.goalType.toLowerCase();
+    return type.contains('weight') || type.contains('muscle');
+  }
+
+  double _calculateCurrentWeight(Goal goal) {
+    if (goal.isDecreaseGoal) {
+      // Weight loss: subtract progress from starting weight
+      return goal.currentValue - goal.totalProgress;
+    } else {
+      // Muscle gain: add progress to starting weight
+      return goal.currentValue + goal.totalProgress;
+    }
+  }
+
   Widget _buildEnhancedGoalCard(Goal goal) {
     final progress = (goal.progressPercentage / 100).clamp(0.0, 1.0);
     final goalColor = _getGoalColor(goal.goalType);
@@ -246,8 +261,8 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
             const SizedBox(height: 16),
 
-            // Weight/Value summary (for weight loss goals)
-            if (goal.isDecreaseGoal) ...[
+            // Weight/Value summary (for weight loss AND muscle gain goals)
+            if (_isWeightGoal(goal)) ...[
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -273,7 +288,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                     ),
                     _buildWeightStat(
                       'Current',
-                      '${(goal.currentValue - goal.totalProgress).toStringAsFixed(1)} ${goal.unit ?? ''}',
+                      '${_calculateCurrentWeight(goal).toStringAsFixed(1)} ${goal.unit ?? ''}',
                       goalColor,
                     ),
                     Container(
@@ -1355,7 +1370,12 @@ class _AddProgressDialogState extends State<AddProgressDialog> {
     if (widget.goal.isDecreaseGoal) {
       return 'Amount Lost';
     } else {
-      return 'Progress Made';
+      final type = widget.goal.goalType.toLowerCase();
+      if (type.contains('weight') || type.contains('muscle')) {
+        return 'Amount Gained';
+      } else {
+        return 'Progress Made';
+      }
     }
   }
 
@@ -1363,7 +1383,12 @@ class _AddProgressDialogState extends State<AddProgressDialog> {
     if (widget.goal.isDecreaseGoal) {
       return 'Enter how much you lost (e.g., 2 for 2 lbs lost)';
     } else {
-      return 'Enter your progress (e.g., 3 for 3 workouts completed)';
+      final type = widget.goal.goalType.toLowerCase();
+      if (type.contains('weight') || type.contains('muscle')) {
+        return 'Enter how much you gained (e.g., 2 for 2 lbs gained)';
+      } else {
+        return 'Enter your progress (e.g., 3 for 3 workouts completed)';
+      }
     }
   }
 
