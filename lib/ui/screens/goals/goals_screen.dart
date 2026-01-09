@@ -138,18 +138,19 @@ class _GoalsScreenState extends State<GoalsScreen> {
   Widget _buildEnhancedGoalCard(Goal goal) {
     final progress = (goal.progressPercentage / 100).clamp(0.0, 1.0);
     final isCompleted = goal.progressPercentage >= 100;
-    final goalColor = isCompleted ? Colors.green : _getGoalColor(goal.goalType);
+    final goalColor = _getGoalColor(goal.goalType); // Keep original color
     final goalIcon = _getGoalIcon(goal.goalType);
     final streak = _calculateStreak(goal);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: isCompleted ? Colors.green.shade50 : Colors.white,
+        color: Colors.white, // Keep white background
         borderRadius: BorderRadius.circular(20),
+        // Add subtle green left border accent when completed
         border:
             isCompleted
-                ? Border.all(color: Colors.green.shade300, width: 2)
+                ? Border(left: BorderSide(color: Colors.green, width: 4))
                 : null,
         boxShadow: [
           BoxShadow(
@@ -358,30 +359,30 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
             // Add Progress Button OR Completion Badge
             if (isCompleted) ...[
-              // Goal Completed Badge
+              // Goal Completed Badge (subtle design)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.15),
+                  color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green, width: 2),
+                  border: Border.all(color: Colors.grey.shade300),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.check_circle,
-                      color: Colors.green,
-                      size: 28,
+                      color: Colors.green.shade600,
+                      size: 24,
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Text(
-                      '🎉 Goal Completed!',
+                      'Goal Completed 🎉',
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green.shade800,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
                       ),
                     ),
                   ],
