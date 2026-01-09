@@ -1136,7 +1136,8 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
               TextFormField(
                 controller: _currentValueController,
                 decoration: InputDecoration(
-                  labelText: _isWeightGoal() ? 'Current Weight' : 'Current Value',
+                  labelText:
+                      _isWeightGoal() ? 'Current Weight' : 'Current Value',
                   prefixIcon: const Icon(Icons.trending_up),
                   helperText: 'Your starting point',
                 ),
@@ -1145,7 +1146,9 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return _isWeightGoal() ? 'Please enter current weight' : 'Please enter current value';
+                    return _isWeightGoal()
+                        ? 'Please enter current weight'
+                        : 'Please enter current value';
                   }
                   if (double.tryParse(value) == null) {
                     return 'Please enter a valid number';
@@ -1167,7 +1170,9 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return _isWeightGoal() ? 'Please enter target weight' : 'Please enter target value';
+                    return _isWeightGoal()
+                        ? 'Please enter target weight'
+                        : 'Please enter target value';
                   }
                   if (double.tryParse(value) == null) {
                     return 'Please enter a valid number';
