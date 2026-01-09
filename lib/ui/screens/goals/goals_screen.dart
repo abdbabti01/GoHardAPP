@@ -1320,18 +1320,18 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
 
       // Generate the AI prompt based on the goal
       final prompt = _generateWorkoutPlanPrompt(goal);
-      print('Generated prompt: ${prompt.substring(0, 50)}...');
+      debugPrint('Generated prompt: ${prompt.substring(0, 50)}...');
 
       // Create a new conversation
-      print('Creating conversation...');
+      debugPrint('Creating conversation...');
       final conversation = await chatProvider.createConversation(
         title: 'Workout Plan: ${goal.goalType}',
         type: 'workout_plan',
       );
-      print('Conversation created: ${conversation?.id}');
+      debugPrint('Conversation created: ${conversation?.id}');
 
       if (conversation != null && context.mounted) {
-        print('Navigating to chat conversation...');
+        debugPrint('Navigating to chat conversation...');
         // Navigate to chat with the pre-filled prompt
         await Navigator.pushNamed(
           context,
@@ -1341,9 +1341,9 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
             'initialMessage': prompt,
           },
         );
-        print('Navigation completed');
+        debugPrint('Navigation completed');
       } else {
-        print('ERROR: Conversation is null or context not mounted');
+        debugPrint('ERROR: Conversation is null or context not mounted');
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -1357,8 +1357,8 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
         }
       }
     } catch (e, stackTrace) {
-      print('ERROR in _navigateToWorkoutPlanChat: $e');
-      print('Stack trace: $stackTrace');
+      debugPrint('ERROR in _navigateToWorkoutPlanChat: $e');
+      debugPrint('Stack trace: $stackTrace');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
