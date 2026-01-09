@@ -1305,33 +1305,65 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
     BuildContext context,
     Goal goal,
   ) async {
-    final chatProvider = context.read<ChatProvider>();
+    try {
+      final chatProvider = context.read<ChatProvider>();
 
-    // Generate the AI prompt based on the goal
-    final prompt = _generateWorkoutPlanPrompt(goal);
-
-    // Create a new conversation
-    final conversation = await chatProvider.createConversation(
-      title: 'Workout Plan: ${goal.goalType}',
-      type: 'workout_plan',
-    );
-
-    if (conversation != null && context.mounted) {
-      // Navigate to chat with the pre-filled prompt
-      Navigator.pushNamed(
-        context,
-        '/chat_conversation',
-        arguments: {
-          'conversationId': conversation.id,
-          'initialMessage': prompt,
-        },
-      );
-    } else {
+      // Show loading indicator
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Failed to create conversation'),
+            content: Text('Creating workout plan chat...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Generate the AI prompt based on the goal
+      final prompt = _generateWorkoutPlanPrompt(goal);
+      print('Generated prompt: ${prompt.substring(0, 50)}...');
+
+      // Create a new conversation
+      print('Creating conversation...');
+      final conversation = await chatProvider.createConversation(
+        title: 'Workout Plan: ${goal.goalType}',
+        type: 'workout_plan',
+      );
+      print('Conversation created: ${conversation?.id}');
+
+      if (conversation != null && context.mounted) {
+        print('Navigating to chat conversation...');
+        // Navigate to chat with the pre-filled prompt
+        await Navigator.pushNamed(
+          context,
+          '/chat_conversation',
+          arguments: {
+            'conversationId': conversation.id,
+            'initialMessage': prompt,
+          },
+        );
+        print('Navigation completed');
+      } else {
+        print('ERROR: Conversation is null or context not mounted');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Failed to create conversation. ${chatProvider.errorMessage ?? "Unknown error"}'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e, stackTrace) {
+      print('ERROR in _navigateToWorkoutPlanChat: $e');
+      print('Stack trace: $stackTrace');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
