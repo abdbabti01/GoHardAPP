@@ -941,6 +941,12 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
     }
   }
 
+  bool _isWeightGoal() {
+    return _selectedGoalType != null &&
+        (_selectedGoalType!.toLowerCase().contains('weight') ||
+            _selectedGoalType!.toLowerCase().contains('muscle'));
+  }
+
   @override
   void dispose() {
     _targetValueController.dispose();
@@ -1126,18 +1132,20 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                 },
               ),
               const SizedBox(height: 16),
+              // Current Weight/Value field (starting point) - shown FIRST
               TextFormField(
-                controller: _targetValueController,
-                decoration: const InputDecoration(
-                  labelText: 'Target Value',
-                  prefixIcon: Icon(Icons.track_changes),
+                controller: _currentValueController,
+                decoration: InputDecoration(
+                  labelText: _isWeightGoal() ? 'Current Weight' : 'Current Value',
+                  prefixIcon: const Icon(Icons.trending_up),
+                  helperText: 'Your starting point',
                 ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Please enter a target value';
+                    return _isWeightGoal() ? 'Please enter current weight' : 'Please enter current value';
                   }
                   if (double.tryParse(value) == null) {
                     return 'Please enter a valid number';
@@ -1146,15 +1154,26 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                 },
               ),
               const SizedBox(height: 16),
+              // Target Weight/Value field - shown SECOND
               TextFormField(
-                controller: _currentValueController,
-                decoration: const InputDecoration(
-                  labelText: 'Current Value (optional)',
-                  prefixIcon: Icon(Icons.trending_up),
+                controller: _targetValueController,
+                decoration: InputDecoration(
+                  labelText: _isWeightGoal() ? 'Target Weight' : 'Target Value',
+                  prefixIcon: const Icon(Icons.track_changes),
+                  helperText: 'Your goal',
                 ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return _isWeightGoal() ? 'Please enter target weight' : 'Please enter target value';
+                  }
+                  if (double.tryParse(value) == null) {
+                    return 'Please enter a valid number';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
@@ -1256,6 +1275,22 @@ class _AddProgressDialogState extends State<AddProgressDialog> {
   final _notesController = TextEditingController();
   bool _isAdding = false;
 
+  String _getProgressLabel() {
+    if (widget.goal.isDecreaseGoal) {
+      return 'Amount Lost';
+    } else {
+      return 'Progress Made';
+    }
+  }
+
+  String _getProgressHelperText() {
+    if (widget.goal.isDecreaseGoal) {
+      return 'Enter how much you lost (e.g., 2 for 2 lbs lost)';
+    } else {
+      return 'Enter your progress (e.g., 3 for 3 workouts completed)';
+    }
+  }
+
   @override
   void dispose() {
     _valueController.dispose();
@@ -1314,20 +1349,36 @@ class _AddProgressDialogState extends State<AddProgressDialog> {
           children: [
             Text(
               widget.goal.goalType,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Current: ${widget.goal.currentValue.toStringAsFixed(1)} ${widget.goal.unit ?? ''}',
-              style: const TextStyle(color: Colors.grey),
+            const SizedBox(height: 12),
+            // Show current progress
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                widget.goal.getProgressDescription(),
+                style: TextStyle(
+                  color: Colors.blue.shade700,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.center,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            // Progress input field
             TextFormField(
               controller: _valueController,
               decoration: InputDecoration(
-                labelText: 'New Value',
+                labelText: _getProgressLabel(),
                 suffixText: widget.goal.unit,
-                prefixIcon: const Icon(Icons.edit),
+                prefixIcon: const Icon(Icons.add_circle_outline),
+                helperText: _getProgressHelperText(),
+                helperMaxLines: 2,
               ),
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
@@ -1335,10 +1386,14 @@ class _AddProgressDialogState extends State<AddProgressDialog> {
               autofocus: true,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Please enter a value';
+                  return 'Please enter progress';
                 }
-                if (double.tryParse(value) == null) {
+                final num = double.tryParse(value);
+                if (num == null) {
                   return 'Please enter a valid number';
+                }
+                if (num <= 0) {
+                  return 'Progress must be greater than 0';
                 }
                 return null;
               },
