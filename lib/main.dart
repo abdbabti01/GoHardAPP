@@ -16,6 +16,7 @@ import 'data/repositories/shared_workout_repository.dart';
 import 'data/repositories/workout_template_repository.dart';
 import 'data/repositories/goals_repository.dart';
 import 'data/repositories/body_metrics_repository.dart';
+import 'data/repositories/programs_repository.dart';
 import 'data/local/services/local_database_service.dart';
 import 'core/services/connectivity_service.dart';
 import 'core/services/sync_service.dart';
@@ -35,6 +36,7 @@ import 'providers/shared_workout_provider.dart';
 import 'providers/workout_template_provider.dart';
 import 'providers/goals_provider.dart';
 import 'providers/body_metrics_provider.dart';
+import 'providers/programs_provider.dart';
 import 'providers/music_player_provider.dart';
 import 'providers/settings_provider.dart';
 
@@ -194,6 +196,11 @@ void main() async {
           update:
               (_, apiService, connectivity, __) =>
                   BodyMetricsRepository(apiService, connectivity),
+        ),
+        ProxyProvider2<ApiService, ConnectivityService, ProgramsRepository>(
+          update:
+              (_, apiService, connectivity, __) =>
+                  ProgramsRepository(apiService, connectivity),
         ),
 
         // Sync Service
@@ -388,6 +395,20 @@ void main() async {
               (_, bodyMetricsRepo, connectivity, previous) =>
                   previous ??
                   BodyMetricsProvider(bodyMetricsRepo, connectivity),
+        ),
+        ChangeNotifierProxyProvider2<
+          ProgramsRepository,
+          ConnectivityService,
+          ProgramsProvider
+        >(
+          create:
+              (context) => ProgramsProvider(
+                context.read<ProgramsRepository>(),
+                context.read<ConnectivityService>(),
+              ),
+          update:
+              (_, programsRepo, connectivity, previous) =>
+                  previous ?? ProgramsProvider(programsRepo, connectivity),
         ),
         ChangeNotifierProvider<MusicPlayerProvider>(
           create: (_) => MusicPlayerProvider(),

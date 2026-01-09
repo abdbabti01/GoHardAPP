@@ -64,6 +64,7 @@ class ApiConfig {
   static const String workoutTemplates = 'workouttemplates';
   static const String goals = 'goals';
   static const String bodyMetrics = 'bodymetrics';
+  static const String programs = 'programs';
 
   /// Helper methods for building endpoint URLs
   static String userById(int id) => '$users/$id';
@@ -95,4 +96,15 @@ class ApiConfig {
   static String bodyMetricById(int id) => '$bodyMetrics/$id';
   static String bodyMetricsLatest = '$bodyMetrics/latest';
   static String bodyMetricsChart = '$bodyMetrics/chart';
+  static String programById(int id) => '$programs/$id';
+  static String programComplete(int id) => '$programs/$id/complete';
+  static String programAdvance(int id) => '$programs/$id/advance';
+  static String programWeek(int id, int weekNumber) =>
+      '$programs/$id/weeks/$weekNumber';
+  static String programToday(int id) => '$programs/$id/today';
+  static String programWorkouts(int id) => '$programs/$id/workouts';
+  static String programWorkoutById(int workoutId) =>
+      '$programs/workouts/$workoutId';
+  static String programWorkoutComplete(int workoutId) =>
+      '$programs/workouts/$workoutId/complete';
 }

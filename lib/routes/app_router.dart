@@ -20,6 +20,9 @@ import '../ui/screens/chat/workout_plan_form_screen.dart';
 import '../ui/screens/chat/meal_plan_form_screen.dart';
 import '../ui/screens/community/community_screen.dart';
 import '../ui/screens/templates/templates_screen.dart';
+import '../ui/screens/programs/programs_screen.dart';
+import '../ui/screens/programs/program_detail_screen.dart';
+import '../ui/screens/programs/program_workout_screen.dart';
 
 /// Central router for the application
 /// Handles route generation and navigation logic
@@ -197,6 +200,40 @@ class AppRouter {
       case RouteNames.templates:
         return MaterialPageRoute(
           builder: (_) => const TemplatesScreen(),
+          settings: settings,
+        );
+
+      // Program routes
+      case RouteNames.programs:
+        return MaterialPageRoute(
+          builder: (_) => const ProgramsScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.programDetail:
+        final programId = settings.arguments as int?;
+        if (programId == null) {
+          return MaterialPageRoute(
+            builder: (_) => const _NotFoundScreen(routeName: 'program-detail'),
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => ProgramDetailScreen(programId: programId),
+          settings: settings,
+        );
+
+      case RouteNames.programWorkout:
+        final args = settings.arguments as Map<String, dynamic>?;
+        if (args == null || args['workoutId'] == null || args['programId'] == null) {
+          return MaterialPageRoute(
+            builder: (_) => const _NotFoundScreen(routeName: 'program-workout'),
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => ProgramWorkoutScreen(
+            workoutId: args['workoutId'] as int,
+            programId: args['programId'] as int,
+          ),
           settings: settings,
         );
 

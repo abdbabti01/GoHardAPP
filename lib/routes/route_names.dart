@@ -44,6 +44,11 @@ class RouteNames {
   // Template routes
   static const String templates = '/templates';
 
+  // Program routes
+  static const String programs = '/programs';
+  static const String programDetail = '/program-detail';
+  static const String programWorkout = '/program-workout';
+
   // Initial route (shown when app starts)
   static const String initial = login;
 }
