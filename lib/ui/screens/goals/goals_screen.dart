@@ -1348,7 +1348,8 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                  'Failed to create conversation. ${chatProvider.errorMessage ?? "Unknown error"}'),
+                'Failed to create conversation. ${chatProvider.errorMessage ?? "Unknown error"}',
+              ),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 5),
             ),
