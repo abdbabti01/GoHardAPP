@@ -137,15 +137,20 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
   Widget _buildEnhancedGoalCard(Goal goal) {
     final progress = (goal.progressPercentage / 100).clamp(0.0, 1.0);
-    final goalColor = _getGoalColor(goal.goalType);
+    final isCompleted = goal.progressPercentage >= 100;
+    final goalColor = isCompleted ? Colors.green : _getGoalColor(goal.goalType);
     final goalIcon = _getGoalIcon(goal.goalType);
     final streak = _calculateStreak(goal);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isCompleted ? Colors.green.shade50 : Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border:
+            isCompleted
+                ? Border.all(color: Colors.green.shade300, width: 2)
+                : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -351,18 +356,51 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
             const SizedBox(height: 16),
 
-            // Add Progress Button
-            SizedBox(
-              width: double.infinity,
-              child: _buildQuickActionButton(
-                'Add Progress',
-                goalColor,
-                () => _showAddProgressDialog(goal),
+            // Add Progress Button OR Completion Badge
+            if (isCompleted) ...[
+              // Goal Completed Badge
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green, width: 2),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      '🎉 Goal Completed!',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade800,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ] else ...[
+              // Add Progress Button (only if not completed)
+              SizedBox(
+                width: double.infinity,
+                child: _buildQuickActionButton(
+                  'Add Progress',
+                  goalColor,
+                  () => _showAddProgressDialog(goal),
+                ),
+              ),
+            ],
 
-            // AI Suggestion card
-            if (goal.getProgressSuggestion() != null) ...[
+            // AI Suggestion card (only show if not completed)
+            if (!isCompleted && goal.getProgressSuggestion() != null) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
