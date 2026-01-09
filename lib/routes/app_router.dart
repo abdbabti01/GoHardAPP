@@ -164,7 +164,20 @@ class AppRouter {
         );
 
       case RouteNames.chatConversation:
-        final conversationId = settings.arguments as int?;
+        // Support both int and Map arguments for flexibility
+        final args = settings.arguments;
+        int? conversationId;
+        String? initialMessage;
+
+        if (args is int) {
+          // Direct int argument (existing usage)
+          conversationId = args;
+        } else if (args is Map<String, dynamic>) {
+          // Map argument with conversationId and optional initialMessage
+          conversationId = args['conversationId'] as int?;
+          initialMessage = args['initialMessage'] as String?;
+        }
+
         if (conversationId == null) {
           return MaterialPageRoute(
             builder:
@@ -173,7 +186,10 @@ class AppRouter {
         }
         return MaterialPageRoute(
           builder:
-              (_) => ChatConversationScreen(conversationId: conversationId),
+              (_) => ChatConversationScreen(
+                conversationId: conversationId!, // Safe after null check
+                initialMessage: initialMessage,
+              ),
           settings: settings,
         );
 
