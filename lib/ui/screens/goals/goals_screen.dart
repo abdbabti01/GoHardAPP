@@ -1258,7 +1258,7 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${goal.goalType}',
+                        goal.goalType,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -1339,10 +1339,6 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
   }
 
   String _generateWorkoutPlanPrompt(Goal goal) {
-    final isWeightGoal =
-        goal.goalType.toLowerCase().contains('weight') ||
-        goal.goalType.toLowerCase().contains('muscle');
-
     String prompt;
 
     if (goal.goalType.toLowerCase().contains('loss')) {
