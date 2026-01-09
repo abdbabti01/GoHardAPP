@@ -246,6 +246,52 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
             const SizedBox(height: 16),
 
+            // Weight/Value summary (for weight loss goals)
+            if (goal.isDecreaseGoal) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: goalColor.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: goalColor.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildWeightStat(
+                      'Starting',
+                      '${goal.startValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
+                      Colors.grey.shade600,
+                    ),
+                    Container(
+                      height: 30,
+                      width: 1,
+                      color: Colors.grey.shade300,
+                    ),
+                    _buildWeightStat(
+                      'Current',
+                      '${(goal.currentValue - goal.totalProgress).toStringAsFixed(1)} ${goal.unit ?? ''}',
+                      goalColor,
+                    ),
+                    Container(
+                      height: 30,
+                      width: 1,
+                      color: Colors.grey.shade300,
+                    ),
+                    _buildWeightStat(
+                      'Target',
+                      '${goal.targetValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
+                      Colors.grey.shade600,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // Progress percentage and streak
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -370,6 +416,31 @@ class _GoalsScreenState extends State<GoalsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildWeightStat(String label, String value, Color color) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 
