@@ -12,8 +12,13 @@ import '../../widgets/common/offline_banner.dart';
 /// Chat conversation screen showing messages and input
 class ChatConversationScreen extends StatefulWidget {
   final int conversationId;
+  final String? initialMessage; // Optional pre-filled message
 
-  const ChatConversationScreen({super.key, required this.conversationId});
+  const ChatConversationScreen({
+    super.key,
+    required this.conversationId,
+    this.initialMessage,
+  });
 
   @override
   State<ChatConversationScreen> createState() => _ChatConversationScreenState();
@@ -26,6 +31,10 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
   @override
   void initState() {
     super.initState();
+    // Set initial message if provided
+    if (widget.initialMessage != null && widget.initialMessage!.isNotEmpty) {
+      _messageController.text = widget.initialMessage!;
+    }
     // Load conversation on first build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ChatProvider>().loadConversation(widget.conversationId);
