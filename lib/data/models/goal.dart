@@ -102,10 +102,11 @@ class Goal {
 
       return (totalProgress / goalAmount * 100).clamp(0, 100);
     } else {
-      // For increase goals: total progress / target * 100
-      // Example: Target 20 workouts, Progress 5 = 5/20 = 25%
-      if (targetValue <= 0) return 0;
-      return (totalProgress / targetValue * 100).clamp(0, 100);
+      // For increase goals: total progress / goal amount * 100
+      // Example: Start 190, Target 200, Progress 5 = 5/10 = 50%
+      final goalAmount = targetValue - currentValue; // 200 - 190 = 10
+      if (goalAmount <= 0) return 0;
+      return (totalProgress / goalAmount * 100).clamp(0, 100);
     }
   }
 
