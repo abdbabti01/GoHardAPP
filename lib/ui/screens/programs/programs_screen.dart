@@ -80,17 +80,14 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   Text(
                     'No Programs Yet',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: Colors.grey.shade600,
-                        ),
+                      color: Colors.grey.shade600,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Create a goal and generate\na workout plan to get started!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
                   ),
                 ],
               ),
@@ -107,12 +104,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   Text(
                     'Active Programs',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  ...provider.activePrograms
-                      .map((program) => _buildProgramCard(context, program)),
+                  ...provider.activePrograms.map(
+                    (program) => _buildProgramCard(context, program),
+                  ),
                   const SizedBox(height: 24),
                 ],
 
@@ -121,13 +119,14 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   Text(
                     'Completed Programs',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade600,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  ...provider.completedPrograms
-                      .map((program) => _buildProgramCard(context, program)),
+                  ...provider.completedPrograms.map(
+                    (program) => _buildProgramCard(context, program),
+                  ),
                 ],
               ],
             ),
@@ -148,9 +147,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: isCompleted
-            ? BorderSide(color: Colors.green.shade200, width: 2)
-            : BorderSide.none,
+        side:
+            isCompleted
+                ? BorderSide(color: Colors.green.shade200, width: 2)
+                : BorderSide.none,
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -245,8 +245,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             // Current Phase Badge
             if (!isCompleted)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: theme.primaryColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -258,8 +260,11 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.trending_up,
-                        size: 16, color: theme.primaryColor),
+                    Icon(
+                      Icons.trending_up,
+                      size: 16,
+                      color: theme.primaryColor,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'Phase ${program.currentPhase}: ${program.phaseName}',
@@ -322,8 +327,11 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                             children: [
                               if (program.todaysWorkout!.estimatedDuration !=
                                   null) ...[
-                                Icon(Icons.access_time,
-                                    size: 14, color: Colors.grey.shade600),
+                                Icon(
+                                  Icons.access_time,
+                                  size: 14,
+                                  color: Colors.grey.shade600,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${program.todaysWorkout!.estimatedDuration} min',
@@ -334,8 +342,11 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                                 ),
                                 const SizedBox(width: 12),
                               ],
-                              Icon(Icons.fitness_center,
-                                  size: 14, color: Colors.grey.shade600),
+                              Icon(
+                                Icons.fitness_center,
+                                size: 14,
+                                color: Colors.grey.shade600,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 '${program.todaysWorkout!.exerciseCount} exercises',
@@ -360,7 +371,11 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Icon(Icons.celebration, size: 20, color: Colors.green.shade700),
+                  Icon(
+                    Icons.celebration,
+                    size: 20,
+                    color: Colors.green.shade700,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Program Completed!',
@@ -395,7 +410,8 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                         // TODO: Navigate to workout screen
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text('Start workout - Coming soon!')),
+                            content: Text('Start workout - Coming soon!'),
+                          ),
                         );
                       },
                       icon: const Icon(Icons.play_arrow, size: 20),

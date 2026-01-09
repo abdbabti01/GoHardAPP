@@ -8,10 +8,7 @@ import '../../../routes/route_names.dart';
 class ProgramDetailScreen extends StatefulWidget {
   final int programId;
 
-  const ProgramDetailScreen({
-    super.key,
-    required this.programId,
-  });
+  const ProgramDetailScreen({super.key, required this.programId});
 
   @override
   State<ProgramDetailScreen> createState() => _ProgramDetailScreenState();
@@ -97,28 +94,32 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                   _showDeleteConfirmation(context, program);
                 }
               },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'complete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle_outline),
-                      SizedBox(width: 12),
-                      Text('Mark as Complete'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_outline, color: Colors.red),
-                      SizedBox(width: 12),
-                      Text('Delete Program', style: TextStyle(color: Colors.red)),
-                    ],
-                  ),
-                ),
-              ],
+              itemBuilder:
+                  (context) => [
+                    const PopupMenuItem(
+                      value: 'complete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle_outline),
+                          SizedBox(width: 12),
+                          Text('Mark as Complete'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: Colors.red),
+                          SizedBox(width: 12),
+                          Text(
+                            'Delete Program',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
             ),
         ],
       ),
@@ -130,10 +131,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
             decoration: BoxDecoration(
               color: theme.primaryColor.withValues(alpha: 0.05),
               border: Border(
-                bottom: BorderSide(
-                  color: Colors.grey.shade200,
-                  width: 1,
-                ),
+                bottom: BorderSide(color: Colors.grey.shade200, width: 1),
               ),
             ),
             child: Column(
@@ -193,17 +191,16 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     value: program.progressPercentage / 100,
                     minHeight: 10,
                     backgroundColor: Colors.grey.shade200,
-                    valueColor: AlwaysStoppedAnimation<Color>(theme.primaryColor),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      theme.primaryColor,
+                    ),
                   ),
                 ),
                 if (program.description != null) ...[
                   const SizedBox(height: 12),
                   Text(
                     program.description!,
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -227,54 +224,61 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
 
           // Workouts List
           Expanded(
-            child: program.workouts == null || program.workouts!.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.fitness_center,
-                            size: 64, color: Colors.grey.shade400),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No workouts in this program yet',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 16,
+            child:
+                program.workouts == null || program.workouts!.isEmpty
+                    ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.fitness_center,
+                            size: 64,
+                            color: Colors.grey.shade400,
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                : TabBarView(
-                    controller: _tabController,
-                    children: List.generate(
-                      program.totalWeeks,
-                      (weekIndex) {
+                          const SizedBox(height: 16),
+                          Text(
+                            'No workouts in this program yet',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    : TabBarView(
+                      controller: _tabController,
+                      children: List.generate(program.totalWeeks, (weekIndex) {
                         final weekNumber = weekIndex + 1;
-                        final weekWorkouts = program.workouts!
-                            .where((w) => w.weekNumber == weekNumber)
-                            .toList()
-                          ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+                        final weekWorkouts =
+                            program.workouts!
+                                .where((w) => w.weekNumber == weekNumber)
+                                .toList()
+                              ..sort(
+                                (a, b) => a.orderIndex.compareTo(b.orderIndex),
+                              );
 
                         return weekWorkouts.isEmpty
                             ? Center(
-                                child: Text(
-                                  'No workouts for Week $weekNumber',
-                                  style: TextStyle(color: Colors.grey.shade600),
-                                ),
-                              )
+                              child: Text(
+                                'No workouts for Week $weekNumber',
+                                style: TextStyle(color: Colors.grey.shade600),
+                              ),
+                            )
                             : ListView.builder(
-                                padding: const EdgeInsets.all(16),
-                                itemCount: weekWorkouts.length,
-                                itemBuilder: (context, index) {
-                                  final workout = weekWorkouts[index];
-                                  return _buildWorkoutCard(
-                                      context, workout, program);
-                                },
-                              );
-                      },
+                              padding: const EdgeInsets.all(16),
+                              itemCount: weekWorkouts.length,
+                              itemBuilder: (context, index) {
+                                final workout = weekWorkouts[index];
+                                return _buildWorkoutCard(
+                                  context,
+                                  workout,
+                                  program,
+                                );
+                              },
+                            );
+                      }),
                     ),
-                  ),
           ),
         ],
       ),
@@ -282,11 +286,16 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
   }
 
   Widget _buildWorkoutCard(
-      BuildContext context, ProgramWorkout workout, Program program) {
+    BuildContext context,
+    ProgramWorkout workout,
+    Program program,
+  ) {
     final theme = Theme.of(context);
-    final isCurrentWorkout = program.currentWeek == workout.weekNumber &&
+    final isCurrentWorkout =
+        program.currentWeek == workout.weekNumber &&
         program.currentDay == workout.dayNumber;
-    final isPastWorkout = (workout.weekNumber < program.currentWeek) ||
+    final isPastWorkout =
+        (workout.weekNumber < program.currentWeek) ||
         (workout.weekNumber == program.currentWeek &&
             workout.dayNumber < program.currentDay);
 
@@ -295,9 +304,10 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       elevation: isCurrentWorkout ? 4 : 1,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: isCurrentWorkout
-            ? BorderSide(color: theme.primaryColor, width: 2)
-            : BorderSide.none,
+        side:
+            isCurrentWorkout
+                ? BorderSide(color: theme.primaryColor, width: 2)
+                : BorderSide.none,
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -305,10 +315,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
           Navigator.pushNamed(
             context,
             RouteNames.programWorkout,
-            arguments: {
-              'workoutId': workout.id,
-              'programId': program.id,
-            },
+            arguments: {'workoutId': workout.id, 'programId': program.id},
           );
         },
         child: Padding(
@@ -320,12 +327,15 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                 children: [
                   // Day Badge
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
-                      color: isCurrentWorkout
-                          ? theme.primaryColor
-                          : workout.isCompleted
+                      color:
+                          isCurrentWorkout
+                              ? theme.primaryColor
+                              : workout.isCompleted
                               ? Colors.green
                               : Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(8),
@@ -333,9 +343,10 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     child: Text(
                       workout.dayNameFromNumber.substring(0, 3).toUpperCase(),
                       style: TextStyle(
-                        color: isCurrentWorkout || workout.isCompleted
-                            ? Colors.white
-                            : Colors.grey.shade700,
+                        color:
+                            isCurrentWorkout || workout.isCompleted
+                                ? Colors.white
+                                : Colors.grey.shade700,
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
@@ -367,11 +378,17 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     ),
                   ),
                   if (workout.isCompleted)
-                    const Icon(Icons.check_circle, color: Colors.green, size: 24)
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 24,
+                    )
                   else if (isCurrentWorkout)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: theme.primaryColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
@@ -391,10 +408,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                 const SizedBox(height: 8),
                 Text(
                   workout.description!,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -403,8 +417,11 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
               Row(
                 children: [
                   if (workout.estimatedDuration != null) ...[
-                    Icon(Icons.access_time,
-                        size: 16, color: Colors.grey.shade600),
+                    Icon(
+                      Icons.access_time,
+                      size: 16,
+                      color: Colors.grey.shade600,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       '${workout.estimatedDuration} min',
@@ -415,15 +432,15 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     ),
                     const SizedBox(width: 16),
                   ],
-                  Icon(Icons.fitness_center,
-                      size: 16, color: Colors.grey.shade600),
+                  Icon(
+                    Icons.fitness_center,
+                    size: 16,
+                    color: Colors.grey.shade600,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     '${workout.exerciseCount} exercises',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                   ),
                   if (workout.isRestDay) ...[
                     const SizedBox(width: 16),
@@ -450,65 +467,67 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
   void _showCompleteConfirmation(BuildContext context, Program program) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Complete Program?'),
-        content: Text(
-          'Mark "${program.title}" as completed? You can still view it in your completed programs.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Complete Program?'),
+            content: Text(
+              'Mark "${program.title}" as completed? You can still view it in your completed programs.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final provider = context.read<ProgramsProvider>();
+                  final success = await provider.completeProgram(program.id);
+                  if (success && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Program completed!')),
+                    );
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text('Complete'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final provider = context.read<ProgramsProvider>();
-              final success = await provider.completeProgram(program.id);
-              if (success && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Program completed!')),
-                );
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Complete'),
-          ),
-        ],
-      ),
     );
   }
 
   void _showDeleteConfirmation(BuildContext context, Program program) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Program?'),
-        content: Text(
-          'Are you sure you want to delete "${program.title}"? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Program?'),
+            content: Text(
+              'Are you sure you want to delete "${program.title}"? This action cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final provider = context.read<ProgramsProvider>();
+                  final success = await provider.deleteProgram(program.id);
+                  if (success && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Program deleted')),
+                    );
+                    Navigator.pop(context);
+                  }
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final provider = context.read<ProgramsProvider>();
-              final success = await provider.deleteProgram(program.id);
-              if (success && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Program deleted')),
-                );
-                Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
     );
   }
 }

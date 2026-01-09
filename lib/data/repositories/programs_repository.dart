@@ -58,8 +58,10 @@ class ProgramsRepository {
 
   /// Update an existing program
   Future<void> updateProgram(int id, Program program) async {
-    await _apiService.put<void>(ApiConfig.programById(id),
-        data: program.toJson());
+    await _apiService.put<void>(
+      ApiConfig.programById(id),
+      data: program.toJson(),
+    );
   }
 
   /// Delete a program
@@ -82,7 +84,9 @@ class ProgramsRepository {
 
   /// Get workouts for a specific week
   Future<List<ProgramWorkout>> getWeekWorkouts(
-      int programId, int weekNumber) async {
+    int programId,
+    int weekNumber,
+  ) async {
     final data = await _apiService.get<List<dynamic>>(
       ApiConfig.programWeek(programId, weekNumber),
     );
@@ -101,7 +105,9 @@ class ProgramsRepository {
 
   /// Add a workout to a program
   Future<ProgramWorkout> addWorkout(
-      int programId, ProgramWorkout workout) async {
+    int programId,
+    ProgramWorkout workout,
+  ) async {
     final data = await _apiService.post<Map<String, dynamic>>(
       ApiConfig.programWorkouts(programId),
       data: workout.toJson(),
@@ -111,8 +117,10 @@ class ProgramsRepository {
 
   /// Update a program workout
   Future<void> updateWorkout(int workoutId, ProgramWorkout workout) async {
-    await _apiService.put<void>(ApiConfig.programWorkoutById(workoutId),
-        data: workout.toJson());
+    await _apiService.put<void>(
+      ApiConfig.programWorkoutById(workoutId),
+      data: workout.toJson(),
+    );
   }
 
   /// Mark a workout as completed

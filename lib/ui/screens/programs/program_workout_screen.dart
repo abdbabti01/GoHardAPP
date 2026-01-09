@@ -175,10 +175,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                   const SizedBox(height: 12),
                   Text(
                     workout.description!,
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
                   ),
                 ],
               ],
@@ -200,7 +197,10 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
 
                 // Exercises
                 _buildSectionHeader(
-                    Icons.fitness_center, 'Exercises', theme.primaryColor),
+                  Icons.fitness_center,
+                  'Exercises',
+                  theme.primaryColor,
+                ),
                 const SizedBox(height: 12),
                 if (exercises.isEmpty)
                   Center(
@@ -222,7 +222,8 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                 const SizedBox(height: 20),
 
                 // Cool-down Section
-                if (workout.coolDown != null && workout.coolDown!.isNotEmpty) ...[
+                if (workout.coolDown != null &&
+                    workout.coolDown!.isNotEmpty) ...[
                   _buildSectionHeader(Icons.ac_unit, 'Cool-down', Colors.blue),
                   const SizedBox(height: 8),
                   _buildInfoCard(workout.coolDown!),
@@ -262,7 +263,10 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                     icon: const Icon(Icons.check_circle, size: 24),
                     label: const Text(
                       'Complete Workout',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -356,9 +360,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -432,7 +434,11 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
+                    Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: Colors.blue.shade700,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -458,100 +464,94 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
       children: [
         Text(
           label,
-          style: TextStyle(
-            color: Colors.grey.shade600,
-            fontSize: 12,
-          ),
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
         ),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
         ),
       ],
     );
   }
 
   Widget _buildVerticalDivider() {
-    return Container(
-      width: 1,
-      height: 30,
-      color: Colors.grey.shade300,
-    );
+    return Container(width: 1, height: 30, color: Colors.grey.shade300);
   }
 
   void _showCompleteDialog(BuildContext context, ProgramWorkout workout) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle_outline, color: Colors.green),
-            SizedBox(width: 12),
-            Text('Complete Workout?'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Great job on completing "${workout.workoutName}"!'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes (optional)',
-                hintText: 'How did the workout feel?',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.green),
+                SizedBox(width: 12),
+                Text('Complete Workout?'),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () async {
-              Navigator.pop(context);
-              final provider = context.read<ProgramsProvider>();
-
-              // Complete the workout
-              final success = await provider.completeWorkout(
-                workout.id,
-                notes: _notesController.text.isEmpty ? null : _notesController.text,
-              );
-
-              if (success && context.mounted) {
-                // Advance the program to next day
-                await provider.advanceProgram(widget.programId);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Workout completed! Moving to next day...'),
-                    backgroundColor: Colors.green,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Great job on completing "${workout.workoutName}"!'),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (optional)',
+                    hintText: 'How did the workout feel?',
+                    border: OutlineInputBorder(),
                   ),
-                );
-
-                // Go back to program detail
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              }
-            },
-            icon: const Icon(Icons.check),
-            label: const Text('Complete'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
+                  maxLines: 3,
+                ),
+              ],
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final provider = context.read<ProgramsProvider>();
+
+                  // Complete the workout
+                  final success = await provider.completeWorkout(
+                    workout.id,
+                    notes:
+                        _notesController.text.isEmpty
+                            ? null
+                            : _notesController.text,
+                  );
+
+                  if (success && context.mounted) {
+                    // Advance the program to next day
+                    await provider.advanceProgram(widget.programId);
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Workout completed! Moving to next day...',
+                        ),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+
+                    // Go back to program detail
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  }
+                },
+                icon: const Icon(Icons.check),
+                label: const Text('Complete'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 }

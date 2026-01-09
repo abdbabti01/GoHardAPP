@@ -199,7 +199,9 @@ class ProgramsProvider extends ChangeNotifier {
         _completedPrograms = _programs.where((p) => p.isCompleted).toList();
       }
 
-      debugPrint('✅ Advanced program to week ${updatedProgram.currentWeek}, day ${updatedProgram.currentDay}');
+      debugPrint(
+        '✅ Advanced program to week ${updatedProgram.currentWeek}, day ${updatedProgram.currentDay}',
+      );
       notifyListeners();
       return true;
     } catch (e) {
@@ -213,7 +215,9 @@ class ProgramsProvider extends ChangeNotifier {
 
   /// Get workouts for a specific week
   Future<List<ProgramWorkout>> getWeekWorkouts(
-      int programId, int weekNumber) async {
+    int programId,
+    int weekNumber,
+  ) async {
     try {
       return await _programsRepository.getWeekWorkouts(programId, weekNumber);
     } catch (e) {

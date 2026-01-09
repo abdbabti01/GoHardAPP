@@ -224,16 +224,19 @@ class AppRouter {
 
       case RouteNames.programWorkout:
         final args = settings.arguments as Map<String, dynamic>?;
-        if (args == null || args['workoutId'] == null || args['programId'] == null) {
+        if (args == null ||
+            args['workoutId'] == null ||
+            args['programId'] == null) {
           return MaterialPageRoute(
             builder: (_) => const _NotFoundScreen(routeName: 'program-workout'),
           );
         }
         return MaterialPageRoute(
-          builder: (_) => ProgramWorkoutScreen(
-            workoutId: args['workoutId'] as int,
-            programId: args['programId'] as int,
-          ),
+          builder:
+              (_) => ProgramWorkoutScreen(
+                workoutId: args['workoutId'] as int,
+                programId: args['programId'] as int,
+              ),
           settings: settings,
         );
 
