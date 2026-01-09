@@ -42,11 +42,6 @@ class ProgramWorkout {
   });
 
   // Helper method to ensure datetime is in UTC
-  static DateTime _toUtc(DateTime dt) {
-    if (dt.isUtc) return dt;
-    return dt.toUtc();
-  }
-
   static DateTime? _toUtcNullable(DateTime? dt) {
     if (dt == null) return null;
     if (dt.isUtc) return dt;

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:convert';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 
@@ -531,6 +530,8 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                     // Advance the program to next day
                     await provider.advanceProgram(widget.programId);
 
+                    if (!context.mounted) return;
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
@@ -541,9 +542,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                     );
 
                     // Go back to program detail
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                    }
+                    Navigator.pop(context);
                   }
                 },
                 icon: const Icon(Icons.check),

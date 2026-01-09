@@ -294,10 +294,6 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     final isCurrentWorkout =
         program.currentWeek == workout.weekNumber &&
         program.currentDay == workout.dayNumber;
-    final isPastWorkout =
-        (workout.weekNumber < program.currentWeek) ||
-        (workout.weekNumber == program.currentWeek &&
-            workout.dayNumber < program.currentDay);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
