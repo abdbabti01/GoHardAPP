@@ -74,47 +74,45 @@ class Goal {
         type.contains('fat');
   }
 
-  /// Get the starting value (first recorded value or current value at creation)
-  double get startValue {
-    // If we have progress history, get the earliest value
-    if (progressHistory != null && progressHistory!.isNotEmpty) {
-      final sorted =
-          progressHistory!.toList()
-            ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
-      return sorted.first.value;
+  /// Get the starting value (currentValue represents starting weight/value)
+  double get startValue => currentValue;
+
+  /// Calculate total cumulative progress from all progress history entries
+  /// For weight loss: sum of all pounds lost
+  /// For increase goals: sum of all progress made
+  double get totalProgress {
+    if (progressHistory == null || progressHistory!.isEmpty) {
+      return 0;
     }
-    // Otherwise, for decrease goals we start at current value
-    // For increase goals, we start at 0 or current value
-    return currentValue;
+    // Sum all progress values (each entry is a delta/increment)
+    return progressHistory!.fold(0.0, (sum, p) => sum + p.value);
   }
 
   /// Calculate progress percentage correctly for both increase and decrease goals
+  /// Progress entries represent incremental changes (e.g., 2 lbs lost, 3 workouts completed)
   double get progressPercentage {
     if (isDecreaseGoal) {
-      // For weight loss: (start - current) / (start - target) * 100
-      // Example: Start 190, Current 180, Target 170
-      // Progress: (190 - 180) / (190 - 170) = 10 / 20 = 50%
-      final totalToLose = startValue - targetValue;
-      if (totalToLose <= 0) return 0;
+      // For weight loss: total progress / goal amount * 100
+      // Example: Start 200, Target 150, Progress 12 = 12/50 = 24%
+      final goalAmount = currentValue - targetValue; // 200 - 150 = 50
+      if (goalAmount <= 0) return 0;
 
-      final lostSoFar = startValue - currentValue;
-      return (lostSoFar / totalToLose * 100).clamp(0, 100);
+      return (totalProgress / goalAmount * 100).clamp(0, 100);
     } else {
-      // For increase goals: current / target * 100
-      // Example: Current 15, Target 20 = 75%
+      // For increase goals: total progress / target * 100
+      // Example: Target 20 workouts, Progress 5 = 5/20 = 25%
       if (targetValue <= 0) return 0;
-      return (currentValue / targetValue * 100).clamp(0, 100);
+      return (totalProgress / targetValue * 100).clamp(0, 100);
     }
   }
 
-  /// Get progress description (e.g., "Lost 10 / 20 lb" or "15 / 20 workouts")
+  /// Get progress description (e.g., "Lost 12.0 / 50.0 lb" or "5.0 / 20.0 workouts")
   String getProgressDescription() {
     if (isDecreaseGoal) {
-      final lost = startValue - currentValue;
-      final totalToLose = startValue - targetValue;
-      return 'Lost ${lost.toStringAsFixed(1)} / ${totalToLose.toStringAsFixed(1)} ${unit ?? ''}';
+      final goalAmount = currentValue - targetValue; // Total to lose
+      return 'Lost ${totalProgress.toStringAsFixed(1)} / ${goalAmount.toStringAsFixed(1)} ${unit ?? ''}';
     } else {
-      return '${currentValue.toStringAsFixed(1)} / ${targetValue.toStringAsFixed(1)} ${unit ?? ''}';
+      return '${totalProgress.toStringAsFixed(1)} / ${targetValue.toStringAsFixed(1)} ${unit ?? ''}';
     }
   }
 
