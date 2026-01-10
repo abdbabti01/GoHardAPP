@@ -37,7 +37,9 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     }
     // Load conversation on first build
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await context.read<ChatProvider>().loadConversation(widget.conversationId);
+      await context.read<ChatProvider>().loadConversation(
+        widget.conversationId,
+      );
 
       // Auto-send initial message if provided
       if (widget.initialMessage != null &&
