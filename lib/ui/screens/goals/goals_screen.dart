@@ -715,11 +715,16 @@ class _GoalsScreenState extends State<GoalsScreen> {
     );
   }
 
-  void _showCreateGoalDialog(BuildContext context) {
-    showDialog(
+  void _showCreateGoalDialog(BuildContext context) async {
+    final createdGoal = await showDialog<Goal>(
       context: context,
       builder: (context) => const CreateGoalDialog(),
     );
+
+    // If goal was created, ask if user wants to generate workout plan
+    if (createdGoal != null && context.mounted) {
+      _showWorkoutPlanDialog(context, createdGoal);
+    }
   }
 
   void _showAddProgressDialog(Goal goal) {
@@ -1011,6 +1016,162 @@ class _GoalsScreenState extends State<GoalsScreen> {
         return 'Weekly';
     }
   }
+
+  void _showWorkoutPlanDialog(BuildContext context, Goal goal) {
+    showDialog<void>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(
+                  Icons.fitness_center,
+                  color: Theme.of(context).primaryColor,
+                ),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Generate Workout Plan?')),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Would you like AI to create a personalized workout plan to help you reach this goal?',
+                  style: TextStyle(fontSize: 15),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        goal.goalType,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        goal.getProgressDescription(),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Maybe Later'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(dialogContext);
+                  await _navigateToWorkoutPlanChat(context, goal);
+                },
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: const Text('Generate Plan'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _navigateToWorkoutPlanChat(
+    BuildContext context,
+    Goal goal,
+  ) async {
+    try {
+      final chatProvider = context.read<ChatProvider>();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Creating workout plan chat...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      final prompt = _generateWorkoutPlanPrompt(goal);
+
+      final conversation = await chatProvider.createConversation(
+        title: 'Workout Plan: ${goal.goalType}',
+        type: 'workout_plan',
+      );
+
+      if (conversation != null && context.mounted) {
+        await Navigator.pushNamed(
+          context,
+          RouteNames.chatConversation,
+          arguments: {
+            'conversationId': conversation.id,
+            'initialMessage': prompt,
+          },
+        );
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                chatProvider.errorMessage ?? 'Failed to create conversation',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  String _generateWorkoutPlanPrompt(Goal goal) {
+    String prompt;
+
+    if (goal.goalType.toLowerCase().contains('loss')) {
+      final totalToLose = goal.currentValue - goal.targetValue;
+      prompt =
+          'Create a comprehensive workout plan to help me lose ${totalToLose.toStringAsFixed(0)} ${goal.unit ?? ''} (from ${goal.currentValue.toStringAsFixed(0)} to ${goal.targetValue.toStringAsFixed(0)} ${goal.unit ?? ''})';
+    } else if (goal.goalType.toLowerCase().contains('muscle') ||
+        goal.goalType.toLowerCase().contains('gain')) {
+      final totalToGain = goal.targetValue - goal.currentValue;
+      prompt =
+          'Create a comprehensive workout plan to help me gain ${totalToGain.toStringAsFixed(0)} ${goal.unit ?? ''} of muscle (from ${goal.currentValue.toStringAsFixed(0)} to ${goal.targetValue.toStringAsFixed(0)} ${goal.unit ?? ''})';
+    } else {
+      prompt =
+          'Create a comprehensive workout plan to help me achieve my ${goal.goalType} goal (target: ${goal.targetValue.toStringAsFixed(0)} ${goal.unit ?? ''})';
+    }
+
+    if (goal.targetDate != null) {
+      final months = goal.targetDate!.difference(DateTime.now()).inDays ~/ 30;
+      if (months > 0) {
+        prompt +=
+            ' within the next $months ${months == 1 ? 'month' : 'months'}';
+      }
+    }
+
+    prompt +=
+        '.\n\nPlease include:\n- Weekly workout schedule\n- Specific exercises with sets and reps\n- Progressive overload strategy\n- Rest and recovery recommendations';
+
+    return prompt;
+  }
 }
 
 // Import the dialog classes from the original goals_screen.dart
@@ -1206,13 +1367,13 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
       setState(() => _isCreating = false);
 
       if (success) {
-        Navigator.pop(context);
+        // Return the created goal to parent
+        Navigator.pop(context, goal);
+
+        // Show success message on parent screen
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Goal created successfully')),
         );
-
-        // Ask if user wants to generate a workout plan
-        _showWorkoutPlanDialog(context, goal);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1222,220 +1383,6 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
         );
       }
     }
-  }
-
-  void _showWorkoutPlanDialog(BuildContext context, Goal goal) {
-    debugPrint('_showWorkoutPlanDialog called for goal: ${goal.goalType}');
-    // Capture the parent context before showing dialog
-    final parentContext = context;
-
-    showDialog(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Row(
-              children: [
-                Icon(
-                  Icons.fitness_center,
-                  color: Theme.of(context).primaryColor,
-                ),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('Generate Workout Plan?')),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Would you like AI to create a personalized workout plan to help you reach this goal?',
-                  style: TextStyle(fontSize: 15),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        goal.goalType,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        goal.getProgressDescription(),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Maybe Later'),
-              ),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  // Capture scaffoldMessenger before async gap
-                  final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-                  // Close dialog first
-                  Navigator.pop(dialogContext);
-
-                  // Wait for dialog to fully close before navigating
-                  await Future.delayed(const Duration(milliseconds: 300));
-
-                  // Show test message
-                  scaffoldMessenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('Button clicked, checking context...'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-
-                  // Use parent context for navigation
-                  if (parentContext.mounted) {
-                    await _navigateToWorkoutPlanChat(parentContext, goal);
-                  } else {
-                    scaffoldMessenger.showSnackBar(
-                      const SnackBar(
-                        content: Text('ERROR: Context not mounted!'),
-                        backgroundColor: Colors.red,
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.auto_awesome, size: 18),
-                label: const Text('Generate Plan'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-    );
-  }
-
-  Future<void> _navigateToWorkoutPlanChat(
-    BuildContext context,
-    Goal goal,
-  ) async {
-    try {
-      final chatProvider = context.read<ChatProvider>();
-
-      // Show loading indicator
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Creating workout plan chat...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-
-      // Generate the AI prompt based on the goal
-      final prompt = _generateWorkoutPlanPrompt(goal);
-      debugPrint('Generated prompt: ${prompt.substring(0, 50)}...');
-
-      // Create a new conversation
-      debugPrint('Creating conversation...');
-      final conversation = await chatProvider.createConversation(
-        title: 'Workout Plan: ${goal.goalType}',
-        type: 'workout_plan',
-      );
-      debugPrint('Conversation created: ${conversation?.id}');
-
-      if (conversation != null && context.mounted) {
-        debugPrint('Navigating to chat conversation...');
-        // Navigate to chat with the pre-filled prompt
-        await Navigator.pushNamed(
-          context,
-          RouteNames.chatConversation,
-          arguments: {
-            'conversationId': conversation.id,
-            'initialMessage': prompt,
-          },
-        );
-        debugPrint('Navigation completed');
-      } else {
-        debugPrint('ERROR: Conversation is null or context not mounted');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Failed to create conversation. ${chatProvider.errorMessage ?? "Unknown error"}',
-              ),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
-      }
-    } catch (e, stackTrace) {
-      debugPrint('ERROR in _navigateToWorkoutPlanChat: $e');
-      debugPrint('Stack trace: $stackTrace');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    }
-  }
-
-  String _generateWorkoutPlanPrompt(Goal goal) {
-    String prompt;
-
-    if (goal.goalType.toLowerCase().contains('loss')) {
-      // Weight loss goal
-      final totalToLose = goal.currentValue - goal.targetValue;
-      prompt =
-          'Create a comprehensive workout plan to help me lose ${totalToLose.toStringAsFixed(0)} ${goal.unit ?? ''} (from ${goal.currentValue.toStringAsFixed(0)} to ${goal.targetValue.toStringAsFixed(0)} ${goal.unit ?? ''})';
-    } else if (goal.goalType.toLowerCase().contains('muscle') ||
-        goal.goalType.toLowerCase().contains('gain')) {
-      // Muscle gain goal
-      final totalToGain = goal.targetValue - goal.currentValue;
-      prompt =
-          'Create a comprehensive workout plan to help me gain ${totalToGain.toStringAsFixed(0)} ${goal.unit ?? ''} of muscle (from ${goal.currentValue.toStringAsFixed(0)} to ${goal.targetValue.toStringAsFixed(0)} ${goal.unit ?? ''})';
-    } else {
-      // Other goals
-      prompt =
-          'Create a comprehensive workout plan to help me achieve my ${goal.goalType} goal (target: ${goal.targetValue.toStringAsFixed(0)} ${goal.unit ?? ''})';
-    }
-
-    // Add target date if set
-    if (goal.targetDate != null) {
-      final months = goal.targetDate!.difference(DateTime.now()).inDays ~/ 30;
-      if (months > 0) {
-        prompt +=
-            ' within the next $months ${months == 1 ? 'month' : 'months'}';
-      }
-    }
-
-    prompt +=
-        '.\n\nPlease include:\n- Weekly workout schedule\n- Specific exercises with sets and reps\n- Progressive overload strategy\n- Rest and recovery recommendations';
-
-    return prompt;
   }
 
   @override
