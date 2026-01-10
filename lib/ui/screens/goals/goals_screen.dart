@@ -1225,6 +1225,7 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
   }
 
   void _showWorkoutPlanDialog(BuildContext context, Goal goal) {
+    debugPrint('_showWorkoutPlanDialog called for goal: ${goal.goalType}');
     // Capture the parent context before showing dialog
     final parentContext = context;
 
@@ -1288,8 +1289,12 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
               ),
               ElevatedButton.icon(
                 onPressed: () async {
+                  debugPrint('Generate Plan button clicked!');
                   // Close dialog first
                   Navigator.pop(dialogContext);
+                  debugPrint(
+                    'Dialog closed, calling _navigateToWorkoutPlanChat',
+                  );
                   // Use parent context for navigation
                   await _navigateToWorkoutPlanChat(parentContext, goal);
                 },
