@@ -12,9 +12,9 @@ import '../../widgets/sessions/workout_options_sheet.dart';
 import '../../widgets/sessions/weekly_progress_card.dart';
 import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/active_workout_banner.dart';
+import '../programs/programs_screen.dart';
 
-/// Sessions screen displaying list of workout sessions
-/// Matches SessionsPage.xaml from MAUI app
+/// Sessions screen with tabs for My Workouts and Programs
 class SessionsScreen extends StatefulWidget {
   const SessionsScreen({super.key});
 
@@ -22,7 +22,9 @@ class SessionsScreen extends StatefulWidget {
   State<SessionsScreen> createState() => _SessionsScreenState();
 }
 
-class _SessionsScreenState extends State<SessionsScreen> {
+class _SessionsScreenState extends State<SessionsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   bool _isPlannedExpanded =
       false; // Track if planned workouts section is expanded
   String _pastWorkoutsFilter = 'Last Month'; // Filter for past workouts
@@ -32,12 +34,19 @@ class _SessionsScreenState extends State<SessionsScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     // Load sessions and exercise templates on first build (for offline caching)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SessionsProvider>().loadSessions();
       // Trigger exercise templates to load and cache for offline use
       context.read<ExercisesProvider>().loadExercises();
     });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _handleRefresh() async {
@@ -527,312 +536,343 @@ class _SessionsScreenState extends State<SessionsScreen> {
             tooltip: 'Analytics',
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [Tab(text: 'My Workouts'), Tab(text: 'Programs')],
+        ),
       ),
-      body: Column(
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          const ActiveWorkoutBanner(),
-          const OfflineBanner(),
-          Expanded(
-            child: Consumer<SessionsProvider>(
-              builder: (context, provider, child) {
-                // Loading state
-                if (provider.isLoading && provider.sessions.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+          // My Workouts tab
+          Column(
+            children: [
+              const ActiveWorkoutBanner(),
+              const OfflineBanner(),
+              Expanded(
+                child: Consumer<SessionsProvider>(
+                  builder: (context, provider, child) {
+                    // Loading state
+                    if (provider.isLoading && provider.sessions.isEmpty) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                // Error state
-                if (provider.errorMessage != null &&
-                    provider.errorMessage!.isNotEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 64,
-                          color: Colors.red.shade300,
+                    // Error state
+                    if (provider.errorMessage != null &&
+                        provider.errorMessage!.isNotEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 64,
+                              color: Colors.red.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Error Loading Workouts',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 32,
+                              ),
+                              child: Text(
+                                provider.errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: Colors.grey),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: _handleRefresh,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Error Loading Workouts',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 32),
-                          child: Text(
-                            provider.errorMessage!,
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: Colors.grey),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: _handleRefresh,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
+                      );
+                    }
 
-                // Empty state
-                if (provider.sessions.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.fitness_center,
-                          size: 80,
-                          color: Colors.grey.shade300,
+                    // Empty state
+                    if (provider.sessions.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.fitness_center,
+                              size: 80,
+                              color: Colors.grey.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No Workouts Yet',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 48,
+                              ),
+                              child: Text(
+                                'Start your first workout by tapping the + button below',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: Colors.grey),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No Workouts Yet',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 48),
-                          child: Text(
-                            'Start your first workout by tapping the + button below',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: Colors.grey),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
+                      );
+                    }
 
-                // Organize sessions by time period
-                final now = DateTime.now();
-                final today = DateTime(now.year, now.month, now.day);
-                final weekStart = today.subtract(
-                  Duration(days: today.weekday - 1),
-                );
+                    // Organize sessions by time period
+                    final now = DateTime.now();
+                    final today = DateTime(now.year, now.month, now.day);
+                    final weekStart = today.subtract(
+                      Duration(days: today.weekday - 1),
+                    );
 
-                // Group sessions
-                // Today: includes today's workouts + ALL in-progress workouts (even if scheduled for future)
-                final todaySessions =
-                    provider.sessions
-                        .where(
-                          (s) =>
-                              (s.status != 'planned' &&
+                    // Group sessions
+                    // Today: includes today's workouts + ALL in-progress workouts (even if scheduled for future)
+                    final todaySessions =
+                        provider.sessions
+                            .where(
+                              (s) =>
+                                  (s.status != 'planned' &&
+                                      DateTime(
+                                            s.date.year,
+                                            s.date.month,
+                                            s.date.day,
+                                          ) ==
+                                          today) ||
+                                  s.status ==
+                                      'in_progress', // Show all active workouts
+                            )
+                            .toList();
+
+                    // ALL sessions for this week (for progress card) - includes planned, in-progress, completed, draft
+                    final allThisWeekSessions =
+                        provider.sessions
+                            .where(
+                              (s) =>
+                                  s.date.isAfter(
+                                    weekStart.subtract(const Duration(days: 1)),
+                                  ) &&
+                                  s.date.isBefore(
+                                    today.add(const Duration(days: 7)),
+                                  ), // Include future workouts in current week
+                            )
+                            .toList();
+
+                    // ALL sessions for this month (for progress card)
+                    final monthStart = DateTime(now.year, now.month, 1);
+                    final monthEnd = DateTime(now.year, now.month + 1, 1);
+                    final allThisMonthSessions =
+                        provider.sessions
+                            .where(
+                              (s) =>
+                                  s.date.isAfter(
+                                    monthStart.subtract(
+                                      const Duration(days: 1),
+                                    ),
+                                  ) &&
+                                  s.date.isBefore(monthEnd),
+                            )
+                            .toList();
+
+                    final plannedSessions =
+                        provider.sessions
+                            .where((s) => s.status == 'planned')
+                            .toList();
+
+                    // This Week: workouts from Monday to yesterday (not today, not before this week)
+                    final thisWeekSessions =
+                        provider.sessions
+                            .where(
+                              (s) =>
+                                  s.status != 'planned' &&
+                                  s.status != 'in_progress' &&
+                                  !s.date.isBefore(
+                                    weekStart,
+                                  ) && // After/equal Monday
                                   DateTime(
                                         s.date.year,
                                         s.date.month,
                                         s.date.day,
-                                      ) ==
-                                      today) ||
-                              s.status ==
-                                  'in_progress', // Show all active workouts
-                        )
-                        .toList();
+                                      ) !=
+                                      today, // Not today
+                            )
+                            .toList();
 
-                // ALL sessions for this week (for progress card) - includes planned, in-progress, completed, draft
-                final allThisWeekSessions =
-                    provider.sessions
-                        .where(
-                          (s) =>
-                              s.date.isAfter(
-                                weekStart.subtract(const Duration(days: 1)),
-                              ) &&
-                              s.date.isBefore(
-                                today.add(const Duration(days: 7)),
-                              ), // Include future workouts in current week
-                        )
-                        .toList();
+                    // Calculate date range for past workouts filter
+                    final filterDays = _getFilterDays(_pastWorkoutsFilter);
+                    final filterCutoff = today.subtract(
+                      Duration(days: filterDays),
+                    );
 
-                // ALL sessions for this month (for progress card)
-                final monthStart = DateTime(now.year, now.month, 1);
-                final monthEnd = DateTime(now.year, now.month + 1, 1);
-                final allThisMonthSessions =
-                    provider.sessions
-                        .where(
-                          (s) =>
-                              s.date.isAfter(
-                                monthStart.subtract(const Duration(days: 1)),
-                              ) &&
-                              s.date.isBefore(monthEnd),
-                        )
-                        .toList();
+                    // Past sessions: before this week AND within filter range
+                    final pastSessions =
+                        provider.sessions
+                            .where(
+                              (s) =>
+                                  s.status != 'planned' &&
+                                  s.status != 'in_progress' &&
+                                  s.date.isBefore(
+                                    weekStart,
+                                  ) && // Before this week
+                                  s.date.isAfter(
+                                    filterCutoff.subtract(
+                                      const Duration(days: 1),
+                                    ),
+                                  ), // Within filter range
+                            )
+                            .toList();
 
-                final plannedSessions =
-                    provider.sessions
-                        .where((s) => s.status == 'planned')
-                        .toList();
+                    // Group past sessions by week
+                    final groupedPast = DateGroupingUtils.groupSessionsByWeek(
+                      pastSessions,
+                    );
+                    final pastWeekLabels =
+                        DateGroupingUtils.getOrderedWeekLabels(groupedPast);
 
-                // This Week: workouts from Monday to yesterday (not today, not before this week)
-                final thisWeekSessions =
-                    provider.sessions
-                        .where(
-                          (s) =>
-                              s.status != 'planned' &&
-                              s.status != 'in_progress' &&
-                              !s.date.isBefore(
-                                weekStart,
-                              ) && // After/equal Monday
-                              DateTime(s.date.year, s.date.month, s.date.day) !=
-                                  today, // Not today
-                        )
-                        .toList();
-
-                // Calculate date range for past workouts filter
-                final filterDays = _getFilterDays(_pastWorkoutsFilter);
-                final filterCutoff = today.subtract(Duration(days: filterDays));
-
-                // Past sessions: before this week AND within filter range
-                final pastSessions =
-                    provider.sessions
-                        .where(
-                          (s) =>
-                              s.status != 'planned' &&
-                              s.status != 'in_progress' &&
-                              s.date.isBefore(weekStart) && // Before this week
-                              s.date.isAfter(
-                                filterCutoff.subtract(const Duration(days: 1)),
-                              ), // Within filter range
-                        )
-                        .toList();
-
-                // Group past sessions by week
-                final groupedPast = DateGroupingUtils.groupSessionsByWeek(
-                  pastSessions,
-                );
-                final pastWeekLabels = DateGroupingUtils.getOrderedWeekLabels(
-                  groupedPast,
-                );
-
-                return RefreshIndicator(
-                  onRefresh: _handleRefresh,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 80),
-                    children: [
-                      // Weekly/Monthly Progress Card
-                      if (allThisWeekSessions.isNotEmpty ||
-                          allThisMonthSessions.isNotEmpty)
-                        WeeklyProgressCard(
-                          thisWeekSessions: allThisWeekSessions,
-                          thisMonthSessions: allThisMonthSessions,
-                        ),
-
-                      // Today Section
-                      if (todaySessions.isNotEmpty) ...[
-                        _buildSectionHeader('Today', Icons.today, null),
-                        ...todaySessions.map(
-                          (session) => SessionCard(
-                            session: session,
-                            onTap:
-                                () => _handleSessionTap(
-                                  session.id,
-                                  session.status,
-                                ),
-                            onDelete: () => _handleDeleteSession(session.id),
-                          ),
-                        ),
-                      ],
-
-                      // Planned/Upcoming Section (Grouped by Workout Name)
-                      if (plannedSessions.isNotEmpty) ...[
-                        _buildSectionHeader(
-                          'Upcoming',
-                          Icons.event,
-                          plannedSessions.length,
-                        ),
-                        if (_isPlannedExpanded) ...[
-                          () {
-                            final groupedPlanned = _groupPlannedSessionsByName(
-                              plannedSessions,
-                            );
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children:
-                                  groupedPlanned.entries.expand((entry) {
-                                    final workoutName = entry.key;
-                                    final sessions = entry.value;
-                                    final isExpanded =
-                                        _expandedWorkoutGroups[workoutName] ??
-                                        false;
-
-                                    return [
-                                      _buildWorkoutNameSubheader(
-                                        workoutName,
-                                        sessions.length,
-                                      ),
-                                      // Only show sessions if this group is expanded
-                                      if (isExpanded)
-                                        ...sessions.map(
-                                          (session) => SessionCard(
-                                            session: session,
-                                            onTap:
-                                                () => _handleSessionTap(
-                                                  session.id,
-                                                  session.status,
-                                                ),
-                                            onDelete:
-                                                () => _handleDeleteSession(
-                                                  session.id,
-                                                ),
-                                          ),
-                                        ),
-                                    ];
-                                  }).toList(),
-                            );
-                          }(),
-                        ],
-                      ],
-
-                      // This Week Section (Monday to yesterday)
-                      if (thisWeekSessions.isNotEmpty) ...[
-                        _buildSectionHeader(
-                          'This Week',
-                          Icons.calendar_today,
-                          null,
-                        ),
-                        ...thisWeekSessions.map(
-                          (session) => SessionCard(
-                            session: session,
-                            onTap:
-                                () => _handleSessionTap(
-                                  session.id,
-                                  session.status,
-                                ),
-                            onDelete: () => _handleDeleteSession(session.id),
-                          ),
-                        ),
-                      ],
-
-                      // Past Sessions with Filter
-                      if (pastSessions.isNotEmpty) ...[
-                        _buildPastWorkoutsFilter(),
-                        for (final label in pastWeekLabels) ...[
-                          _buildWeekHeader(label),
-                          ...groupedPast[label]!.map(
-                            (session) => SessionCard(
-                              session: session,
-                              onTap:
-                                  () => _handleSessionTap(
-                                    session.id,
-                                    session.status,
-                                  ),
-                              onDelete: () => _handleDeleteSession(session.id),
+                    return RefreshIndicator(
+                      onRefresh: _handleRefresh,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.only(bottom: 80),
+                        children: [
+                          // Weekly/Monthly Progress Card
+                          if (allThisWeekSessions.isNotEmpty ||
+                              allThisMonthSessions.isNotEmpty)
+                            WeeklyProgressCard(
+                              thisWeekSessions: allThisWeekSessions,
+                              thisMonthSessions: allThisMonthSessions,
                             ),
-                          ),
+
+                          // Today Section
+                          if (todaySessions.isNotEmpty) ...[
+                            _buildSectionHeader('Today', Icons.today, null),
+                            ...todaySessions.map(
+                              (session) => SessionCard(
+                                session: session,
+                                onTap:
+                                    () => _handleSessionTap(
+                                      session.id,
+                                      session.status,
+                                    ),
+                                onDelete:
+                                    () => _handleDeleteSession(session.id),
+                              ),
+                            ),
+                          ],
+
+                          // Planned/Upcoming Section (Grouped by Workout Name)
+                          if (plannedSessions.isNotEmpty) ...[
+                            _buildSectionHeader(
+                              'Upcoming',
+                              Icons.event,
+                              plannedSessions.length,
+                            ),
+                            if (_isPlannedExpanded) ...[
+                              () {
+                                final groupedPlanned =
+                                    _groupPlannedSessionsByName(
+                                      plannedSessions,
+                                    );
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children:
+                                      groupedPlanned.entries.expand((entry) {
+                                        final workoutName = entry.key;
+                                        final sessions = entry.value;
+                                        final isExpanded =
+                                            _expandedWorkoutGroups[workoutName] ??
+                                            false;
+
+                                        return [
+                                          _buildWorkoutNameSubheader(
+                                            workoutName,
+                                            sessions.length,
+                                          ),
+                                          // Only show sessions if this group is expanded
+                                          if (isExpanded)
+                                            ...sessions.map(
+                                              (session) => SessionCard(
+                                                session: session,
+                                                onTap:
+                                                    () => _handleSessionTap(
+                                                      session.id,
+                                                      session.status,
+                                                    ),
+                                                onDelete:
+                                                    () => _handleDeleteSession(
+                                                      session.id,
+                                                    ),
+                                              ),
+                                            ),
+                                        ];
+                                      }).toList(),
+                                );
+                              }(),
+                            ],
+                          ],
+
+                          // This Week Section (Monday to yesterday)
+                          if (thisWeekSessions.isNotEmpty) ...[
+                            _buildSectionHeader(
+                              'This Week',
+                              Icons.calendar_today,
+                              null,
+                            ),
+                            ...thisWeekSessions.map(
+                              (session) => SessionCard(
+                                session: session,
+                                onTap:
+                                    () => _handleSessionTap(
+                                      session.id,
+                                      session.status,
+                                    ),
+                                onDelete:
+                                    () => _handleDeleteSession(session.id),
+                              ),
+                            ),
+                          ],
+
+                          // Past Sessions with Filter
+                          if (pastSessions.isNotEmpty) ...[
+                            _buildPastWorkoutsFilter(),
+                            for (final label in pastWeekLabels) ...[
+                              _buildWeekHeader(label),
+                              ...groupedPast[label]!.map(
+                                (session) => SessionCard(
+                                  session: session,
+                                  onTap:
+                                      () => _handleSessionTap(
+                                        session.id,
+                                        session.status,
+                                      ),
+                                  onDelete:
+                                      () => _handleDeleteSession(session.id),
+                                ),
+                              ),
+                            ],
+                          ],
                         ],
-                      ],
-                    ],
-                  ),
-                );
-              },
-            ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
+          // Programs tab
+          const ProgramsScreen(),
         ],
       ),
       floatingActionButton: Container(

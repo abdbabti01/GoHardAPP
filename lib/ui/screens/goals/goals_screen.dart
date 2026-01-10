@@ -8,6 +8,7 @@ import '../../../data/models/goal_progress.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/goal_reminder_preferences.dart';
 import '../../../routes/route_names.dart';
+import '../analytics/analytics_screen.dart';
 
 class GoalsScreen extends StatefulWidget {
   const GoalsScreen({super.key});
@@ -16,13 +17,23 @@ class GoalsScreen extends StatefulWidget {
   State<GoalsScreen> createState() => _GoalsScreenState();
 }
 
-class _GoalsScreenState extends State<GoalsScreen> {
+class _GoalsScreenState extends State<GoalsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<GoalsProvider>().loadGoals();
     });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
@@ -38,56 +49,67 @@ class _GoalsScreenState extends State<GoalsScreen> {
             tooltip: 'Create Goal',
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [Tab(text: 'Goals'), Tab(text: 'Analytics')],
+        ),
       ),
-      body: Consumer<GoalsProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          Consumer<GoalsProvider>(
+            builder: (context, provider, child) {
+              if (provider.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          if (provider.errorMessage != null) {
-            return _buildErrorState(provider);
-          }
+              if (provider.errorMessage != null) {
+                return _buildErrorState(provider);
+              }
 
-          if (provider.activeGoals.isEmpty && provider.completedGoals.isEmpty) {
-            return _buildEmptyState();
-          }
+              if (provider.activeGoals.isEmpty &&
+                  provider.completedGoals.isEmpty) {
+                return _buildEmptyState();
+              }
 
-          return RefreshIndicator(
-            onRefresh: () => provider.loadGoals(),
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Active Goals Section
-                  if (provider.activeGoals.isNotEmpty) ...[
-                    _buildSectionHeader(
-                      'Active Goals',
-                      provider.activeGoals.length,
-                    ),
-                    ...provider.activeGoals.map(
-                      (goal) => _buildEnhancedGoalCard(goal),
-                    ),
-                  ],
+              return RefreshIndicator(
+                onRefresh: () => provider.loadGoals(),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Active Goals Section
+                      if (provider.activeGoals.isNotEmpty) ...[
+                        _buildSectionHeader(
+                          'Active Goals',
+                          provider.activeGoals.length,
+                        ),
+                        ...provider.activeGoals.map(
+                          (goal) => _buildEnhancedGoalCard(goal),
+                        ),
+                      ],
 
-                  // Completed Goals Section
-                  if (provider.completedGoals.isNotEmpty) ...[
-                    _buildSectionHeader(
-                      'Completed',
-                      provider.completedGoals.length,
-                    ),
-                    ...provider.completedGoals.map(
-                      (goal) => _buildCompletedGoalCard(goal),
-                    ),
-                  ],
+                      // Completed Goals Section
+                      if (provider.completedGoals.isNotEmpty) ...[
+                        _buildSectionHeader(
+                          'Completed',
+                          provider.completedGoals.length,
+                        ),
+                        ...provider.completedGoals.map(
+                          (goal) => _buildCompletedGoalCard(goal),
+                        ),
+                      ],
 
-                  const SizedBox(height: 80),
-                ],
-              ),
-            ),
-          );
-        },
+                      const SizedBox(height: 80),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const AnalyticsScreen(),
+        ],
       ),
     );
   }
