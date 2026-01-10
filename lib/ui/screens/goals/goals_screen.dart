@@ -1295,8 +1295,14 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                   debugPrint(
                     'Dialog closed, calling _navigateToWorkoutPlanChat',
                   );
+                  // Wait for dialog to fully close before navigating
+                  await Future.delayed(const Duration(milliseconds: 300));
                   // Use parent context for navigation
-                  await _navigateToWorkoutPlanChat(parentContext, goal);
+                  if (parentContext.mounted) {
+                    await _navigateToWorkoutPlanChat(parentContext, goal);
+                  } else {
+                    debugPrint('ERROR: parentContext not mounted!');
+                  }
                 },
                 icon: const Icon(Icons.auto_awesome, size: 18),
                 label: const Text('Generate Plan'),
