@@ -37,15 +37,24 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     }
     // Load conversation on first build
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await context.read<ChatProvider>().loadConversation(
-        widget.conversationId,
-      );
+      try {
+        debugPrint('ChatConversationScreen: Loading conversation...');
+        await context.read<ChatProvider>().loadConversation(
+          widget.conversationId,
+        );
+        debugPrint('ChatConversationScreen: Conversation loaded');
 
-      // Auto-send initial message if provided
-      if (widget.initialMessage != null &&
-          widget.initialMessage!.isNotEmpty &&
-          mounted) {
-        await _sendMessage();
+        // Auto-send initial message if provided
+        if (widget.initialMessage != null &&
+            widget.initialMessage!.isNotEmpty &&
+            mounted) {
+          debugPrint('ChatConversationScreen: Auto-sending initial message...');
+          await _sendMessage();
+          debugPrint('ChatConversationScreen: Initial message sent');
+        }
+      } catch (e, stackTrace) {
+        debugPrint('ChatConversationScreen initState error: $e');
+        debugPrint('Stack trace: $stackTrace');
       }
     });
   }
