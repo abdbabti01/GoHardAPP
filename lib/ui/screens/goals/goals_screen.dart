@@ -1289,19 +1289,34 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
               ),
               ElevatedButton.icon(
                 onPressed: () async {
-                  debugPrint('Generate Plan button clicked!');
+                  // Capture scaffoldMessenger before async gap
+                  final scaffoldMessenger = ScaffoldMessenger.of(context);
+
                   // Close dialog first
                   Navigator.pop(dialogContext);
-                  debugPrint(
-                    'Dialog closed, calling _navigateToWorkoutPlanChat',
-                  );
+
                   // Wait for dialog to fully close before navigating
                   await Future.delayed(const Duration(milliseconds: 300));
+
+                  // Show test message
+                  scaffoldMessenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Button clicked, checking context...'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+
                   // Use parent context for navigation
                   if (parentContext.mounted) {
                     await _navigateToWorkoutPlanChat(parentContext, goal);
                   } else {
-                    debugPrint('ERROR: parentContext not mounted!');
+                    scaffoldMessenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('ERROR: Context not mounted!'),
+                        backgroundColor: Colors.red,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
                   }
                 },
                 icon: const Icon(Icons.auto_awesome, size: 18),
