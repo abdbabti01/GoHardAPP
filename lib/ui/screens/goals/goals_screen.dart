@@ -1340,7 +1340,7 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
         // Navigate to chat with the pre-filled prompt
         await Navigator.pushNamed(
           context,
-          '/chat_conversation',
+          RouteNames.chatConversation,
           arguments: {
             'conversationId': conversation.id,
             'initialMessage': prompt,
