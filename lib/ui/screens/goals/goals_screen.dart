@@ -7,6 +7,7 @@ import '../../../data/models/goal.dart';
 import '../../../data/models/goal_progress.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/goal_reminder_preferences.dart';
+import '../../../routes/route_names.dart';
 
 class GoalsScreen extends StatefulWidget {
   const GoalsScreen({super.key});

@@ -36,8 +36,15 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       _messageController.text = widget.initialMessage!;
     }
     // Load conversation on first build
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ChatProvider>().loadConversation(widget.conversationId);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<ChatProvider>().loadConversation(widget.conversationId);
+
+      // Auto-send initial message if provided
+      if (widget.initialMessage != null &&
+          widget.initialMessage!.isNotEmpty &&
+          mounted) {
+        await _sendMessage();
+      }
     });
   }
 
