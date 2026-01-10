@@ -1224,10 +1224,13 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
   }
 
   void _showWorkoutPlanDialog(BuildContext context, Goal goal) {
+    // Capture the parent context before showing dialog
+    final parentContext = context;
+
     showDialog(
       context: context,
       builder:
-          (context) => AlertDialog(
+          (dialogContext) => AlertDialog(
             title: Row(
               children: [
                 Icon(
@@ -1279,13 +1282,15 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.pop(dialogContext),
                 child: const Text('Maybe Later'),
               ),
               ElevatedButton.icon(
                 onPressed: () async {
-                  Navigator.pop(context);
-                  await _navigateToWorkoutPlanChat(context, goal);
+                  // Close dialog first
+                  Navigator.pop(dialogContext);
+                  // Use parent context for navigation
+                  await _navigateToWorkoutPlanChat(parentContext, goal);
                 },
                 icon: const Icon(Icons.auto_awesome, size: 18),
                 label: const Text('Generate Plan'),
