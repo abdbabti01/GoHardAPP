@@ -43,50 +43,70 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   Widget build(BuildContext context) {
     final provider = context.watch<AnalyticsProvider>();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Analytics'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Overview', icon: Icon(Icons.dashboard)),
-            Tab(text: 'Progress', icon: Icon(Icons.trending_up)),
-            Tab(text: 'Records', icon: Icon(Icons.emoji_events)),
+    if (provider.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (provider.errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(provider.errorMessage!),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () => provider.refresh(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
           ],
         ),
-      ),
-      body:
-          provider.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : provider.errorMessage != null
-              ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.red,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(provider.errorMessage!),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () => provider.refresh(),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              )
-              : TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildOverviewTab(provider),
-                  _buildProgressTab(provider),
-                  _buildRecordsTab(provider),
-                ],
-              ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Clean tab selector
+        Container(
+          margin: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.outline.withValues(alpha: 0.2),
+            ),
+          ),
+          child: TabBar(
+            controller: _tabController,
+            indicator: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            labelColor: Theme.of(context).colorScheme.onPrimary,
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurface,
+            dividerColor: Colors.transparent,
+            tabs: const [
+              Tab(text: 'Overview', icon: Icon(Icons.dashboard, size: 20)),
+              Tab(text: 'Progress', icon: Icon(Icons.trending_up, size: 20)),
+              Tab(text: 'Records', icon: Icon(Icons.emoji_events, size: 20)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildOverviewTab(provider),
+              _buildProgressTab(provider),
+              _buildRecordsTab(provider),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
