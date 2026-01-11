@@ -4,6 +4,7 @@ import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../routes/route_names.dart';
+import '../../widgets/programs/program_calendar_widget.dart';
 
 class ProgramDetailScreen extends StatefulWidget {
   final int programId;
@@ -19,6 +20,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
   Program? _program;
   bool _isLoading = true;
   int _selectedWeek = 1;
+  bool _showCalendarView = false;
   late TabController _tabController;
 
   @override
@@ -85,6 +87,18 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       appBar: AppBar(
         title: Text(program.title),
         actions: [
+          // Calendar/Week view toggle
+          IconButton(
+            icon: Icon(
+              _showCalendarView ? Icons.view_week : Icons.calendar_month,
+            ),
+            onPressed: () {
+              setState(() {
+                _showCalendarView = !_showCalendarView;
+              });
+            },
+            tooltip: _showCalendarView ? 'Week View' : 'Calendar View',
+          ),
           if (!program.isCompleted)
             PopupMenuButton<String>(
               onSelected: (value) async {
@@ -208,78 +222,103 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
             ),
           ),
 
-          // Week Tabs
-          if (program.workouts != null && program.workouts!.isNotEmpty)
-            TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              indicatorColor: theme.primaryColor,
-              labelColor: theme.primaryColor,
-              unselectedLabelColor: Colors.grey.shade600,
-              tabs: List.generate(
-                program.totalWeeks,
-                (index) => Tab(text: 'Week ${index + 1}'),
+          // Conditional rendering: Calendar View or Week Tabs
+          if (_showCalendarView)
+            // Calendar View
+            Expanded(
+              child: ProgramCalendarWidget(
+                program: program,
+                onDateTapped: (date, workout) {
+                  if (workout != null && !workout.isRestDay) {
+                    Navigator.pushNamed(
+                      context,
+                      RouteNames.programWorkout,
+                      arguments: {
+                        'workoutId': workout.id,
+                        'programId': program.id,
+                      },
+                    );
+                  }
+                },
               ),
-            ),
+            )
+          else ...[
+            // Week Tabs
+            if (program.workouts != null && program.workouts!.isNotEmpty)
+              TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                indicatorColor: theme.primaryColor,
+                labelColor: theme.primaryColor,
+                unselectedLabelColor: Colors.grey.shade600,
+                tabs: List.generate(
+                  program.totalWeeks,
+                  (index) => Tab(text: 'Week ${index + 1}'),
+                ),
+              ),
 
-          // Workouts List
-          Expanded(
-            child:
-                program.workouts == null || program.workouts!.isEmpty
-                    ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.fitness_center,
-                            size: 64,
-                            color: Colors.grey.shade400,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No workouts in this program yet',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 16,
+            // Workouts List
+            Expanded(
+              child:
+                  program.workouts == null || program.workouts!.isEmpty
+                      ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.fitness_center,
+                              size: 64,
+                              color: Colors.grey.shade400,
                             ),
-                          ),
-                        ],
-                      ),
-                    )
-                    : TabBarView(
-                      controller: _tabController,
-                      children: List.generate(program.totalWeeks, (weekIndex) {
-                        final weekNumber = weekIndex + 1;
-                        final weekWorkouts =
-                            program.workouts!
-                                .where((w) => w.weekNumber == weekNumber)
-                                .toList()
-                              ..sort(
-                                (a, b) => a.orderIndex.compareTo(b.orderIndex),
-                              );
-
-                        return weekWorkouts.isEmpty
-                            ? Center(
-                              child: Text(
-                                'No workouts for Week $weekNumber',
-                                style: TextStyle(color: Colors.grey.shade600),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No workouts in this program yet',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 16,
                               ),
-                            )
-                            : ListView.builder(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: weekWorkouts.length,
-                              itemBuilder: (context, index) {
-                                final workout = weekWorkouts[index];
-                                return _buildWorkoutCard(
-                                  context,
-                                  workout,
-                                  program,
+                            ),
+                          ],
+                        ),
+                      )
+                      : TabBarView(
+                        controller: _tabController,
+                        children: List.generate(program.totalWeeks, (
+                          weekIndex,
+                        ) {
+                          final weekNumber = weekIndex + 1;
+                          final weekWorkouts =
+                              program.workouts!
+                                  .where((w) => w.weekNumber == weekNumber)
+                                  .toList()
+                                ..sort(
+                                  (a, b) =>
+                                      a.orderIndex.compareTo(b.orderIndex),
                                 );
-                              },
-                            );
-                      }),
-                    ),
-          ),
+
+                          return weekWorkouts.isEmpty
+                              ? Center(
+                                child: Text(
+                                  'No workouts for Week $weekNumber',
+                                  style: TextStyle(color: Colors.grey.shade600),
+                                ),
+                              )
+                              : ListView.builder(
+                                padding: const EdgeInsets.all(16),
+                                itemCount: weekWorkouts.length,
+                                itemBuilder: (context, index) {
+                                  final workout = weekWorkouts[index];
+                                  return _buildWorkoutCard(
+                                    context,
+                                    workout,
+                                    program,
+                                  );
+                                },
+                              );
+                        }),
+                      ),
+            ),
+          ],
         ],
       ),
     );

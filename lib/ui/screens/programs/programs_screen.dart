@@ -412,13 +412,67 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   Expanded(
                     flex: 2,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        // TODO: Navigate to workout screen
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Start workout - Coming soon!'),
-                          ),
+                      onPressed: () async {
+                        final programsProvider =
+                            context.read<ProgramsProvider>();
+
+                        // Get today's workout
+                        final workout = await programsProvider.getTodaysWorkout(
+                          program.id,
                         );
+
+                        if (workout == null || !context.mounted) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('No workout scheduled for today'),
+                                backgroundColor: Colors.orange,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                          return;
+                        }
+
+                        // Handle completed workout
+                        if (workout.isCompleted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Today\'s workout already completed!',
+                              ),
+                              backgroundColor: Colors.green,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          return;
+                        }
+
+                        // Handle rest day
+                        if (workout.isRestDay) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Today is a rest day. Enjoy your recovery!',
+                              ),
+                              backgroundColor: Colors.blue,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          return;
+                        }
+
+                        // Navigate to workout detail screen
+                        if (context.mounted) {
+                          Navigator.pushNamed(
+                            context,
+                            RouteNames.programWorkout,
+                            arguments: {
+                              'workoutId': workout.id,
+                              'programId': program.id,
+                            },
+                          );
+                        }
                       },
                       icon: const Icon(Icons.play_arrow, size: 20),
                       label: const Text('Start Workout'),
