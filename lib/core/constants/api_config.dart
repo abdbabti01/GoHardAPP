@@ -91,6 +91,8 @@ class ApiConfig {
       '$chatConversations/$conversationId/preview-sessions';
   static String chatCreateSessions(int conversationId) =>
       '$chatConversations/$conversationId/create-sessions';
+  static String chatCreateProgram(int conversationId) =>
+      '$chatConversations/$conversationId/create-program';
   static String goalById(int id) => '$goals/$id';
   static String goalComplete(int id) => '$goals/$id/complete';
   static String goalProgress(int id) => '$goals/$id/progress';

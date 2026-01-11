@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:intl/intl.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/active_workout_provider.dart';
+import '../../../providers/programs_provider.dart';
 import '../../../data/models/exercise_template.dart';
 import '../../../data/services/api_service.dart';
 import '../../../core/constants/api_config.dart';
@@ -194,6 +196,211 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _saveProgramPlan() async {
+    final navigator = Navigator.of(context);
+    final chatProvider = context.read<ChatProvider>();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    // Show dialog to collect program details
+    final programDetails = await _showProgramDetailsDialog();
+
+    if (programDetails == null || !mounted) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    // Create program
+    final createResult = await chatProvider.createProgramFromPlan(
+      title: programDetails['title'] as String?,
+      description: programDetails['description'] as String?,
+      goalId: programDetails['goalId'] as int?,
+      totalWeeks: programDetails['totalWeeks'] as int?,
+      daysPerWeek: programDetails['daysPerWeek'] as int?,
+      startDate: programDetails['startDate'] as DateTime?,
+    );
+
+    if (!mounted) return;
+    navigator.pop(); // Close loading
+
+    if (createResult != null) {
+      final programTitle = createResult['program']['title'] ?? 'Program';
+      final workoutCount = createResult['workouts']?.length ?? 0;
+
+      // Delete the conversation after successful program creation
+      final conversationId = chatProvider.currentConversation?.id;
+      if (conversationId != null) {
+        await chatProvider.deleteConversation(conversationId);
+      }
+
+      // Refresh programs list
+      if (mounted) {
+        debugPrint('🔄 Refreshing programs after creating workout plan...');
+        await context.read<ProgramsProvider>().loadPrograms();
+        debugPrint('✅ Programs refreshed after program creation');
+      }
+
+      // Navigate to programs screen (tab 2)
+      if (mounted) {
+        navigator.pushNamedAndRemoveUntil(
+          '/main',
+          (route) => false,
+          arguments: 2, // Programs tab index
+        );
+
+        // Show success message
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Created program "$programTitle" with $workoutCount workouts!',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            chatProvider.errorMessage ?? 'Failed to create program',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>?> _showProgramDetailsDialog() async {
+    final titleController = TextEditingController(
+      text:
+          context.read<ChatProvider>().currentConversation?.title ??
+          'My Program',
+    );
+    final descriptionController = TextEditingController(
+      text: 'AI-generated workout program',
+    );
+    DateTime startDate = DateTime.now();
+    int totalWeeks = 8;
+    int daysPerWeek = 4;
+
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Create Program'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Program Title',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int>(
+                    value: totalWeeks,
+                    decoration: const InputDecoration(
+                      labelText: 'Total Weeks',
+                      border: OutlineInputBorder(),
+                    ),
+                    items:
+                        [4, 6, 8, 10, 12, 16, 20].map((weeks) {
+                          return DropdownMenuItem(
+                            value: weeks,
+                            child: Text('$weeks weeks'),
+                          );
+                        }).toList(),
+                    onChanged: (value) {
+                      if (value != null) totalWeeks = value;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int>(
+                    value: daysPerWeek,
+                    decoration: const InputDecoration(
+                      labelText: 'Days Per Week',
+                      border: OutlineInputBorder(),
+                    ),
+                    items:
+                        [3, 4, 5, 6, 7].map((days) {
+                          return DropdownMenuItem(
+                            value: days,
+                            child: Text('$days days/week'),
+                          );
+                        }).toList(),
+                    onChanged: (value) {
+                      if (value != null) daysPerWeek = value;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    title: const Text('Start Date'),
+                    subtitle: Text(DateFormat('MMM d, yyyy').format(startDate)),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: startDate,
+                        firstDate: DateTime.now().subtract(
+                          const Duration(days: 30),
+                        ),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (picked != null) {
+                        startDate = picked;
+                      }
+                    },
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context, {
+                    'title': titleController.text.trim(),
+                    'description':
+                        descriptionController.text.trim().isEmpty
+                            ? null
+                            : descriptionController.text.trim(),
+                    'totalWeeks': totalWeeks,
+                    'daysPerWeek': daysPerWeek,
+                    'startDate': startDate,
+                    'goalId': null, // TODO: Add goal selection if needed
+                  });
+                },
+                child: const Text('Create Program'),
+              ),
+            ],
+          ),
+    );
   }
 
   Future<DateTime?> _showPreviewDialog(Map<String, dynamic> preview) async {
@@ -529,15 +736,25 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         actions: [
           Consumer<ChatProvider>(
             builder: (context, provider, child) {
-              // Only show "Save to Workouts" button for workout plan conversations
+              // Only show save buttons for workout plan conversations
               if (provider.currentConversation?.type != 'workout_plan') {
                 return const SizedBox.shrink();
               }
 
-              return IconButton(
-                icon: const Icon(Icons.save),
-                tooltip: 'Save to My Workouts',
-                onPressed: provider.isOffline ? null : _saveWorkoutPlan,
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.calendar_view_week),
+                    tooltip: 'Save as Program',
+                    onPressed: provider.isOffline ? null : _saveProgramPlan,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.save),
+                    tooltip: 'Save to My Workouts',
+                    onPressed: provider.isOffline ? null : _saveWorkoutPlan,
+                  ),
+                ],
               );
             },
           ),

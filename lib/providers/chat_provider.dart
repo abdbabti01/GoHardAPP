@@ -523,6 +523,60 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  /// Create a Program from the current workout plan conversation
+  Future<Map<String, dynamic>?> createProgramFromPlan({
+    String? title,
+    String? description,
+    int? goalId,
+    int? totalWeeks,
+    int? daysPerWeek,
+    DateTime? startDate,
+  }) async {
+    if (isOffline) {
+      _errorMessage = 'Cannot create program offline';
+      notifyListeners();
+      return null;
+    }
+
+    if (_currentConversation == null) {
+      _errorMessage = 'No active conversation';
+      notifyListeners();
+      return null;
+    }
+
+    if (_currentConversation!.type != 'workout_plan') {
+      _errorMessage = 'This conversation is not a workout plan';
+      notifyListeners();
+      return null;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _chatRepository.createProgramFromPlan(
+        conversationId: _currentConversation!.id,
+        title: title,
+        description: description,
+        goalId: goalId,
+        totalWeeks: totalWeeks,
+        daysPerWeek: daysPerWeek,
+        startDate: startDate,
+      );
+
+      return result;
+    } catch (e) {
+      _errorMessage =
+          'Failed to create program: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Create program error: $e');
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Clear all chat data (called on logout)
   void clear() {
     _conversations = [];

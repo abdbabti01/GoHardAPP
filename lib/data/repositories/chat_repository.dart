@@ -630,4 +630,44 @@ class ChatRepository {
       rethrow;
     }
   }
+
+  /// Create a Program from an AI-generated workout plan
+  /// Requires online connection - cannot create programs offline
+  Future<Map<String, dynamic>> createProgramFromPlan({
+    required int conversationId,
+    String? title,
+    String? description,
+    int? goalId,
+    int? totalWeeks,
+    int? daysPerWeek,
+    DateTime? startDate,
+  }) async {
+    if (!_connectivity.isOnline) {
+      throw Exception('Cannot create program offline');
+    }
+
+    try {
+      final data = <String, dynamic>{};
+      if (title != null) data['title'] = title;
+      if (description != null) data['description'] = description;
+      if (goalId != null) data['goalId'] = goalId;
+      if (totalWeeks != null) data['totalWeeks'] = totalWeeks;
+      if (daysPerWeek != null) data['daysPerWeek'] = daysPerWeek;
+      if (startDate != null) data['startDate'] = startDate.toIso8601String();
+
+      final response = await _apiService.post<Map<String, dynamic>>(
+        ApiConfig.chatCreateProgram(conversationId),
+        data: data,
+      );
+
+      debugPrint(
+        '✅ Created program from workout plan: ${response['program']['title']}',
+      );
+
+      return response;
+    } catch (e) {
+      debugPrint('❌ Error creating program from plan: $e');
+      rethrow;
+    }
+  }
 }
