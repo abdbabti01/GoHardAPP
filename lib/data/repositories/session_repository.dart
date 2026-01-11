@@ -432,7 +432,11 @@ class SessionRepository {
 
   /// Update session status
   /// Optimistic update: updates locally first, syncs to server if online
-  Future<Session> updateSessionStatus(int id, String status) async {
+  Future<Session> updateSessionStatus(
+    int id,
+    String status, {
+    int? duration,
+  }) async {
     final Isar db = _localDb.database;
 
     // Find local session (id could be localId or serverId)
@@ -445,7 +449,12 @@ class SessionRepository {
     }
 
     // ALWAYS update locally first for instant response
-    await _updateLocalSessionStatus(db, localSession, status);
+    await _updateLocalSessionStatus(
+      db,
+      localSession,
+      status,
+      duration: duration,
+    );
 
     // Then sync to server in background if online (don't block)
     if (_connectivity.isOnline && localSession.serverId != null) {
@@ -492,6 +501,7 @@ class SessionRepository {
           'completedAt': localSession.completedAt!.toIso8601String(),
         if (localSession.pausedAt != null)
           'pausedAt': localSession.pausedAt!.toIso8601String(),
+        if (localSession.duration != null) 'duration': localSession.duration,
       };
 
       await _apiService.patch<void>(
@@ -525,8 +535,9 @@ class SessionRepository {
   Future<void> _updateLocalSessionStatus(
     Isar db,
     LocalSession localSession,
-    String status,
-  ) async {
+    String status, {
+    int? duration,
+  }) async {
     await db.writeTxn(() async {
       final now = DateTime.now();
       final nowUtc = DateTime.now().toUtc(); // Use UTC for timestamps
@@ -547,6 +558,12 @@ class SessionRepository {
         debugPrint('✅ Set completedAt in DB (UTC): $nowUtc');
       }
 
+      // Update duration if provided (from timer elapsed time)
+      if (duration != null) {
+        localSession.duration = duration;
+        debugPrint('⏱️ Set duration in DB: $duration minutes');
+      }
+
       // Only mark as pending_update if session already exists on server
       // If no serverId, keep it as pending_create
       if (localSession.serverId != null) {
@@ -558,7 +575,8 @@ class SessionRepository {
 
   /// Pause session timer
   /// Works offline by updating local database
-  Future<void> pauseSession(int id) async {
+  /// [pausedAt] timestamp from provider (to avoid time drift)
+  Future<void> pauseSession(int id, DateTime pausedAt) async {
     final Isar db = _localDb.database;
     var localSession = await db.localSessions.get(id);
     localSession ??=
@@ -570,8 +588,7 @@ class SessionRepository {
 
     // ALWAYS update locally first for instant response
     await db.writeTxn(() async {
-      final nowUtc = DateTime.now().toUtc(); // CRITICAL: Store as UTC
-      localSession!.pausedAt = nowUtc; // Store as UTC, not local time
+      localSession!.pausedAt = pausedAt; // Use provided timestamp (already UTC)
       localSession.lastModifiedLocal = DateTime.now();
       localSession.isSynced = false;
       // Only mark as pending_update if session already exists on server
@@ -579,33 +596,17 @@ class SessionRepository {
         localSession.syncStatus = 'pending_update';
       }
       await db.localSessions.put(localSession);
-      debugPrint('⏸️ Session paused locally (pausedAt UTC: $nowUtc)');
+      debugPrint('⏸️ Session paused locally (pausedAt UTC: $pausedAt)');
     });
 
     debugPrint('⏸️ Session paused locally');
 
     // Then sync to server in background if online (don't block)
+    // Use status endpoint with timestamps to avoid redundant calculation
     if (_connectivity.isOnline && localSession.serverId != null) {
-      _apiService
-          .patch<void>(
-            '${ApiConfig.sessions}/${localSession.serverId}/pause',
-            data: {},
-          )
+      _syncSessionStatusToServer(db, localSession.serverId!, localSession)
           .then((_) {
             debugPrint('✅ Background sync: Pause synced to server');
-            // Update sync status
-            db.writeTxn(() async {
-              final session =
-                  await db.localSessions
-                      .filter()
-                      .serverIdEqualTo(localSession!.serverId!)
-                      .findFirst();
-              if (session != null) {
-                session.isSynced = true;
-                session.syncStatus = 'synced';
-                await db.localSessions.put(session);
-              }
-            });
           })
           .catchError((e) {
             debugPrint('⚠️ Background sync failed, will retry later: $e');
@@ -615,7 +616,8 @@ class SessionRepository {
 
   /// Resume session timer
   /// Works offline by updating local database
-  Future<void> resumeSession(int id) async {
+  /// [newStartedAt] adjusted timestamp from provider (to avoid time drift)
+  Future<void> resumeSession(int id, DateTime newStartedAt) async {
     final Isar db = _localDb.database;
     var localSession = await db.localSessions.get(id);
     localSession ??=
@@ -627,14 +629,8 @@ class SessionRepository {
 
     // ALWAYS update locally first for instant response
     await db.writeTxn(() async {
-      // Calculate pause duration and adjust startedAt (just like backend does)
-      if (localSession!.pausedAt != null && localSession.startedAt != null) {
-        final nowUtc = DateTime.now().toUtc();
-        final pauseDuration = nowUtc.difference(localSession.pausedAt!);
-        localSession.startedAt = localSession.startedAt!.add(pauseDuration);
-        debugPrint('▶️ Adjusted startedAt by pause duration: $pauseDuration');
-      }
-
+      // Use the adjusted startedAt provided by provider (already calculated)
+      localSession!.startedAt = newStartedAt;
       localSession.pausedAt = null;
       localSession.lastModifiedLocal = DateTime.now();
       localSession.isSynced = false;
@@ -643,32 +639,17 @@ class SessionRepository {
         localSession.syncStatus = 'pending_update';
       }
       await db.localSessions.put(localSession);
+      debugPrint('▶️ Adjusted startedAt to: $newStartedAt');
     });
 
     debugPrint('▶️ Session resumed locally');
 
     // Then sync to server in background if online (don't block)
+    // Use status endpoint with timestamps to avoid redundant calculation
     if (_connectivity.isOnline && localSession.serverId != null) {
-      _apiService
-          .patch<void>(
-            '${ApiConfig.sessions}/${localSession.serverId}/resume',
-            data: {},
-          )
+      _syncSessionStatusToServer(db, localSession.serverId!, localSession)
           .then((_) {
             debugPrint('✅ Background sync: Resume synced to server');
-            // Update sync status
-            db.writeTxn(() async {
-              final session =
-                  await db.localSessions
-                      .filter()
-                      .serverIdEqualTo(localSession!.serverId!)
-                      .findFirst();
-              if (session != null) {
-                session.isSynced = true;
-                session.syncStatus = 'synced';
-                await db.localSessions.put(session);
-              }
-            });
           })
           .catchError((e) {
             debugPrint('⚠️ Background sync failed, will retry later: $e');

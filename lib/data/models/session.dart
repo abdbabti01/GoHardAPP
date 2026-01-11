@@ -33,34 +33,14 @@ class Session {
     this.exercises = const [],
   });
 
-  // Helper method to mark datetime as UTC without conversion
-  // Database timestamps are already stored as UTC, just need to mark them
-  static DateTime? _toUtc(DateTime? dt) {
-    if (dt == null) return null;
-    // If already marked as UTC, return as-is
-    if (dt.isUtc) return dt;
-    // CRITICAL: Don't convert! Just mark as UTC since DB stores UTC values
-    // Using toUtc() would double-convert and add timezone offset
-    return DateTime.utc(
-      dt.year,
-      dt.month,
-      dt.day,
-      dt.hour,
-      dt.minute,
-      dt.second,
-      dt.millisecond,
-      dt.microsecond,
-    );
-  }
-
   factory Session.fromJson(Map<String, dynamic> json) {
     // Parse the session using generated code
     final session = _$SessionFromJson(json);
 
-    // Convert timestamp fields to UTC using proper conversion
+    // Convert timestamp fields to UTC using standard conversion
     // NOTE: Do NOT convert the 'date' field - it's date-only and should stay in local timezone
     // Timestamps (startedAt, completedAt, pausedAt) MUST be UTC for proper time calculations
-    // Using toUtc() instead of reinterpretation to handle JSON parser timezone conversions
+    // Using toUtc() ensures proper conversion regardless of JSON parser behavior
     return Session(
       id: session.id,
       userId: session.userId,
@@ -70,9 +50,9 @@ class Session {
       type: session.type,
       name: session.name, // Preserve workout name
       status: session.status,
-      startedAt: _toUtc(session.startedAt), // Convert to UTC (timestamp)
-      completedAt: _toUtc(session.completedAt), // Convert to UTC (timestamp)
-      pausedAt: _toUtc(session.pausedAt), // Convert to UTC (timestamp)
+      startedAt: session.startedAt?.toUtc(), // Convert to UTC (timestamp)
+      completedAt: session.completedAt?.toUtc(), // Convert to UTC (timestamp)
+      pausedAt: session.pausedAt?.toUtc(), // Convert to UTC (timestamp)
       exercises: session.exercises,
     );
   }

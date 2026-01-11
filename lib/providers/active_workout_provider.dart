@@ -168,8 +168,10 @@ class ActiveWorkoutProvider extends ChangeNotifier {
       return;
     }
 
-    // Update UI IMMEDIATELY - don't wait for anything
+    // Calculate timestamp ONCE to avoid drift
     final nowUtc = DateTime.now().toUtc(); // CRITICAL: Use UTC
+
+    // Update UI IMMEDIATELY - don't wait for anything
     _stopTimer();
     _currentSession = _currentSession!.copyWith(
       pausedAt: nowUtc, // Store as UTC
@@ -177,8 +179,10 @@ class ActiveWorkoutProvider extends ChangeNotifier {
     notifyListeners();
     debugPrint('⏸️ Timer paused (UI updated) - pausedAt UTC: $nowUtc');
 
-    // Then save to DB in background (don't block UI)
-    _sessionRepository.pauseSession(_currentSession!.id).catchError((e) {
+    // Then save to DB in background with SAME timestamp (don't block UI)
+    _sessionRepository.pauseSession(_currentSession!.id, nowUtc).catchError((
+      e,
+    ) {
       _errorMessage =
           'Failed to pause: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Pause error: $e');
@@ -196,7 +200,7 @@ class ActiveWorkoutProvider extends ChangeNotifier {
       return;
     }
 
-    // Update UI IMMEDIATELY - don't wait for anything
+    // Calculate adjusted startedAt ONCE to avoid drift
     final now = DateTime.now().toUtc();
     final pauseDuration =
         _currentSession!.pausedAt != null
@@ -204,6 +208,7 @@ class ActiveWorkoutProvider extends ChangeNotifier {
             : Duration.zero;
     final newStartedAt = _currentSession!.startedAt!.add(pauseDuration);
 
+    // Update UI IMMEDIATELY - don't wait for anything
     _currentSession = _currentSession!.copyWith(
       startedAt: newStartedAt,
       pausedAt: null, // Clear pausedAt
@@ -212,15 +217,17 @@ class ActiveWorkoutProvider extends ChangeNotifier {
     // Resume timer
     _startTimer();
     notifyListeners();
-    debugPrint('▶️ Timer resumed (UI updated)');
+    debugPrint('▶️ Timer resumed (UI updated) - new startedAt: $newStartedAt');
 
-    // Then save to DB in background (don't block UI)
-    _sessionRepository.resumeSession(_currentSession!.id).catchError((e) {
-      _errorMessage =
-          'Failed to resume: ${e.toString().replaceAll('Exception: ', '')}';
-      debugPrint('Resume error: $e');
-      notifyListeners();
-    });
+    // Then save to DB in background with SAME adjusted timestamp (don't block UI)
+    _sessionRepository
+        .resumeSession(_currentSession!.id, newStartedAt)
+        .catchError((e) {
+          _errorMessage =
+              'Failed to resume: ${e.toString().replaceAll('Exception: ', '')}';
+          debugPrint('Resume error: $e');
+          notifyListeners();
+        });
   }
 
   /// Finish workout (update status to completed)
@@ -229,9 +236,15 @@ class ActiveWorkoutProvider extends ChangeNotifier {
 
     try {
       _stopTimer();
+
+      // Calculate workout duration in minutes from elapsed time
+      final durationMinutes = _elapsedTime.inMinutes;
+      debugPrint('🏁 Finishing workout - Duration: $durationMinutes minutes');
+
       _currentSession = await _sessionRepository.updateSessionStatus(
         _currentSession!.id,
         'completed',
+        duration: durationMinutes,
       );
       notifyListeners();
       return true;
