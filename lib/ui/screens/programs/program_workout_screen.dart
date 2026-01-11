@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
+import '../../../providers/sessions_provider.dart';
+import '../../../routes/route_names.dart';
 
 class ProgramWorkoutScreen extends StatefulWidget {
   final int workoutId;
@@ -240,7 +242,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
             ),
           ),
 
-          // Complete Workout Button
+          // Action Buttons
           if (!workout.isCompleted)
             Container(
               padding: const EdgeInsets.all(16),
@@ -255,25 +257,91 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                 ],
               ),
               child: SafeArea(
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showCompleteDialog(context, workout),
-                    icon: const Icon(Icons.check_circle, size: 24),
-                    label: const Text(
-                      'Complete Workout',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          // Create session from program workout
+                          final sessionsProvider =
+                              context.read<SessionsProvider>();
+                          final session =
+                              await sessionsProvider.startProgramWorkout(
+                            widget.workoutId,
+                          );
+
+                          if (session != null && mounted) {
+                            // Navigate to active workout screen
+                            await Navigator.pushNamed(
+                              context,
+                              RouteNames.activeWorkout,
+                              arguments: session.id,
+                            );
+
+                            // When returning, check if session was completed
+                            if (mounted) {
+                              final completedSession =
+                                  await sessionsProvider.getSessionById(
+                                session.id,
+                              );
+
+                              if (completedSession.status == 'completed') {
+                                // Mark program workout as complete
+                                final programsProvider =
+                                    context.read<ProgramsProvider>();
+                                await programsProvider.completeWorkout(
+                                  widget.workoutId,
+                                );
+                                await programsProvider.advanceProgram(
+                                  widget.programId,
+                                );
+
+                                if (mounted) {
+                                  Navigator.pop(context);
+                                }
+                              }
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.play_arrow, size: 24),
+                        label: const Text(
+                          'Start Workout',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _showCompleteDialog(context, workout),
+                        icon: const Icon(Icons.check, size: 20),
+                        label: const Text(
+                          'Skip',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),

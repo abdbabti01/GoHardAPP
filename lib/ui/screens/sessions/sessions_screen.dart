@@ -25,11 +25,7 @@ class SessionsScreen extends StatefulWidget {
 class _SessionsScreenState extends State<SessionsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  bool _isPlannedExpanded =
-      false; // Track if planned workouts section is expanded
   String _pastWorkoutsFilter = 'Last Month'; // Filter for past workouts
-  final Map<String, bool> _expandedWorkoutGroups =
-      {}; // Track which workout name groups are expanded
 
   @override
   void initState() {
@@ -279,86 +275,6 @@ class _SessionsScreenState extends State<SessionsScreen>
     }
   }
 
-  /// Group planned sessions by workout name
-  Map<String, List<Session>> _groupPlannedSessionsByName(
-    List<Session> sessions,
-  ) {
-    final grouped = <String, List<Session>>{};
-
-    for (final session in sessions) {
-      final name = session.name ?? 'Unnamed Workout';
-      if (!grouped.containsKey(name)) {
-        grouped[name] = [];
-      }
-      grouped[name]!.add(session);
-    }
-
-    // Sort sessions within each group by date
-    for (final group in grouped.values) {
-      group.sort((a, b) => a.date.compareTo(b.date));
-    }
-
-    return grouped;
-  }
-
-  /// Build subheader for workout name groups (collapsible)
-  Widget _buildWorkoutNameSubheader(String workoutName, int count) {
-    final isExpanded = _expandedWorkoutGroups[workoutName] ?? false;
-
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _expandedWorkoutGroups[workoutName] = !isExpanded;
-        });
-      },
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 16, 8),
-        child: Row(
-          children: [
-            Icon(
-              isExpanded ? Icons.expand_more : Icons.chevron_right,
-              size: 20,
-              color: Theme.of(context).colorScheme.secondary,
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.fitness_center,
-              size: 16,
-              color: Theme.of(context).colorScheme.secondary,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                workoutName,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.secondary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$count',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.secondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   /// Build week header widget
   Widget _buildWeekHeader(String label) {
     return Padding(
@@ -449,61 +365,40 @@ class _SessionsScreenState extends State<SessionsScreen>
 
   /// Build section header widget
   Widget _buildSectionHeader(String label, IconData icon, int? count) {
-    final isCollapsible = label == 'Upcoming';
-
-    return InkWell(
-      onTap:
-          isCollapsible
-              ? () {
-                setState(() {
-                  _isPlannedExpanded = !_isPlannedExpanded;
-                });
-              }
-              : null,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          if (count != null) ...[
+            const SizedBox(width: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
             ),
-            if (count != null) ...[
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-            ],
-            if (isCollapsible) ...[
-              const Spacer(),
-              Icon(
-                _isPlannedExpanded
-                    ? Icons.keyboard_arrow_up
-                    : Icons.keyboard_arrow_down,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -685,11 +580,6 @@ class _SessionsScreenState extends State<SessionsScreen>
                             )
                             .toList();
 
-                    final plannedSessions =
-                        provider.sessions
-                            .where((s) => s.status == 'planned')
-                            .toList();
-
                     // This Week: workouts from Monday to yesterday (not today, not before this week)
                     final thisWeekSessions =
                         provider.sessions
@@ -769,58 +659,6 @@ class _SessionsScreenState extends State<SessionsScreen>
                                     () => _handleDeleteSession(session.id),
                               ),
                             ),
-                          ],
-
-                          // Planned/Upcoming Section (Grouped by Workout Name)
-                          if (plannedSessions.isNotEmpty) ...[
-                            _buildSectionHeader(
-                              'Upcoming',
-                              Icons.event,
-                              plannedSessions.length,
-                            ),
-                            if (_isPlannedExpanded) ...[
-                              () {
-                                final groupedPlanned =
-                                    _groupPlannedSessionsByName(
-                                      plannedSessions,
-                                    );
-
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children:
-                                      groupedPlanned.entries.expand((entry) {
-                                        final workoutName = entry.key;
-                                        final sessions = entry.value;
-                                        final isExpanded =
-                                            _expandedWorkoutGroups[workoutName] ??
-                                            false;
-
-                                        return [
-                                          _buildWorkoutNameSubheader(
-                                            workoutName,
-                                            sessions.length,
-                                          ),
-                                          // Only show sessions if this group is expanded
-                                          if (isExpanded)
-                                            ...sessions.map(
-                                              (session) => SessionCard(
-                                                session: session,
-                                                onTap:
-                                                    () => _handleSessionTap(
-                                                      session.id,
-                                                      session.status,
-                                                    ),
-                                                onDelete:
-                                                    () => _handleDeleteSession(
-                                                      session.id,
-                                                    ),
-                                              ),
-                                            ),
-                                        ];
-                                      }).toList(),
-                                );
-                              }(),
-                            ],
                           ],
 
                           // This Week Section (Monday to yesterday)

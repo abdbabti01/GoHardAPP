@@ -400,6 +400,41 @@ class SessionRepository {
     return localResult;
   }
 
+  /// Create a session from a program workout
+  /// Links the session to the program and program workout
+  Future<Session> createSessionFromProgramWorkout(int programWorkoutId) async {
+    final db = _localDb.database;
+    final userId = await _authService.getUserId();
+
+    if (userId == null) {
+      throw Exception('User not authenticated');
+    }
+
+    // Create session with program workout link (server will handle exercise copying)
+    if (_connectivity.isOnline) {
+      try {
+        final data = await _apiService.post<Map<String, dynamic>>(
+          ApiConfig.sessionsFromProgramWorkout,
+          data: {'programWorkoutId': programWorkoutId},
+        );
+        final apiSession = Session.fromJson(data);
+
+        // Cache the session locally
+        await _createLocalSession(apiSession, db, isPending: false);
+
+        debugPrint('✅ Created session from program workout: ${apiSession.id}');
+        return apiSession;
+      } catch (e) {
+        debugPrint('❌ Failed to create session from program workout: $e');
+        rethrow;
+      }
+    } else {
+      throw Exception(
+        'Cannot create program workout session while offline. Please connect to the internet.',
+      );
+    }
+  }
+
   /// Background sync: Create session on server
   Future<void> _syncCreateSessionToServer(
     Session session,
@@ -446,6 +481,8 @@ class SessionRepository {
       startedAt: session.startedAt,
       completedAt: session.completedAt,
       pausedAt: session.pausedAt,
+      programId: session.programId,
+      programWorkoutId: session.programWorkoutId,
       isSynced: !isPending,
       syncStatus: isPending ? 'pending_create' : 'synced',
       lastModifiedLocal: DateTime.now(),
@@ -468,6 +505,8 @@ class SessionRepository {
       startedAt: localSession.startedAt,
       completedAt: localSession.completedAt,
       pausedAt: localSession.pausedAt,
+      programId: localSession.programId,
+      programWorkoutId: localSession.programWorkoutId,
     );
   }
 

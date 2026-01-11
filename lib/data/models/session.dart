@@ -17,6 +17,8 @@ class Session {
   final DateTime? completedAt;
   final DateTime? pausedAt;
   final List<Exercise> exercises;
+  final int? programId;
+  final int? programWorkoutId;
 
   Session({
     required this.id,
@@ -31,6 +33,8 @@ class Session {
     this.completedAt,
     this.pausedAt,
     this.exercises = const [],
+    this.programId,
+    this.programWorkoutId,
   });
 
   factory Session.fromJson(Map<String, dynamic> json) {
@@ -54,10 +58,15 @@ class Session {
       completedAt: session.completedAt?.toUtc(), // Convert to UTC (timestamp)
       pausedAt: session.pausedAt?.toUtc(), // Convert to UTC (timestamp)
       exercises: session.exercises,
+      programId: session.programId,
+      programWorkoutId: session.programWorkoutId,
     );
   }
 
   Map<String, dynamic> toJson() => _$SessionToJson(this);
+
+  /// Check if session is from a program
+  bool get isFromProgram => programId != null;
 
   /// Create a copy of this Session with some fields replaced
   Session copyWith({
@@ -73,6 +82,8 @@ class Session {
     DateTime? completedAt,
     DateTime? pausedAt,
     List<Exercise>? exercises,
+    int? programId,
+    int? programWorkoutId,
   }) {
     return Session(
       id: id ?? this.id,
@@ -87,6 +98,8 @@ class Session {
       completedAt: completedAt ?? this.completedAt,
       pausedAt: pausedAt ?? this.pausedAt,
       exercises: exercises ?? this.exercises,
+      programId: programId ?? this.programId,
+      programWorkoutId: programWorkoutId ?? this.programWorkoutId,
     );
   }
 }

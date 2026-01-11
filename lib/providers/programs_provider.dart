@@ -239,6 +239,19 @@ class ProgramsProvider extends ChangeNotifier {
     }
   }
 
+  /// Get workouts for the current week of a program
+  List<ProgramWorkout> getThisWeeksWorkouts(Program program) {
+    if (program.workouts == null || program.workouts!.isEmpty) {
+      return [];
+    }
+
+    final currentWeek = program.currentWeek;
+    return program.workouts!
+        .where((w) => w.weekNumber == currentWeek)
+        .toList()
+      ..sort((a, b) => a.dayNumber.compareTo(b.dayNumber));
+  }
+
   /// Add a workout to a program
   Future<bool> addWorkout(int programId, ProgramWorkout workout) async {
     try {

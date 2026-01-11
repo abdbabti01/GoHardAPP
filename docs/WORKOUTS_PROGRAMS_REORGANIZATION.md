@@ -148,11 +148,6 @@ class Program {
 │ 📆 THIS WEEK                    │
 │ Monday - Today's workouts       │
 ├─────────────────────────────────┤
-│ ⏰ UPCOMING (Next 7 days)       │
-│ • ONLY standalone planned       │
-│ • NOT from programs             │
-│ • User-scheduled one-offs       │
-├─────────────────────────────────┤
 │ 📜 PAST WORKOUTS [Filter ▼]    │
 │ • Historical log                │
 │ • Grouped by week               │
@@ -160,6 +155,8 @@ class Program {
 
 [+ New Workout] ← Quick start or plan one-off
 ```
+
+**NOTE:** "Upcoming" section REMOVED per user decision - reduces confusion since program workouts don't create Sessions.
 
 **Key principles:**
 - Focus on INDIVIDUAL workouts
@@ -241,11 +238,16 @@ class Program {
 **Goal:** Make it purely about individual workout logging
 
 **Changes needed:**
-1. **Modify "Upcoming" section logic** (`sessions_screen.dart` lines 774-824)
-   - Filter OUT workouts that are part of active programs
-   - Only show standalone planned sessions
-   - Add label: "Upcoming Standalone Workouts" or just "Planned"
-   - Limit to next 7 days only
+1. **REMOVE "Upcoming" section entirely** (`sessions_screen.dart` lines 774-824) ✅ USER DECISION
+   - Remove `_isPlannedExpanded` state variable (line 28-29)
+   - Remove `_expandedWorkoutGroups` map (line 31-32)
+   - Remove `plannedSessions` filter logic (lines 688-691)
+   - Remove entire "Upcoming" section rendering (lines 774-824)
+   - Remove `_groupPlannedSessionsByName()` method (lines 283-302)
+   - Remove `_buildWorkoutNameSubheader()` method (lines 305-360)
+   - Remove collapsible section header logic from `_buildSectionHeader()` (lines 452-508)
+
+   **Rationale:** Program workouts don't create Sessions, so "Upcoming" only shows standalone planned workouts which is confusing. Users can plan workouts from Programs tab instead.
 
 2. **Improve Progress Card** (already good, keep it)
    - Should show ALL workouts (program + standalone)
@@ -399,10 +401,12 @@ GET /api/programs/{id}/today  // Get today's workout
 
 ## Questions to Resolve
 
-1. **Should program workouts appear in My Workouts history?**
-   - ✅ YES - They're still workout sessions
-   - Show in TODAY, THIS WEEK, PAST
-   - Maybe add badge/indicator: "From: 12-Week Muscle Building"
+1. **Should program workouts appear in My Workouts history?** ❌ RESOLVED
+   - ❌ NO - Currently program workouts do NOT create Session records
+   - ProgramWorkout and Session are completely separate systems
+   - Program workouts are tracked in ProgramWorkout table (isCompleted flag)
+   - Standalone workouts are tracked in Session table
+   - **Future improvement:** Link them by adding programId to Session model
 
 2. **Can users edit/skip program workouts?**
    - Need to define flexibility rules
@@ -412,9 +416,10 @@ GET /api/programs/{id}/today  // Get today's workout
    - Show empty state with CTA to create from goal
    - Show recommended/template programs
 
-4. **Should standalone planned workouts have a limit?**
-   - Current implementation groups by name (collapsible)
-   - Seems good for organization
+4. **Remove "Upcoming" section from My Workouts?** ✅ RESOLVED
+   - ✅ YES - User decision to remove it
+   - Reduces confusion since it only showed standalone planned Sessions
+   - Users will plan/schedule workouts from Programs tab instead
 
 ---
 

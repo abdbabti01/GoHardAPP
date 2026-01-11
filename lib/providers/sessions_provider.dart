@@ -375,6 +375,44 @@ class SessionsProvider extends ChangeNotifier {
     await loadSessions(showLoading: false);
   }
 
+  /// Create a session from a program workout
+  Future<Session?> startProgramWorkout(int programWorkoutId) async {
+    try {
+      _errorMessage = null;
+
+      final session = await _sessionRepository.createSessionFromProgramWorkout(
+        programWorkoutId,
+      );
+
+      _sessions.insert(0, session);
+      notifyListeners();
+
+      debugPrint('✅ Created session from program workout: ${session.id}');
+      return session;
+    } catch (e) {
+      _errorMessage =
+          'Failed to start program workout: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Start program workout error: $e');
+      notifyListeners();
+      return null;
+    }
+  }
+
+  /// Get sessions from a specific program
+  List<Session> getSessionsFromProgram(int programId) {
+    return _sessions.where((s) => s.programId == programId).toList();
+  }
+
+  /// Get standalone sessions (not from programs)
+  List<Session> getStandaloneSessions() {
+    return _sessions.where((s) => s.programId == null).toList();
+  }
+
+  /// Get a session by ID
+  Future<Session> getSessionById(int id) async {
+    return await _sessionRepository.getSession(id);
+  }
+
   /// Clear error message
   void clearError() {
     _errorMessage = null;

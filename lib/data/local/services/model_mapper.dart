@@ -64,6 +64,8 @@ class ModelMapper {
       startedAt: localSession.startedAt,
       completedAt: localSession.completedAt,
       pausedAt: localSession.pausedAt,
+      programId: localSession.programId,
+      programWorkoutId: localSession.programWorkoutId,
       exercises: exercises,
     );
   }

@@ -45,6 +45,12 @@ class LocalSession {
   /// Timestamp when timer was paused (UTC)
   DateTime? pausedAt;
 
+  /// Program ID if this session is from a program
+  int? programId;
+
+  /// Program Workout ID if this session is from a program workout
+  int? programWorkoutId;
+
   // ========== Sync Tracking Fields ==========
 
   /// Whether entity is in sync with server
@@ -83,6 +89,8 @@ class LocalSession {
     this.startedAt,
     this.completedAt,
     this.pausedAt,
+    this.programId,
+    this.programWorkoutId,
     this.isSynced = false,
     this.syncStatus = 'pending_create',
     required this.lastModifiedLocal,

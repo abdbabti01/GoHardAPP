@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../data/models/program.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../routes/route_names.dart';
+import '../../widgets/programs/weekly_schedule_widget.dart';
 
 class ProgramsScreen extends StatefulWidget {
   const ProgramsScreen({super.key});
@@ -262,6 +263,27 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 ),
               ),
             const SizedBox(height: 16),
+
+            // Weekly Schedule
+            if (!isCompleted) ...[
+              const Divider(height: 32),
+              WeeklyScheduleWidget(
+                program: program,
+                onWorkoutTap: (workout) {
+                  if (!workout.isRestDay) {
+                    Navigator.pushNamed(
+                      context,
+                      RouteNames.programWorkout,
+                      arguments: {
+                        'workoutId': workout.id,
+                        'programId': program.id,
+                      },
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Today's Workout Section
             if (!isCompleted && program.todaysWorkout != null) ...[
