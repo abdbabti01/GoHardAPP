@@ -14,11 +14,11 @@ class WeeklyScheduleWidget extends StatelessWidget {
     this.onWorkoutTap,
   });
 
-  /// Get workouts for the current week
+  /// Get workouts for the current week based on calendar
   List<ProgramWorkout?> _getThisWeeksWorkouts() {
     if (program.workouts == null) return List.filled(7, null);
 
-    final currentWeek = program.currentWeek;
+    final currentWeek = program.calendarCurrentWeek;
     final weekWorkouts = <ProgramWorkout?>[];
 
     // Get workouts for days 1-7 of current week
@@ -78,7 +78,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                'Week ${program.currentWeek}/${program.totalWeeks}',
+                'Week ${program.calendarCurrentWeek}/${program.totalWeeks}',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -91,13 +91,15 @@ class WeeklyScheduleWidget extends StatelessWidget {
 
           // 7-day calendar
           ...weekWorkouts.asMap().entries.map((entry) {
-            final dayNumber = entry.key + 1;
             final workout = entry.value;
-            final isCurrentDay = dayNumber == program.currentDay;
-            final isPastDay = dayNumber < program.currentDay;
 
             if (workout == null) return const SizedBox.shrink();
 
+            // Use calendar-based logic instead of program position
+            final isCurrentDay = program.isWorkoutToday(workout);
+            final isPastDay =
+                !program.isWorkoutFuture(workout) &&
+                !program.isWorkoutToday(workout);
             final isMissed = program.isWorkoutMissed(workout);
 
             return Padding(

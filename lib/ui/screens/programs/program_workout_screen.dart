@@ -290,9 +290,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                                 await programsProvider.completeWorkout(
                                   widget.workoutId,
                                 );
-                                await programsProvider.advanceProgram(
-                                  widget.programId,
-                                );
+                                // No need to advance - program auto-syncs with calendar
 
                                 if (mounted) {
                                   navigator.pop();
@@ -592,16 +590,13 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                   );
 
                   if (success && context.mounted) {
-                    // Advance the program to next day
-                    await provider.advanceProgram(widget.programId);
+                    // No need to advance - program auto-syncs with calendar
 
                     if (!context.mounted) return;
 
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text(
-                          'Workout completed! Moving to next day...',
-                        ),
+                        content: Text('Workout completed!'),
                         backgroundColor: Colors.green,
                       ),
                     );

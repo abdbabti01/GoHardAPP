@@ -44,21 +44,10 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
     }
   }
 
-  /// Calculate what "today" means in the context of the program
+  /// Calculate what "today" means - uses real calendar date
   DateTime _calculateTodayInProgram() {
-    final programToday = widget.program.startDate.add(
-      Duration(
-        days:
-            (widget.program.currentWeek - 1) * 7 +
-            widget.program.currentDay -
-            1,
-      ),
-    );
-    return DateTime.utc(
-      programToday.year,
-      programToday.month,
-      programToday.day,
-    );
+    final now = DateTime.now();
+    return DateTime.utc(now.year, now.month, now.day);
   }
 
   /// Build a map of dates to workouts for O(1) lookup
@@ -126,8 +115,8 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
               title: const Text('Future Workout'),
               content: Text(
                 'This workout is scheduled for ${DateFormat('MMM d, yyyy').format(selectedDay)}.\n\n'
-                'Your program is currently on Week ${widget.program.currentWeek}, '
-                'Day ${widget.program.currentDay}.\n\n'
+                'Your program is currently on Week ${widget.program.calendarCurrentWeek}, '
+                'Day ${widget.program.calendarCurrentDay}.\n\n'
                 'Would you like to view this workout ahead of schedule?',
               ),
               actions: [

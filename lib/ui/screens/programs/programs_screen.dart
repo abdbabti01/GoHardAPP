@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../data/models/program.dart';
+import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../routes/route_names.dart';
@@ -21,6 +22,63 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ProgramsProvider>().loadPrograms();
     });
+  }
+
+  /// Show confirmation dialog and start workout if confirmed
+  Future<void> _startWorkoutWithConfirmation(
+    BuildContext context,
+    ProgramWorkout workout,
+    int programId,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.add_circle_outline, color: Colors.blue),
+                SizedBox(width: 12),
+                Text('Add to My Workouts?'),
+              ],
+            ),
+            content: Text(
+              'Do you want to add "${workout.workoutName}" to your workout sessions?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Add & Start'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    // User confirmed - create session and navigate
+    final sessionsProvider = context.read<SessionsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final session = await sessionsProvider.startProgramWorkout(workout.id);
+
+    if (session != null && context.mounted) {
+      // Navigate to My Workouts (Sessions screen) instead of active workout
+      navigator.pushNamed(RouteNames.sessions);
+
+      // Show success message
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${workout.workoutName} added to My Workouts!'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -195,7 +253,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Week ${program.currentWeek} of ${program.totalWeeks}',
+                  'Week ${program.calendarCurrentWeek} of ${program.totalWeeks}',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: theme.primaryColor,
@@ -297,45 +355,12 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     return;
                   }
 
-                  // Auto-start the workout
-                  final sessionsProvider = context.read<SessionsProvider>();
-                  final programsProvider = context.read<ProgramsProvider>();
-                  final navigator = Navigator.of(context);
-
-                  final session = await sessionsProvider.startProgramWorkout(
-                    workout.id,
+                  // Show confirmation dialog and add to My Workouts
+                  await _startWorkoutWithConfirmation(
+                    context,
+                    workout,
+                    program.id,
                   );
-
-                  if (session != null && context.mounted) {
-                    // Navigate to active workout screen
-                    await navigator.pushNamed(
-                      RouteNames.activeWorkout,
-                      arguments: session.id,
-                    );
-
-                    // When returning, check if session was completed
-                    if (context.mounted) {
-                      final completedSession = await sessionsProvider
-                          .getSessionById(session.id);
-
-                      if (completedSession.status == 'completed') {
-                        // Mark program workout as complete
-                        await programsProvider.completeWorkout(workout.id);
-                        await programsProvider.advanceProgram(program.id);
-
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Workout completed! Program advanced.',
-                              ),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      }
-                    }
-                  }
                 },
               ),
               const SizedBox(height: 16),

@@ -37,13 +37,13 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     if (program != null && mounted) {
       setState(() {
         _program = program;
-        _selectedWeek = program.currentWeek;
+        _selectedWeek = program.calendarCurrentWeek;
         _isLoading = false;
       });
       _tabController = TabController(
         length: program.totalWeeks,
         vsync: this,
-        initialIndex: program.currentWeek - 1,
+        initialIndex: program.calendarCurrentWeek - 1,
       );
       _tabController.addListener(() {
         if (!_tabController.indexIsChanging) {
@@ -63,6 +63,66 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       _tabController.dispose();
     }
     super.dispose();
+  }
+
+  /// Show confirmation dialog and start workout if confirmed
+  Future<void> _startWorkoutWithConfirmation(
+    BuildContext context,
+    ProgramWorkout workout,
+    int programId,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.add_circle_outline, color: Colors.blue),
+                SizedBox(width: 12),
+                Text('Add to My Workouts?'),
+              ],
+            ),
+            content: Text(
+              'Do you want to add "${workout.workoutName}" to your workout sessions?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Add & Start'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    // User confirmed - create session and navigate
+    final sessionsProvider = context.read<SessionsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final session = await sessionsProvider.startProgramWorkout(workout.id);
+
+    if (session != null && context.mounted) {
+      // Navigate to My Workouts (Sessions screen)
+      navigator.pushNamed(RouteNames.sessions);
+
+      // Show success message
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${workout.workoutName} added to My Workouts!'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      // Reload program to refresh UI
+      _loadProgram();
+    }
   }
 
   @override
@@ -258,48 +318,12 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     return;
                   }
 
-                  // Auto-start the workout
-                  final sessionsProvider = context.read<SessionsProvider>();
-                  final programsProvider = context.read<ProgramsProvider>();
-                  final navigator = Navigator.of(context);
-                  final messenger = ScaffoldMessenger.of(context);
-
-                  final session = await sessionsProvider.startProgramWorkout(
-                    workout.id,
+                  // Show confirmation dialog and add to My Workouts
+                  await _startWorkoutWithConfirmation(
+                    context,
+                    workout,
+                    program.id,
                   );
-
-                  if (session != null && mounted) {
-                    // Navigate to active workout screen
-                    await navigator.pushNamed(
-                      RouteNames.activeWorkout,
-                      arguments: session.id,
-                    );
-
-                    // When returning, check if session was completed
-                    if (mounted) {
-                      final completedSession = await sessionsProvider
-                          .getSessionById(session.id);
-
-                      if (completedSession.status == 'completed') {
-                        // Mark program workout as complete
-                        await programsProvider.completeWorkout(workout.id);
-                        await programsProvider.advanceProgram(program.id);
-
-                        if (mounted) {
-                          messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Workout completed! Program advanced.',
-                              ),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                          // Reload program to reflect changes
-                          _loadProgram();
-                        }
-                      }
-                    }
-                  }
                 },
               ),
             )
@@ -391,9 +415,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     Program program,
   ) {
     final theme = Theme.of(context);
-    final isCurrentWorkout =
-        program.currentWeek == workout.weekNumber &&
-        program.currentDay == workout.dayNumber;
+    final isCurrentWorkout = program.isWorkoutToday(workout);
     final isMissed = program.isWorkoutMissed(workout);
 
     return Card(
@@ -435,47 +457,8 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
             return;
           }
 
-          // Auto-start the workout
-          final sessionsProvider = context.read<SessionsProvider>();
-          final programsProvider = context.read<ProgramsProvider>();
-          final navigator = Navigator.of(context);
-          final messenger = ScaffoldMessenger.of(context);
-
-          final session = await sessionsProvider.startProgramWorkout(
-            workout.id,
-          );
-
-          if (session != null && mounted) {
-            // Navigate to active workout screen
-            await navigator.pushNamed(
-              RouteNames.activeWorkout,
-              arguments: session.id,
-            );
-
-            // When returning, check if session was completed
-            if (mounted) {
-              final completedSession = await sessionsProvider.getSessionById(
-                session.id,
-              );
-
-              if (completedSession.status == 'completed') {
-                // Mark program workout as complete
-                await programsProvider.completeWorkout(workout.id);
-                await programsProvider.advanceProgram(program.id);
-
-                if (mounted) {
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('Workout completed! Program advanced.'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                  // Reload program to reflect changes
-                  _loadProgram();
-                }
-              }
-            }
-          }
+          // Show confirmation dialog and add to My Workouts
+          await _startWorkoutWithConfirmation(context, workout, program.id);
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
