@@ -5,7 +5,6 @@ import '../../../providers/exercises_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../../core/services/sync_service.dart';
 import '../../../core/utils/date_utils.dart';
-import '../../../data/models/session.dart';
 import '../../widgets/sessions/session_card.dart';
 import '../../widgets/sessions/workout_name_dialog.dart';
 import '../../widgets/sessions/workout_options_sheet.dart';

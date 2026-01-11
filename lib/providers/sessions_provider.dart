@@ -408,11 +408,6 @@ class SessionsProvider extends ChangeNotifier {
     return _sessions.where((s) => s.programId == null).toList();
   }
 
-  /// Get a session by ID
-  Future<Session> getSessionById(int id) async {
-    return await _sessionRepository.getSession(id);
-  }
-
   /// Clear error message
   void clearError() {
     _errorMessage = null;

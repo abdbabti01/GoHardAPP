@@ -266,13 +266,16 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                           // Create session from program workout
                           final sessionsProvider =
                               context.read<SessionsProvider>();
+                          final programsProvider =
+                              context.read<ProgramsProvider>();
+                          final navigator = Navigator.of(context);
+
                           final session = await sessionsProvider
                               .startProgramWorkout(widget.workoutId);
 
                           if (session != null && mounted) {
                             // Navigate to active workout screen
-                            await Navigator.pushNamed(
-                              context,
+                            await navigator.pushNamed(
                               RouteNames.activeWorkout,
                               arguments: session.id,
                             );
@@ -284,8 +287,6 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
 
                               if (completedSession.status == 'completed') {
                                 // Mark program workout as complete
-                                final programsProvider =
-                                    context.read<ProgramsProvider>();
                                 await programsProvider.completeWorkout(
                                   widget.workoutId,
                                 );
@@ -294,7 +295,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                                 );
 
                                 if (mounted) {
-                                  Navigator.pop(context);
+                                  navigator.pop();
                                 }
                               }
                             }
