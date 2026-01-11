@@ -25,17 +25,18 @@ class WeeklyScheduleWidget extends StatelessWidget {
     for (int day = 1; day <= 7; day++) {
       final workout = program.workouts!.firstWhere(
         (w) => w.weekNumber == currentWeek && w.dayNumber == day,
-        orElse: () => ProgramWorkout(
-          id: 0,
-          programId: program.id,
-          weekNumber: currentWeek,
-          dayNumber: day,
-          workoutName: 'Rest',
-          workoutType: 'rest',
-          exercisesJson: '[]',
-          isCompleted: false,
-          orderIndex: day,
-        ),
+        orElse:
+            () => ProgramWorkout(
+              id: 0,
+              programId: program.id,
+              weekNumber: currentWeek,
+              dayNumber: day,
+              workoutName: 'Rest',
+              workoutType: 'rest',
+              exercisesJson: '[]',
+              isCompleted: false,
+              orderIndex: day,
+            ),
       );
       weekWorkouts.add(workout);
     }
@@ -64,11 +65,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
           // Header
           Row(
             children: [
-              Icon(
-                Icons.calendar_today,
-                size: 20,
-                color: theme.primaryColor,
-              ),
+              Icon(Icons.calendar_today, size: 20, color: theme.primaryColor),
               const SizedBox(width: 8),
               Text(
                 'THIS WEEK\'S SCHEDULE',
@@ -107,7 +104,8 @@ class WeeklyScheduleWidget extends StatelessWidget {
                 workout: workout,
                 isCurrentDay: isCurrentDay,
                 isPastDay: isPastDay,
-                onTap: onWorkoutTap != null ? () => onWorkoutTap!(workout) : null,
+                onTap:
+                    onWorkoutTap != null ? () => onWorkoutTap!(workout) : null,
               ),
             );
           }),

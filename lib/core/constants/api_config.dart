@@ -51,7 +51,8 @@ class ApiConfig {
   static const String authSignup = 'auth/signup';
   static const String users = 'users';
   static const String sessions = 'sessions';
-  static const String sessionsFromProgramWorkout = 'sessions/from-program-workout';
+  static const String sessionsFromProgramWorkout =
+      'sessions/from-program-workout';
   static const String exercises = 'exercises';
   static const String exerciseSets = 'exercisesets';
   static const String exerciseTemplates = 'exercisetemplates';

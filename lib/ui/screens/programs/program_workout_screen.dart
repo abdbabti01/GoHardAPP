@@ -266,10 +266,8 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                           // Create session from program workout
                           final sessionsProvider =
                               context.read<SessionsProvider>();
-                          final session =
-                              await sessionsProvider.startProgramWorkout(
-                            widget.workoutId,
-                          );
+                          final session = await sessionsProvider
+                              .startProgramWorkout(widget.workoutId);
 
                           if (session != null && mounted) {
                             // Navigate to active workout screen
@@ -281,10 +279,8 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
 
                             // When returning, check if session was completed
                             if (mounted) {
-                              final completedSession =
-                                  await sessionsProvider.getSessionById(
-                                session.id,
-                              );
+                              final completedSession = await sessionsProvider
+                                  .getSessionById(session.id);
 
                               if (completedSession.status == 'completed') {
                                 // Mark program workout as complete

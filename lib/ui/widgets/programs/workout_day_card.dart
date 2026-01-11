@@ -53,10 +53,7 @@ class WorkoutDayCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: borderColor,
-            width: isCurrentDay ? 2 : 1,
-          ),
+          border: Border.all(color: borderColor, width: isCurrentDay ? 2 : 1),
         ),
         child: Row(
           children: [
@@ -80,7 +77,8 @@ class WorkoutDayCard extends StatelessWidget {
                 workout.workoutName,
                 style: TextStyle(
                   fontSize: 15,
-                  fontWeight: isCurrentDay ? FontWeight.bold : FontWeight.normal,
+                  fontWeight:
+                      isCurrentDay ? FontWeight.bold : FontWeight.normal,
                   color: textColor,
                 ),
               ),
@@ -108,7 +106,11 @@ class WorkoutDayCard extends StatelessWidget {
             else if (!isRestDay && !isPastDay)
               Icon(Icons.circle_outlined, color: Colors.grey.shade400, size: 24)
             else if (isRestDay)
-              Icon(Icons.self_improvement, color: Colors.grey.shade400, size: 20),
+              Icon(
+                Icons.self_improvement,
+                color: Colors.grey.shade400,
+                size: 20,
+              ),
           ],
         ),
       ),

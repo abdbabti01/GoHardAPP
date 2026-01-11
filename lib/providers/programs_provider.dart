@@ -246,9 +246,7 @@ class ProgramsProvider extends ChangeNotifier {
     }
 
     final currentWeek = program.currentWeek;
-    return program.workouts!
-        .where((w) => w.weekNumber == currentWeek)
-        .toList()
+    return program.workouts!.where((w) => w.weekNumber == currentWeek).toList()
       ..sort((a, b) => a.dayNumber.compareTo(b.dayNumber));
   }
 
