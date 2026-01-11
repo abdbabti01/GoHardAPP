@@ -6,6 +6,7 @@ class WorkoutDayCard extends StatelessWidget {
   final ProgramWorkout workout;
   final bool isCurrentDay;
   final bool isPastDay;
+  final bool isMissed;
   final VoidCallback? onTap;
 
   const WorkoutDayCard({
@@ -13,6 +14,7 @@ class WorkoutDayCard extends StatelessWidget {
     required this.workout,
     required this.isCurrentDay,
     required this.isPastDay,
+    this.isMissed = false,
     this.onTap,
   });
 
@@ -35,6 +37,10 @@ class WorkoutDayCard extends StatelessWidget {
       backgroundColor = Colors.green.withValues(alpha: 0.1);
       textColor = Colors.green.shade700;
       borderColor = Colors.green;
+    } else if (isMissed) {
+      backgroundColor = Colors.orange.withValues(alpha: 0.1);
+      textColor = Colors.orange.shade700;
+      borderColor = Colors.orange;
     } else if (isRestDay) {
       backgroundColor = Colors.grey.shade50;
       textColor = Colors.grey.shade600;
@@ -103,6 +109,22 @@ class WorkoutDayCard extends StatelessWidget {
               )
             else if (isCompleted)
               Icon(Icons.check_circle, color: Colors.green, size: 24)
+            else if (isMissed)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'MISSED',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              )
             else if (!isRestDay && !isPastDay)
               Icon(Icons.circle_outlined, color: Colors.grey.shade400, size: 24)
             else if (isRestDay)

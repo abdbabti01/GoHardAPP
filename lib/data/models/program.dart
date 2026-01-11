@@ -138,6 +138,28 @@ class Program {
     return (totalDays - currentDays).clamp(0, totalDays);
   }
 
+  /// Check if a workout is missed (past its date but not completed)
+  bool isWorkoutMissed(ProgramWorkout workout) {
+    // Can't be missed if already completed
+    if (workout.isCompleted) return false;
+
+    // Can't be missed if it's a rest day
+    if (workout.isRestDay) return false;
+
+    // Calculate the scheduled date for this workout
+    final workoutDate = startDate.add(
+      Duration(days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1)),
+    );
+
+    // Calculate today's date in the program
+    final programToday = startDate.add(
+      Duration(days: (currentWeek - 1) * 7 + (currentDay - 1)),
+    );
+
+    // Workout is missed if its date is before today
+    return workoutDate.isBefore(programToday);
+  }
+
   Program copyWith({
     int? id,
     int? userId,

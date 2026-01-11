@@ -162,6 +162,7 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
     final normalized = _normalizeDate(day);
     final programToday = _calculateTodayInProgram();
     final isToday = normalized == programToday;
+    final isMissed = widget.program.isWorkoutMissed(workout); // Check if missed
 
     Color markerColor;
     IconData? icon;
@@ -178,6 +179,10 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
     } else if (normalized.isAfter(programToday)) {
       markerColor = theme.colorScheme.primary.withValues(alpha: 0.4);
       icon = Icons.circle_outlined;
+    } else if (isMissed) {
+      // Missed workout - past date but not completed
+      markerColor = Colors.orange.shade600;
+      icon = Icons.warning;
     } else {
       markerColor = theme.colorScheme.primary;
       icon = Icons.circle;

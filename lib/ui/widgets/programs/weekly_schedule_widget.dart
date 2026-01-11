@@ -98,12 +98,15 @@ class WeeklyScheduleWidget extends StatelessWidget {
 
             if (workout == null) return const SizedBox.shrink();
 
+            final isMissed = program.isWorkoutMissed(workout);
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: WorkoutDayCard(
                 workout: workout,
                 isCurrentDay: isCurrentDay,
                 isPastDay: isPastDay,
+                isMissed: isMissed,
                 onTap:
                     onWorkoutTap != null ? () => onWorkoutTap!(workout) : null,
               ),

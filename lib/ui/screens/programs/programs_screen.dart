@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../data/models/program.dart';
 import '../../../providers/programs_provider.dart';
+import '../../../providers/sessions_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/programs/weekly_schedule_widget.dart';
 
@@ -269,16 +270,71 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
               const Divider(height: 32),
               WeeklyScheduleWidget(
                 program: program,
-                onWorkoutTap: (workout) {
-                  if (!workout.isRestDay) {
-                    Navigator.pushNamed(
-                      context,
-                      RouteNames.programWorkout,
-                      arguments: {
-                        'workoutId': workout.id,
-                        'programId': program.id,
-                      },
+                onWorkoutTap: (workout) async {
+                  // Don't allow starting rest days
+                  if (workout.isRestDay) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text(
+                          'Rest day - Recovery is part of the program!',
+                        ),
+                        backgroundColor: Colors.blue.shade700,
+                        duration: const Duration(seconds: 2),
+                      ),
                     );
+                    return;
+                  }
+
+                  // Don't allow restarting completed workouts
+                  if (workout.isCompleted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('This workout is already completed!'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
+
+                  // Auto-start the workout
+                  final sessionsProvider = context.read<SessionsProvider>();
+                  final programsProvider = context.read<ProgramsProvider>();
+                  final navigator = Navigator.of(context);
+
+                  final session = await sessionsProvider.startProgramWorkout(
+                    workout.id,
+                  );
+
+                  if (session != null && context.mounted) {
+                    // Navigate to active workout screen
+                    await navigator.pushNamed(
+                      RouteNames.activeWorkout,
+                      arguments: session.id,
+                    );
+
+                    // When returning, check if session was completed
+                    if (context.mounted) {
+                      final completedSession = await sessionsProvider
+                          .getSessionById(session.id);
+
+                      if (completedSession.status == 'completed') {
+                        // Mark program workout as complete
+                        await programsProvider.completeWorkout(workout.id);
+                        await programsProvider.advanceProgram(program.id);
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Workout completed! Program advanced.',
+                              ),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      }
+                    }
                   }
                 },
               ),
@@ -407,104 +463,24 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             // Action Buttons
             if (!isCompleted) ...[
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        final programsProvider =
-                            context.read<ProgramsProvider>();
-
-                        // Get today's workout
-                        final workout = await programsProvider.getTodaysWorkout(
-                          program.id,
-                        );
-
-                        if (workout == null || !context.mounted) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('No workout scheduled for today'),
-                                backgroundColor: Colors.orange,
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                          return;
-                        }
-
-                        // Handle completed workout
-                        if (workout.isCompleted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Today\'s workout already completed!',
-                              ),
-                              backgroundColor: Colors.green,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                          return;
-                        }
-
-                        // Handle rest day
-                        if (workout.isRestDay) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Today is a rest day. Enjoy your recovery!',
-                              ),
-                              backgroundColor: Colors.blue,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                          return;
-                        }
-
-                        // Navigate to workout detail screen
-                        if (context.mounted) {
-                          Navigator.pushNamed(
-                            context,
-                            RouteNames.programWorkout,
-                            arguments: {
-                              'workoutId': workout.id,
-                              'programId': program.id,
-                            },
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.play_arrow, size: 20),
-                      label: const Text('Start Workout'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.pushNamed(
+                      context,
+                      RouteNames.programDetail,
+                      arguments: program.id,
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 1,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        Navigator.pushNamed(
-                          context,
-                          RouteNames.programDetail,
-                          arguments: program.id,
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text('View'),
-                    ),
-                  ),
-                ],
+                  child: const Text('View Program Detail'),
+                ),
               ),
             ],
           ],

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
+import '../../../providers/sessions_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/programs/program_calendar_widget.dart';
 
@@ -228,16 +229,76 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
             Expanded(
               child: ProgramCalendarWidget(
                 program: program,
-                onDateTapped: (date, workout) {
-                  if (workout != null && !workout.isRestDay) {
-                    Navigator.pushNamed(
-                      context,
-                      RouteNames.programWorkout,
-                      arguments: {
-                        'workoutId': workout.id,
-                        'programId': program.id,
-                      },
+                onDateTapped: (date, workout) async {
+                  if (workout == null) return;
+
+                  // Don't allow starting rest days
+                  if (workout.isRestDay) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text(
+                          'Rest day - Recovery is part of the program!',
+                        ),
+                        backgroundColor: Colors.blue.shade700,
+                        duration: const Duration(seconds: 2),
+                      ),
                     );
+                    return;
+                  }
+
+                  // Don't allow restarting completed workouts
+                  if (workout.isCompleted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('This workout is already completed!'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
+
+                  // Auto-start the workout
+                  final sessionsProvider = context.read<SessionsProvider>();
+                  final programsProvider = context.read<ProgramsProvider>();
+                  final navigator = Navigator.of(context);
+                  final messenger = ScaffoldMessenger.of(context);
+
+                  final session = await sessionsProvider.startProgramWorkout(
+                    workout.id,
+                  );
+
+                  if (session != null && mounted) {
+                    // Navigate to active workout screen
+                    await navigator.pushNamed(
+                      RouteNames.activeWorkout,
+                      arguments: session.id,
+                    );
+
+                    // When returning, check if session was completed
+                    if (mounted) {
+                      final completedSession = await sessionsProvider
+                          .getSessionById(session.id);
+
+                      if (completedSession.status == 'completed') {
+                        // Mark program workout as complete
+                        await programsProvider.completeWorkout(workout.id);
+                        await programsProvider.advanceProgram(program.id);
+
+                        if (mounted) {
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Workout completed! Program advanced.',
+                              ),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                          // Reload program to reflect changes
+                          _loadProgram();
+                        }
+                      }
+                    }
                   }
                 },
               ),
@@ -333,6 +394,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     final isCurrentWorkout =
         program.currentWeek == workout.weekNumber &&
         program.currentDay == workout.dayNumber;
+    final isMissed = program.isWorkoutMissed(workout);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -346,12 +408,74 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          Navigator.pushNamed(
-            context,
-            RouteNames.programWorkout,
-            arguments: {'workoutId': workout.id, 'programId': program.id},
+        onTap: () async {
+          // Don't allow starting rest days
+          if (workout.isRestDay) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Rest day - Recovery is part of the program!',
+                ),
+                backgroundColor: Colors.blue.shade700,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+            return;
+          }
+
+          // Don't allow restarting completed workouts
+          if (workout.isCompleted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('This workout is already completed!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            return;
+          }
+
+          // Auto-start the workout
+          final sessionsProvider = context.read<SessionsProvider>();
+          final programsProvider = context.read<ProgramsProvider>();
+          final navigator = Navigator.of(context);
+          final messenger = ScaffoldMessenger.of(context);
+
+          final session = await sessionsProvider.startProgramWorkout(
+            workout.id,
           );
+
+          if (session != null && mounted) {
+            // Navigate to active workout screen
+            await navigator.pushNamed(
+              RouteNames.activeWorkout,
+              arguments: session.id,
+            );
+
+            // When returning, check if session was completed
+            if (mounted) {
+              final completedSession = await sessionsProvider.getSessionById(
+                session.id,
+              );
+
+              if (completedSession.status == 'completed') {
+                // Mark program workout as complete
+                await programsProvider.completeWorkout(workout.id);
+                await programsProvider.advanceProgram(program.id);
+
+                if (mounted) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Workout completed! Program advanced.'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  // Reload program to reflect changes
+                  _loadProgram();
+                }
+              }
+            }
+          }
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -372,6 +496,8 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                               ? theme.primaryColor
                               : workout.isCompleted
                               ? Colors.green
+                              : isMissed
+                              ? Colors.orange
                               : Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -379,7 +505,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                       workout.dayNameFromNumber.substring(0, 3).toUpperCase(),
                       style: TextStyle(
                         color:
-                            isCurrentWorkout || workout.isCompleted
+                            isCurrentWorkout || workout.isCompleted || isMissed
                                 ? Colors.white
                                 : Colors.grey.shade700,
                         fontSize: 12,
@@ -432,6 +558,25 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                         'TODAY',
                         style: TextStyle(
                           color: theme.primaryColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    )
+                  else if (isMissed)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'MISSED',
+                        style: TextStyle(
+                          color: Colors.orange,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
