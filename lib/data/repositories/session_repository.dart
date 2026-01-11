@@ -58,6 +58,47 @@ class SessionRepository {
     return cachedSessions;
   }
 
+  /// Get all in-progress sessions for the current user
+  /// Used to ensure only one workout is active at a time
+  Future<List<Session>> getInProgressSessions() async {
+    final Isar db = _localDb.database;
+    final userId = await _authService.getUserId();
+
+    if (userId == null) {
+      debugPrint('⚠️ No authenticated user, returning empty list');
+      return [];
+    }
+
+    // Get all in-progress sessions from local DB
+    final localSessions =
+        await db.localSessions
+            .filter()
+            .userIdEqualTo(userId)
+            .statusEqualTo('in_progress')
+            .findAll();
+
+    final sessions = <Session>[];
+    for (final localSession in localSessions) {
+      // Load exercises for this session
+      final localExercises =
+          await db.localExercises
+              .filter()
+              .sessionLocalIdEqualTo(localSession.localId)
+              .findAll();
+
+      final exercises =
+          localExercises
+              .map((localEx) => ModelMapper.localToExercise(localEx))
+              .toList();
+
+      sessions.add(
+        ModelMapper.localToSession(localSession, exercises: exercises),
+      );
+    }
+
+    return sessions;
+  }
+
   /// Background sync: Fetch sessions from server and update cache
   Future<void> _syncSessionsFromServer(Isar db) async {
     try {

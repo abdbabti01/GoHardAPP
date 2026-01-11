@@ -138,7 +138,41 @@ class ActiveWorkoutProvider extends ChangeNotifier {
     if (_currentSession == null) return;
 
     try {
-      // Update DB and get session with correct timestamps
+      // CRITICAL: Check for any existing in-progress sessions
+      // Only one workout can be active at a time
+      final inProgressSessions =
+          await _sessionRepository.getInProgressSessions();
+
+      for (final session in inProgressSessions) {
+        // Skip if it's the current session
+        if (session.id == _currentSession!.id) continue;
+
+        // Auto-complete any other in-progress workout
+        debugPrint(
+          '⚠️ Found existing in-progress workout (ID: ${session.id}), auto-completing...',
+        );
+
+        // Calculate duration from that session's timer
+        final duration =
+            session.startedAt != null
+                ? DateTime.now()
+                    .toUtc()
+                    .difference(session.startedAt!)
+                    .inMinutes
+                : 0;
+
+        await _sessionRepository.updateSessionStatus(
+          session.id,
+          'completed',
+          duration: duration,
+        );
+
+        debugPrint(
+          '✅ Auto-completed workout ${session.id} with duration: $duration minutes',
+        );
+      }
+
+      // Now start the new workout
       final updatedSession = await _sessionRepository.updateSessionStatus(
         _currentSession!.id,
         'in_progress',
