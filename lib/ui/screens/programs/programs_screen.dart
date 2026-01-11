@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../data/models/program.dart';
-import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
-import '../../../providers/sessions_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/programs/weekly_schedule_widget.dart';
 
@@ -22,63 +20,6 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ProgramsProvider>().loadPrograms();
     });
-  }
-
-  /// Show confirmation dialog and start workout if confirmed
-  Future<void> _startWorkoutWithConfirmation(
-    BuildContext context,
-    ProgramWorkout workout,
-    int programId,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.add_circle_outline, color: Colors.blue),
-                SizedBox(width: 12),
-                Text('Add to My Workouts?'),
-              ],
-            ),
-            content: Text(
-              'Do you want to add "${workout.workoutName}" to your workout sessions?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Add & Start'),
-              ),
-            ],
-          ),
-    );
-
-    if (confirmed != true || !context.mounted) return;
-
-    // User confirmed - create session and navigate
-    final sessionsProvider = context.read<SessionsProvider>();
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-
-    final session = await sessionsProvider.startProgramWorkout(workout.id);
-
-    if (session != null && context.mounted) {
-      // Navigate to My Workouts (Sessions screen) instead of active workout
-      navigator.pushNamed(RouteNames.sessions);
-
-      // Show success message
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('${workout.workoutName} added to My Workouts!'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
   }
 
   @override
@@ -328,9 +269,18 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
               const Divider(height: 32),
               WeeklyScheduleWidget(
                 program: program,
-                onWorkoutTap: (workout) async {
-                  // Don't allow starting rest days
-                  if (workout.isRestDay) {
+                onWorkoutTap: (workout) {
+                  // Navigate to workout detail screen to show details first
+                  if (!workout.isRestDay) {
+                    Navigator.pushNamed(
+                      context,
+                      RouteNames.programWorkout,
+                      arguments: {
+                        'workoutId': workout.id,
+                        'programId': program.id,
+                      },
+                    );
+                  } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: const Text(
@@ -340,27 +290,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                         duration: const Duration(seconds: 2),
                       ),
                     );
-                    return;
                   }
-
-                  // Don't allow restarting completed workouts
-                  if (workout.isCompleted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('This workout is already completed!'),
-                        backgroundColor: Colors.green,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                    return;
-                  }
-
-                  // Show confirmation dialog and add to My Workouts
-                  await _startWorkoutWithConfirmation(
-                    context,
-                    workout,
-                    program.id,
-                  );
                 },
               ),
               const SizedBox(height: 16),

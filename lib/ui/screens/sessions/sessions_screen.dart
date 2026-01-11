@@ -598,6 +598,23 @@ class _SessionsScreenState extends State<SessionsScreen>
                             )
                             .toList();
 
+                    // Upcoming/Planned Workouts: all planned workouts in the future
+                    final upcomingSessions =
+                        provider.sessions
+                            .where(
+                              (s) =>
+                                  s.status == 'planned' &&
+                                  DateTime(
+                                    s.date.year,
+                                    s.date.month,
+                                    s.date.day,
+                                  ).isAfter(
+                                    today.subtract(const Duration(days: 1)),
+                                  ), // Today or future
+                            )
+                            .toList()
+                          ..sort((a, b) => a.date.compareTo(b.date));
+
                     // Calculate date range for past workouts filter
                     final filterDays = _getFilterDays(_pastWorkoutsFilter);
                     final filterCutoff = today.subtract(
@@ -668,6 +685,27 @@ class _SessionsScreenState extends State<SessionsScreen>
                               null,
                             ),
                             ...thisWeekSessions.map(
+                              (session) => SessionCard(
+                                session: session,
+                                onTap:
+                                    () => _handleSessionTap(
+                                      session.id,
+                                      session.status,
+                                    ),
+                                onDelete:
+                                    () => _handleDeleteSession(session.id),
+                              ),
+                            ),
+                          ],
+
+                          // Upcoming Workouts Section (Planned workouts)
+                          if (upcomingSessions.isNotEmpty) ...[
+                            _buildSectionHeader(
+                              'Upcoming Workouts',
+                              Icons.schedule,
+                              upcomingSessions.length,
+                            ),
+                            ...upcomingSessions.map(
                               (session) => SessionCard(
                                 session: session,
                                 onTap:

@@ -263,40 +263,65 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                       flex: 3,
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          // Create session from program workout
+                          // Capture providers/context before async operations
                           final sessionsProvider =
                               context.read<SessionsProvider>();
-                          final programsProvider =
-                              context.read<ProgramsProvider>();
+                          final messenger = ScaffoldMessenger.of(context);
                           final navigator = Navigator.of(context);
 
+                          // Show confirmation dialog first
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder:
+                                (context) => AlertDialog(
+                                  title: const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.add_circle_outline,
+                                        color: Colors.blue,
+                                      ),
+                                      SizedBox(width: 12),
+                                      Text('Add to My Workouts?'),
+                                    ],
+                                  ),
+                                  content: Text(
+                                    'Do you want to add "${workout.workoutName}" to your workout sessions?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed:
+                                          () => Navigator.pop(context, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed:
+                                          () => Navigator.pop(context, true),
+                                      child: const Text('Add & Start'),
+                                    ),
+                                  ],
+                                ),
+                          );
+
+                          if (confirmed != true || !mounted) return;
+
+                          // User confirmed - create session and navigate
                           final session = await sessionsProvider
                               .startProgramWorkout(widget.workoutId);
 
                           if (session != null && mounted) {
-                            // Navigate to active workout screen
-                            await navigator.pushNamed(
-                              RouteNames.activeWorkout,
-                              arguments: session.id,
+                            // Navigate to My Workouts (Sessions screen)
+                            navigator.pushNamed(RouteNames.sessions);
+
+                            // Show success message
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '${workout.workoutName} added to My Workouts!',
+                                ),
+                                backgroundColor: Colors.green,
+                                duration: const Duration(seconds: 2),
+                              ),
                             );
-
-                            // When returning, check if session was completed
-                            if (mounted) {
-                              final completedSession = await sessionsProvider
-                                  .getSessionById(session.id);
-
-                              if (completedSession.status == 'completed') {
-                                // Mark program workout as complete
-                                await programsProvider.completeWorkout(
-                                  widget.workoutId,
-                                );
-                                // No need to advance - program auto-syncs with calendar
-
-                                if (mounted) {
-                                  navigator.pop();
-                                }
-                              }
-                            }
                           }
                         },
                         icon: const Icon(Icons.play_arrow, size: 24),

@@ -41,14 +41,22 @@ class Session {
     // Parse the session using generated code
     final session = _$SessionFromJson(json);
 
+    // Normalize date to local midnight (fixes timezone issue where UTC midnight becomes yesterday)
+    final normalizedDate = DateTime(
+      session.date.year,
+      session.date.month,
+      session.date.day,
+    );
+
     // Convert timestamp fields to UTC using standard conversion
-    // NOTE: Do NOT convert the 'date' field - it's date-only and should stay in local timezone
+    // NOTE: The 'date' field is date-only and normalized to local timezone midnight above
     // Timestamps (startedAt, completedAt, pausedAt) MUST be UTC for proper time calculations
     // Using toUtc() ensures proper conversion regardless of JSON parser behavior
     return Session(
       id: session.id,
       userId: session.userId,
-      date: session.date, // Keep in local timezone (date-only field)
+      date:
+          normalizedDate, // Normalize to local midnight (fixes timezone issue)
       duration: session.duration,
       notes: session.notes,
       type: session.type,

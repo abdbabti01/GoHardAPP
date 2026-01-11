@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
-import '../../../providers/sessions_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/programs/program_calendar_widget.dart';
 
@@ -63,66 +62,6 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       _tabController.dispose();
     }
     super.dispose();
-  }
-
-  /// Show confirmation dialog and start workout if confirmed
-  Future<void> _startWorkoutWithConfirmation(
-    BuildContext context,
-    ProgramWorkout workout,
-    int programId,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.add_circle_outline, color: Colors.blue),
-                SizedBox(width: 12),
-                Text('Add to My Workouts?'),
-              ],
-            ),
-            content: Text(
-              'Do you want to add "${workout.workoutName}" to your workout sessions?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Add & Start'),
-              ),
-            ],
-          ),
-    );
-
-    if (confirmed != true || !context.mounted) return;
-
-    // User confirmed - create session and navigate
-    final sessionsProvider = context.read<SessionsProvider>();
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-
-    final session = await sessionsProvider.startProgramWorkout(workout.id);
-
-    if (session != null && context.mounted) {
-      // Navigate to My Workouts (Sessions screen)
-      navigator.pushNamed(RouteNames.sessions);
-
-      // Show success message
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('${workout.workoutName} added to My Workouts!'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-
-      // Reload program to refresh UI
-      _loadProgram();
-    }
   }
 
   @override
@@ -289,41 +228,18 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
             Expanded(
               child: ProgramCalendarWidget(
                 program: program,
-                onDateTapped: (date, workout) async {
-                  if (workout == null) return;
-
-                  // Don't allow starting rest days
-                  if (workout.isRestDay) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text(
-                          'Rest day - Recovery is part of the program!',
-                        ),
-                        backgroundColor: Colors.blue.shade700,
-                        duration: const Duration(seconds: 2),
-                      ),
+                onDateTapped: (date, workout) {
+                  if (workout != null && !workout.isRestDay) {
+                    // Navigate to workout detail screen to show details first
+                    Navigator.pushNamed(
+                      context,
+                      RouteNames.programWorkout,
+                      arguments: {
+                        'workoutId': workout.id,
+                        'programId': program.id,
+                      },
                     );
-                    return;
                   }
-
-                  // Don't allow restarting completed workouts
-                  if (workout.isCompleted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('This workout is already completed!'),
-                        backgroundColor: Colors.green,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                    return;
-                  }
-
-                  // Show confirmation dialog and add to My Workouts
-                  await _startWorkoutWithConfirmation(
-                    context,
-                    workout,
-                    program.id,
-                  );
                 },
               ),
             )
@@ -430,35 +346,13 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () async {
-          // Don't allow starting rest days
-          if (workout.isRestDay) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text(
-                  'Rest day - Recovery is part of the program!',
-                ),
-                backgroundColor: Colors.blue.shade700,
-                duration: const Duration(seconds: 2),
-              ),
-            );
-            return;
-          }
-
-          // Don't allow restarting completed workouts
-          if (workout.isCompleted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('This workout is already completed!'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
-            return;
-          }
-
-          // Show confirmation dialog and add to My Workouts
-          await _startWorkoutWithConfirmation(context, workout, program.id);
+        onTap: () {
+          // Navigate to workout detail screen to show details first
+          Navigator.pushNamed(
+            context,
+            RouteNames.programWorkout,
+            arguments: {'workoutId': workout.id, 'programId': program.id},
+          );
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
