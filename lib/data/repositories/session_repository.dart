@@ -110,7 +110,9 @@ class SessionRepository {
       // Debug: Log raw JSON to check programId
       debugPrint('📥 Received ${data.length} sessions from API');
       for (final sessionJson in data.take(3)) {
-        debugPrint('  Session JSON: programId=${sessionJson['programId']}, programWorkoutId=${sessionJson['programWorkoutId']}, name=${sessionJson['name']}');
+        debugPrint(
+          '  Session JSON: programId=${sessionJson['programId']}, programWorkoutId=${sessionJson['programWorkoutId']}, name=${sessionJson['name']}',
+        );
       }
 
       final apiSessions =
