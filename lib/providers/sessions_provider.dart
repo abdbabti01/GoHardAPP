@@ -423,6 +423,7 @@ class SessionsProvider extends ChangeNotifier {
   Future<Session?> startProgramWorkout(
     int programWorkoutId,
     ProgramWorkout programWorkout,
+    DateTime programStartDate,
   ) async {
     try {
       _errorMessage = null;
@@ -430,6 +431,7 @@ class SessionsProvider extends ChangeNotifier {
       final session = await _sessionRepository.createSessionFromProgramWorkout(
         programWorkoutId,
         programWorkout,
+        programStartDate,
       );
 
       _sessions.insert(0, session);

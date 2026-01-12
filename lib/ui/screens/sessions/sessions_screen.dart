@@ -558,8 +558,8 @@ class _SessionsScreenState extends State<SessionsScreen>
                                     weekStart.subtract(const Duration(days: 1)),
                                   ) &&
                                   s.date.isBefore(
-                                    today.add(const Duration(days: 7)),
-                                  ), // Include future workouts in current week
+                                    weekStart.add(const Duration(days: 7)),
+                                  ), // Monday through Sunday (this week only)
                             )
                             .toList();
 
@@ -598,7 +598,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                             )
                             .toList();
 
-                    // Upcoming/Planned Workouts: all planned workouts in the future
+                    // Upcoming/Planned Workouts: all planned workouts in the future (NOT today)
                     final upcomingSessions =
                         provider.sessions
                             .where(
@@ -608,9 +608,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                                     s.date.year,
                                     s.date.month,
                                     s.date.day,
-                                  ).isAfter(
-                                    today.subtract(const Duration(days: 1)),
-                                  ), // Today or future
+                                  ).isAfter(today), // Future only (not today)
                             )
                             .toList()
                           ..sort((a, b) => a.date.compareTo(b.date));

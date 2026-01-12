@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
+import '../../../providers/goals_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/programs/program_calendar_widget.dart';
 
@@ -102,7 +103,11 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
           if (!program.isCompleted)
             PopupMenuButton<String>(
               onSelected: (value) async {
-                if (value == 'complete') {
+                if (value == 'link_goal') {
+                  _showLinkGoalDialog(context, program);
+                } else if (value == 'unlink_goal') {
+                  _unlinkGoal(context, program);
+                } else if (value == 'complete') {
                   _showCompleteConfirmation(context, program);
                 } else if (value == 'delete') {
                   _showDeleteConfirmation(context, program);
@@ -110,6 +115,28 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
               },
               itemBuilder:
                   (context) => [
+                    if (program.goalId == null)
+                      const PopupMenuItem(
+                        value: 'link_goal',
+                        child: Row(
+                          children: [
+                            Icon(Icons.link),
+                            SizedBox(width: 12),
+                            Text('Link to Goal'),
+                          ],
+                        ),
+                      )
+                    else
+                      const PopupMenuItem(
+                        value: 'unlink_goal',
+                        child: Row(
+                          children: [
+                            Icon(Icons.link_off),
+                            SizedBox(width: 12),
+                            Text('Unlink from Goal'),
+                          ],
+                        ),
+                      ),
                     const PopupMenuItem(
                       value: 'complete',
                       child: Row(
@@ -216,6 +243,38 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     program.description!,
                     style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
                     textAlign: TextAlign.center,
+                  ),
+                ],
+                if (program.goal != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: theme.primaryColor.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.link, size: 16, color: theme.primaryColor),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Linked to: ${program.goal!.goalType}',
+                          style: TextStyle(
+                            color: theme.primaryColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ],
@@ -586,5 +645,134 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
             ],
           ),
     );
+  }
+
+  void _showLinkGoalDialog(BuildContext context, Program program) async {
+    // Load goals if not already loaded
+    final goalsProvider = context.read<GoalsProvider>();
+    await goalsProvider.loadGoals();
+
+    if (!context.mounted) return;
+
+    final activeGoals = goalsProvider.activeGoals;
+
+    if (activeGoals.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No active goals found. Create a goal first!'),
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Link to Goal'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: activeGoals.length,
+                itemBuilder: (context, index) {
+                  final goal = activeGoals[index];
+                  return ListTile(
+                    title: Text(goal.goalType),
+                    subtitle: Text(
+                      'Target: ${goal.targetValue} ${goal.unit ?? ''}',
+                    ),
+                    trailing: Text(
+                      '${goal.progressPercentage.toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        color: Theme.of(context).primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _linkProgramToGoal(program, goal.id);
+                    },
+                  );
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _linkProgramToGoal(Program program, int goalId) async {
+    final provider = context.read<ProgramsProvider>();
+
+    // Create updated program with new goalId
+    final updatedProgram = Program(
+      id: program.id,
+      userId: program.userId,
+      title: program.title,
+      description: program.description,
+      goalId: goalId, // Link to goal
+      totalWeeks: program.totalWeeks,
+      currentWeek: program.currentWeek,
+      currentDay: program.currentDay,
+      startDate: program.startDate,
+      endDate: program.endDate,
+      isActive: program.isActive,
+      isCompleted: program.isCompleted,
+      completedAt: program.completedAt,
+      createdAt: program.createdAt,
+      programStructure: program.programStructure,
+      workouts: program.workouts,
+      goal: program.goal,
+    );
+
+    final success = await provider.updateProgram(program.id, updatedProgram);
+
+    if (success && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Program linked to goal')));
+      await _loadProgram(); // Reload to show updated goal
+    }
+  }
+
+  Future<void> _unlinkGoal(BuildContext context, Program program) async {
+    final provider = context.read<ProgramsProvider>();
+
+    // Create updated program with null goalId
+    final updatedProgram = Program(
+      id: program.id,
+      userId: program.userId,
+      title: program.title,
+      description: program.description,
+      goalId: null, // Unlink from goal
+      totalWeeks: program.totalWeeks,
+      currentWeek: program.currentWeek,
+      currentDay: program.currentDay,
+      startDate: program.startDate,
+      endDate: program.endDate,
+      isActive: program.isActive,
+      isCompleted: program.isCompleted,
+      completedAt: program.completedAt,
+      createdAt: program.createdAt,
+      programStructure: program.programStructure,
+      workouts: program.workouts,
+      goal: program.goal,
+    );
+
+    final messenger = ScaffoldMessenger.of(context);
+    final success = await provider.updateProgram(program.id, updatedProgram);
+
+    if (success && mounted) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Program unlinked from goal')),
+      );
+      await _loadProgram(); // Reload to show changes
+    }
   }
 }

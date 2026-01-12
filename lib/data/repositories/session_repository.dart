@@ -408,6 +408,7 @@ class SessionRepository {
   Future<Session> createSessionFromProgramWorkout(
     int programWorkoutId,
     ProgramWorkout programWorkout,
+    DateTime programStartDate,
   ) async {
     final db = _localDb.database;
     final userId = await _authService.getUserId();
@@ -461,14 +462,42 @@ class SessionRepository {
     final exercisesData = programWorkout.exercises;
     final exercises = <Exercise>[];
 
-    // Create session locally
+    // Calculate the actual scheduled date for this workout
+    // based on program start date + (weekNumber - 1) * 7 days + (dayNumber - 1) days
+    final scheduledDate = programStartDate.add(
+      Duration(
+        days:
+            (programWorkout.weekNumber - 1) * 7 +
+            (programWorkout.dayNumber - 1),
+      ),
+    );
+
+    // Normalize to midnight
+    final normalizedScheduledDate = DateTime(
+      scheduledDate.year,
+      scheduledDate.month,
+      scheduledDate.day,
+    );
+
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+
+    // Determine status based on scheduled date
+    // - If scheduled for future: status = 'planned'
+    // - If scheduled for today or past: status = 'draft' (user can start immediately)
+    final status = normalizedScheduledDate.isAfter(today) ? 'planned' : 'draft';
+
+    // Create session with calculated date and status
     final session = Session(
       id: 0, // Will be replaced with local ID
       userId: userId,
-      date: DateTime.now(),
+      date: normalizedScheduledDate, // Use calculated scheduled date
       name: programWorkout.workoutName,
       type: programWorkout.workoutType ?? 'Workout',
-      status: 'draft',
+      status: status, // Use calculated status
       programId: programWorkout.programId,
       programWorkoutId: programWorkoutId,
       exercises: exercises,

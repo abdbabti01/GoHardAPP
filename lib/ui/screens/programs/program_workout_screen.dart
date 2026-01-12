@@ -21,6 +21,7 @@ class ProgramWorkoutScreen extends StatefulWidget {
 
 class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
   ProgramWorkout? _workout;
+  DateTime? _programStartDate;
   bool _isLoading = true;
   final TextEditingController _notesController = TextEditingController();
 
@@ -48,6 +49,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
       );
       setState(() {
         _workout = workout;
+        _programStartDate = program.startDate;
         _isLoading = false;
       });
     } else if (mounted) {
@@ -306,7 +308,11 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
 
                           // User confirmed - create session and navigate
                           final session = await sessionsProvider
-                              .startProgramWorkout(widget.workoutId, _workout!);
+                              .startProgramWorkout(
+                                widget.workoutId,
+                                _workout!,
+                                _programStartDate ?? DateTime.now(),
+                              );
 
                           if (session != null && mounted) {
                             // Navigate to My Workouts (Sessions screen)
