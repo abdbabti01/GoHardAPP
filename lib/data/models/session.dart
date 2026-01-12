@@ -77,7 +77,7 @@ class Session {
   Map<String, dynamic> toJson() => _$SessionToJson(this);
 
   /// Check if session is from a program
-  bool get isFromProgram => programId != null;
+  bool get isFromProgram => programId != null && programId! > 0;
 
   /// Create a copy of this Session with some fields replaced
   Session copyWith({
