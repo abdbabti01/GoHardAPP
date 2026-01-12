@@ -171,31 +171,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  void _toggleUnitPreference() {
-    setState(() {
-      final currentHeight = double.tryParse(_heightController.text);
-
-      // Convert values when toggling
-      if (_unitPreference == UnitPreference.metric) {
-        // Convert metric to imperial
-        _unitPreference = UnitPreference.imperial;
-        if (currentHeight != null) {
-          _heightController.text = UnitConverter.cmToInches(
-            currentHeight,
-          ).toStringAsFixed(1);
-        }
-      } else {
-        // Convert imperial to metric
-        _unitPreference = UnitPreference.metric;
-        if (currentHeight != null) {
-          _heightController.text = UnitConverter.inchesToCm(
-            currentHeight,
-          ).toStringAsFixed(1);
-        }
-      }
-    });
-  }
-
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -300,12 +275,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               _buildSectionHeader('Fitness Profile'),
               const SizedBox(height: 16),
               _buildFitnessProfileCard(),
-              const SizedBox(height: 24),
-
-              // Preferences
-              _buildSectionHeader('Preferences'),
-              const SizedBox(height: 16),
-              _buildPreferencesCard(),
               const SizedBox(height: 24),
 
               // Bio & Social
@@ -452,15 +421,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Unit toggle
-            SwitchListTile(
-              title: Text('Units: ${_unitPreference.displayName}'),
-              subtitle: const Text('Toggle between Metric and Imperial'),
-              value: _unitPreference == UnitPreference.imperial,
-              onChanged: (value) => _toggleUnitPreference(),
-            ),
-            const Divider(),
-            const SizedBox(height: 8),
             TextFormField(
               controller: _heightController,
               decoration: InputDecoration(
@@ -469,6 +429,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 suffixText: UnitConverter.getHeightUnit(
                   _unitPreference.serverValue,
                 ),
+                helperText: 'Unit preference can be changed in Settings',
               ),
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
@@ -520,31 +481,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       )
                       .toList(),
               onChanged: (value) => setState(() => _primaryGoal = value),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPreferencesCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            DropdownButtonFormField<String>(
-              value: _themePreference,
-              decoration: const InputDecoration(
-                labelText: 'Theme',
-                prefixIcon: Icon(Icons.palette),
-              ),
-              items: const [
-                DropdownMenuItem(value: 'Light', child: Text('Light')),
-                DropdownMenuItem(value: 'Dark', child: Text('Dark')),
-                DropdownMenuItem(value: 'System', child: Text('System')),
-              ],
-              onChanged: (value) => setState(() => _themePreference = value),
             ),
           ],
         ),

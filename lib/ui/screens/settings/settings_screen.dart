@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../providers/profile_provider.dart';
+import '../../../core/enums/profile_enums.dart';
+import '../../../data/models/profile_update_request.dart';
 
 /// Settings screen for managing app preferences
 /// Currently focuses on notification settings
@@ -11,9 +14,9 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings'), centerTitle: true),
-      body: Consumer<SettingsProvider>(
-        builder: (context, settings, _) {
-          if (settings.isLoading) {
+      body: Consumer2<SettingsProvider, ProfileProvider>(
+        builder: (context, settings, profile, _) {
+          if (settings.isLoading || profile.isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -24,6 +27,12 @@ class SettingsScreen extends StatelessWidget {
               _buildSectionHeader(context, 'Notifications'),
               const SizedBox(height: 8),
               _buildNotificationCard(context, settings),
+              const SizedBox(height: 24),
+
+              // Preferences Section
+              _buildSectionHeader(context, 'Preferences'),
+              const SizedBox(height: 8),
+              _buildPreferencesCard(context, profile),
             ],
           );
         },
@@ -187,6 +196,145 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Icon(Icons.arrow_drop_down, color: Theme.of(context).primaryColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreferencesCard(BuildContext context, ProfileProvider profile) {
+    final user = profile.currentUser;
+    if (user == null) return const SizedBox.shrink();
+
+    final currentUnitPreference = UnitPreference.fromString(user.unitPreference);
+    final currentThemePreference = user.themePreference;
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Unit Preference
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text(
+                'Unit System',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              ),
+              subtitle: Text(
+                'Currently using ${currentUnitPreference.displayName} units',
+              ),
+              secondary: const Icon(Icons.straighten),
+              value: currentUnitPreference == UnitPreference.imperial,
+              onChanged: (value) async {
+                final newPreference = value ? 'Imperial' : 'Metric';
+                final request = ProfileUpdateRequest(
+                  unitPreference: newPreference,
+                );
+                await profile.updateProfile(request);
+              },
+            ),
+            const Divider(height: 32),
+
+            // Theme Preference
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.palette),
+              title: const Text(
+                'Theme',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              ),
+              subtitle: Text('Current: ${currentThemePreference ?? 'System'}'),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildThemeOption(
+                    context,
+                    profile,
+                    'Light',
+                    Icons.light_mode,
+                    currentThemePreference == 'Light',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildThemeOption(
+                    context,
+                    profile,
+                    'Dark',
+                    Icons.dark_mode,
+                    currentThemePreference == 'Dark',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildThemeOption(
+                    context,
+                    profile,
+                    'System',
+                    Icons.settings_suggest,
+                    currentThemePreference == 'System' ||
+                        currentThemePreference == null,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThemeOption(
+    BuildContext context,
+    ProfileProvider profile,
+    String theme,
+    IconData icon,
+    bool isSelected,
+  ) {
+    return InkWell(
+      onTap: () async {
+        final request = ProfileUpdateRequest(themePreference: theme);
+        await profile.updateProfile(request);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected
+                ? Theme.of(context).primaryColor
+                : Colors.grey.withValues(alpha: 0.3),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: isSelected
+                  ? Theme.of(context).primaryColor
+                  : Colors.grey.shade600,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              theme,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected
+                    ? Theme.of(context).primaryColor
+                    : Colors.grey.shade600,
+              ),
+            ),
           ],
         ),
       ),
