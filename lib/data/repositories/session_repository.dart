@@ -436,7 +436,10 @@ class SessionRepository {
       try {
         final data = await _apiService.post<Map<String, dynamic>>(
           ApiConfig.sessionsFromProgramWorkout,
-          data: {'programWorkoutId': programWorkoutId},
+          data: {
+            'programWorkoutId': programWorkoutId,
+            'programId': programId, // Send programId to backend
+          },
         );
         final apiSession = Session.fromJson(data);
 
