@@ -420,7 +420,10 @@ class SessionsProvider extends ChangeNotifier {
   }
 
   /// Create a session from a program workout
-  Future<Session?> startProgramWorkout(int programWorkoutId, ProgramWorkout programWorkout) async {
+  Future<Session?> startProgramWorkout(
+    int programWorkoutId,
+    ProgramWorkout programWorkout,
+  ) async {
     try {
       _errorMessage = null;
 
