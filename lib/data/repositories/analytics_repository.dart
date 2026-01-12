@@ -230,46 +230,186 @@ class AnalyticsRepository {
   }
 
   /// Get all personal records
-  /// Returns empty list when offline (online-only feature)
+  /// Offline-first: calculates from local DB when offline
   Future<List<PersonalRecord>> getPersonalRecords() async {
-    if (!_connectivity.isOnline) {
-      debugPrint('📴 Offline - personal records unavailable');
-      return [];
-    }
-
-    try {
-      final data = await _apiService.get<List<dynamic>>(
-        'analytics/personal-records',
+    if (_connectivity.isOnline) {
+      try {
+        final data = await _apiService.get<List<dynamic>>(
+          'analytics/personal-records',
+        );
+        return data
+            .map(
+              (json) => PersonalRecord.fromJson(json as Map<String, dynamic>),
+            )
+            .toList();
+      } catch (e) {
+        debugPrint('⚠️ API failed, falling back to local calculation: $e');
+        return await _calculatePersonalRecordsFromLocal();
+      }
+    } else {
+      debugPrint(
+        '📴 Offline - calculating personal records from local database',
       );
-      return data
-          .map((json) => PersonalRecord.fromJson(json as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      debugPrint('⚠️ Failed to load personal records: $e');
-      return [];
+      return await _calculatePersonalRecordsFromLocal();
     }
   }
 
-  /// Get volume over time
-  /// Returns empty list when offline (online-only feature)
-  Future<List<ProgressDataPoint>> getVolumeOverTime({int days = 90}) async {
-    if (!_connectivity.isOnline) {
-      debugPrint('📴 Offline - volume over time unavailable');
-      return [];
+  /// Calculate personal records from local database
+  Future<List<PersonalRecord>> _calculatePersonalRecordsFromLocal() async {
+    final db = _localDb.database;
+    final userId = await _authService.getUserId();
+
+    if (userId == null) {
+      throw Exception('No authenticated user');
     }
 
-    try {
-      final data = await _apiService.get<List<dynamic>>(
-        'analytics/volume-over-time?days=$days',
-      );
-      return data
-          .map(
-            (json) => ProgressDataPoint.fromJson(json as Map<String, dynamic>),
-          )
-          .toList();
-    } catch (e) {
-      debugPrint('⚠️ Failed to load volume over time: $e');
-      return [];
+    // Get all completed sessions
+    final sessions =
+        await db.localSessions
+            .filter()
+            .userIdEqualTo(userId)
+            .statusEqualTo('completed')
+            .findAll();
+
+    // Map to track max weight per exercise template
+    final Map<int, PersonalRecord> records = {};
+
+    for (final session in sessions) {
+      final exercises =
+          await db.localExercises
+              .filter()
+              .sessionLocalIdEqualTo(session.localId)
+              .findAll();
+
+      for (final exercise in exercises) {
+        // Skip exercises without template ID
+        if (exercise.exerciseTemplateId == null) continue;
+
+        final sets =
+            await db.localExerciseSets
+                .filter()
+                .exerciseLocalIdEqualTo(exercise.localId)
+                .findAll();
+
+        for (final set in sets) {
+          if (set.weight == null || set.weight! <= 0) continue;
+
+          final templateId = exercise.exerciseTemplateId!;
+          final currentRecord = records[templateId];
+
+          // Update if this is a new PR
+          if (currentRecord == null || set.weight! > currentRecord.weight) {
+            // Calculate 1RM using Brzycki formula
+            final reps = set.reps ?? 1;
+            final oneRepMax =
+                reps == 1
+                    ? set.weight!
+                    : set.weight! / (1.0278 - (0.0278 * reps));
+
+            records[templateId] = PersonalRecord(
+              exerciseName: exercise.name,
+              exerciseTemplateId: templateId,
+              weight: set.weight!,
+              reps: reps,
+              dateAchieved: session.date,
+              estimatedOneRepMax: oneRepMax,
+              daysSincePR: DateTime.now().difference(session.date).inDays,
+            );
+          }
+        }
+      }
     }
+
+    return records.values.toList()
+      ..sort((a, b) => b.weight.compareTo(a.weight));
+  }
+
+  /// Get volume over time
+  /// Offline-first: calculates from local DB when offline
+  Future<List<ProgressDataPoint>> getVolumeOverTime({int days = 90}) async {
+    if (_connectivity.isOnline) {
+      try {
+        final data = await _apiService.get<List<dynamic>>(
+          'analytics/volume-over-time?days=$days',
+        );
+        return data
+            .map(
+              (json) =>
+                  ProgressDataPoint.fromJson(json as Map<String, dynamic>),
+            )
+            .toList();
+      } catch (e) {
+        debugPrint('⚠️ API failed, falling back to local calculation: $e');
+        return await _calculateVolumeOverTimeFromLocal(days: days);
+      }
+    } else {
+      debugPrint(
+        '📴 Offline - calculating volume over time from local database',
+      );
+      return await _calculateVolumeOverTimeFromLocal(days: days);
+    }
+  }
+
+  /// Calculate volume over time from local database
+  Future<List<ProgressDataPoint>> _calculateVolumeOverTimeFromLocal({
+    int days = 90,
+  }) async {
+    final db = _localDb.database;
+    final userId = await _authService.getUserId();
+
+    if (userId == null) {
+      throw Exception('No authenticated user');
+    }
+
+    final startDate = DateTime.now().subtract(Duration(days: days));
+
+    // Get all completed sessions in date range
+    final sessions =
+        await db.localSessions
+            .filter()
+            .userIdEqualTo(userId)
+            .statusEqualTo('completed')
+            .dateBetween(startDate, DateTime.now())
+            .sortByDate()
+            .findAll();
+
+    final dataPoints = <ProgressDataPoint>[];
+
+    for (final session in sessions) {
+      // Get exercises for this session
+      final exercises =
+          await db.localExercises
+              .filter()
+              .sessionLocalIdEqualTo(session.localId)
+              .findAll();
+
+      double totalVolume = 0;
+
+      for (final exercise in exercises) {
+        final sets =
+            await db.localExerciseSets
+                .filter()
+                .exerciseLocalIdEqualTo(exercise.localId)
+                .findAll();
+
+        for (final set in sets) {
+          if (set.weight != null && set.reps != null) {
+            totalVolume += set.weight! * set.reps!;
+          }
+        }
+      }
+
+      if (totalVolume > 0) {
+        dataPoints.add(
+          ProgressDataPoint(
+            date: session.date,
+            value: totalVolume,
+            label: '${totalVolume.toStringAsFixed(0)} kg',
+          ),
+        );
+      }
+    }
+
+    return dataPoints;
   }
 }

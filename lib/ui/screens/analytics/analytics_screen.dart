@@ -2,13 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/analytics_provider.dart';
 import '../../../providers/sessions_provider.dart';
-import '../../../providers/goals_provider.dart';
 import '../../../data/models/workout_stats.dart';
 import '../../widgets/charts/volume_chart.dart';
-import '../../widgets/charts/muscle_group_chart.dart';
 import '../../widgets/analytics/calendar_heatmap.dart';
 import '../../widgets/analytics/streak_counter.dart';
-import 'exercise_detail_screen.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -17,26 +14,15 @@ class AnalyticsScreen extends StatefulWidget {
   State<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
-class _AnalyticsScreenState extends State<AnalyticsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
+class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
 
-    // Load analytics data and goals
+    // Load analytics data
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AnalyticsProvider>().loadAnalytics();
-      context.read<GoalsProvider>().loadGoals();
     });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   @override
@@ -66,51 +52,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       );
     }
 
-    return Column(
-      children: [
-        // Clean tab selector
-        Container(
-          margin: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Theme.of(
-                context,
-              ).colorScheme.outline.withValues(alpha: 0.2),
-            ),
-          ),
-          child: TabBar(
-            controller: _tabController,
-            indicator: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            labelColor: Theme.of(context).colorScheme.onPrimary,
-            unselectedLabelColor: Theme.of(context).colorScheme.onSurface,
-            dividerColor: Colors.transparent,
-            tabs: const [
-              Tab(text: 'Overview', icon: Icon(Icons.dashboard, size: 20)),
-              Tab(text: 'Progress', icon: Icon(Icons.trending_up, size: 20)),
-              Tab(text: 'Records', icon: Icon(Icons.emoji_events, size: 20)),
-            ],
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildOverviewTab(provider),
-              _buildProgressTab(provider),
-              _buildRecordsTab(provider),
-            ],
-          ),
-        ),
-      ],
-    );
+    return _buildOverview(provider);
   }
 
-  Widget _buildOverviewTab(AnalyticsProvider provider) {
+  Widget _buildOverview(AnalyticsProvider provider) {
     final stats = provider.workoutStats;
     if (stats == null) {
       return const Center(child: Text('No data available'));
@@ -154,11 +99,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
             // Key Stats (4 most important)
             _buildKeyStatsGrid(stats, provider),
-
-            const SizedBox(height: 16),
-
-            // Active Goals Progress
-            _buildActiveGoalsSection(),
           ],
         ),
       ),
@@ -202,75 +142,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     );
   }
 
-  Widget _buildActiveGoalsSection() {
-    final goalsProvider = context.watch<GoalsProvider>();
-    final activeGoals = goalsProvider.activeGoals.take(3).toList();
-
-    if (activeGoals.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Active Goals',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        ...activeGoals.map((goal) {
-          final progress = goal.progressPercentage / 100;
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          goal.goalType,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${goal.progressPercentage.toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: progress >= 1.0 ? Colors.green : Colors.blue,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: progress.clamp(0.0, 1.0),
-                    backgroundColor: Colors.grey.shade200,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      progress >= 1.0 ? Colors.green : Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${goal.currentValue.toStringAsFixed(1)} / ${goal.targetValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
   Widget _buildStatCard(
     String title,
     String value,
@@ -303,139 +174,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildProgressTab(AnalyticsProvider provider) {
-    final muscleGroupData = provider.muscleGroupVolume;
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        // Muscle Group Distribution
-        if (muscleGroupData.isNotEmpty) ...[
-          const Text(
-            'Muscle Group Distribution',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          MuscleGroupChart(data: muscleGroupData),
-          const SizedBox(height: 24),
-        ],
-
-        // Exercise Progress Header
-        const Text(
-          'Exercise Progress',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-
-        // Exercise Progress List
-        if (provider.exerciseProgress.isEmpty)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Text('No exercise progress data available'),
-            ),
-          )
-        else
-          ...provider.exerciseProgress.map((progress) {
-            return _buildExerciseProgressCard(progress);
-          }),
-      ],
-    );
-  }
-
-  Widget _buildExerciseProgressCard(progress) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ExerciseDetailScreen(exercise: progress),
-            ),
-          );
-        },
-        title: Text(progress.exerciseName),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Performed: ${progress.timesPerformed} times'),
-            Text('Volume: ${progress.formattedVolume}'),
-            if (progress.personalRecord != null)
-              Text('PR: ${progress.personalRecord!.toStringAsFixed(1)} kg'),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (progress.progressPercentage != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color:
-                      (progress.progressPercentage! >= 0)
-                          ? Colors.green.withValues(alpha: 0.2)
-                          : Colors.red.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  progress.formattedProgress,
-                  style: TextStyle(
-                    color:
-                        (progress.progressPercentage! >= 0)
-                            ? Colors.green
-                            : Colors.red,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: Colors.grey),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRecordsTab(AnalyticsProvider provider) {
-    if (provider.personalRecords.isEmpty) {
-      return const Center(child: Text('No personal records yet'));
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: provider.personalRecords.length,
-      itemBuilder: (context, index) {
-        final pr = provider.personalRecords[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: const Icon(
-              Icons.emoji_events,
-              color: Colors.amber,
-              size: 40,
-            ),
-            title: Text(
-              pr.exerciseName,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('PR: ${pr.formattedPR}'),
-                Text('Est. 1RM: ${pr.formattedOneRM}'),
-                Text(
-                  'Achieved: ${pr.timeSincePR}',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }
