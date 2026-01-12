@@ -105,11 +105,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
             tooltip: 'Edit Profile',
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _handleRefresh,
-            tooltip: 'Refresh',
-          ),
         ],
       ),
       body: Consumer<ProfileProvider>(

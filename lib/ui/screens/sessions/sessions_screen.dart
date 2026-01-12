@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/exercises_provider.dart';
+import '../../../providers/active_workout_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../../core/services/sync_service.dart';
 import '../../../core/utils/date_utils.dart';
@@ -88,7 +89,17 @@ class _SessionsScreenState extends State<SessionsScreen>
   }
 
   Future<void> _handleDeleteSession(int sessionId) async {
-    await context.read<SessionsProvider>().deleteSession(sessionId);
+    final sessionsProvider = context.read<SessionsProvider>();
+    final activeWorkoutProvider = context.read<ActiveWorkoutProvider>();
+
+    // Check if the session being deleted is the current active workout
+    if (activeWorkoutProvider.currentSession?.id == sessionId) {
+      // Clear the active workout provider to remove the timer bar
+      activeWorkoutProvider.clear();
+    }
+
+    // Delete the session
+    await sessionsProvider.deleteSession(sessionId);
   }
 
   Future<void> _handlePlanWorkout() async {
@@ -421,13 +432,6 @@ class _SessionsScreenState extends State<SessionsScreen>
               Navigator.pushNamed(context, RouteNames.templates);
             },
             tooltip: 'Templates',
-          ),
-          IconButton(
-            icon: const Icon(Icons.analytics),
-            onPressed: () {
-              Navigator.pushNamed(context, RouteNames.analytics);
-            },
-            tooltip: 'Analytics',
           ),
         ],
         bottom: TabBar(

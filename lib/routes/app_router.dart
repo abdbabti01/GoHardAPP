@@ -194,8 +194,15 @@ class AppRouter {
         );
 
       case RouteNames.workoutPlanForm:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final goalId = args?['goalId'] as int?;
+        final prefilledGoal = args?['prefilledGoal'] as String?;
         return MaterialPageRoute(
-          builder: (_) => const WorkoutPlanFormScreen(),
+          builder:
+              (_) => WorkoutPlanFormScreen(
+                goalId: goalId,
+                prefilledGoal: prefilledGoal,
+              ),
           settings: settings,
         );
 

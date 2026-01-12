@@ -6,7 +6,10 @@ import '../../widgets/common/offline_banner.dart';
 
 /// Form screen for generating AI workout plans
 class WorkoutPlanFormScreen extends StatefulWidget {
-  const WorkoutPlanFormScreen({super.key});
+  final int? goalId;
+  final String? prefilledGoal;
+
+  const WorkoutPlanFormScreen({super.key, this.goalId, this.prefilledGoal});
 
   @override
   State<WorkoutPlanFormScreen> createState() => _WorkoutPlanFormScreenState();
@@ -20,6 +23,15 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
   String _experienceLevel = 'beginner';
   int _daysPerWeek = 3;
   String _equipment = 'full gym';
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill goal text if provided
+    if (widget.prefilledGoal != null) {
+      _goalController.text = widget.prefilledGoal!;
+    }
+  }
 
   @override
   void dispose() {

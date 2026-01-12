@@ -477,11 +477,6 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
             onPressed: _showFilters,
             tooltip: 'Filter',
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _handleRefresh,
-            tooltip: 'Refresh',
-          ),
         ],
       ),
       body: Consumer<ExercisesProvider>(
