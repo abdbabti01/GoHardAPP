@@ -6,7 +6,7 @@ import 'chat/chat_list_screen.dart';
 import 'profile/profile_screen.dart';
 
 /// Main screen wrapper with bottom navigation
-/// Provides 5-tab navigation: Workouts (with Programs), Exercises, Goals (with Analytics), AI Assistant, Profile
+/// Provides 5-tab navigation: Workouts, Goals & Stats, AI Coach, Exercises, Profile
 class MainScreen extends StatefulWidget {
   final int? initialTab;
 
@@ -22,9 +22,9 @@ class _MainScreenState extends State<MainScreen> {
   // Screens for each tab
   final List<Widget> _screens = [
     const SessionsScreen(),
-    const ExercisesScreen(),
     const GoalsScreen(),
     const ChatListScreen(),
+    const ExercisesScreen(),
     const ProfileScreen(),
   ];
 
@@ -50,12 +50,15 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icon(Icons.fitness_center),
             label: 'Workouts',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Exercises'),
-          BottomNavigationBarItem(icon: Icon(Icons.flag), label: 'Goals'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.smart_toy),
-            label: 'AI Assistant',
+            icon: Icon(Icons.flag),
+            label: 'Goals & Stats',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.psychology),
+            label: 'AI Coach',
+          ),
+          BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Exercises'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),

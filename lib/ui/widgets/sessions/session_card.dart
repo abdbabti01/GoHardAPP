@@ -60,8 +60,12 @@ class SessionCard extends StatelessWidget {
                           // Workout name
                           Text(
                             session.name ?? _getDefaultName(),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           // Date

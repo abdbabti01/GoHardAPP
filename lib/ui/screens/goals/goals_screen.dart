@@ -40,7 +40,7 @@ class _GoalsScreenState extends State<GoalsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Goals'),
+        title: const Text('Goals & Stats'),
         elevation: 0,
         actions: [
           IconButton(
@@ -51,7 +51,7 @@ class _GoalsScreenState extends State<GoalsScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: 'Goals'), Tab(text: 'Analytics')],
+          tabs: const [Tab(text: 'Goals'), Tab(text: 'Stats')],
         ),
       ),
       body: TabBarView(
@@ -226,7 +226,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                       Text(
                         _formatGoalType(goal.goalType),
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

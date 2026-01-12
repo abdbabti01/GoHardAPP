@@ -173,7 +173,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AI Assistant'),
+        title: const Text('AI Coach'),
         centerTitle: true,
         actions: [
           Consumer<ChatProvider>(
