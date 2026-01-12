@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import '../data/models/session.dart';
 import '../data/models/exercise.dart';
 import '../data/repositories/session_repository.dart';
@@ -7,7 +7,7 @@ import '../core/services/connectivity_service.dart';
 
 /// Provider for active workout session with timer
 /// Replaces ActiveWorkoutViewModel from MAUI app
-class ActiveWorkoutProvider extends ChangeNotifier {
+class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
   final SessionRepository _sessionRepository;
   final ConnectivityService? _connectivity;
 
@@ -24,6 +24,9 @@ class ActiveWorkoutProvider extends ChangeNotifier {
   StreamSubscription<bool>? _connectivitySubscription;
 
   ActiveWorkoutProvider(this._sessionRepository, [this._connectivity]) {
+    // Register app lifecycle observer to detect when app resumes
+    WidgetsBinding.instance.addObserver(this);
+
     // Listen for connectivity changes and refresh session when going online
     _connectivitySubscription = _connectivity?.connectivityStream.listen((
       isOnline,
@@ -35,6 +38,44 @@ class ActiveWorkoutProvider extends ChangeNotifier {
         loadSession(_currentSession!.id, showLoading: false);
       }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('⏱️ App resumed - recalculating elapsed time');
+      // Recalculate elapsed time when app comes back from background
+      _recalculateElapsedTime();
+    }
+  }
+
+  /// Recalculate elapsed time based on current time and startedAt timestamp
+  void _recalculateElapsedTime() {
+    if (_currentSession == null || _currentSession!.startedAt == null) {
+      return;
+    }
+
+    final Duration calculated;
+
+    if (_currentSession!.pausedAt != null) {
+      // Timer is paused - elapsed time is when it was paused
+      calculated = _currentSession!.pausedAt!.difference(
+        _currentSession!.startedAt!,
+      );
+      debugPrint('  Timer PAUSED - recalculated: ${calculated.inSeconds}s');
+    } else {
+      // Timer is running - calculate from current time
+      calculated = DateTime.now().toUtc().difference(
+        _currentSession!.startedAt!,
+      );
+      debugPrint('  Timer RUNNING - recalculated: ${calculated.inSeconds}s');
+    }
+
+    // Update elapsed time and notify listeners
+    _elapsedTime = calculated.isNegative ? Duration.zero : calculated;
+    notifyListeners();
   }
 
   // Getters
@@ -426,6 +467,7 @@ class ActiveWorkoutProvider extends ChangeNotifier {
   void dispose() {
     _stopTimer();
     _connectivitySubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 }
