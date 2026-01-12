@@ -25,7 +25,9 @@ class SessionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Debug: Log session program info
-    debugPrint('Session ${session.id}: programId=${session.programId}, isFromProgram=${session.isFromProgram}');
+    debugPrint(
+      'Session ${session.id}: programId=${session.programId}, isFromProgram=${session.isFromProgram}',
+    );
 
     return Dismissible(
       key: Key('session_${session.id}'),
