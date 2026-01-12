@@ -24,11 +24,6 @@ class SessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Debug: Log session program info
-    debugPrint(
-      'Session ${session.id}: programId=${session.programId}, isFromProgram=${session.isFromProgram}',
-    );
-
     return Dismissible(
       key: Key('session_${session.id}'),
       direction: DismissDirection.endToStart,
@@ -125,7 +120,7 @@ class SessionCard extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  '${session.isFromProgram ? 'From Program' : 'Standalone'} (ID:${session.programId ?? 0})',
+                                  session.isFromProgram ? 'From Program' : 'Standalone',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
