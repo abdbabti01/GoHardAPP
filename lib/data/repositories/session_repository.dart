@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
+import 'package:dio/dio.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
 import '../models/session.dart';
 import '../models/exercise.dart';
+import '../models/program_workout.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../local/services/local_database_service.dart';
@@ -402,7 +404,11 @@ class SessionRepository {
 
   /// Create a session from a program workout
   /// Links the session to the program and program workout
-  Future<Session> createSessionFromProgramWorkout(int programWorkoutId) async {
+  /// Now works offline by parsing exercisesJson client-side
+  Future<Session> createSessionFromProgramWorkout(
+    int programWorkoutId,
+    ProgramWorkout programWorkout,
+  ) async {
     final db = _localDb.database;
     final userId = await _authService.getUserId();
 
@@ -410,7 +416,7 @@ class SessionRepository {
       throw Exception('User not authenticated');
     }
 
-    // Create session with program workout link (server will handle exercise copying)
+    // Try to create on server if online
     if (_connectivity.isOnline) {
       try {
         final data = await _apiService.post<Map<String, dynamic>>(
@@ -419,20 +425,129 @@ class SessionRepository {
         );
         final apiSession = Session.fromJson(data);
 
-        // Cache the session locally
-        await _createLocalSession(apiSession, db, isPending: false);
+        // Cache the session locally with exercises
+        await db.writeTxn(() async {
+          final localSession = ModelMapper.sessionToLocal(
+            apiSession,
+            isSynced: true,
+          );
+          await db.localSessions.put(localSession);
+
+          // Cache exercises
+          for (final apiExercise in apiSession.exercises) {
+            final localExercise = ModelMapper.exerciseToLocal(
+              apiExercise,
+              sessionLocalId: localSession.localId,
+              isSynced: true,
+            );
+            await db.localExercises.put(localExercise);
+          }
+        });
 
         debugPrint('✅ Created session from program workout: ${apiSession.id}');
         return apiSession;
       } catch (e) {
-        debugPrint('❌ Failed to create session from program workout: $e');
-        rethrow;
+        debugPrint(
+          '⚠️ Failed to create session on server, creating locally: $e',
+        );
+        // Fall through to offline creation
       }
-    } else {
-      throw Exception(
-        'Cannot create program workout session while offline. Please connect to the internet.',
-      );
     }
+
+    // Offline creation: Parse exercisesJson and create locally
+    debugPrint('📴 Creating session from program workout offline');
+
+    // Parse exercises from JSON
+    final exercisesData = programWorkout.exercises;
+    final exercises = <Exercise>[];
+
+    // Create session locally
+    final session = Session(
+      id: 0, // Will be replaced with local ID
+      userId: userId,
+      date: DateTime.now(),
+      name: programWorkout.workoutName,
+      type: programWorkout.workoutType ?? 'Workout',
+      status: 'draft',
+      programId: programWorkout.programId,
+      programWorkoutId: programWorkoutId,
+      exercises: exercises,
+    );
+
+    late int sessionLocalId;
+
+    await db.writeTxn(() async {
+      // Create session
+      final localSession = LocalSession(
+        serverId: null,
+        userId: userId,
+        date: session.date,
+        duration: session.duration,
+        notes: session.notes,
+        type: session.type,
+        name: session.name,
+        status: session.status,
+        startedAt: session.startedAt,
+        completedAt: session.completedAt,
+        pausedAt: session.pausedAt,
+        programId: session.programId,
+        programWorkoutId: session.programWorkoutId,
+        isSynced: false,
+        syncStatus: 'pending_create',
+        lastModifiedLocal: DateTime.now(),
+      );
+
+      sessionLocalId = await db.localSessions.put(localSession);
+
+      // Create exercises from exercisesJson
+      for (final exerciseData in exercisesData) {
+        final exerciseName = exerciseData['name'] as String? ?? 'Exercise';
+        final exerciseTemplateId = exerciseData['exerciseTemplateId'] as int?;
+        final notes = exerciseData['notes'] as String?;
+        final restTime = exerciseData['rest'] as int?;
+
+        final exercise = Exercise(
+          id: 0, // Temporary
+          sessionId: sessionLocalId, // Use local ID
+          name: exerciseName,
+          exerciseTemplateId: exerciseTemplateId,
+          notes: notes,
+          restTime: restTime,
+          duration: null,
+          exerciseSets: [],
+        );
+
+        final localExercise = ModelMapper.exerciseToLocal(
+          exercise,
+          sessionLocalId: sessionLocalId,
+          isSynced: false,
+        );
+        final exerciseLocalId = await db.localExercises.put(localExercise);
+
+        exercises.add(exercise.copyWith(id: exerciseLocalId));
+      }
+    });
+
+    debugPrint(
+      '💾 Created session offline with ${exercises.length} exercises (localId: $sessionLocalId)',
+    );
+
+    return Session(
+      id: sessionLocalId,
+      userId: userId,
+      date: session.date,
+      duration: session.duration,
+      notes: session.notes,
+      type: session.type,
+      name: session.name,
+      status: session.status,
+      startedAt: session.startedAt,
+      completedAt: session.completedAt,
+      pausedAt: session.pausedAt,
+      programId: session.programId,
+      programWorkoutId: session.programWorkoutId,
+      exercises: exercises,
+    );
   }
 
   /// Background sync: Create session on server
@@ -636,6 +751,12 @@ class SessionRepository {
       if (status == 'completed' && localSession.completedAt == null) {
         localSession.completedAt = nowUtc; // Store as UTC
         debugPrint('✅ Set completedAt in DB (UTC): $nowUtc');
+
+        // Update workout frequency goals when a workout is completed (Issue #11)
+        final userId = await _authService.getUserId();
+        if (userId != null) {
+          await _updateWorkoutGoals(db, userId, nowUtc);
+        }
       }
 
       // Update duration if provided (from timer elapsed time)
@@ -651,6 +772,79 @@ class SessionRepository {
       }
       await db.localSessions.put(localSession);
     });
+  }
+
+  /// Update workout frequency goals when a workout is completed (Issue #11)
+  /// This ensures goals update even when offline
+  ///
+  /// NOTE: Currently goals are server-only (no LocalGoal model exists).
+  /// This method documents the intended client-side goal update logic.
+  /// To fully implement offline goal updates, you would need to:
+  /// 1. Create a LocalGoal model (lib/data/local/models/local_goal.dart)
+  /// 2. Add goals to LocalDatabaseService collections
+  /// 3. Update GoalsRepository to use offline-first pattern
+  /// 4. Uncomment the implementation below
+  ///
+  /// For now, goal updates only happen server-side via SessionsController.cs
+  Future<void> _updateWorkoutGoals(
+    Isar db,
+    int userId,
+    DateTime completedAt,
+  ) async {
+    debugPrint(
+      '📊 Goal updates (Issue #11): Currently server-only. LocalGoal model needed for offline support.',
+    );
+
+    // TODO: Uncomment when LocalGoal model is created
+    /*
+    try {
+      // Find active workout frequency goals
+      final goals = await db.localGoals
+        .filter()
+        .userIdEqualTo(userId)
+        .isActiveEqualTo(true)
+        .goalTypeContains('workout', caseSensitive: false)
+        .or()
+        .goalTypeContains('frequency', caseSensitive: false)
+        .findAll();
+
+      if (goals.isEmpty) {
+        debugPrint('📊 No active workout frequency goals to update');
+        return;
+      }
+
+      await db.writeTxn(() async {
+        for (final goal in goals) {
+          // Increment currentValue
+          final oldValue = goal.currentValue ?? 0;
+          goal.currentValue = oldValue + 1;
+
+          debugPrint('📊 Updated goal "${goal.goalType}": $oldValue → ${goal.currentValue}/${goal.targetValue}');
+
+          // Check if goal is now complete
+          if (goal.currentValue! >= goal.targetValue!) {
+            goal.isCompleted = true;
+            goal.completedAt = completedAt;
+            debugPrint('🎉 Goal completed: ${goal.goalType}');
+          }
+
+          // Mark as needing sync
+          goal.isSynced = false;
+          if (goal.serverId != null) {
+            goal.syncStatus = 'pending_update';
+          }
+          goal.lastModifiedLocal = DateTime.now();
+
+          await db.localGoals.put(goal);
+        }
+      });
+
+      debugPrint('✅ Updated ${goals.length} workout goals locally');
+    } catch (e) {
+      debugPrint('⚠️ Failed to update workout goals: $e');
+      // Don't throw - goal updates are non-critical
+    }
+    */
   }
 
   /// Pause session timer
@@ -958,6 +1152,39 @@ class SessionRepository {
           await db.localSessions.put(updatedSession);
         }
       });
+    } on DioException catch (e) {
+      // Handle version conflicts (Issue #13)
+      if (e.response?.statusCode == 409) {
+        debugPrint('⚠️ Conflict detected - server version is newer');
+
+        // Server wins: reload fresh data from server
+        try {
+          final serverSession = await getSession(serverId);
+
+          // Update local cache with server version
+          await db.writeTxn(() async {
+            final localSession =
+                await db.localSessions
+                    .filter()
+                    .serverIdEqualTo(serverId)
+                    .findFirst();
+            if (localSession != null) {
+              final updated = ModelMapper.sessionToLocal(
+                serverSession,
+                localId: localSession.localId,
+                isSynced: true,
+              );
+              await db.localSessions.put(updated);
+            }
+          });
+
+          debugPrint('🔄 Local session updated with server version');
+        } catch (reloadError) {
+          debugPrint('⚠️ Failed to reload server session: $reloadError');
+        }
+      } else {
+        rethrow;
+      }
     } catch (e) {
       debugPrint('Error syncing workout date to server: $e');
       rethrow;
@@ -1000,9 +1227,78 @@ class SessionRepository {
           await db.localSessions.put(localSession);
         }
       });
+    } on DioException catch (e) {
+      // Handle version conflicts (Issue #13)
+      if (e.response?.statusCode == 409) {
+        debugPrint('⚠️ Conflict detected - server version is newer');
+
+        // Server wins: reload fresh data from server
+        try {
+          final serverSession = await getSession(serverId);
+
+          // Update local cache with server version
+          await db.writeTxn(() async {
+            final localSession =
+                await db.localSessions
+                    .filter()
+                    .serverIdEqualTo(serverId)
+                    .findFirst();
+            if (localSession != null) {
+              final updated = ModelMapper.sessionToLocal(
+                serverSession,
+                localId: localSession.localId,
+                isSynced: true,
+              );
+              await db.localSessions.put(updated);
+            }
+          });
+
+          debugPrint('🔄 Local session updated with server version');
+        } catch (reloadError) {
+          debugPrint('⚠️ Failed to reload server session: $reloadError');
+        }
+      } else {
+        rethrow;
+      }
     } catch (e) {
       rethrow; // Let caller handle error
     }
+  }
+
+  /// Watch sessions for reactive updates (Issue #7)
+  /// Returns a stream that emits whenever sessions change in local DB
+  /// This enables automatic UI updates when background sync completes
+  Stream<List<Session>> watchSessions(int userId) {
+    final db = _localDb.database;
+
+    return db.localSessions
+        .filter()
+        .userIdEqualTo(userId)
+        .not()
+        .statusEqualTo('pending_delete')
+        .watch(fireImmediately: true)
+        .asyncMap((localSessions) async {
+          // Convert local sessions to domain models with exercises
+          final sessions = <Session>[];
+          for (final localSession in localSessions) {
+            final exercises =
+                await db.localExercises
+                    .filter()
+                    .sessionLocalIdEqualTo(localSession.localId)
+                    .findAll();
+
+            final exerciseList =
+                exercises.map((e) => ModelMapper.localToExercise(e)).toList();
+
+            sessions.add(
+              ModelMapper.localToSession(localSession, exercises: exerciseList),
+            );
+          }
+
+          // Sort by date descending
+          sessions.sort((a, b) => b.date.compareTo(a.date));
+          return sessions;
+        });
   }
 
   /// Add exercise to session

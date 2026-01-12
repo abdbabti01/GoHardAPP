@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../data/models/session.dart';
+import '../data/models/program_workout.dart';
 import '../data/repositories/session_repository.dart';
 import '../data/services/auth_service.dart';
 import '../core/services/connectivity_service.dart';
@@ -16,6 +17,7 @@ class SessionsProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   StreamSubscription<bool>? _connectivitySubscription;
+  StreamSubscription<List<Session>>? _sessionsStreamSubscription;
 
   SessionsProvider(
     this._sessionRepository,
@@ -63,12 +65,28 @@ class SessionsProvider extends ChangeNotifier {
     }
 
     try {
+      final userId = await _authService.getUserId();
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+
+      // Load initial sessions
       final sessionList = await _sessionRepository.getSessions(
         waitForSync: waitForSync,
       );
       // Sort by date descending (most recent first)
       _sessions = sessionList..sort((a, b) => b.date.compareTo(a.date));
       debugPrint('✅ Loaded ${_sessions.length} sessions into provider');
+
+      // Set up reactive watch for background updates (Issue #7)
+      _sessionsStreamSubscription?.cancel();
+      _sessionsStreamSubscription = _sessionRepository
+          .watchSessions(userId)
+          .listen((updatedSessions) {
+            _sessions = updatedSessions;
+            notifyListeners();
+            debugPrint('🔄 Sessions auto-updated from background sync');
+          });
     } catch (e) {
       _errorMessage =
           'Failed to load sessions: ${e.toString().replaceAll('Exception: ', '')}';
@@ -206,6 +224,7 @@ class SessionsProvider extends ChangeNotifier {
     String? type,
     String? notes,
     int? estimatedDuration,
+    List<int>? exerciseTemplateIds,
   }) async {
     try {
       final userId = await _authService.getUserId();
@@ -234,6 +253,31 @@ class SessionsProvider extends ChangeNotifier {
       );
 
       final createdSession = await _sessionRepository.createSession(newSession);
+
+      // Add exercises if provided (Issue #3)
+      if (exerciseTemplateIds != null && exerciseTemplateIds.isNotEmpty) {
+        for (final templateId in exerciseTemplateIds) {
+          try {
+            await _sessionRepository.addExerciseToSession(
+              createdSession.id,
+              templateId,
+            );
+            debugPrint(
+              '✅ Added exercise template $templateId to planned workout',
+            );
+          } catch (e) {
+            debugPrint('⚠️ Failed to add exercise template $templateId: $e');
+            // Continue with other exercises even if one fails
+          }
+        }
+        // Reload session to get updated exercises list
+        final updatedSession = await _sessionRepository.getSession(
+          createdSession.id,
+        );
+        _sessions.insert(0, updatedSession);
+        notifyListeners();
+        return updatedSession;
+      }
 
       _sessions.insert(0, createdSession);
       notifyListeners();
@@ -376,12 +420,13 @@ class SessionsProvider extends ChangeNotifier {
   }
 
   /// Create a session from a program workout
-  Future<Session?> startProgramWorkout(int programWorkoutId) async {
+  Future<Session?> startProgramWorkout(int programWorkoutId, ProgramWorkout programWorkout) async {
     try {
       _errorMessage = null;
 
       final session = await _sessionRepository.createSessionFromProgramWorkout(
         programWorkoutId,
+        programWorkout,
       );
 
       _sessions.insert(0, session);
@@ -426,6 +471,7 @@ class SessionsProvider extends ChangeNotifier {
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
+    _sessionsStreamSubscription?.cancel();
     super.dispose();
   }
 }

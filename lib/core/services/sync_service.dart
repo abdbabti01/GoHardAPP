@@ -435,6 +435,17 @@ class SyncService {
         continue;
       }
 
+      // Update exercise's sessionServerId if not set
+      if (exercise.sessionServerId != parentSession.serverId) {
+        await db.writeTxn(() async {
+          exercise.sessionServerId = parentSession.serverId;
+          await db.localExercises.put(exercise);
+        });
+        debugPrint(
+          '    Updated exercise sessionServerId to ${parentSession.serverId}',
+        );
+      }
+
       try {
         switch (exercise.syncStatus) {
           case 'pending_create':
@@ -538,6 +549,17 @@ class SyncService {
       if (parentExercise == null || parentExercise.serverId == null) {
         debugPrint('    ! Skipping set - parent exercise not synced yet');
         continue;
+      }
+
+      // Update set's exerciseServerId if not set
+      if (set.exerciseServerId != parentExercise.serverId) {
+        await db.writeTxn(() async {
+          set.exerciseServerId = parentExercise.serverId;
+          await db.localExerciseSets.put(set);
+        });
+        debugPrint(
+          '    Updated set exerciseServerId to ${parentExercise.serverId}',
+        );
       }
 
       try {

@@ -71,11 +71,12 @@ class MusicPlayerProvider extends ChangeNotifier {
       await _musicService.play();
       _currentTrack = _musicService.currentTrack;
       _errorMessage = null;
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to play: $e';
       debugPrint('❌ $_errorMessage');
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Pause music
@@ -83,11 +84,12 @@ class MusicPlayerProvider extends ChangeNotifier {
     try {
       await _musicService.pause();
       _errorMessage = null;
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to pause: $e';
       debugPrint('❌ $_errorMessage');
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Toggle play/pause
@@ -107,11 +109,12 @@ class MusicPlayerProvider extends ChangeNotifier {
       _duration = _musicService.duration;
       _position = Duration.zero;
       _errorMessage = null;
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to skip: $e';
       debugPrint('❌ $_errorMessage');
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Skip to previous track
@@ -122,11 +125,12 @@ class MusicPlayerProvider extends ChangeNotifier {
       _duration = _musicService.duration;
       _position = Duration.zero;
       _errorMessage = null;
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to go back: $e';
       debugPrint('❌ $_errorMessage');
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Seek to position
@@ -134,11 +138,12 @@ class MusicPlayerProvider extends ChangeNotifier {
     try {
       await _musicService.seek(position);
       _errorMessage = null;
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to seek: $e';
       debugPrint('❌ $_errorMessage');
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Set volume (0.0 to 1.0)
@@ -149,6 +154,7 @@ class MusicPlayerProvider extends ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Failed to set volume: $e';
       debugPrint('❌ $_errorMessage');
+      notifyListeners();
     }
   }
 
@@ -158,11 +164,12 @@ class MusicPlayerProvider extends ChangeNotifier {
       await _musicService.stop();
       _position = Duration.zero;
       _errorMessage = null;
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to stop: $e';
       debugPrint('❌ $_errorMessage');
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Clear error message

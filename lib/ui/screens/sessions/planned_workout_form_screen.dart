@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/sessions_provider.dart';
+import '../../../providers/exercises_provider.dart';
 import '../../../core/constants/workout_names.dart';
+import '../../../data/models/exercise_template.dart';
 
 /// Screen for creating planned workouts (future workouts)
 class PlannedWorkoutFormScreen extends StatefulWidget {
@@ -20,6 +22,7 @@ class _PlannedWorkoutFormScreenState extends State<PlannedWorkoutFormScreen> {
 
   DateTime? _selectedDate;
   String? _selectedType;
+  List<ExerciseTemplate> _selectedExercises = [];
 
   final List<String> _workoutTypes = [
     'Strength',
@@ -67,6 +70,34 @@ class _PlannedWorkoutFormScreenState extends State<PlannedWorkoutFormScreen> {
     }
   }
 
+  Future<void> _selectExercises() async {
+    final exercisesProvider = context.read<ExercisesProvider>();
+    final buildContext = context;
+
+    // Load exercises if not loaded
+    if (exercisesProvider.filteredExercises.isEmpty) {
+      await exercisesProvider.loadExercises();
+    }
+
+    final selected = await showDialog<List<ExerciseTemplate>>(
+      // ignore: use_build_context_synchronously
+      context: buildContext,
+      builder:
+          (context) => _ExerciseSelectionDialog(
+            initialSelection: _selectedExercises,
+            exercises: exercisesProvider.filteredExercises,
+          ),
+    );
+
+    if (!mounted) return;
+
+    if (selected != null) {
+      setState(() {
+        _selectedExercises = selected;
+      });
+    }
+  }
+
   Future<void> _createPlannedWorkout() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -93,6 +124,10 @@ class _PlannedWorkoutFormScreenState extends State<PlannedWorkoutFormScreen> {
       estimatedDuration:
           _durationController.text.isNotEmpty
               ? int.tryParse(_durationController.text)
+              : null,
+      exerciseTemplateIds:
+          _selectedExercises.isNotEmpty
+              ? _selectedExercises.map((e) => e.id).toList()
               : null,
     );
 
@@ -368,6 +403,88 @@ class _PlannedWorkoutFormScreenState extends State<PlannedWorkoutFormScreen> {
             ),
             const SizedBox(height: 24),
 
+            // Exercises (Optional)
+            Text(
+              'Exercises (Optional)',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              elevation: 2,
+              child: InkWell(
+                onTap: _selectExercises,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.fitness_center,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _selectedExercises.isEmpty
+                                  ? 'Add exercises to this workout'
+                                  : '${_selectedExercises.length} exercise${_selectedExercises.length == 1 ? '' : 's'} selected',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight:
+                                    _selectedExercises.isEmpty
+                                        ? FontWeight.normal
+                                        : FontWeight.bold,
+                                color:
+                                    _selectedExercises.isEmpty
+                                        ? Colors.grey
+                                        : Theme.of(context).primaryColor,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                        ],
+                      ),
+                      if (_selectedExercises.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        const Divider(),
+                        const SizedBox(height: 8),
+                        ..._selectedExercises.map((exercise) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: Colors.green,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    exercise.name,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
             // Notes (Optional)
             Text(
               'Notes',
@@ -400,6 +517,145 @@ class _PlannedWorkoutFormScreenState extends State<PlannedWorkoutFormScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Dialog for selecting exercises to add to a planned workout
+class _ExerciseSelectionDialog extends StatefulWidget {
+  final List<ExerciseTemplate> initialSelection;
+  final List<ExerciseTemplate> exercises;
+
+  const _ExerciseSelectionDialog({
+    required this.initialSelection,
+    required this.exercises,
+  });
+
+  @override
+  State<_ExerciseSelectionDialog> createState() =>
+      _ExerciseSelectionDialogState();
+}
+
+class _ExerciseSelectionDialogState extends State<_ExerciseSelectionDialog> {
+  late List<ExerciseTemplate> _selectedExercises;
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedExercises = List.from(widget.initialSelection);
+  }
+
+  List<ExerciseTemplate> get _filteredExercises {
+    if (_searchQuery.isEmpty) {
+      return widget.exercises;
+    }
+    return widget.exercises.where((exercise) {
+      return exercise.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          (exercise.muscleGroup?.toLowerCase().contains(
+                _searchQuery.toLowerCase(),
+              ) ??
+              false);
+    }).toList();
+  }
+
+  void _toggleExercise(ExerciseTemplate exercise) {
+    setState(() {
+      if (_selectedExercises.any((e) => e.id == exercise.id)) {
+        _selectedExercises.removeWhere((e) => e.id == exercise.id);
+      } else {
+        _selectedExercises.add(exercise);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
+        child: Column(
+          children: [
+            // Header
+            AppBar(
+              title: const Text('Select Exercises'),
+              automaticallyImplyLeading: false,
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+                TextButton(
+                  onPressed:
+                      () => Navigator.of(context).pop(_selectedExercises),
+                  child: Text(
+                    'Done (${_selectedExercises.length})',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            // Search bar
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search exercises...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: const OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Theme.of(context).cardColor,
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              ),
+            ),
+
+            // Exercise list
+            Expanded(
+              child:
+                  _filteredExercises.isEmpty
+                      ? const Center(child: Text('No exercises found'))
+                      : ListView.builder(
+                        itemCount: _filteredExercises.length,
+                        itemBuilder: (context, index) {
+                          final exercise = _filteredExercises[index];
+                          final isSelected = _selectedExercises.any(
+                            (e) => e.id == exercise.id,
+                          );
+
+                          return CheckboxListTile(
+                            title: Text(exercise.name),
+                            subtitle: Text(
+                              exercise.muscleGroup ?? '',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                            value: isSelected,
+                            onChanged: (_) => _toggleExercise(exercise),
+                            secondary: Icon(
+                              Icons.fitness_center,
+                              color: Theme.of(context).primaryColor,
+                            ),
+                          );
+                        },
+                      ),
             ),
           ],
         ),

@@ -19,6 +19,7 @@ class Session {
   final List<Exercise> exercises;
   final int? programId;
   final int? programWorkoutId;
+  final int version; // Version tracking for conflict resolution (Issue #13)
 
   Session({
     required this.id,
@@ -35,6 +36,7 @@ class Session {
     this.exercises = const [],
     this.programId,
     this.programWorkoutId,
+    this.version = 1,
   });
 
   factory Session.fromJson(Map<String, dynamic> json) {
@@ -68,6 +70,7 @@ class Session {
       exercises: session.exercises,
       programId: session.programId,
       programWorkoutId: session.programWorkoutId,
+      version: session.version,
     );
   }
 
@@ -92,6 +95,7 @@ class Session {
     List<Exercise>? exercises,
     int? programId,
     int? programWorkoutId,
+    int? version,
   }) {
     return Session(
       id: id ?? this.id,
@@ -108,6 +112,7 @@ class Session {
       exercises: exercises ?? this.exercises,
       programId: programId ?? this.programId,
       programWorkoutId: programWorkoutId ?? this.programWorkoutId,
+      version: version ?? this.version,
     );
   }
 }

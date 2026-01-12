@@ -306,7 +306,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
 
                           // User confirmed - create session and navigate
                           final session = await sessionsProvider
-                              .startProgramWorkout(widget.workoutId);
+                              .startProgramWorkout(widget.workoutId, _workout!);
 
                           if (session != null && mounted) {
                             // Navigate to My Workouts (Sessions screen)

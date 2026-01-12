@@ -82,6 +82,7 @@ class ExercisesProvider extends ChangeNotifier {
       _errorMessage =
           'Failed to load exercises: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Load exercises error: $e');
+      notifyListeners();
     } finally {
       if (showLoading) {
         _isLoading = false;

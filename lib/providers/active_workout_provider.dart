@@ -213,15 +213,18 @@ class ActiveWorkoutProvider extends ChangeNotifier {
     notifyListeners();
     debugPrint('⏸️ Timer paused (UI updated) - pausedAt UTC: $nowUtc');
 
-    // Then save to DB in background with SAME timestamp (don't block UI)
-    _sessionRepository.pauseSession(_currentSession!.id, nowUtc).catchError((
-      e,
-    ) {
+    // CRITICAL FIX #10 & #1: AWAIT the pause to ensure local DB write completes
+    // This prevents timer drift if app is killed before sync completes
+    // Repository method writes to Isar synchronously, then syncs to API in background
+    try {
+      await _sessionRepository.pauseSession(_currentSession!.id, nowUtc);
+      debugPrint('✅ Pause persisted to local DB - timer state safe');
+    } catch (e) {
       _errorMessage =
           'Failed to pause: ${e.toString().replaceAll('Exception: ', '')}';
-      debugPrint('Pause error: $e');
+      debugPrint('❌ Pause error: $e');
       notifyListeners();
-    });
+    }
   }
 
   /// Resume the timer (continues from current elapsed time)
@@ -253,15 +256,18 @@ class ActiveWorkoutProvider extends ChangeNotifier {
     notifyListeners();
     debugPrint('▶️ Timer resumed (UI updated) - new startedAt: $newStartedAt');
 
-    // Then save to DB in background with SAME adjusted timestamp (don't block UI)
-    _sessionRepository
-        .resumeSession(_currentSession!.id, newStartedAt)
-        .catchError((e) {
-          _errorMessage =
-              'Failed to resume: ${e.toString().replaceAll('Exception: ', '')}';
-          debugPrint('Resume error: $e');
-          notifyListeners();
-        });
+    // CRITICAL FIX #10 & #1: AWAIT the resume to ensure local DB write completes
+    // This prevents timer drift if app is killed before sync completes
+    // Repository method writes to Isar synchronously, then syncs to API in background
+    try {
+      await _sessionRepository.resumeSession(_currentSession!.id, newStartedAt);
+      debugPrint('✅ Resume persisted to local DB - timer state safe');
+    } catch (e) {
+      _errorMessage =
+          'Failed to resume: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('❌ Resume error: $e');
+      notifyListeners();
+    }
   }
 
   /// Finish workout (update status to completed)
