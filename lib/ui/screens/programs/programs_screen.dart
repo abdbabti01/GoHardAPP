@@ -22,10 +22,89 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     });
   }
 
+  void _showCreateProgramOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Create New Program',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // AI-Generated Option
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.auto_awesome, color: Colors.purple),
+              ),
+              title: const Text(
+                'Create with AI',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: const Text('Let AI generate a personalized program'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, RouteNames.workoutPlanForm);
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // Manual Creation Option
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.edit, color: Colors.blue),
+              ),
+              title: const Text(
+                'Create Manually',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: const Text('Build your own custom program'),
+              onTap: () {
+                Navigator.pop(context);
+                // TODO: Navigate to manual program creation screen
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Manual program creation coming soon!'),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Consumer<ProgramsProvider>(
-      builder: (context, provider, child) {
+    return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showCreateProgramOptions(context),
+        icon: const Icon(Icons.add),
+        label: const Text('Create Program'),
+      ),
+      body: Consumer<ProgramsProvider>(
+        builder: (context, provider, child) {
         if (provider.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -118,6 +197,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
           ),
         );
       },
+      ),
     );
   }
 
