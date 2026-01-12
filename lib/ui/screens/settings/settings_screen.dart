@@ -206,7 +206,9 @@ class SettingsScreen extends StatelessWidget {
     final user = profile.currentUser;
     if (user == null) return const SizedBox.shrink();
 
-    final currentUnitPreference = UnitPreference.fromString(user.unitPreference);
+    final currentUnitPreference = UnitPreference.fromString(
+      user.unitPreference,
+    );
     final currentThemePreference = user.themePreference;
 
     return Card(
@@ -305,14 +307,16 @@ class SettingsScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-              : Colors.transparent,
+          color:
+              isSelected
+                  ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+                  : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected
-                ? Theme.of(context).primaryColor
-                : Colors.grey.withValues(alpha: 0.3),
+            color:
+                isSelected
+                    ? Theme.of(context).primaryColor
+                    : Colors.grey.withValues(alpha: 0.3),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -320,9 +324,10 @@ class SettingsScreen extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: isSelected
-                  ? Theme.of(context).primaryColor
-                  : Colors.grey.shade600,
+              color:
+                  isSelected
+                      ? Theme.of(context).primaryColor
+                      : Colors.grey.shade600,
             ),
             const SizedBox(height: 4),
             Text(
@@ -330,9 +335,10 @@ class SettingsScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected
-                    ? Theme.of(context).primaryColor
-                    : Colors.grey.shade600,
+                color:
+                    isSelected
+                        ? Theme.of(context).primaryColor
+                        : Colors.grey.shade600,
               ),
             ),
           ],
