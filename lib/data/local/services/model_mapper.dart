@@ -31,7 +31,9 @@ class ModelMapper {
       completedAt: apiSession.completedAt,
       pausedAt: apiSession.pausedAt,
       programId: apiSession.programId, // Fix: preserve programId when caching
-      programWorkoutId: apiSession.programWorkoutId, // Fix: preserve programWorkoutId when caching
+      programWorkoutId:
+          apiSession
+              .programWorkoutId, // Fix: preserve programWorkoutId when caching
       isSynced: isSynced,
       syncStatus: isSynced ? 'synced' : 'pending_create',
       lastModifiedLocal: DateTime.now(),

@@ -447,7 +447,9 @@ class SessionRepository {
 
         debugPrint('📥 API Response programId: ${data['programId']}');
         final apiSession = Session.fromJson(data);
-        debugPrint('✅ Created session - ID: ${apiSession.id}, programId: ${apiSession.programId}');
+        debugPrint(
+          '✅ Created session - ID: ${apiSession.id}, programId: ${apiSession.programId}',
+        );
 
         // Cache the session locally with exercises
         await db.writeTxn(() async {
