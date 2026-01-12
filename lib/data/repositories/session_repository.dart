@@ -106,6 +106,13 @@ class SessionRepository {
     try {
       // Fetch from API
       final data = await _apiService.get<List<dynamic>>(ApiConfig.sessions);
+
+      // Debug: Log raw JSON to check programId
+      debugPrint('📥 Received ${data.length} sessions from API');
+      for (final sessionJson in data.take(3)) {
+        debugPrint('  Session JSON: programId=${sessionJson['programId']}, programWorkoutId=${sessionJson['programWorkoutId']}, name=${sessionJson['name']}');
+      }
+
       final apiSessions =
           data
               .map((json) => Session.fromJson(json as Map<String, dynamic>))
