@@ -420,6 +420,10 @@ class SessionRepository {
     DateTime programStartDate,
     int programId, // Use actual programId instead of programWorkout.programId
   ) async {
+    debugPrint(
+      '🔍 createSessionFromProgramWorkout: programId=$programId, programWorkout.programId=${programWorkout.programId}',
+    );
+
     final db = _localDb.database;
     final userId = await _authService.getUserId();
 
