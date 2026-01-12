@@ -434,14 +434,20 @@ class SessionRepository {
     // Try to create on server if online
     if (_connectivity.isOnline) {
       try {
+        final requestData = {
+          'programWorkoutId': programWorkoutId,
+          'programId': programId, // Send programId to backend
+        };
+        debugPrint('🌐 Sending to API: $requestData');
+
         final data = await _apiService.post<Map<String, dynamic>>(
           ApiConfig.sessionsFromProgramWorkout,
-          data: {
-            'programWorkoutId': programWorkoutId,
-            'programId': programId, // Send programId to backend
-          },
+          data: requestData,
         );
+
+        debugPrint('📥 API Response programId: ${data['programId']}');
         final apiSession = Session.fromJson(data);
+        debugPrint('✅ Created session - ID: ${apiSession.id}, programId: ${apiSession.programId}');
 
         // Cache the session locally with exercises
         await db.writeTxn(() async {
