@@ -125,9 +125,7 @@ class SessionCard extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  session.isFromProgram
-                                      ? 'From Program'
-                                      : 'Standalone',
+                                  '${session.isFromProgram ? 'From Program' : 'Standalone'} (ID:${session.programId ?? 0})',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
