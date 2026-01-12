@@ -508,7 +508,8 @@ class SessionRepository {
       name: programWorkout.workoutName,
       type: programWorkout.workoutType ?? 'Workout',
       status: status, // Use calculated status
-      programId: programId, // Use passed programId instead of programWorkout.programId
+      programId:
+          programId, // Use passed programId instead of programWorkout.programId
       programWorkoutId: programWorkoutId,
       exercises: exercises,
     );
