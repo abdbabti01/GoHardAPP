@@ -424,6 +424,7 @@ class SessionsProvider extends ChangeNotifier {
     int programWorkoutId,
     ProgramWorkout programWorkout,
     DateTime programStartDate,
+    int programId, // Pass actual programId to override old data
   ) async {
     try {
       _errorMessage = null;
@@ -432,6 +433,7 @@ class SessionsProvider extends ChangeNotifier {
         programWorkoutId,
         programWorkout,
         programStartDate,
+        programId, // Pass programId through
       );
 
       _sessions.insert(0, session);

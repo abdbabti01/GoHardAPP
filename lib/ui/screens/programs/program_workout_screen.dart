@@ -312,6 +312,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                                 widget.workoutId,
                                 _workout!,
                                 _programStartDate ?? DateTime.now(),
+                                widget.programId, // Pass actual programId
                               );
 
                           if (session != null && mounted) {

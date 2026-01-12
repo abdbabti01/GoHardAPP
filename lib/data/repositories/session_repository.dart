@@ -418,6 +418,7 @@ class SessionRepository {
     int programWorkoutId,
     ProgramWorkout programWorkout,
     DateTime programStartDate,
+    int programId, // Use actual programId instead of programWorkout.programId
   ) async {
     final db = _localDb.database;
     final userId = await _authService.getUserId();
@@ -507,7 +508,7 @@ class SessionRepository {
       name: programWorkout.workoutName,
       type: programWorkout.workoutType ?? 'Workout',
       status: status, // Use calculated status
-      programId: programWorkout.programId,
+      programId: programId, // Use passed programId instead of programWorkout.programId
       programWorkoutId: programWorkoutId,
       exercises: exercises,
     );
