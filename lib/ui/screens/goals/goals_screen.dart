@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../providers/goals_provider.dart';
+import '../../../providers/programs_provider.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../data/models/goal.dart';
 import '../../../data/models/goal_progress.dart';
+import '../../../data/models/program.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/goal_reminder_preferences.dart';
 import '../../../routes/route_names.dart';
@@ -246,6 +248,16 @@ class _GoalsScreenState extends State<GoalsScreen>
                   icon: Icon(Icons.more_vert, color: Colors.grey.shade600),
                   itemBuilder:
                       (context) => [
+                        const PopupMenuItem(
+                          value: 'link_programs',
+                          child: Row(
+                            children: [
+                              Icon(Icons.fitness_center, size: 20),
+                              SizedBox(width: 12),
+                              Text('Link Programs'),
+                            ],
+                          ),
+                        ),
                         const PopupMenuItem(
                           value: 'reminder',
                           child: Row(
@@ -695,7 +707,9 @@ class _GoalsScreenState extends State<GoalsScreen>
   void _handleGoalAction(Goal goal, String action) async {
     final provider = context.read<GoalsProvider>();
 
-    if (action == 'reminder') {
+    if (action == 'link_programs') {
+      await _showLinkProgramsDialog(goal);
+    } else if (action == 'reminder') {
       await _showReminderDialog(goal);
     } else if (action == 'complete') {
       final confirmed = await _showConfirmDialog(
@@ -1036,6 +1050,218 @@ class _GoalsScreenState extends State<GoalsScreen>
         return 'Every 2 weeks';
       default:
         return 'Weekly';
+    }
+  }
+
+  Future<void> _showLinkProgramsDialog(Goal goal) async {
+    // Load programs if not already loaded
+    final programsProvider = context.read<ProgramsProvider>();
+    await programsProvider.loadPrograms();
+
+    if (!mounted) return;
+
+    final allPrograms = programsProvider.programs;
+
+    if (allPrograms.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No programs found. Create a program first!'),
+        ),
+      );
+      return;
+    }
+
+    // Separate programs linked to this goal vs others
+    final linkedPrograms =
+        allPrograms.where((p) => p.goalId == goal.id).toList();
+    final otherPrograms =
+        allPrograms.where((p) => p.goalId != goal.id).toList();
+
+    await showDialog(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.fitness_center, size: 24),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Link Programs')),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Goal info
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            goal.goalType,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            goal.getProgressDescription(),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Linked programs section
+                    if (linkedPrograms.isNotEmpty) ...[
+                      Text(
+                        'Linked Programs (${linkedPrograms.length})',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...linkedPrograms.map(
+                        (program) => Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: Icon(
+                              Icons.check_circle,
+                              color: Colors.green.shade600,
+                            ),
+                            title: Text(program.title),
+                            subtitle: Text(
+                              '${program.currentWeek}/${program.totalWeeks} weeks • ${program.progressPercentage.toStringAsFixed(0)}%',
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(
+                                Icons.link_off,
+                                color: Colors.red,
+                              ),
+                              onPressed: () async {
+                                Navigator.pop(dialogContext);
+                                await _unlinkProgramFromGoal(program);
+                              },
+                              tooltip: 'Unlink',
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Available programs section
+                    if (otherPrograms.isNotEmpty) ...[
+                      Text(
+                        'Available Programs (${otherPrograms.length})',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...otherPrograms.map(
+                        (program) => Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: Icon(
+                              Icons.fitness_center,
+                              color: Colors.grey.shade600,
+                            ),
+                            title: Text(program.title),
+                            subtitle: Text(
+                              program.goalId != null
+                                  ? '${program.currentWeek}/${program.totalWeeks} weeks • Linked to another goal'
+                                  : '${program.currentWeek}/${program.totalWeeks} weeks',
+                              style: TextStyle(
+                                color:
+                                    program.goalId != null
+                                        ? Colors.orange.shade700
+                                        : null,
+                              ),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(
+                                Icons.add_link,
+                                color: Colors.blue,
+                              ),
+                              onPressed: () async {
+                                Navigator.pop(dialogContext);
+                                await _linkProgramToGoal(program, goal.id);
+                              },
+                              tooltip: 'Link to this goal',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    if (linkedPrograms.isEmpty && otherPrograms.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Center(child: Text('No programs available')),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _linkProgramToGoal(Program program, int goalId) async {
+    final programsProvider = context.read<ProgramsProvider>();
+
+    // Create updated program with new goalId
+    final updatedProgram = program.copyWith(goalId: goalId);
+
+    final success = await programsProvider.updateProgram(
+      program.id,
+      updatedProgram,
+    );
+
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${program.title} linked to goal')),
+      );
+    }
+  }
+
+  Future<void> _unlinkProgramFromGoal(Program program) async {
+    final programsProvider = context.read<ProgramsProvider>();
+
+    // Create updated program with null goalId
+    final updatedProgram = program.copyWith(goalId: null);
+
+    final success = await programsProvider.updateProgram(
+      program.id,
+      updatedProgram,
+    );
+
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${program.title} unlinked from goal')),
+      );
     }
   }
 
