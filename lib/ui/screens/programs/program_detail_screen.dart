@@ -614,7 +614,9 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
   }
 
   void _showDeleteConfirmation(BuildContext context, Program program) async {
-    debugPrint('🗑️ Delete program requested: ${program.id} - ${program.title}');
+    debugPrint(
+      '🗑️ Delete program requested: ${program.id} - ${program.title}',
+    );
     final provider = context.read<ProgramsProvider>();
 
     // Show loading dialog
@@ -650,7 +652,9 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
-                    Text('• ${impact['sessionsCount'] ?? 0} Workout Session(s)'),
+                    Text(
+                      '• ${impact['sessionsCount'] ?? 0} Workout Session(s)',
+                    ),
                     const SizedBox(height: 8),
                     const Text(
                       'This action cannot be undone.',
@@ -687,13 +691,13 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(
-        content: Text('Error fetching deletion impact: ${e.toString()}'),
-        duration: const Duration(seconds: 5),
-        backgroundColor: Colors.red,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error fetching deletion impact: ${e.toString()}'),
+          duration: const Duration(seconds: 5),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
