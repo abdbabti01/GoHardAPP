@@ -16,11 +16,13 @@ import '../../widgets/common/offline_banner.dart';
 class ChatConversationScreen extends StatefulWidget {
   final int conversationId;
   final String? initialMessage; // Optional pre-filled message
+  final int? goalId; // Optional goal to link program to
 
   const ChatConversationScreen({
     super.key,
     required this.conversationId,
     this.initialMessage,
+    this.goalId,
   });
 
   @override
@@ -289,7 +291,8 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     DateTime startDate = DateTime.now();
     int totalWeeks = 8;
     int daysPerWeek = 4;
-    int? selectedGoalId;
+    int? selectedGoalId =
+        widget.goalId; // Pre-select goal if passed from navigation
 
     // Fetch user's goals
     final goalsProvider = context.read<GoalsProvider>();

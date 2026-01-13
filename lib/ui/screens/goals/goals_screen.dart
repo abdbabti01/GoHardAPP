@@ -1273,6 +1273,7 @@ class _GoalsScreenState extends State<GoalsScreen>
           arguments: {
             'conversationId': conversation.id,
             'initialMessage': prompt,
+            'goalId': goal.id, // Pass goalId to chat
           },
         );
       } else {
