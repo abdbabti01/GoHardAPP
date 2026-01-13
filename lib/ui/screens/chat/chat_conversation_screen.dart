@@ -6,6 +6,7 @@ import '../../../providers/chat_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/active_workout_provider.dart';
 import '../../../providers/programs_provider.dart';
+import '../../../providers/goals_provider.dart';
 import '../../../data/models/exercise_template.dart';
 import '../../../data/services/api_service.dart';
 import '../../../core/constants/api_config.dart';
@@ -295,6 +296,8 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     await goalsProvider.loadGoals();
     final activeGoals = goalsProvider.goals.where((g) => g.isActive).toList();
 
+    if (!mounted) return null;
+
     return showDialog<Map<String, dynamic>>(
       context: context,
       builder:
@@ -340,7 +343,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                 value: goal.id,
                                 child: Text(goal.goalType),
                               );
-                            }).toList(),
+                            }),
                           ],
                           onChanged: (value) {
                             setState(() {
