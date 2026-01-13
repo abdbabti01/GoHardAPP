@@ -26,99 +26,98 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
   Widget build(BuildContext context) {
     return Consumer<ProgramsProvider>(
       builder: (context, provider, child) {
-          if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        if (provider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          if (provider.errorMessage != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text(
-                    provider.errorMessage!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => provider.loadPrograms(),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (provider.programs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.fitness_center,
-                    size: 80,
-                    color: Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No Programs Yet',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Create a goal and generate\na workout plan to get started!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () => provider.loadPrograms(),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
+        if (provider.errorMessage != null) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Active Programs
-                if (provider.activePrograms.isNotEmpty) ...[
-                  Text(
-                    'Active Programs',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ...provider.activePrograms.map(
-                    (program) => _buildProgramCard(context, program),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-
-                // Completed Programs
-                if (provider.completedPrograms.isNotEmpty) ...[
-                  Text(
-                    'Completed Programs',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ...provider.completedPrograms.map(
-                    (program) => _buildProgramCard(context, program),
-                  ),
-                ],
+                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  provider.errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => provider.loadPrograms(),
+                  child: const Text('Retry'),
+                ),
               ],
             ),
           );
-        },
-      ),
+        }
+
+        if (provider.programs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.fitness_center,
+                  size: 80,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No Programs Yet',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Create a goal and generate\na workout plan to get started!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () => provider.loadPrograms(),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Active Programs
+              if (provider.activePrograms.isNotEmpty) ...[
+                Text(
+                  'Active Programs',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                ...provider.activePrograms.map(
+                  (program) => _buildProgramCard(context, program),
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // Completed Programs
+              if (provider.completedPrograms.isNotEmpty) ...[
+                Text(
+                  'Completed Programs',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...provider.completedPrograms.map(
+                  (program) => _buildProgramCard(context, program),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
