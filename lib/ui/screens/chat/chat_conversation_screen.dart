@@ -299,141 +299,146 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       context: context,
       builder:
           (context) => StatefulBuilder(
-            builder: (context, setState) => AlertDialog(
-              title: const Text('Create Program'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Program Title',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: descriptionController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<int?>(
-                      value: selectedGoalId,
-                      decoration: const InputDecoration(
-                        labelText: 'Link to Goal (optional)',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        const DropdownMenuItem<int?>(
-                          value: null,
-                          child: Text('No goal'),
+            builder:
+                (context, setState) => AlertDialog(
+                  title: const Text('Create Program'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: titleController,
+                          decoration: const InputDecoration(
+                            labelText: 'Program Title',
+                            border: OutlineInputBorder(),
+                          ),
                         ),
-                        ...activeGoals.map((goal) {
-                          return DropdownMenuItem<int?>(
-                            value: goal.id,
-                            child: Text(goal.goalType),
-                          );
-                        }).toList(),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: descriptionController,
+                          decoration: const InputDecoration(
+                            labelText: 'Description (optional)',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<int?>(
+                          value: selectedGoalId,
+                          decoration: const InputDecoration(
+                            labelText: 'Link to Goal (optional)',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('No goal'),
+                            ),
+                            ...activeGoals.map((goal) {
+                              return DropdownMenuItem<int?>(
+                                value: goal.id,
+                                child: Text(goal.goalType),
+                              );
+                            }).toList(),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedGoalId = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<int>(
+                          value: totalWeeks,
+                          decoration: const InputDecoration(
+                            labelText: 'Total Weeks',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              [4, 6, 8, 10, 12, 16, 20].map((weeks) {
+                                return DropdownMenuItem(
+                                  value: weeks,
+                                  child: Text('$weeks weeks'),
+                                );
+                              }).toList(),
+                          onChanged: (value) {
+                            if (value != null) totalWeeks = value;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<int>(
+                          value: daysPerWeek,
+                          decoration: const InputDecoration(
+                            labelText: 'Days Per Week',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              [3, 4, 5, 6, 7].map((days) {
+                                return DropdownMenuItem(
+                                  value: days,
+                                  child: Text('$days days/week'),
+                                );
+                              }).toList(),
+                          onChanged: (value) {
+                            if (value != null) daysPerWeek = value;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        ListTile(
+                          title: const Text('Start Date'),
+                          subtitle: Text(
+                            DateFormat('MMM d, yyyy').format(startDate),
+                          ),
+                          trailing: const Icon(Icons.calendar_today),
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: startDate,
+                              firstDate: DateTime.now().subtract(
+                                const Duration(days: 30),
+                              ),
+                              lastDate: DateTime.now().add(
+                                const Duration(days: 365),
+                              ),
+                            );
+                            if (picked != null) {
+                              setState(() {
+                                startDate = picked;
+                              });
+                            }
+                          },
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                        ),
                       ],
-                      onChanged: (value) {
-                        setState(() {
-                          selectedGoalId = value;
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context, {
+                          'title': titleController.text.trim(),
+                          'description':
+                              descriptionController.text.trim().isEmpty
+                                  ? null
+                                  : descriptionController.text.trim(),
+                          'totalWeeks': totalWeeks,
+                          'daysPerWeek': daysPerWeek,
+                          'startDate': startDate,
+                          'goalId': selectedGoalId,
                         });
                       },
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<int>(
-                      value: totalWeeks,
-                      decoration: const InputDecoration(
-                        labelText: 'Total Weeks',
-                        border: OutlineInputBorder(),
-                      ),
-                      items:
-                          [4, 6, 8, 10, 12, 16, 20].map((weeks) {
-                            return DropdownMenuItem(
-                              value: weeks,
-                              child: Text('$weeks weeks'),
-                            );
-                          }).toList(),
-                      onChanged: (value) {
-                        if (value != null) totalWeeks = value;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<int>(
-                      value: daysPerWeek,
-                      decoration: const InputDecoration(
-                        labelText: 'Days Per Week',
-                        border: OutlineInputBorder(),
-                      ),
-                      items:
-                          [3, 4, 5, 6, 7].map((days) {
-                            return DropdownMenuItem(
-                              value: days,
-                              child: Text('$days days/week'),
-                            );
-                          }).toList(),
-                      onChanged: (value) {
-                        if (value != null) daysPerWeek = value;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    ListTile(
-                      title: const Text('Start Date'),
-                      subtitle: Text(DateFormat('MMM d, yyyy').format(startDate)),
-                      trailing: const Icon(Icons.calendar_today),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: startDate,
-                          firstDate: DateTime.now().subtract(
-                            const Duration(days: 30),
-                          ),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            startDate = picked;
-                          });
-                        }
-                      },
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.grey.shade300),
-                      ),
+                      child: const Text('Create Program'),
                     ),
                   ],
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context, {
-                      'title': titleController.text.trim(),
-                      'description':
-                          descriptionController.text.trim().isEmpty
-                              ? null
-                              : descriptionController.text.trim(),
-                      'totalWeeks': totalWeeks,
-                      'daysPerWeek': daysPerWeek,
-                      'startDate': startDate,
-                      'goalId': selectedGoalId,
-                    });
-                  },
-                  child: const Text('Create Program'),
-                ),
-              ],
-            ),
           ),
     );
   }
