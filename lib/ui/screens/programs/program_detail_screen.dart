@@ -614,6 +614,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
   }
 
   void _showDeleteConfirmation(BuildContext context, Program program) async {
+    debugPrint('🗑️ Delete program requested: ${program.id} - ${program.title}');
     final provider = context.read<ProgramsProvider>();
 
     // Show loading dialog
@@ -624,7 +625,9 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     );
 
     try {
+      debugPrint('📡 Fetching deletion impact for program ${program.id}...');
       final impact = await provider.getDeletionImpact(program.id);
+      debugPrint('✅ Deletion impact: $impact');
 
       if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog
@@ -640,14 +643,14 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Are you sure you want to delete "${program.title}"?'),
-                  if (impact['sessionsCount']! > 0) ...[
+                  if ((impact['sessionsCount'] ?? 0) > 0) ...[
                     const SizedBox(height: 16),
                     const Text(
                       'This will also delete:',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
-                    Text('• ${impact['sessionsCount']} Workout Session(s)'),
+                    Text('• ${impact['sessionsCount'] ?? 0} Workout Session(s)'),
                     const SizedBox(height: 8),
                     const Text(
                       'This action cannot be undone.',
@@ -680,12 +683,17 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
         }
       }
     } catch (e) {
+      debugPrint('❌ Error fetching deletion impact: $e');
       if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      ).showSnackBar(SnackBar(
+        content: Text('Error fetching deletion impact: ${e.toString()}'),
+        duration: const Duration(seconds: 5),
+        backgroundColor: Colors.red,
+      ));
     }
   }
 
