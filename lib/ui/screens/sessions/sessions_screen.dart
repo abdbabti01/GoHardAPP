@@ -16,7 +16,9 @@ import '../programs/programs_screen.dart';
 
 /// Sessions screen with tabs for My Workouts and Programs
 class SessionsScreen extends StatefulWidget {
-  const SessionsScreen({super.key});
+  final int? initialTab;
+
+  const SessionsScreen({super.key, this.initialTab});
 
   @override
   State<SessionsScreen> createState() => _SessionsScreenState();
@@ -30,7 +32,11 @@ class _SessionsScreenState extends State<SessionsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTab ?? 0,
+    );
     // Listen to tab changes to update FAB
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {

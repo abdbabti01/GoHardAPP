@@ -49,9 +49,24 @@ class AppRouter {
 
       // Main app wrapper with bottom navigation
       case RouteNames.main:
-        final initialTab = settings.arguments as int?;
+        // Support both int and Map arguments
+        final args = settings.arguments;
+        int? initialTab;
+        int? initialSubTab;
+
+        if (args is int) {
+          initialTab = args;
+        } else if (args is Map<String, dynamic>) {
+          initialTab = args['tab'] as int?;
+          initialSubTab = args['subTab'] as int?;
+        }
+
         return MaterialPageRoute(
-          builder: (_) => MainScreen(initialTab: initialTab),
+          builder:
+              (_) => MainScreen(
+                initialTab: initialTab,
+                initialSubTab: initialSubTab,
+              ),
           settings: settings,
         );
 

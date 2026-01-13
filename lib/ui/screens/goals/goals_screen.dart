@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../providers/goals_provider.dart';
+import '../../../providers/programs_provider.dart';
+import '../../../providers/sessions_provider.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../data/models/goal.dart';
 import '../../../data/models/goal_progress.dart';
@@ -514,12 +516,14 @@ class _GoalsScreenState extends State<GoalsScreen>
             const SizedBox(height: 12),
             InkWell(
               onTap: () {
-                // Navigate to Programs tab in Sessions screen (index 1)
+                // Navigate to Programs tab (Workouts tab index 0, sub-tab index 1)
                 Navigator.pushNamed(
                   context,
                   RouteNames.main,
-                  arguments:
-                      0, // Sessions tab, which contains Programs as second tab
+                  arguments: {
+                    'tab': 0, // Workouts tab
+                    'subTab': 1, // Programs sub-tab
+                  },
                 ).then((_) {
                   // Optional: could add logic to filter programs by this goal
                 });
@@ -932,7 +936,15 @@ class _GoalsScreenState extends State<GoalsScreen>
       );
 
       if (confirmed == true && mounted) {
-        await provider.deleteGoal(goal.id);
+        final success = await provider.deleteGoal(goal.id);
+
+        if (success && mounted) {
+          // Reload programs and sessions to remove cascade-deleted items
+          await Future.wait([
+            context.read<ProgramsProvider>().loadPrograms(),
+            context.read<SessionsProvider>().loadSessions(waitForSync: true),
+          ]);
+        }
       }
     } catch (e) {
       if (!mounted) return;

@@ -763,10 +763,11 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       if (confirmed == true && context.mounted) {
         final success = await provider.deleteProgram(program.id);
         if (success && context.mounted) {
-          // Reload sessions to remove cascade-deleted sessions from cache
-          await context.read<SessionsProvider>().loadSessions(
-            waitForSync: true,
-          );
+          // Reload both sessions and programs to remove deleted items from cache
+          await Future.wait([
+            context.read<SessionsProvider>().loadSessions(waitForSync: true),
+            context.read<ProgramsProvider>().loadPrograms(),
+          ]);
 
           if (!context.mounted) return;
           ScaffoldMessenger.of(

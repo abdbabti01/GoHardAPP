@@ -9,8 +9,9 @@ import 'profile/profile_screen.dart';
 /// Provides 5-tab navigation: Workouts, Goals & Stats, AI Coach, Exercises, Profile
 class MainScreen extends StatefulWidget {
   final int? initialTab;
+  final int? initialSubTab;
 
-  const MainScreen({super.key, this.initialTab});
+  const MainScreen({super.key, this.initialTab, this.initialSubTab});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -18,20 +19,21 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   late int _currentIndex;
-
-  // Screens for each tab
-  final List<Widget> _screens = [
-    const SessionsScreen(),
-    const GoalsScreen(),
-    const ChatListScreen(),
-    const ExercisesScreen(),
-    const ProfileScreen(),
-  ];
+  late List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialTab ?? 0;
+
+    // Create screens with initial sub-tab if provided
+    _screens = [
+      SessionsScreen(initialTab: widget.initialSubTab),
+      const GoalsScreen(),
+      const ChatListScreen(),
+      const ExercisesScreen(),
+      const ProfileScreen(),
+    ];
   }
 
   @override
