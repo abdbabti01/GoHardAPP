@@ -619,17 +619,38 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     );
     final provider = context.read<ProgramsProvider>();
 
-    // Show loading dialog
+    // Show loading dialog with message
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+      builder:
+          (context) => const AlertDialog(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Checking deletion impact...'),
+              ],
+            ),
+          ),
     );
 
     try {
       debugPrint('📡 Fetching deletion impact for program ${program.id}...');
       final impact = await provider.getDeletionImpact(program.id);
       debugPrint('✅ Deletion impact: $impact');
+
+      // Show success message briefly
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Impact: ${impact['sessionsCount']} sessions'),
+            duration: const Duration(seconds: 1),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
 
       if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog
@@ -691,12 +712,35 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error fetching deletion impact: ${e.toString()}'),
-          duration: const Duration(seconds: 5),
-          backgroundColor: Colors.red,
-        ),
+      // Show error dialog instead of snackbar for better visibility
+      showDialog(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('❌ Error'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Failed to fetch deletion impact:'),
+                  const SizedBox(height: 8),
+                  Text(
+                    e.toString(),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: Colors.red,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
       );
     }
   }
