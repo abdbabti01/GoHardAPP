@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../data/models/program_workout.dart';
+import '../../../data/models/session.dart';
 
 /// Card widget for displaying a single day in the weekly schedule
 class WorkoutDayCard extends StatelessWidget {
   final ProgramWorkout workout;
+  final Session? session; // Session created from this workout (if any)
   final bool isCurrentDay;
   final bool isPastDay;
   final bool isMissed;
@@ -12,6 +14,7 @@ class WorkoutDayCard extends StatelessWidget {
   const WorkoutDayCard({
     super.key,
     required this.workout,
+    this.session,
     required this.isCurrentDay,
     required this.isPastDay,
     this.isMissed = false,
@@ -22,9 +25,17 @@ class WorkoutDayCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isRestDay = workout.isRestDay;
-    final isCompleted = workout.isCompleted;
 
-    // Determine colors
+    // Determine status from session (if exists)
+    final sessionStatus = session?.status;
+    final isCompleted = sessionStatus == 'completed';
+    final isInProgress = sessionStatus == 'in_progress';
+    final isNotStarted =
+        session == null ||
+        sessionStatus == 'planned' ||
+        sessionStatus == 'draft';
+
+    // Determine colors based on session status
     Color backgroundColor;
     Color textColor;
     Color borderColor;
@@ -34,9 +45,15 @@ class WorkoutDayCard extends StatelessWidget {
       textColor = theme.primaryColor;
       borderColor = theme.primaryColor;
     } else if (isCompleted) {
+      // Completed workout - green
       backgroundColor = Colors.green.withValues(alpha: 0.1);
       textColor = Colors.green.shade700;
       borderColor = Colors.green;
+    } else if (isInProgress) {
+      // In progress workout - blue
+      backgroundColor = Colors.blue.withValues(alpha: 0.1);
+      textColor = Colors.blue.shade700;
+      borderColor = Colors.blue;
     } else if (isMissed) {
       backgroundColor = Colors.orange.withValues(alpha: 0.1);
       textColor = Colors.orange.shade700;
@@ -44,6 +61,11 @@ class WorkoutDayCard extends StatelessWidget {
     } else if (isRestDay) {
       backgroundColor = Colors.grey.shade50;
       textColor = Colors.grey.shade600;
+      borderColor = Colors.grey.shade300;
+    } else if (isNotStarted) {
+      // Not started - grey
+      backgroundColor = Colors.grey.shade100;
+      textColor = Colors.grey.shade700;
       borderColor = Colors.grey.shade300;
     } else {
       backgroundColor = Colors.white;
@@ -109,6 +131,8 @@ class WorkoutDayCard extends StatelessWidget {
               )
             else if (isCompleted)
               Icon(Icons.check_circle, color: Colors.green, size: 24)
+            else if (isInProgress)
+              Icon(Icons.play_circle_filled, color: Colors.blue, size: 24)
             else if (isMissed)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

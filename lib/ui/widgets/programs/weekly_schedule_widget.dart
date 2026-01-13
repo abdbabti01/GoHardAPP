@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
+import '../../../data/models/session.dart';
+import '../../../providers/sessions_provider.dart';
 import 'workout_day_card.dart';
 
 /// Widget that displays a 7-day weekly schedule for a program
@@ -44,10 +47,25 @@ class WeeklyScheduleWidget extends StatelessWidget {
     return weekWorkouts;
   }
 
+  /// Find session for a given program workout
+  Session? _findSessionForWorkout(
+    List<Session> sessions,
+    ProgramWorkout workout,
+  ) {
+    return sessions.cast<Session?>().firstWhere(
+      (s) => s?.programWorkoutId == workout.id,
+      orElse: () => null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final weekWorkouts = _getThisWeeksWorkouts();
+
+    // Get all sessions from the program to match with workouts
+    final sessionsProvider = context.watch<SessionsProvider>();
+    final programSessions = sessionsProvider.getSessionsFromProgram(program.id);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -95,6 +113,9 @@ class WeeklyScheduleWidget extends StatelessWidget {
 
             if (workout == null) return const SizedBox.shrink();
 
+            // Find the session created from this workout
+            final session = _findSessionForWorkout(programSessions, workout);
+
             // Use calendar-based logic instead of program position
             final isCurrentDay = program.isWorkoutToday(workout);
             final isPastDay =
@@ -106,6 +127,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: WorkoutDayCard(
                 workout: workout,
+                session: session, // Pass session for status
                 isCurrentDay: isCurrentDay,
                 isPastDay: isPastDay,
                 isMissed: isMissed,

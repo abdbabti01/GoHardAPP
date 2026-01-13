@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../../data/models/session.dart';
+import '../../../providers/programs_provider.dart';
+import '../../../routes/route_names.dart';
 import 'status_badge.dart';
 import 'quick_actions_sheet.dart';
 
@@ -86,55 +89,10 @@ class SessionCard extends StatelessWidget {
                           ),
                           // Workout type badge (always shown)
                           const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color:
-                                  session.isFromProgram
-                                      ? Colors.blue.withValues(alpha: 0.1)
-                                      : Colors.green.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color:
-                                    session.isFromProgram
-                                        ? Colors.blue.withValues(alpha: 0.3)
-                                        : Colors.green.withValues(alpha: 0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  session.isFromProgram
-                                      ? Icons.calendar_view_week
-                                      : Icons.fitness_center,
-                                  size: 14,
-                                  color:
-                                      session.isFromProgram
-                                          ? Colors.blue.shade700
-                                          : Colors.green.shade700,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  session.isFromProgram
-                                      ? 'From Program'
-                                      : 'Standalone',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color:
-                                        session.isFromProgram
-                                            ? Colors.blue.shade700
-                                            : Colors.green.shade700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          if (session.isFromProgram)
+                            _buildProgramBadge(context)
+                          else
+                            _buildStandaloneBadge(),
                         ],
                       ),
                     ),
@@ -325,5 +283,102 @@ class SessionCard extends StatelessWidget {
     } else {
       return '${minutes}m';
     }
+  }
+
+  Widget _buildProgramBadge(BuildContext context) {
+    final programsProvider = context.watch<ProgramsProvider>();
+    final program = programsProvider.programs.cast().firstWhere(
+      (p) => p?.id == session.programId,
+      orElse: () => null,
+    );
+
+    return InkWell(
+      onTap:
+          session.programId != null
+              ? () {
+                Navigator.pushNamed(
+                  context,
+                  RouteNames.programDetail,
+                  arguments: session.programId,
+                );
+              }
+              : null,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.blue.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.blue.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.calendar_view_week,
+              size: 14,
+              color: Colors.blue.shade700,
+            ),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'From Program',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+                if (program != null)
+                  Text(
+                    program.title,
+                    style: TextStyle(fontSize: 10, color: Colors.blue.shade600),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 10,
+              color: Colors.blue.shade700,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStandaloneBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.green.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.fitness_center, size: 14, color: Colors.green.shade700),
+          const SizedBox(width: 6),
+          Text(
+            'Standalone',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.green.shade700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
