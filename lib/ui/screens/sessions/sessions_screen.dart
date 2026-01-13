@@ -31,6 +31,12 @@ class _SessionsScreenState extends State<SessionsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    // Listen to tab changes to update FAB
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() {}); // Rebuild to update FAB
+      }
+    });
     // Load sessions and exercise templates on first build (for offline caching)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SessionsProvider>().loadSessions();
@@ -436,6 +442,14 @@ class _SessionsScreenState extends State<SessionsScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
+          labelStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+          ),
           tabs: const [Tab(text: 'My Workouts'), Tab(text: 'Programs')],
         ),
       ),
@@ -752,55 +766,135 @@ class _SessionsScreenState extends State<SessionsScreen>
           const ProgramsScreen(),
         ],
       ),
-      floatingActionButton: Container(
-        height: 56,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          gradient: LinearGradient(
-            colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
-            ],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
+      floatingActionButton: _buildFloatingActionButton(),
+    );
+  }
+
+  Widget _buildFloatingActionButton() {
+    final isMyWorkoutsTab = _tabController.index == 0;
+    final buttonText = isMyWorkoutsTab ? 'New Workout' : 'Create Program';
+    final buttonIcon = isMyWorkoutsTab ? Icons.fitness_center : Icons.add;
+    final onTap = isMyWorkoutsTab ? _showWorkoutOptionsSheet : _showCreateProgramOptions;
+
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primary,
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
           ],
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(28),
-            onTap: _showWorkoutOptionsSheet,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.fitness_center,
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  buttonIcon,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  buttonText,
+                  style: TextStyle(
                     color: Theme.of(context).colorScheme.onPrimary,
-                    size: 24,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'New Workout',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showCreateProgramOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Create New Program',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // AI-Generated Option
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.auto_awesome, color: Colors.purple),
+              ),
+              title: const Text(
+                'Create with AI',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: const Text('Let AI generate a personalized program'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, RouteNames.workoutPlanForm);
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // Manual Creation Option
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.edit, color: Colors.blue),
+              ),
+              title: const Text(
+                'Create Manually',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: const Text('Build your own custom program'),
+              onTap: () {
+                Navigator.pop(context);
+                // TODO: Navigate to manual program creation screen
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Manual program creation coming soon!'),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );

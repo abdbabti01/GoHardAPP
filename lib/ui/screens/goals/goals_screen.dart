@@ -51,6 +51,14 @@ class _GoalsScreenState extends State<GoalsScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
+          labelStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+          ),
           tabs: const [Tab(text: 'Goals'), Tab(text: 'Stats')],
         ),
       ),
