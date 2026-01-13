@@ -212,6 +212,38 @@ class SessionRepository {
             '  📝 Cached $exerciseCount exercises for session ${apiSession.id}',
           );
         }
+
+        // Remove sessions that were deleted on the server (cascade delete cleanup)
+        final serverSessionIds = apiSessions.map((s) => s.id).toSet();
+        final allLocalSessions =
+            await db.localSessions
+                .filter()
+                .userIdEqualTo(currentUserId)
+                .serverIdIsNotNull()
+                .findAll();
+
+        for (final localSession in allLocalSessions) {
+          if (!serverSessionIds.contains(localSession.serverId)) {
+            // Session exists locally but not on server - it was deleted (cascade)
+            debugPrint(
+              '  🗑️ Removing session ${localSession.serverId} (deleted on server)',
+            );
+
+            // Delete associated exercises first
+            final exercisesToDelete =
+                await db.localExercises
+                    .filter()
+                    .sessionLocalIdEqualTo(localSession.localId)
+                    .findAll();
+
+            for (final exercise in exercisesToDelete) {
+              await db.localExercises.delete(exercise.localId);
+            }
+
+            // Delete the session
+            await db.localSessions.delete(localSession.localId);
+          }
+        }
       });
 
       debugPrint('✅ Synced ${apiSessions.length} sessions from server');
