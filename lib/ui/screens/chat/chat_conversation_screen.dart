@@ -10,6 +10,7 @@ import '../../../providers/goals_provider.dart';
 import '../../../data/models/exercise_template.dart';
 import '../../../data/services/api_service.dart';
 import '../../../core/constants/api_config.dart';
+import '../../../routes/route_names.dart';
 import '../../widgets/common/offline_banner.dart';
 
 /// Chat conversation screen showing messages and input
@@ -232,6 +233,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     navigator.pop(); // Close loading
 
     if (createResult != null) {
+      final programId = createResult['program']['id'] as int;
       final programTitle = createResult['program']['title'] ?? 'Program';
       final workoutCount = createResult['workouts']?.length ?? 0;
 
@@ -248,12 +250,12 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         debugPrint('✅ Programs refreshed after program creation');
       }
 
-      // Navigate to programs screen (tab 2)
+      // Navigate directly to the created program detail screen
       if (mounted) {
         navigator.pushNamedAndRemoveUntil(
-          '/main',
-          (route) => false,
-          arguments: 2, // Programs tab index
+          RouteNames.programDetail,
+          (route) => route.isFirst, // Keep only the main screen in stack
+          arguments: programId,
         );
 
         // Show success message

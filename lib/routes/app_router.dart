@@ -168,14 +168,16 @@ class AppRouter {
         final args = settings.arguments;
         int? conversationId;
         String? initialMessage;
+        int? goalId;
 
         if (args is int) {
           // Direct int argument (existing usage)
           conversationId = args;
         } else if (args is Map<String, dynamic>) {
-          // Map argument with conversationId and optional initialMessage
+          // Map argument with conversationId and optional initialMessage/goalId
           conversationId = args['conversationId'] as int?;
           initialMessage = args['initialMessage'] as String?;
+          goalId = args['goalId'] as int?;
         }
 
         if (conversationId == null) {
@@ -189,6 +191,7 @@ class AppRouter {
               (_) => ChatConversationScreen(
                 conversationId: conversationId!, // Safe after null check
                 initialMessage: initialMessage,
+                goalId: goalId,
               ),
           settings: settings,
         );
