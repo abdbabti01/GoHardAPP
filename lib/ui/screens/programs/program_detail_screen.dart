@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
+import '../../../providers/sessions_provider.dart';
 import '../../../providers/goals_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/programs/program_calendar_widget.dart';
@@ -257,33 +258,51 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                 ],
                 if (program.goal != null) ...[
                   const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: theme.primaryColor.withValues(alpha: 0.3),
-                        width: 1,
+                  InkWell(
+                    onTap: () {
+                      // Navigate to Goals tab in main screen
+                      Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        RouteNames.main,
+                        (route) => route.isFirst,
+                        arguments: 1, // Goals tab index
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
                       ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.link, size: 16, color: theme.primaryColor),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Linked to: ${program.goal!.goalType}',
-                          style: TextStyle(
-                            color: theme.primaryColor,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      decoration: BoxDecoration(
+                        color: theme.primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: theme.primaryColor.withValues(alpha: 0.3),
+                          width: 1,
                         ),
-                      ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.flag, size: 16, color: theme.primaryColor),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Goal: ${program.goal!.goalType}',
+                            style: TextStyle(
+                              color: theme.primaryColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 10,
+                            color: theme.primaryColor,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -744,6 +763,12 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       if (confirmed == true && context.mounted) {
         final success = await provider.deleteProgram(program.id);
         if (success && context.mounted) {
+          // Reload sessions to remove cascade-deleted sessions from cache
+          await context.read<SessionsProvider>().loadSessions(
+            waitForSync: true,
+          );
+
+          if (!context.mounted) return;
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Program deleted')));

@@ -509,6 +509,62 @@ class _GoalsScreenState extends State<GoalsScreen>
                 ],
               ),
             ],
+
+            // View Programs badge
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: () {
+                // Navigate to Programs tab in Sessions screen (index 1)
+                Navigator.pushNamed(
+                  context,
+                  RouteNames.main,
+                  arguments:
+                      0, // Sessions tab, which contains Programs as second tab
+                ).then((_) {
+                  // Optional: could add logic to filter programs by this goal
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.blue.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.calendar_view_week,
+                      size: 16,
+                      color: Colors.blue,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'View Programs',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 10,
+                      color: Colors.blue,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

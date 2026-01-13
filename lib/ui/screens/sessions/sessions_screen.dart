@@ -106,6 +106,9 @@ class _SessionsScreenState extends State<SessionsScreen>
 
     // Delete the session
     await sessionsProvider.deleteSession(sessionId);
+
+    // Reload sessions to refresh the UI
+    await sessionsProvider.loadSessions(waitForSync: true);
   }
 
   Future<void> _handlePlanWorkout() async {
