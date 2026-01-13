@@ -103,6 +103,15 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
           if (!program.isCompleted)
             PopupMenuButton<String>(
               onSelected: (value) async {
+                // DEBUG: Log menu selection
+                debugPrint('🔔 Menu item selected: $value');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Menu selected: $value'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+
                 if (value == 'link_goal') {
                   _showLinkGoalDialog(context, program);
                 } else if (value == 'unlink_goal') {
@@ -110,6 +119,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                 } else if (value == 'complete') {
                   _showCompleteConfirmation(context, program);
                 } else if (value == 'delete') {
+                  debugPrint('🗑️ Calling _showDeleteConfirmation...');
                   _showDeleteConfirmation(context, program);
                 }
               },
