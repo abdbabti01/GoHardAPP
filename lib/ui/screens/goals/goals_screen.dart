@@ -1516,14 +1516,14 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
     );
 
     final provider = context.read<GoalsProvider>();
-    final success = await provider.createGoal(goal);
+    final createdGoal = await provider.createGoal(goal);
 
     if (mounted) {
       setState(() => _isCreating = false);
 
-      if (success) {
-        // Return the created goal to parent
-        Navigator.pop(context, goal);
+      if (createdGoal != null) {
+        // Return the created goal with server ID to parent
+        Navigator.pop(context, createdGoal);
 
         // Show success message on parent screen
         ScaffoldMessenger.of(context).showSnackBar(

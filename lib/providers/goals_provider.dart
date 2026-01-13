@@ -81,7 +81,7 @@ class GoalsProvider extends ChangeNotifier {
   }
 
   /// Create a new goal
-  Future<bool> createGoal(Goal goal) async {
+  Future<Goal?> createGoal(Goal goal) async {
     _isCreating = true;
     _errorMessage = null;
     notifyListeners();
@@ -91,17 +91,17 @@ class GoalsProvider extends ChangeNotifier {
       _goals.add(newGoal);
       _activeGoals.add(newGoal);
 
-      debugPrint('✅ Created goal: ${newGoal.goalType}');
+      debugPrint('✅ Created goal: ${newGoal.goalType} (ID: ${newGoal.id})');
       _isCreating = false;
       notifyListeners();
-      return true;
+      return newGoal;
     } catch (e) {
       _errorMessage =
           'Failed to create goal: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Create goal error: $e');
       _isCreating = false;
       notifyListeners();
-      return false;
+      return null;
     }
   }
 
