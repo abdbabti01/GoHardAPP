@@ -670,26 +670,57 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
         context: context,
         builder:
             (context) => AlertDialog(
-              title: const Text('Delete Program?'),
+              title: const Text('⚠️ Delete Program?'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Are you sure you want to delete "${program.title}"?'),
+                  Text(
+                    'Are you sure you want to delete "${program.title}"?',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   if ((impact['sessionsCount'] ?? 0) > 0) ...[
                     const SizedBox(height: 16),
                     const Text(
-                      'This will also delete:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      'This will permanently delete:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Text(
-                      '• ${impact['sessionsCount'] ?? 0} Workout Session(s)',
+                      '• ${impact['sessionsCount'] ?? 0} Workout Session(s) with all exercises and sets',
+                      style: const TextStyle(fontSize: 14),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'This action cannot be undone.',
-                      style: TextStyle(color: Colors.red, fontSize: 12),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.withOpacity(0.3)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'This action cannot be undone!',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ],

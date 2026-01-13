@@ -797,28 +797,64 @@ class _GoalsScreenState extends State<GoalsScreen>
         context: context,
         builder:
             (context) => AlertDialog(
-              title: const Text('Delete Goal?'),
+              title: const Text('⚠️ Delete Goal?'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Are you sure you want to delete "${goal.goalType}"?'),
+                  Text(
+                    'Are you sure you want to delete "${goal.goalType}"?',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   if ((impact['programsCount'] ?? 0) > 0 ||
                       (impact['sessionsCount'] ?? 0) > 0) ...[
                     const SizedBox(height: 16),
                     const Text(
-                      'This will also delete:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      'This will permanently delete:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     if ((impact['programsCount'] ?? 0) > 0)
-                      Text('• ${impact['programsCount']} Program(s)'),
+                      Text(
+                        '• ${impact['programsCount']} Program(s) with all their workouts',
+                        style: const TextStyle(fontSize: 14),
+                      ),
                     if ((impact['sessionsCount'] ?? 0) > 0)
-                      Text('• ${impact['sessionsCount']} Workout Session(s)'),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'This action cannot be undone.',
-                      style: TextStyle(color: Colors.red, fontSize: 12),
+                      Text(
+                        '• ${impact['sessionsCount']} Workout Session(s) with all exercises and sets',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.withOpacity(0.3)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'This action cannot be undone!',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ],
