@@ -731,13 +731,7 @@ class _GoalsScreenState extends State<GoalsScreen>
         await provider.completeGoal(goal.id);
       }
     } else if (action == 'delete') {
-      final confirmed = await _showConfirmDialog(
-        'Delete Goal',
-        'Are you sure you want to delete this goal?',
-      );
-      if (confirmed == true && mounted) {
-        await provider.deleteGoal(goal.id);
-      }
+      await _showDeleteGoalConfirmation(goal);
     }
   }
 
@@ -779,6 +773,81 @@ class _GoalsScreenState extends State<GoalsScreen>
       context: context,
       builder: (context) => AddProgressDialog(goal: goal),
     );
+  }
+
+  Future<void> _showDeleteGoalConfirmation(Goal goal) async {
+    // Fetch deletion impact
+    final provider = context.read<GoalsProvider>();
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final impact = await provider.getDeletionImpact(goal.id);
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      // Show confirmation with impact
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Delete Goal?'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Are you sure you want to delete "${goal.goalType}"?'),
+                  if ((impact['programsCount'] ?? 0) > 0 ||
+                      (impact['sessionsCount'] ?? 0) > 0) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'This will also delete:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    if ((impact['programsCount'] ?? 0) > 0)
+                      Text('• ${impact['programsCount']} Program(s)'),
+                    if ((impact['sessionsCount'] ?? 0) > 0)
+                      Text('• ${impact['sessionsCount']} Workout Session(s)'),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'This action cannot be undone.',
+                      style: TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
+      );
+
+      if (confirmed == true && mounted) {
+        await provider.deleteGoal(goal.id);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+    }
   }
 
   Widget _buildEmptyState() {

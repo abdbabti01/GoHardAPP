@@ -136,6 +136,16 @@ class GoalsProvider extends ChangeNotifier {
     }
   }
 
+  /// Get deletion impact for a goal (how many programs and sessions will be deleted)
+  Future<Map<String, int>> getDeletionImpact(int id) async {
+    try {
+      return await _goalsRepository.getDeletionImpact(id);
+    } catch (e) {
+      debugPrint('Get deletion impact error: $e');
+      rethrow;
+    }
+  }
+
   /// Delete a goal
   Future<bool> deleteGoal(int id) async {
     _errorMessage = null;

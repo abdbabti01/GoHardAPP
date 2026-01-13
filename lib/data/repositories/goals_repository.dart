@@ -61,6 +61,17 @@ class GoalsRepository {
     await _apiService.put<void>(ApiConfig.goalById(id), data: goal.toJson());
   }
 
+  /// Get deletion impact for a goal
+  Future<Map<String, int>> getDeletionImpact(int id) async {
+    final data = await _apiService.get<Map<String, dynamic>>(
+      ApiConfig.goalDeletionImpact(id),
+    );
+    return {
+      'programsCount': data['programsCount'] as int,
+      'sessionsCount': data['sessionsCount'] as int,
+    };
+  }
+
   /// Delete a goal
   Future<void> deleteGoal(int id) async {
     await _apiService.delete(ApiConfig.goalById(id));

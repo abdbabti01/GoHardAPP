@@ -613,38 +613,80 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     );
   }
 
-  void _showDeleteConfirmation(BuildContext context, Program program) {
+  void _showDeleteConfirmation(BuildContext context, Program program) async {
+    final provider = context.read<ProgramsProvider>();
+
+    // Show loading dialog
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Delete Program?'),
-            content: Text(
-              'Are you sure you want to delete "${program.title}"? This action cannot be undone.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  final provider = context.read<ProgramsProvider>();
-                  final success = await provider.deleteProgram(program.id);
-                  if (success && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Program deleted')),
-                    );
-                    Navigator.pop(context);
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
+
+    try {
+      final impact = await provider.getDeletionImpact(program.id);
+
+      if (!context.mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      // Show confirmation with impact
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Delete Program?'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Are you sure you want to delete "${program.title}"?'),
+                  if (impact['sessionsCount']! > 0) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'This will also delete:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('• ${impact['sessionsCount']} Workout Session(s)'),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'This action cannot be undone.',
+                      style: TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
+      );
+
+      if (confirmed == true && context.mounted) {
+        final success = await provider.deleteProgram(program.id);
+        if (success && context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Program deleted')));
+          Navigator.pop(context);
+        }
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+    }
   }
 
   void _showLinkGoalDialog(BuildContext context, Program program) async {

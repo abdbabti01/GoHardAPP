@@ -97,12 +97,15 @@ class ApiConfig {
   static String goalComplete(int id) => '$goals/$id/complete';
   static String goalProgress(int id) => '$goals/$id/progress';
   static String goalHistory(int id) => '$goals/$id/history';
+  static String goalDeletionImpact(int id) => '$goals/$id/deletion-impact';
   static String bodyMetricById(int id) => '$bodyMetrics/$id';
   static String bodyMetricsLatest = '$bodyMetrics/latest';
   static String bodyMetricsChart = '$bodyMetrics/chart';
   static String programById(int id) => '$programs/$id';
   static String programComplete(int id) => '$programs/$id/complete';
   static String programAdvance(int id) => '$programs/$id/advance';
+  static String programDeletionImpact(int id) =>
+      '$programs/$id/deletion-impact';
   static String programWeek(int id, int weekNumber) =>
       '$programs/$id/weeks/$weekNumber';
   static String programToday(int id) => '$programs/$id/today';

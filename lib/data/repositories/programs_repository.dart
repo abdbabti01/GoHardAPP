@@ -64,6 +64,14 @@ class ProgramsRepository {
     );
   }
 
+  /// Get deletion impact for a program
+  Future<Map<String, int>> getDeletionImpact(int id) async {
+    final data = await _apiService.get<Map<String, dynamic>>(
+      ApiConfig.programDeletionImpact(id),
+    );
+    return {'sessionsCount': data['sessionsCount'] as int};
+  }
+
   /// Delete a program
   Future<void> deleteProgram(int id) async {
     await _apiService.delete(ApiConfig.programById(id));

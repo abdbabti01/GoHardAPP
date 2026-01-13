@@ -136,6 +136,16 @@ class ProgramsProvider extends ChangeNotifier {
     }
   }
 
+  /// Get deletion impact for a program (how many sessions will be deleted)
+  Future<Map<String, int>> getDeletionImpact(int id) async {
+    try {
+      return await _programsRepository.getDeletionImpact(id);
+    } catch (e) {
+      debugPrint('Get deletion impact error: $e');
+      rethrow;
+    }
+  }
+
   /// Delete a program
   Future<bool> deleteProgram(int id) async {
     try {
