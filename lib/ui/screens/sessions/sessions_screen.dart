@@ -774,7 +774,8 @@ class _SessionsScreenState extends State<SessionsScreen>
     final isMyWorkoutsTab = _tabController.index == 0;
     final buttonText = isMyWorkoutsTab ? 'New Workout' : 'Create Program';
     final buttonIcon = isMyWorkoutsTab ? Icons.fitness_center : Icons.add;
-    final onTap = isMyWorkoutsTab ? _showWorkoutOptionsSheet : _showCreateProgramOptions;
+    final onTap =
+        isMyWorkoutsTab ? _showWorkoutOptionsSheet : _showCreateProgramOptions;
 
     return Container(
       height: 56,
@@ -833,70 +834,73 @@ class _SessionsScreenState extends State<SessionsScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Create New Program',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // AI-Generated Option
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.purple.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
+      builder:
+          (context) => Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Create New Program',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
-                child: const Icon(Icons.auto_awesome, color: Colors.purple),
-              ),
-              title: const Text(
-                'Create with AI',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: const Text('Let AI generate a personalized program'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(context, RouteNames.workoutPlanForm);
-              },
-            ),
-            const SizedBox(height: 12),
+                const SizedBox(height: 24),
 
-            // Manual Creation Option
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.edit, color: Colors.blue),
-              ),
-              title: const Text(
-                'Create Manually',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: const Text('Build your own custom program'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Navigate to manual program creation screen
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Manual program creation coming soon!'),
+                // AI-Generated Option
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.auto_awesome, color: Colors.purple),
                   ),
-                );
-              },
+                  title: const Text(
+                    'Create with AI',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    'Let AI generate a personalized program',
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, RouteNames.workoutPlanForm);
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // Manual Creation Option
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.edit, color: Colors.blue),
+                  ),
+                  title: const Text(
+                    'Create Manually',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text('Build your own custom program'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    // TODO: Navigate to manual program creation screen
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Manual program creation coming soon!'),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
             ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
+          ),
     );
   }
 }
