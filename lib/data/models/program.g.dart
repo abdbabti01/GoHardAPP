@@ -7,36 +7,32 @@ part of 'program.dart';
 // **************************************************************************
 
 Program _$ProgramFromJson(Map<String, dynamic> json) => Program(
-  id: (json['id'] as num).toInt(),
-  userId: (json['userId'] as num).toInt(),
-  title: json['title'] as String,
-  description: json['description'] as String?,
-  goalId: (json['goalId'] as num?)?.toInt(),
-  totalWeeks: (json['totalWeeks'] as num).toInt(),
-  currentWeek: (json['currentWeek'] as num).toInt(),
-  currentDay: (json['currentDay'] as num).toInt(),
-  startDate: DateTime.parse(json['startDate'] as String),
-  endDate:
-      json['endDate'] == null
+      id: (json['id'] as num).toInt(),
+      userId: (json['userId'] as num).toInt(),
+      title: json['title'] as String,
+      description: json['description'] as String?,
+      goalId: (json['goalId'] as num?)?.toInt(),
+      totalWeeks: (json['totalWeeks'] as num).toInt(),
+      currentWeek: (json['currentWeek'] as num).toInt(),
+      currentDay: (json['currentDay'] as num).toInt(),
+      startDate: DateTime.parse(json['startDate'] as String),
+      endDate: json['endDate'] == null
           ? null
           : DateTime.parse(json['endDate'] as String),
-  isActive: json['isActive'] as bool,
-  isCompleted: json['isCompleted'] as bool,
-  completedAt:
-      json['completedAt'] == null
+      isActive: json['isActive'] as bool,
+      isCompleted: json['isCompleted'] as bool,
+      completedAt: json['completedAt'] == null
           ? null
           : DateTime.parse(json['completedAt'] as String),
-  createdAt: DateTime.parse(json['createdAt'] as String),
-  programStructure: json['programStructure'] as String?,
-  workouts:
-      (json['workouts'] as List<dynamic>?)
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      programStructure: json['programStructure'] as String?,
+      workouts: (json['workouts'] as List<dynamic>?)
           ?.map((e) => ProgramWorkout.fromJson(e as Map<String, dynamic>))
           .toList(),
-  goal:
-      json['goal'] == null
+      goal: json['goal'] == null
           ? null
           : Goal.fromJson(json['goal'] as Map<String, dynamic>),
-);
+    );
 
 Map<String, dynamic> _$ProgramToJson(Program instance) {
   final val = <String, dynamic>{

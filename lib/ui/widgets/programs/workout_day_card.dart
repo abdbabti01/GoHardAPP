@@ -41,28 +41,30 @@ class WorkoutDayCard extends StatelessWidget {
             sessionStatus == 'draft');
 
     // Determine colors based on session status
+    // Priority: completion status > current day > rest day > not started
     Color backgroundColor;
     Color textColor;
     Color borderColor;
 
-    if (isCurrentDay) {
-      backgroundColor = theme.primaryColor.withValues(alpha: 0.1);
-      textColor = theme.primaryColor;
-      borderColor = theme.primaryColor;
-    } else if (isCompleted) {
-      // Completed workout - green
+    if (isCompleted) {
+      // Completed workout - green (even if it's today)
       backgroundColor = Colors.green.withValues(alpha: 0.1);
       textColor = Colors.green.shade700;
       borderColor = Colors.green;
     } else if (isInProgress) {
-      // In progress workout - blue
-      backgroundColor = Colors.blue.withValues(alpha: 0.1);
-      textColor = Colors.blue.shade700;
-      borderColor = Colors.blue;
+      // In progress workout - orange
+      backgroundColor = Colors.orange.withValues(alpha: 0.1);
+      textColor = Colors.orange.shade700;
+      borderColor = Colors.orange;
     } else if (isMissed) {
       backgroundColor = Colors.orange.withValues(alpha: 0.1);
       textColor = Colors.orange.shade700;
       borderColor = Colors.orange;
+    } else if (isCurrentDay) {
+      // Current day but not started yet - primary color
+      backgroundColor = theme.primaryColor.withValues(alpha: 0.1);
+      textColor = theme.primaryColor;
+      borderColor = theme.primaryColor;
     } else if (isRestDay) {
       backgroundColor = Colors.grey.shade50;
       textColor = Colors.grey.shade600;
