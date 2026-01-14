@@ -1509,13 +1509,16 @@ class SessionRepository {
     return db.localSessions
         .filter()
         .userIdEqualTo(userId)
-        .not()
-        .statusEqualTo('pending_delete')
         .watch(fireImmediately: true)
         .asyncMap((localSessions) async {
           // Convert local sessions to domain models with exercises
           final sessions = <Session>[];
           for (final localSession in localSessions) {
+            // Skip deleted or archived sessions
+            if (localSession.syncStatus == 'pending_delete' ||
+                localSession.status == 'archived') {
+              continue;
+            }
             final exercises =
                 await db.localExercises
                     .filter()
