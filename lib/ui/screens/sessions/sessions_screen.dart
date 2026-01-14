@@ -128,11 +128,68 @@ class _SessionsScreenState extends State<SessionsScreen>
       activeWorkoutProvider.clear();
     }
 
-    // Delete the session
-    await sessionsProvider.deleteSession(sessionId);
+    // Try to delete the session
+    final success = await sessionsProvider.deleteSession(sessionId);
+
+    if (!success && mounted) {
+      // Check if error indicates this is a completed program workout
+      if (sessionsProvider.errorMessage?.contains('Archive it instead') ==
+          true) {
+        // Show dialog offering to archive instead
+        final shouldArchive = await showDialog<bool>(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: const Text('Cannot Delete'),
+                content: const Text(
+                  'This is a completed program workout. Deleting it would mark the workout as "Missed" in your program.\n\nWould you like to archive it instead? It will be hidden from this list but will still count as completed in your program.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Archive'),
+                  ),
+                ],
+              ),
+        );
+
+        if (shouldArchive == true && mounted) {
+          // Archive the session
+          final archived = await sessionsProvider.archiveSession(sessionId);
+          if (archived && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Workout archived successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } else {
+        // Show generic error
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                sessionsProvider.errorMessage ?? 'Failed to delete session',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+      // Clear error after showing it
+      sessionsProvider.clearError();
+    }
 
     // Reload sessions to refresh the UI
-    await sessionsProvider.loadSessions(waitForSync: true);
+    if (mounted) {
+      await sessionsProvider.loadSessions(waitForSync: true);
+    }
   }
 
   Future<void> _handlePlanWorkout() async {

@@ -549,13 +549,46 @@ class SessionRepository {
             'programId': programId, // Send programId to backend
           },
         );
-        final apiSession = Session.fromJson(data);
+        var apiSession = Session.fromJson(data);
+
+        // Check if workout is in the past and reschedule to today
+        final today = DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+        );
+        final sessionDate = DateTime(
+          apiSession.date.year,
+          apiSession.date.month,
+          apiSession.date.day,
+        );
+
+        if (sessionDate.isBefore(today) && apiSession.status != 'completed') {
+          debugPrint(
+            '📅 Rescheduling missed workout from $sessionDate to today',
+          );
+          // Update date to today for missed workouts
+          apiSession = apiSession.copyWith(date: today);
+          // Update on server
+          try {
+            await _apiService.patch(
+              '${ApiConfig.sessions}/${apiSession.id}',
+              data: {'date': today.toIso8601String()},
+            );
+          } catch (e) {
+            debugPrint('⚠️ Failed to update date on server: $e');
+            // Continue anyway, the local update will sync later
+          }
+        }
 
         // Cache the session locally with exercises
         await db.writeTxn(() async {
           final localSession = ModelMapper.sessionToLocal(
             apiSession,
-            isSynced: true,
+            isSynced:
+                sessionDate.isBefore(today)
+                    ? false
+                    : true, // Mark as not synced if we rescheduled
           );
           await db.localSessions.put(localSession);
 

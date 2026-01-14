@@ -332,6 +332,19 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                                 duration: const Duration(seconds: 2),
                               ),
                             );
+                          } else if (mounted) {
+                            // Failed to start - show error
+                            final errorMsg =
+                                sessionsProvider.errorMessage ??
+                                'Failed to start workout';
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(errorMsg),
+                                backgroundColor: Colors.red,
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                            sessionsProvider.clearError();
                           }
                         },
                         icon: const Icon(Icons.play_arrow, size: 24),
