@@ -13,11 +13,13 @@ ChatConversation _$ChatConversationFromJson(Map<String, dynamic> json) =>
       title: json['title'] as String,
       type: json['type'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
-      lastMessageAt: json['lastMessageAt'] == null
-          ? null
-          : DateTime.parse(json['lastMessageAt'] as String),
+      lastMessageAt:
+          json['lastMessageAt'] == null
+              ? null
+              : DateTime.parse(json['lastMessageAt'] as String),
       isArchived: json['isArchived'] as bool? ?? false,
-      messages: (json['messages'] as List<dynamic>?)
+      messages:
+          (json['messages'] as List<dynamic>?)
               ?.map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
