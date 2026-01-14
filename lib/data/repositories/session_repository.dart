@@ -268,8 +268,9 @@ class SessionRepository {
 
     final sessions = <Session>[];
     for (final localSession in localSessions) {
-      // Skip sessions marked for deletion
-      if (localSession.syncStatus == 'pending_delete') {
+      // Skip sessions marked for deletion or archived
+      if (localSession.syncStatus == 'pending_delete' ||
+          localSession.status == 'archived') {
         continue;
       }
 
@@ -478,7 +479,7 @@ class SessionRepository {
       throw Exception('User not authenticated');
     }
 
-    // Check if a draft/planned session already exists for this program workout
+    // Check if a session already exists for this program workout
     final existingSessions =
         await db.localSessions
             .filter()
@@ -486,9 +487,13 @@ class SessionRepository {
             .programWorkoutIdEqualTo(programWorkoutId)
             .findAll();
 
-    // Find existing draft or planned session
-    final existingSession = existingSessions.firstWhere(
-      (session) => session.status == 'draft' || session.status == 'planned',
+    // Find existing draft, planned, in_progress, or paused session
+    final existingActiveSession = existingSessions.firstWhere(
+      (session) =>
+          session.status == 'draft' ||
+          session.status == 'planned' ||
+          session.status == 'in_progress' ||
+          session.status == 'paused',
       orElse:
           () => LocalSession(
             userId: 0,
@@ -500,12 +505,34 @@ class SessionRepository {
           ), // Dummy session
     );
 
-    // If we found an existing draft/planned session, return it
-    if (existingSession.userId != 0) {
+    // If we found an existing active session, return it
+    if (existingActiveSession.userId != 0) {
       debugPrint(
-        '✅ Found existing ${existingSession.status} session for program workout $programWorkoutId',
+        '✅ Found existing ${existingActiveSession.status} session for program workout $programWorkoutId',
       );
-      return await _getSessionWithExercises(existingSession);
+      return await _getSessionWithExercises(existingActiveSession);
+    }
+
+    // Check if there's a completed session (can't restart completed workouts)
+    final existingCompletedSession = existingSessions.firstWhere(
+      (session) => session.status == 'completed',
+      orElse:
+          () => LocalSession(
+            userId: 0,
+            date: DateTime.now(),
+            type: '',
+            name: '',
+            status: '',
+            lastModifiedLocal: DateTime.now(),
+          ),
+    );
+
+    // If past workout is already completed, can't start it again
+    if (existingCompletedSession.userId != 0) {
+      debugPrint('⚠️ Cannot start completed program workout $programWorkoutId');
+      throw Exception(
+        'This workout is already completed. You cannot start it again.',
+      );
     }
 
     debugPrint(
@@ -583,16 +610,27 @@ class SessionRepository {
       DateTime.now().day,
     );
 
+    // If workout is in the past and being created now, reschedule to today
+    // This allows users to catch up on missed workouts
+    final actualDate =
+        normalizedScheduledDate.isBefore(today)
+            ? today // Reschedule missed workout to today
+            : normalizedScheduledDate; // Keep original date for future workouts
+
     // Determine status based on scheduled date
     // - If scheduled for future: status = 'planned'
     // - If scheduled for today or past: status = 'draft' (user can start immediately)
-    final status = normalizedScheduledDate.isAfter(today) ? 'planned' : 'draft';
+    final status = actualDate.isAfter(today) ? 'planned' : 'draft';
+
+    debugPrint(
+      '📅 Workout scheduled for: $normalizedScheduledDate, ${actualDate != normalizedScheduledDate ? 'rescheduled to today' : 'using original date'}',
+    );
 
     // Create session with calculated date and status
     final session = Session(
       id: 0, // Will be replaced with local ID
       userId: userId,
-      date: normalizedScheduledDate, // Use calculated scheduled date
+      date: actualDate, // Use rescheduled date for past workouts
       name: programWorkout.workoutName,
       type: programWorkout.workoutType ?? 'Workout',
       status: status, // Use calculated status
@@ -1061,6 +1099,33 @@ class SessionRepository {
 
   /// Delete session
   /// Marks as pending_delete offline, deletes from server when online
+  /// Archive a session (change status to 'archived')
+  /// Archived sessions are hidden from main list but still count for programs
+  Future<bool> archiveSession(int id) async {
+    final Isar db = _localDb.database;
+    var localSession = await db.localSessions.get(id);
+    localSession ??=
+        await db.localSessions.filter().serverIdEqualTo(id).findFirst();
+
+    if (localSession == null) {
+      throw Exception('Session not found: $id');
+    }
+
+    // Change status to archived
+    await db.writeTxn(() async {
+      localSession!.status = 'archived';
+      localSession.lastModifiedLocal = DateTime.now();
+      localSession.isSynced = false;
+      localSession.syncStatus = 'pending_update';
+      await db.localSessions.put(localSession);
+    });
+
+    debugPrint(
+      '📦 Archived session: ${localSession.serverId ?? localSession.localId}',
+    );
+    return true;
+  }
+
   Future<bool> deleteSession(int id) async {
     final Isar db = _localDb.database;
     var localSession = await db.localSessions.get(id);
@@ -1069,6 +1134,14 @@ class SessionRepository {
 
     if (localSession == null) {
       throw Exception('Session not found: $id');
+    }
+
+    // Prevent deletion of completed program workouts
+    if (localSession.status == 'completed' &&
+        localSession.programWorkoutId != null) {
+      throw Exception(
+        'Cannot delete completed program workout. Archive it instead.',
+      );
     }
 
     if (_connectivity.isOnline && localSession.serverId != null) {

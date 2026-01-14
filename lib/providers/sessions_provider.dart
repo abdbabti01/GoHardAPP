@@ -129,6 +129,29 @@ class SessionsProvider extends ChangeNotifier {
     }
   }
 
+  /// Archive a session (hides from main list but keeps for program tracking)
+  Future<bool> archiveSession(int sessionId) async {
+    try {
+      final success = await _sessionRepository.archiveSession(sessionId);
+      if (success) {
+        // Remove from list (it's now archived/hidden)
+        _sessions.removeWhere((s) => s.id == sessionId);
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = 'Failed to archive session';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _errorMessage =
+          'Failed to archive session: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Archive session error: $e');
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Start a new workout session
   Future<Session?> startNewWorkout({String? name}) async {
     try {
