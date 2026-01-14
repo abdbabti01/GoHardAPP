@@ -384,25 +384,12 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                                       a.orderIndex.compareTo(b.orderIndex),
                                 );
 
-                          return weekWorkouts.isEmpty
-                              ? Center(
-                                child: Text(
-                                  'No workouts for Week $weekNumber',
-                                  style: TextStyle(color: Colors.grey.shade600),
-                                ),
-                              )
-                              : ListView.builder(
-                                padding: const EdgeInsets.all(16),
-                                itemCount: weekWorkouts.length,
-                                itemBuilder: (context, index) {
-                                  final workout = weekWorkouts[index];
-                                  return _buildWorkoutCard(
-                                    context,
-                                    workout,
-                                    program,
-                                  );
-                                },
-                              );
+                          return _buildDraggableWeekView(
+                            context,
+                            weekNumber,
+                            weekWorkouts,
+                            program,
+                          );
                         }),
                       ),
             ),
@@ -410,6 +397,189 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildDraggableWeekView(
+    BuildContext context,
+    int weekNumber,
+    List<ProgramWorkout> weekWorkouts,
+    Program program,
+  ) {
+    // Group workouts by day
+    final workoutsByDay = <int, List<ProgramWorkout>>{};
+    for (var workout in weekWorkouts) {
+      workoutsByDay.putIfAbsent(workout.dayNumber, () => []).add(workout);
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 7, // 7 days in a week
+      itemBuilder: (context, dayIndex) {
+        final dayNumber = dayIndex + 1;
+        final dayWorkouts = workoutsByDay[dayNumber] ?? [];
+
+        return _buildDaySlot(
+          context,
+          dayNumber,
+          weekNumber,
+          dayWorkouts,
+          program,
+        );
+      },
+    );
+  }
+
+  Widget _buildDaySlot(
+    BuildContext context,
+    int dayNumber,
+    int weekNumber,
+    List<ProgramWorkout> dayWorkouts,
+    Program program,
+  ) {
+    final theme = Theme.of(context);
+    final isEmpty = dayWorkouts.isEmpty;
+
+    return DragTarget<ProgramWorkout>(
+      onWillAcceptWithDetails: (details) => true,
+      onAcceptWithDetails: (details) async {
+        final workout = details.data;
+        if (workout.dayNumber != dayNumber) {
+          await _updateWorkoutDay(workout, dayNumber, weekNumber);
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHighlighted = candidateData.isNotEmpty;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color:
+                isHighlighted
+                    ? theme.primaryColor.withValues(alpha: 0.1)
+                    : Colors.transparent,
+            border: Border.all(
+              color: isHighlighted ? theme.primaryColor : Colors.grey.shade300,
+              width: isHighlighted ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Day header
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isEmpty ? Colors.grey.shade100 : Colors.transparent,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    topRight: Radius.circular(12),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color:
+                            isEmpty
+                                ? Colors.grey.shade300
+                                : theme.primaryColor.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Day $dayNumber',
+                        style: TextStyle(
+                          color:
+                              isEmpty
+                                  ? Colors.grey.shade700
+                                  : theme.primaryColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    if (isEmpty) ...[
+                      const SizedBox(width: 12),
+                      Icon(
+                        Icons.self_improvement,
+                        size: 20,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Rest Day',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // Workouts for this day
+              ...dayWorkouts.map(
+                (workout) =>
+                    _buildDraggableWorkoutCard(context, workout, program),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDraggableWorkoutCard(
+    BuildContext context,
+    ProgramWorkout workout,
+    Program program,
+  ) {
+    return LongPressDraggable<ProgramWorkout>(
+      data: workout,
+      feedback: Material(
+        elevation: 6,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: MediaQuery.of(context).size.width - 32,
+          child: _buildWorkoutCard(context, workout, program),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.3,
+        child: _buildWorkoutCard(context, workout, program),
+      ),
+      child: _buildWorkoutCard(context, workout, program),
+    );
+  }
+
+  Future<void> _updateWorkoutDay(
+    ProgramWorkout workout,
+    int newDayNumber,
+    int weekNumber,
+  ) async {
+    final provider = context.read<ProgramsProvider>();
+
+    // Update the workout with new day number
+    final updatedWorkout = workout.copyWith(dayNumber: newDayNumber);
+
+    // Call API to update
+    await provider.updateWorkout(updatedWorkout.id, updatedWorkout);
+
+    // Reload program to show updated schedule
+    await _loadProgram();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Moved ${workout.workoutName} to Day $newDayNumber'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   Widget _buildWorkoutCard(
@@ -466,7 +636,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      workout.dayNameFromNumber.substring(0, 3).toUpperCase(),
+                      'Day ${workout.dayNumber}',
                       style: TextStyle(
                         color:
                             isCurrentWorkout || workout.isCompleted || isMissed
