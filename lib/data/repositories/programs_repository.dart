@@ -41,9 +41,19 @@ class ProgramsRepository {
         queryParameters: queryParams,
       );
 
-      return data
-          .map((json) => Program.fromJson(json as Map<String, dynamic>))
-          .toList();
+      final programs =
+          data
+              .map((json) => Program.fromJson(json as Map<String, dynamic>))
+              .toList();
+
+      // Sync workout completion status for each program
+      final syncedPrograms = <Program>[];
+      for (final program in programs) {
+        final syncedProgram = await _syncWorkoutCompletionStatus(program);
+        syncedPrograms.add(syncedProgram);
+      }
+
+      return syncedPrograms;
     } catch (e) {
       debugPrint('⚠️ Failed to fetch programs: $e');
       rethrow;

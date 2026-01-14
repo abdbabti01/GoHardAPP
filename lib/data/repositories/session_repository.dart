@@ -145,11 +145,12 @@ class SessionRepository {
                   .serverIdEqualTo(apiSession.id)
                   .findFirst();
 
-          // Skip sessions marked for deletion - they should not be re-cached
+          // Skip sessions with pending local changes - don't overwrite with server data
           if (existingLocal != null &&
-              existingLocal.syncStatus == 'pending_delete') {
+              (existingLocal.syncStatus == 'pending_delete' ||
+                  existingLocal.syncStatus == 'pending_update')) {
             debugPrint(
-              '  ⏭️ Skipping session ${apiSession.id} - marked for deletion',
+              '  ⏭️ Skipping session ${apiSession.id} - has pending local changes (${existingLocal.syncStatus})',
             );
             continue;
           }
