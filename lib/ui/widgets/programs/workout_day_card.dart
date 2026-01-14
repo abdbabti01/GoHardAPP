@@ -26,14 +26,19 @@ class WorkoutDayCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isRestDay = workout.isRestDay;
 
-    // Determine status from session (if exists)
+    // Determine status from session (if exists) OR workout.isCompleted
+    // This ensures archived workouts still show as completed in the program
     final sessionStatus = session?.status;
-    final isCompleted = sessionStatus == 'completed';
+    final isCompleted =
+        sessionStatus == 'completed' ||
+        sessionStatus == 'archived' ||
+        workout.isCompleted;
     final isInProgress = sessionStatus == 'in_progress';
     final isNotStarted =
-        session == null ||
-        sessionStatus == 'planned' ||
-        sessionStatus == 'draft';
+        !isCompleted &&
+        (session == null ||
+            sessionStatus == 'planned' ||
+            sessionStatus == 'draft');
 
     // Determine colors based on session status
     Color backgroundColor;

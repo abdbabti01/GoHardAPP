@@ -167,6 +167,8 @@ class _SessionsScreenState extends State<SessionsScreen>
                 backgroundColor: Colors.green,
               ),
             );
+            // Reload without sync to avoid server overwriting archived status
+            await sessionsProvider.loadSessions(showLoading: false);
           }
         }
       } else {
@@ -184,11 +186,11 @@ class _SessionsScreenState extends State<SessionsScreen>
       }
       // Clear error after showing it
       sessionsProvider.clearError();
-    }
-
-    // Reload sessions to refresh the UI
-    if (mounted) {
-      await sessionsProvider.loadSessions(waitForSync: true);
+    } else {
+      // Deletion succeeded - reload to refresh UI
+      if (mounted) {
+        await sessionsProvider.loadSessions(showLoading: false);
+      }
     }
   }
 
