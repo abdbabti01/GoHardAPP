@@ -56,6 +56,9 @@ void main() async {
   // Clean up failed/corrupted sessions on startup
   await DatabaseCleanup.cleanupFailedSessions(localDb.database);
 
+  // Clean up duplicate program workouts on startup
+  await DatabaseCleanup.cleanupDuplicateProgramWorkouts(localDb.database);
+
   // Initialize connectivity service
   final connectivity = ConnectivityService.instance;
   await connectivity.initialize();

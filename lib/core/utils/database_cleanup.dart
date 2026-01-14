@@ -67,6 +67,88 @@ class DatabaseCleanup {
     }
   }
 
+  /// Delete duplicate draft/planned program workouts
+  /// Keeps only the most recent draft/planned session for each programWorkoutId
+  static Future<void> cleanupDuplicateProgramWorkouts(Isar db) async {
+    debugPrint('🧹 Cleaning up duplicate program workouts...');
+
+    try {
+      // Get all draft and planned sessions with programWorkoutId
+      final draftSessions =
+          await db.localSessions
+              .filter()
+              .statusEqualTo('draft')
+              .or()
+              .statusEqualTo('planned')
+              .findAll();
+
+      // Group by programWorkoutId
+      final Map<int, List<LocalSession>> groupedSessions = {};
+      for (final session in draftSessions) {
+        if (session.programWorkoutId != null) {
+          groupedSessions.putIfAbsent(session.programWorkoutId!, () => []);
+          groupedSessions[session.programWorkoutId!]!.add(session);
+        }
+      }
+
+      int deletedCount = 0;
+
+      // For each group with duplicates, keep only the most recent
+      for (final entry in groupedSessions.entries) {
+        final sessions = entry.value;
+        if (sessions.length > 1) {
+          // Sort by lastModifiedLocal (most recent first)
+          sessions.sort(
+            (a, b) => b.lastModifiedLocal.compareTo(a.lastModifiedLocal),
+          );
+
+          // Keep the first (most recent), delete the rest
+          final toDelete = sessions.skip(1).toList();
+
+          for (final session in toDelete) {
+            await db.writeTxn(() async {
+              // Delete exercises and sets
+              final exercises =
+                  await db.localExercises
+                      .filter()
+                      .sessionLocalIdEqualTo(session.localId)
+                      .findAll();
+
+              for (final exercise in exercises) {
+                await db.localExerciseSets
+                    .filter()
+                    .exerciseLocalIdEqualTo(exercise.localId)
+                    .deleteAll();
+              }
+
+              await db.localExercises
+                  .filter()
+                  .sessionLocalIdEqualTo(session.localId)
+                  .deleteAll();
+
+              await db.localSessions.delete(session.localId);
+
+              deletedCount++;
+              debugPrint(
+                '  🗑️ Deleted duplicate ${session.status} session for program workout ${session.programWorkoutId}',
+              );
+            });
+          }
+        }
+      }
+
+      if (deletedCount > 0) {
+        debugPrint(
+          '✅ Cleanup completed: deleted $deletedCount duplicate sessions',
+        );
+      } else {
+        debugPrint('✅ No duplicate program workouts found');
+      }
+    } catch (e) {
+      debugPrint('❌ Duplicate cleanup failed: $e');
+    }
+  }
+
   /// Delete ALL local data (nuclear option for fresh start)
   static Future<void> clearAllData(Isar db) async {
     debugPrint('🧹 Clearing ALL local data...');

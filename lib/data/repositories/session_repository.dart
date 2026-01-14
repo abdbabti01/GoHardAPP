@@ -443,6 +443,25 @@ class SessionRepository {
     return localResult;
   }
 
+  /// Helper method to convert LocalSession to Session with exercises
+  Future<Session> _getSessionWithExercises(LocalSession localSession) async {
+    final db = _localDb.database;
+
+    // Load exercises for this session
+    final localExercises =
+        await db.localExercises
+            .filter()
+            .sessionLocalIdEqualTo(localSession.localId)
+            .findAll();
+
+    final exercises =
+        localExercises
+            .map((localEx) => ModelMapper.localToExercise(localEx))
+            .toList();
+
+    return ModelMapper.localToSession(localSession, exercises: exercises);
+  }
+
   /// Create a session from a program workout
   /// Links the session to the program and program workout
   /// Now works offline by parsing exercisesJson client-side
@@ -458,6 +477,40 @@ class SessionRepository {
     if (userId == null) {
       throw Exception('User not authenticated');
     }
+
+    // Check if a draft/planned session already exists for this program workout
+    final existingSessions =
+        await db.localSessions
+            .filter()
+            .userIdEqualTo(userId)
+            .programWorkoutIdEqualTo(programWorkoutId)
+            .findAll();
+
+    // Find existing draft or planned session
+    final existingSession = existingSessions.firstWhere(
+      (session) => session.status == 'draft' || session.status == 'planned',
+      orElse:
+          () => LocalSession(
+            userId: 0,
+            date: DateTime.now(),
+            type: '',
+            name: '',
+            status: '',
+            lastModifiedLocal: DateTime.now(),
+          ), // Dummy session
+    );
+
+    // If we found an existing draft/planned session, return it
+    if (existingSession.userId != 0) {
+      debugPrint(
+        '✅ Found existing ${existingSession.status} session for program workout $programWorkoutId',
+      );
+      return await _getSessionWithExercises(existingSession);
+    }
+
+    debugPrint(
+      '📝 No existing draft/planned session found, creating new session for program workout $programWorkoutId',
+    );
 
     // Try to create on server if online
     if (_connectivity.isOnline) {
