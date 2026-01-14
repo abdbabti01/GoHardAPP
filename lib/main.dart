@@ -201,10 +201,21 @@ void main() async {
               (_, apiService, connectivity, __) =>
                   BodyMetricsRepository(apiService, connectivity),
         ),
-        ProxyProvider2<ApiService, ConnectivityService, ProgramsRepository>(
+        ProxyProvider4<
+          ApiService,
+          ConnectivityService,
+          LocalDatabaseService,
+          AuthService,
+          ProgramsRepository
+        >(
           update:
-              (_, apiService, connectivity, __) =>
-                  ProgramsRepository(apiService, connectivity),
+              (_, apiService, connectivity, localDb, authService, __) =>
+                  ProgramsRepository(
+                    apiService,
+                    connectivity,
+                    localDb,
+                    authService,
+                  ),
         ),
 
         // Sync Service

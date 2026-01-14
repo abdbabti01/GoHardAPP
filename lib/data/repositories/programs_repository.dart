@@ -1,16 +1,27 @@
 import 'package:flutter/foundation.dart';
+import 'package:isar/isar.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
 import '../models/program.dart';
 import '../models/program_workout.dart';
 import '../services/api_service.dart';
+import '../local/services/local_database_service.dart';
+import '../services/auth_service.dart';
+import '../local/models/local_session.dart';
 
 /// Repository for programs operations with offline caching
 class ProgramsRepository {
   final ApiService _apiService;
   final ConnectivityService? _connectivity;
+  final LocalDatabaseService? _localDb;
+  final AuthService? _authService;
 
-  ProgramsRepository(this._apiService, [this._connectivity]);
+  ProgramsRepository(
+    this._apiService, [
+    this._connectivity,
+    this._localDb,
+    this._authService,
+  ]);
 
   /// Get all programs for the current user
   /// Optional filter: isActive (true for active programs, false for inactive/completed)
@@ -44,7 +55,66 @@ class ProgramsRepository {
     final data = await _apiService.get<Map<String, dynamic>>(
       ApiConfig.programById(id),
     );
-    return Program.fromJson(data);
+    var program = Program.fromJson(data);
+
+    // Sync workout completion status from local sessions
+    program = await _syncWorkoutCompletionStatus(program);
+
+    return program;
+  }
+
+  /// Sync program workout completion status from local sessions
+  /// This ensures that workouts completed via "My Workouts" are reflected in the program
+  Future<Program> _syncWorkoutCompletionStatus(Program program) async {
+    // Skip if no local database access
+    if (_localDb == null || _authService == null) {
+      return program;
+    }
+
+    // Skip if program has no workouts
+    if (program.workouts == null || program.workouts!.isEmpty) {
+      return program;
+    }
+
+    try {
+      final db = _localDb.database;
+      final userId = await _authService.getUserId();
+
+      if (userId == null) {
+        return program;
+      }
+
+      // Get all sessions for this program
+      final sessions = await db.localSessions
+          .filter()
+          .userIdEqualTo(userId)
+          .programIdEqualTo(program.id)
+          .findAll();
+
+      // Create a map of programWorkoutId -> completion status
+      final completionMap = <int, bool>{};
+      for (final session in sessions) {
+        if (session.programWorkoutId != null) {
+          // Workout is completed if session is completed OR archived (archived still counts as completed)
+          final isCompleted =
+              session.status == 'completed' || session.status == 'archived';
+          completionMap[session.programWorkoutId!] = isCompleted;
+        }
+      }
+
+      // Update workout completion status
+      final updatedWorkouts =
+          program.workouts!.map((workout) {
+            final isCompleted =
+                completionMap[workout.id] ?? workout.isCompleted;
+            return workout.copyWith(isCompleted: isCompleted);
+          }).toList();
+
+      return program.copyWith(workouts: updatedWorkouts);
+    } catch (e) {
+      debugPrint('⚠️ Failed to sync workout completion status: $e');
+      return program; // Return original program if sync fails
+    }
   }
 
   /// Create a new program
