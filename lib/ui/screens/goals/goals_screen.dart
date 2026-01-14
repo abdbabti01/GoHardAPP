@@ -9,6 +9,7 @@ import '../../../data/models/goal.dart';
 import '../../../data/models/goal_progress.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/goal_reminder_preferences.dart';
+import '../../../core/services/tab_navigation_service.dart';
 import '../../../routes/route_names.dart';
 import '../analytics/analytics_screen.dart';
 
@@ -516,17 +517,11 @@ class _GoalsScreenState extends State<GoalsScreen>
             const SizedBox(height: 12),
             InkWell(
               onTap: () {
-                // Navigate to Programs tab (Workouts tab index 0, sub-tab index 1)
-                Navigator.pushNamed(
-                  context,
-                  RouteNames.main,
-                  arguments: {
-                    'tab': 0, // Workouts tab
-                    'subTab': 1, // Programs sub-tab
-                  },
-                ).then((_) {
-                  // Optional: could add logic to filter programs by this goal
-                });
+                // Switch to Programs tab (Workouts tab index 0, sub-tab index 1)
+                context.read<TabNavigationService>().switchTab(
+                  0, // Workouts tab
+                  subTabIndex: 1, // Programs sub-tab
+                );
               },
               borderRadius: BorderRadius.circular(12),
               child: Container(

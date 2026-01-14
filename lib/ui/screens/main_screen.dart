@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'sessions/sessions_screen.dart';
 import 'exercises/exercises_screen.dart';
 import 'goals/goals_screen.dart';
 import 'chat/chat_list_screen.dart';
 import 'profile/profile_screen.dart';
+import '../../core/services/tab_navigation_service.dart';
 
 /// Main screen wrapper with bottom navigation
 /// Provides 5-tab navigation: Workouts, Goals & Stats, AI Coach, Exercises, Profile
@@ -18,13 +20,21 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  late int _currentIndex;
   late List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialTab ?? 0;
+
+    // Set initial tab in TabNavigationService if provided
+    if (widget.initialTab != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<TabNavigationService>().switchTab(
+          widget.initialTab!,
+          subTabIndex: widget.initialSubTab,
+        );
+      });
+    }
 
     // Create screens with initial sub-tab if provided
     _screens = [
@@ -38,14 +48,14 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tabService = context.watch<TabNavigationService>();
+
     return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _screens),
+      body: IndexedStack(index: tabService.currentTab, children: _screens),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
+        currentIndex: tabService.currentTab,
         onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
+          tabService.switchTab(index);
         },
         items: const [
           BottomNavigationBarItem(

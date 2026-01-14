@@ -5,6 +5,7 @@ import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/goals_provider.dart';
+import '../../../core/services/tab_navigation_service.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/programs/program_calendar_widget.dart';
 
@@ -260,13 +261,11 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                   const SizedBox(height: 12),
                   InkWell(
                     onTap: () {
-                      // Navigate to Goals tab in main screen
-                      Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        RouteNames.main,
-                        (route) => route.isFirst,
-                        arguments: 1, // Goals tab index
-                      );
+                      // Switch to Goals tab and pop back to main screen
+                      context.read<TabNavigationService>().switchTab(
+                        1,
+                      ); // Goals tab index
+                      Navigator.popUntil(context, (route) => route.isFirst);
                     },
                     borderRadius: BorderRadius.circular(20),
                     child: Container(

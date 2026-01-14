@@ -316,14 +316,17 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                               );
 
                           if (session != null && mounted) {
-                            // Navigate to My Workouts (Sessions screen)
-                            navigator.pushNamed(RouteNames.sessions);
+                            // Navigate to Active Workout screen
+                            navigator.pushNamed(
+                              RouteNames.activeWorkout,
+                              arguments: session.id,
+                            );
 
                             // Show success message
                             messenger.showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  '${workout.workoutName} added to My Workouts!',
+                                  '${workout.workoutName} started!',
                                 ),
                                 backgroundColor: Colors.green,
                                 duration: const Duration(seconds: 2),

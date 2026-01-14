@@ -146,13 +146,9 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         debugPrint('✅ Programs refreshed after program creation');
       }
 
-      // Navigate directly to the created program detail screen
+      // Navigate to the created program detail screen
       if (mounted) {
-        navigator.pushNamedAndRemoveUntil(
-          RouteNames.programDetail,
-          (route) => route.isFirst, // Keep only the main screen in stack
-          arguments: programId,
-        );
+        navigator.pushNamed(RouteNames.programDetail, arguments: programId);
 
         // Show success message
         scaffoldMessenger.showSnackBar(
@@ -361,267 +357,324 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     return hasSetPattern || hasRepPattern;
   }
 
+  Future<bool> _handleBackPressed(ChatProvider provider) async {
+    if (!provider.isSending) return true; // Allow navigation if not sending
+
+    final shouldLeave = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Cancel Message?'),
+            content: const Text(
+              'A message is currently being generated. '
+              'If you leave now, the response will be lost. '
+              'Do you want to cancel and leave?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Stay'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Cancel & Leave'),
+              ),
+            ],
+          ),
+    );
+
+    return shouldLeave ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Consumer<ChatProvider>(
-          builder: (context, provider, child) {
-            return Text(
-              provider.currentConversation?.title ?? 'Chat',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            );
+    return Consumer<ChatProvider>(
+      builder: (context, chatProvider, child) {
+        return PopScope(
+          canPop: !chatProvider.isSending,
+          onPopInvokedWithResult: (bool didPop, dynamic result) async {
+            if (didPop) return;
+
+            final navigator = Navigator.of(context);
+            final shouldLeave = await _handleBackPressed(chatProvider);
+            if (shouldLeave && mounted) {
+              navigator.pop();
+            }
           },
-        ),
-        centerTitle: true,
-      ),
-      body: Column(
-        children: [
-          const OfflineBanner(),
-          Expanded(
-            child: Consumer<ChatProvider>(
-              builder: (context, provider, child) {
-                if (provider.isLoading &&
-                    provider.currentConversation == null) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (provider.errorMessage != null &&
-                    provider.currentConversation == null) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          provider.errorMessage!,
-                          style: const TextStyle(color: Colors.red),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed:
-                              () => provider.loadConversation(
-                                widget.conversationId,
-                              ),
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
+          child: Scaffold(
+            appBar: AppBar(
+              title: Consumer<ChatProvider>(
+                builder: (context, provider, child) {
+                  return Text(
+                    provider.currentConversation?.title ?? 'Chat',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   );
-                }
+                },
+              ),
+              centerTitle: true,
+            ),
+            body: Column(
+              children: [
+                const OfflineBanner(),
+                Expanded(
+                  child: Consumer<ChatProvider>(
+                    builder: (context, provider, child) {
+                      if (provider.isLoading &&
+                          provider.currentConversation == null) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                final conversation = provider.currentConversation;
-                if (conversation == null) {
-                  return const Center(child: Text('Conversation not found'));
-                }
-
-                if (conversation.messages.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No messages yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Start the conversation below',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                // Scroll to bottom when messages change
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _scrollToBottom();
-                });
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 16,
-                  ),
-                  itemCount: conversation.messages.length,
-                  itemBuilder: (context, index) {
-                    final message = conversation.messages[index];
-                    final isUser = message.role == 'user';
-
-                    return Align(
-                      alignment:
-                          isUser ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: EdgeInsets.only(
-                          bottom: 8,
-                          left: isUser ? 48 : 0,
-                          right: isUser ? 0 : 48,
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color:
-                              isUser
-                                  ? Theme.of(context).primaryColor
-                                  : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (isUser)
+                      if (provider.errorMessage != null &&
+                          provider.currentConversation == null) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
                               Text(
-                                message.content,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                ),
-                              )
-                            else
-                              MarkdownBody(
-                                data: message.content,
-                                styleSheet: MarkdownStyleSheet(
-                                  p: const TextStyle(
-                                    color: Colors.black87,
-                                    fontSize: 16,
-                                  ),
-                                  code: TextStyle(
-                                    backgroundColor: Colors.grey[300],
-                                    fontFamily: 'monospace',
-                                  ),
-                                  codeblockDecoration: BoxDecoration(
-                                    color: Colors.grey[300],
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                ),
+                                provider.errorMessage!,
+                                style: const TextStyle(color: Colors.red),
+                                textAlign: TextAlign.center,
                               ),
-                            // Show "Create Program" button if AI message contains workout
-                            if (!isUser &&
-                                _detectWorkoutPattern(message.content))
-                              Padding(
-                                padding: const EdgeInsets.only(top: 12),
-                                child: ElevatedButton.icon(
-                                  onPressed: () => _saveProgramPlan(),
-                                  icon: const Icon(
-                                    Icons.calendar_view_week,
-                                    size: 18,
-                                  ),
-                                  label: const Text('Create Program'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        Theme.of(context).primaryColor,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 8,
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed:
+                                    () => provider.loadConversation(
+                                      widget.conversationId,
                                     ),
-                                  ),
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      final conversation = provider.currentConversation;
+                      if (conversation == null) {
+                        return const Center(
+                          child: Text('Conversation not found'),
+                        );
+                      }
+
+                      if (conversation.messages.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.chat_bubble_outline,
+                                size: 64,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No messages yet',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey[600],
                                 ),
                               ),
-                            if (!isUser && message.model != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: Text(
-                                  'Model: ${message.model}',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.grey[600],
-                                  ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Start the conversation below',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[500],
                                 ),
                               ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      // Scroll to bottom when messages change
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _scrollToBottom();
+                      });
+
+                      return ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 16,
+                        ),
+                        itemCount: conversation.messages.length,
+                        itemBuilder: (context, index) {
+                          final message = conversation.messages[index];
+                          final isUser = message.role == 'user';
+
+                          return Align(
+                            alignment:
+                                isUser
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
+                            child: Container(
+                              margin: EdgeInsets.only(
+                                bottom: 8,
+                                left: isUser ? 48 : 0,
+                                right: isUser ? 0 : 48,
+                              ),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color:
+                                    isUser
+                                        ? Theme.of(context).primaryColor
+                                        : Colors.grey[200],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (isUser)
+                                    Text(
+                                      message.content,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                      ),
+                                    )
+                                  else
+                                    MarkdownBody(
+                                      data: message.content,
+                                      styleSheet: MarkdownStyleSheet(
+                                        p: const TextStyle(
+                                          color: Colors.black87,
+                                          fontSize: 16,
+                                        ),
+                                        code: TextStyle(
+                                          backgroundColor: Colors.grey[300],
+                                          fontFamily: 'monospace',
+                                        ),
+                                        codeblockDecoration: BoxDecoration(
+                                          color: Colors.grey[300],
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  // Show "Create Program" button if AI message contains workout
+                                  if (!isUser &&
+                                      _detectWorkoutPattern(message.content))
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: ElevatedButton.icon(
+                                        onPressed: () => _saveProgramPlan(),
+                                        icon: const Icon(
+                                          Icons.calendar_view_week,
+                                          size: 18,
+                                        ),
+                                        label: const Text('Create Program'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              Theme.of(context).primaryColor,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 8,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (!isUser && message.model != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8),
+                                      child: Text(
+                                        'Model: ${message.model}',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+                Consumer<ChatProvider>(
+                  builder: (context, provider, child) {
+                    if (provider.isSending) {
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'AI is thinking...',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 4,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _messageController,
+                                decoration: InputDecoration(
+                                  hintText: 'Type a message...',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                maxLines: null,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
+                                onSubmitted: (value) => _sendMessage(),
+                                enabled: !provider.isOffline,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed:
+                                  provider.isOffline ? null : _sendMessage,
+                              icon: const Icon(Icons.send),
+                              color: Theme.of(context).primaryColor,
+                            ),
                           ],
                         ),
                       ),
                     );
                   },
-                );
-              },
+                ),
+              ],
             ),
           ),
-          Consumer<ChatProvider>(
-            builder: (context, provider, child) {
-              if (provider.isSending) {
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'AI is thinking...',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              return Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _messageController,
-                          decoration: InputDecoration(
-                            hintText: 'Type a message...',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                          maxLines: null,
-                          textCapitalization: TextCapitalization.sentences,
-                          onSubmitted: (value) => _sendMessage(),
-                          enabled: !provider.isOffline,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: provider.isOffline ? null : _sendMessage,
-                        icon: const Icon(Icons.send),
-                        color: Theme.of(context).primaryColor,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

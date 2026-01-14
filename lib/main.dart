@@ -22,6 +22,7 @@ import 'core/services/connectivity_service.dart';
 import 'core/services/sync_service.dart';
 import 'core/services/sync_service_initializer.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/tab_navigation_service.dart';
 import 'core/utils/database_cleanup.dart';
 import 'providers/auth_provider.dart';
 import 'providers/sessions_provider.dart';
@@ -412,6 +413,9 @@ void main() async {
         ),
         ChangeNotifierProvider<MusicPlayerProvider>(
           create: (_) => MusicPlayerProvider(),
+        ),
+        ChangeNotifierProvider<TabNavigationService>(
+          create: (_) => TabNavigationService(),
         ),
         ChangeNotifierProxyProvider2<
           FlutterSecureStorage,

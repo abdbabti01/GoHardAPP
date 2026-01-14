@@ -5,6 +5,7 @@ import '../../../providers/exercises_provider.dart';
 import '../../../providers/active_workout_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../../core/services/sync_service.dart';
+import '../../../core/services/tab_navigation_service.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../widgets/sessions/session_card.dart';
 import '../../widgets/sessions/workout_name_dialog.dart';
@@ -48,11 +49,28 @@ class _SessionsScreenState extends State<SessionsScreen>
       context.read<SessionsProvider>().loadSessions();
       // Trigger exercise templates to load and cache for offline use
       context.read<ExercisesProvider>().loadExercises();
+
+      // Listen to TabNavigationService for dynamic sub-tab switching
+      final tabNavService = context.read<TabNavigationService>();
+      tabNavService.addListener(_handleSubTabChange);
     });
+  }
+
+  void _handleSubTabChange() {
+    final tabNavService = context.read<TabNavigationService>();
+    // Only respond if we're on the Workouts tab (index 0) and subTab is specified
+    if (tabNavService.currentTab == 0 &&
+        tabNavService.currentSubTab != null &&
+        _tabController.index != tabNavService.currentSubTab) {
+      _tabController.animateTo(tabNavService.currentSubTab!);
+    }
   }
 
   @override
   void dispose() {
+    // Remove listener from TabNavigationService
+    final tabNavService = context.read<TabNavigationService>();
+    tabNavService.removeListener(_handleSubTabChange);
     _tabController.dispose();
     super.dispose();
   }

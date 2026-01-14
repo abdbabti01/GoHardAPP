@@ -70,10 +70,50 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       final success = await provider.finishWorkout();
 
       if (success && mounted) {
-        // Pop back to sessions screen
-        Navigator.of(context).pop();
+        // Pop until we find sessions or main screen for consistent navigation
+        Navigator.of(context).popUntil((route) {
+          return route.settings.name == RouteNames.sessions ||
+              route.settings.name == RouteNames.main ||
+              route.isFirst;
+        });
       }
     }
+  }
+
+  Future<bool> _handleBackPressed() async {
+    final shouldLeave = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Leave Workout?'),
+            content: const Text(
+              'Your workout is still in progress. '
+              'If you leave now, the timer will be lost. '
+              'Do you want to finish the workout first?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Stay'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Leave Anyway'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context, false);
+                  // Trigger finish workout dialog
+                  _handleFinishWorkout();
+                },
+                child: const Text('Finish Workout'),
+              ),
+            ],
+          ),
+    );
+
+    return shouldLeave ?? false;
   }
 
   Future<void> _handleEditWorkoutName() async {
@@ -133,97 +173,109 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ActiveWorkoutProvider>(
-      builder: (context, provider, child) {
-        return Scaffold(
-          appBar: AppBar(
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    provider.currentSession?.name ?? 'Active Workout',
-                    overflow: TextOverflow.ellipsis,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+
+        final navigator = Navigator.of(context);
+        final shouldLeave = await _handleBackPressed();
+        if (shouldLeave && mounted) {
+          navigator.pop();
+        }
+      },
+      child: Consumer<ActiveWorkoutProvider>(
+        builder: (context, provider, child) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      provider.currentSession?.name ?? 'Active Workout',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 20),
-                  onPressed: _handleEditWorkoutName,
-                  tooltip: 'Edit Workout Name',
-                ),
-              ],
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.check_circle),
-                onPressed: _handleFinishWorkout,
-                tooltip: 'Finish Workout',
-              ),
-            ],
-          ),
-          body: Column(
-            children: [
-              const OfflineBanner(),
-              Expanded(child: _buildBody(provider)),
-            ],
-          ),
-          floatingActionButton: Container(
-            height: 56,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.secondary,
-                  Theme.of(
-                    context,
-                  ).colorScheme.secondary.withValues(alpha: 0.8),
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 20),
+                    onPressed: _handleEditWorkoutName,
+                    tooltip: 'Edit Workout Name',
+                  ),
                 ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.secondary.withValues(alpha: 0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.check_circle),
+                  onPressed: _handleFinishWorkout,
+                  tooltip: 'Finish Workout',
                 ),
               ],
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
+            body: Column(
+              children: [
+                const OfflineBanner(),
+                Expanded(child: _buildBody(provider)),
+              ],
+            ),
+            floatingActionButton: Container(
+              height: 56,
+              decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(28),
-                onTap: _handleAddExercise,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.secondary,
+                    Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.8),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.add_circle_outline,
-                        color: Theme.of(context).colorScheme.onSecondary,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Add Exercise',
-                        style: TextStyle(
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(28),
+                  onTap: _handleAddExercise,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.add_circle_outline,
                           color: Theme.of(context).colorScheme.onSecondary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
+                          size: 24,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        Text(
+                          'Add Exercise',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSecondary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
