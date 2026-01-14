@@ -85,11 +85,12 @@ class ProgramsRepository {
       }
 
       // Get all sessions for this program
-      final sessions = await db.localSessions
-          .filter()
-          .userIdEqualTo(userId)
-          .programIdEqualTo(program.id)
-          .findAll();
+      final sessions =
+          await db.localSessions
+              .filter()
+              .userIdEqualTo(userId)
+              .programIdEqualTo(program.id)
+              .findAll();
 
       // Create a map of programWorkoutId -> completion status
       final completionMap = <int, bool>{};
