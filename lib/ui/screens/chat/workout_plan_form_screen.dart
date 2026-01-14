@@ -71,10 +71,13 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
       navigator.pop(); // Close loading dialog
 
       if (conversation != null) {
-        // Navigate to conversation screen
+        // Navigate to conversation screen with goalId if provided
         navigator.pushReplacementNamed(
           RouteNames.chatConversation,
-          arguments: conversation.id,
+          arguments: {
+            'conversationId': conversation.id,
+            'goalId': widget.goalId,
+          },
         );
       } else if (provider.errorMessage != null) {
         // Show error
