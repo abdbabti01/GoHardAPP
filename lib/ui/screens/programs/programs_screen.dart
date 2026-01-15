@@ -194,7 +194,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Week ${program.calendarCurrentWeek} of ${program.totalWeeks}',
+                  'Week ${program.currentWeek} of ${program.totalWeeks}',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: theme.primaryColor,
@@ -292,12 +292,16 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     );
                   }
                 },
+                onWorkoutMoved: () {
+                  // Reload programs when a workout is moved
+                  context.read<ProgramsProvider>().loadPrograms();
+                },
               ),
               const SizedBox(height: 16),
             ],
 
             // Today's Workout Section
-            if (!isCompleted && program.todaysWorkout != null) ...[
+            if (!isCompleted && program.currentWorkout != null) ...[
               const Divider(height: 1),
               const SizedBox(height: 16),
               Row(
@@ -333,7 +337,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            program.todaysWorkout!.workoutName,
+                            program.currentWorkout!.workoutName,
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -342,7 +346,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              if (program.todaysWorkout!.estimatedDuration !=
+                              if (program.currentWorkout!.estimatedDuration !=
                                   null) ...[
                                 Icon(
                                   Icons.access_time,
@@ -351,7 +355,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '${program.todaysWorkout!.estimatedDuration} min',
+                                  '${program.currentWorkout!.estimatedDuration} min',
                                   style: TextStyle(
                                     color: Colors.grey.shade600,
                                     fontSize: 13,
@@ -366,7 +370,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '${program.todaysWorkout!.exerciseCount} exercises',
+                                '${program.currentWorkout!.exerciseCount} exercises',
                                 style: TextStyle(
                                   color: Colors.grey.shade600,
                                   fontSize: 13,

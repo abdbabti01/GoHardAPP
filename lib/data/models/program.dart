@@ -111,15 +111,17 @@ class Program {
     }
   }
 
-  /// Get today's workout based on real calendar date
-  ProgramWorkout? get todaysWorkout {
+  /// Get current workout based on user's position in program
+  ProgramWorkout? get currentWorkout {
     if (workouts == null || workouts!.isEmpty) return null;
 
-    // Find workout scheduled for today's actual calendar date
+    // Find workout for current week and day
     try {
-      return workouts!.firstWhere((w) => isWorkoutToday(w));
+      return workouts!.firstWhere(
+        (w) => w.weekNumber == currentWeek && w.dayNumber == currentDay,
+      );
     } catch (e) {
-      // No workout scheduled for today, return null
+      // No workout scheduled for current position, return null
       return null;
     }
   }
@@ -142,81 +144,57 @@ class Program {
     return (totalDays - currentDays).clamp(0, totalDays);
   }
 
-  /// Calculate current week based on real calendar date
-  int get calendarCurrentWeek {
-    final now = DateTime.now();
-    final daysSinceStart = now.difference(startDate).inDays;
-
-    // If program hasn't started yet, return week 1
-    if (daysSinceStart < 0) return 1;
-
-    // If program is past end date, return last week
-    if (endDate != null && now.isAfter(endDate!)) return totalWeeks;
-
-    final weekNumber = (daysSinceStart ~/ 7) + 1;
-    return weekNumber.clamp(1, totalWeeks);
+  /// Check if a workout is the current workout (user's position)
+  bool isCurrentWorkout(ProgramWorkout workout) {
+    return workout.weekNumber == currentWeek && workout.dayNumber == currentDay;
   }
 
-  /// Calculate current day based on real calendar date
-  int get calendarCurrentDay {
-    final now = DateTime.now();
-    final daysSinceStart = now.difference(startDate).inDays;
-
-    // If program hasn't started yet, return day 1
-    if (daysSinceStart < 0) return 1;
-
-    // If program is past end date, return last day
-    if (endDate != null && now.isAfter(endDate!)) return 7;
-
-    final dayNumber = (daysSinceStart % 7) + 1;
-    return dayNumber.clamp(1, 7);
+  /// Check if a workout is in the past (before user's current position)
+  bool isWorkoutPast(ProgramWorkout workout) {
+    if (workout.weekNumber < currentWeek) return true;
+    if (workout.weekNumber == currentWeek && workout.dayNumber < currentDay) {
+      return true;
+    }
+    return false;
   }
 
-  /// Get today's actual calendar date normalized to midnight
-  DateTime get calendarToday {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day);
-  }
-
-  /// Calculate the scheduled calendar date for a workout
-  DateTime getWorkoutScheduledDate(ProgramWorkout workout) {
-    final date = startDate.add(
-      Duration(days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1)),
-    );
-    return DateTime(date.year, date.month, date.day);
-  }
-
-  /// Check if a workout is missed (past its date but not completed)
-  /// Uses REAL calendar dates, not program position
-  bool isWorkoutMissed(ProgramWorkout workout) {
-    // Can't be missed if already completed
-    if (workout.isCompleted) return false;
-
-    // Can't be missed if it's a rest day
-    if (workout.isRestDay) return false;
-
-    // Calculate the scheduled calendar date for this workout
-    final workoutDate = getWorkoutScheduledDate(workout);
-
-    // Get today's date
-    final today = calendarToday;
-
-    // Workout is missed if its date is before today
-    return workoutDate.isBefore(today);
-  }
-
-  /// Check if a workout is today's workout based on real calendar
-  bool isWorkoutToday(ProgramWorkout workout) {
-    final workoutDate = getWorkoutScheduledDate(workout);
-    final today = calendarToday;
-    return workoutDate.isAtSameMomentAs(today);
-  }
-
-  /// Check if a workout is in the future based on real calendar
+  /// Check if a workout is in the future (after user's current position)
   bool isWorkoutFuture(ProgramWorkout workout) {
-    final workoutDate = getWorkoutScheduledDate(workout);
-    final today = calendarToday;
-    return workoutDate.isAfter(today);
+    if (workout.weekNumber > currentWeek) return true;
+    if (workout.weekNumber == currentWeek && workout.dayNumber > currentDay) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Check if a workout is missed (in the past but not completed)
+  bool isWorkoutMissed(ProgramWorkout workout) {
+    return isWorkoutPast(workout) && !workout.isCompleted && !workout.isRestDay;
+  }
+
+  /// Get next workout (first incomplete workout at or after current position)
+  ProgramWorkout? get nextWorkout {
+    if (workouts == null || workouts!.isEmpty) return null;
+
+    // Find first incomplete workout starting from current position
+    final sortedWorkouts =
+        workouts!.toList()..sort((a, b) {
+          if (a.weekNumber != b.weekNumber) {
+            return a.weekNumber.compareTo(b.weekNumber);
+          }
+          return a.dayNumber.compareTo(b.dayNumber);
+        });
+
+    try {
+      return sortedWorkouts.firstWhere(
+        (w) =>
+            !w.isCompleted &&
+            (w.weekNumber > currentWeek ||
+                (w.weekNumber == currentWeek && w.dayNumber >= currentDay)),
+      );
+    } catch (e) {
+      return null;
+    }
   }
 
   Program copyWith({

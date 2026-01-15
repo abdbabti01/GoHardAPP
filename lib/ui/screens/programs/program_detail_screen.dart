@@ -39,13 +39,13 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     if (program != null && mounted) {
       setState(() {
         _program = program;
-        _selectedWeek = program.calendarCurrentWeek;
+        _selectedWeek = program.currentWeek;
         _isLoading = false;
       });
       _tabController = TabController(
         length: program.totalWeeks,
         vsync: this,
-        initialIndex: program.calendarCurrentWeek - 1,
+        initialIndex: program.currentWeek - 1,
       );
       _tabController.addListener(() {
         if (!_tabController.indexIsChanging) {
@@ -90,6 +90,15 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       appBar: AppBar(
         title: Text(program.title),
         actions: [
+          // Advance to next workout button
+          if (!program.isCompleted &&
+              program.currentWorkout != null &&
+              program.currentWorkout!.isCompleted)
+            IconButton(
+              icon: const Icon(Icons.skip_next),
+              tooltip: 'Next Workout',
+              onPressed: () => _advanceToNextWorkout(program),
+            ),
           // Calendar/Week view toggle
           IconButton(
             icon: Icon(
@@ -380,16 +389,10 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                                   .where((w) => w.weekNumber == weekNumber)
                                   .toList()
                                 ..sort(
-                                  (a, b) =>
-                                      a.orderIndex.compareTo(b.orderIndex),
+                                  (a, b) => a.dayNumber.compareTo(b.dayNumber),
                                 );
 
-                          return _buildDraggableWeekView(
-                            context,
-                            weekNumber,
-                            weekWorkouts,
-                            program,
-                          );
+                          return _buildWeekView(context, weekWorkouts, program);
                         }),
                       ),
             ),
@@ -399,184 +402,62 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     );
   }
 
-  Widget _buildDraggableWeekView(
+  Widget _buildWeekView(
     BuildContext context,
-    int weekNumber,
     List<ProgramWorkout> weekWorkouts,
     Program program,
   ) {
-    // Group workouts by day
-    final workoutsByDay = <int, List<ProgramWorkout>>{};
-    for (var workout in weekWorkouts) {
-      workoutsByDay.putIfAbsent(workout.dayNumber, () => []).add(workout);
+    if (weekWorkouts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.self_improvement, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'Rest week - Recovery time!',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+            ),
+          ],
+        ),
+      );
     }
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: 7, // 7 days in a week
-      itemBuilder: (context, dayIndex) {
-        final dayNumber = dayIndex + 1;
-        final dayWorkouts = workoutsByDay[dayNumber] ?? [];
-
-        return _buildDaySlot(
-          context,
-          dayNumber,
-          weekNumber,
-          dayWorkouts,
-          program,
-        );
+      itemCount: weekWorkouts.length,
+      itemBuilder: (context, index) {
+        final workout = weekWorkouts[index];
+        return _buildWorkoutCard(context, workout, program);
       },
     );
   }
 
-  Widget _buildDaySlot(
-    BuildContext context,
-    int dayNumber,
-    int weekNumber,
-    List<ProgramWorkout> dayWorkouts,
-    Program program,
-  ) {
-    final theme = Theme.of(context);
-    final isEmpty = dayWorkouts.isEmpty;
-
-    return DragTarget<ProgramWorkout>(
-      onWillAcceptWithDetails: (details) => true,
-      onAcceptWithDetails: (details) async {
-        final workout = details.data;
-        if (workout.dayNumber != dayNumber) {
-          await _updateWorkoutDay(workout, dayNumber, weekNumber);
-        }
-      },
-      builder: (context, candidateData, rejectedData) {
-        final isHighlighted = candidateData.isNotEmpty;
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color:
-                isHighlighted
-                    ? theme.primaryColor.withValues(alpha: 0.1)
-                    : Colors.transparent,
-            border: Border.all(
-              color: isHighlighted ? theme.primaryColor : Colors.grey.shade300,
-              width: isHighlighted ? 2 : 1,
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Day header
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isEmpty ? Colors.grey.shade100 : Colors.transparent,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    topRight: Radius.circular(12),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color:
-                            isEmpty
-                                ? Colors.grey.shade300
-                                : theme.primaryColor.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'Day $dayNumber',
-                        style: TextStyle(
-                          color:
-                              isEmpty
-                                  ? Colors.grey.shade700
-                                  : theme.primaryColor,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    if (isEmpty) ...[
-                      const SizedBox(width: 12),
-                      Icon(
-                        Icons.self_improvement,
-                        size: 20,
-                        color: Colors.grey.shade400,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Rest Day',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              // Workouts for this day
-              ...dayWorkouts.map(
-                (workout) =>
-                    _buildDraggableWorkoutCard(context, workout, program),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDraggableWorkoutCard(
-    BuildContext context,
-    ProgramWorkout workout,
-    Program program,
-  ) {
-    return LongPressDraggable<ProgramWorkout>(
-      data: workout,
-      feedback: Material(
-        elevation: 6,
-        borderRadius: BorderRadius.circular(12),
-        child: SizedBox(
-          width: MediaQuery.of(context).size.width - 32,
-          child: _buildWorkoutCard(context, workout, program),
-        ),
-      ),
-      childWhenDragging: Opacity(
-        opacity: 0.3,
-        child: _buildWorkoutCard(context, workout, program),
-      ),
-      child: _buildWorkoutCard(context, workout, program),
-    );
-  }
-
-  Future<void> _updateWorkoutDay(
-    ProgramWorkout workout,
-    int newDayNumber,
-    int weekNumber,
-  ) async {
+  /// Advance to next workout in the program
+  Future<void> _advanceToNextWorkout(Program program) async {
     final provider = context.read<ProgramsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
 
-    // Update the workout with new day number
-    final updatedWorkout = workout.copyWith(dayNumber: newDayNumber);
+    final success = await provider.advanceProgram(program.id);
 
-    // Call API to update
-    await provider.updateWorkout(updatedWorkout.id, updatedWorkout);
+    if (success && mounted) {
+      await _loadProgram(); // Reload to show new current position
 
-    // Reload program to show updated schedule
-    await _loadProgram();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Moved ${workout.workoutName} to Day $newDayNumber'),
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Advanced to next workout'),
           backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else if (!success && mounted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            provider.errorMessage ?? 'Failed to advance to next workout',
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -588,7 +469,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     Program program,
   ) {
     final theme = Theme.of(context);
-    final isCurrentWorkout = program.isWorkoutToday(workout);
+    final isCurrentWorkout = program.isCurrentWorkout(workout);
     final isMissed = program.isWorkoutMissed(workout);
 
     return Card(

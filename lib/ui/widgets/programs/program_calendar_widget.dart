@@ -115,8 +115,8 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
               title: const Text('Future Workout'),
               content: Text(
                 'This workout is scheduled for ${DateFormat('MMM d, yyyy').format(selectedDay)}.\n\n'
-                'Your program is currently on Week ${widget.program.calendarCurrentWeek}, '
-                'Day ${widget.program.calendarCurrentDay}.\n\n'
+                'Your program is currently on Week ${widget.program.currentWeek}, '
+                'Day ${widget.program.currentDay}.\n\n'
                 'Would you like to view this workout ahead of schedule?',
               ),
               actions: [
