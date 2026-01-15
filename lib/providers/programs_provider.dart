@@ -292,6 +292,22 @@ class ProgramsProvider extends ChangeNotifier {
     }
   }
 
+  /// Swap two program workouts atomically
+  Future<bool> swapWorkouts(int workout1Id, int workout2Id) async {
+    try {
+      await _programsRepository.swapWorkouts(workout1Id, workout2Id);
+      debugPrint('✅ Swapped workouts $workout1Id and $workout2Id');
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage =
+          'Failed to swap workouts: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Swap workouts error: $e');
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Mark a workout as completed
   Future<bool> completeWorkout(int workoutId, {String? notes}) async {
     try {

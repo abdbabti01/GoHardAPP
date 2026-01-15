@@ -71,15 +71,17 @@ class WeeklyScheduleWidget extends StatelessWidget {
 
     final provider = context.read<ProgramsProvider>();
     final messenger = ScaffoldMessenger.of(context);
-    final oldDayNumber = workout.dayNumber;
 
     // Find workout currently on the destination day (if any)
-    final destinationWorkout = program.workouts?.cast<ProgramWorkout?>().firstWhere(
-      (w) => w?.weekNumber == program.currentWeek &&
-             w?.dayNumber == newDayNumber &&
-             w?.id != workout.id, // Exclude the workout being dragged
-      orElse: () => null,
-    );
+    final destinationWorkout = program.workouts
+        ?.cast<ProgramWorkout?>()
+        .firstWhere(
+          (w) =>
+              w?.weekNumber == program.currentWeek &&
+              w?.dayNumber == newDayNumber &&
+              w?.id != workout.id, // Exclude the workout being dragged
+          orElse: () => null,
+        );
 
     // Show loading indicator
     messenger.showSnackBar(
@@ -97,26 +99,18 @@ class WeeklyScheduleWidget extends StatelessWidget {
       bool success = false;
 
       if (destinationWorkout != null) {
-        // SWAP: Update both workouts
-        final updatedWorkout = workout.copyWith(dayNumber: newDayNumber);
-        final swappedWorkout = destinationWorkout.copyWith(dayNumber: oldDayNumber);
-
-        // Update first workout
-        final success1 = await provider.updateWorkout(
-          updatedWorkout.id,
-          updatedWorkout,
+        // SWAP: Use atomic swap endpoint (swaps both dayNumber and orderIndex)
+        success = await provider.swapWorkouts(
+          workout.id,
+          destinationWorkout.id,
         );
-
-        // Update second workout (swap)
-        final success2 = await provider.updateWorkout(
-          swappedWorkout.id,
-          swappedWorkout,
-        );
-
-        success = success1 && success2;
       } else {
-        // MOVE: Just update the dragged workout
-        final updatedWorkout = workout.copyWith(dayNumber: newDayNumber);
+        // MOVE: Just update the dragged workout (also update orderIndex to match dayNumber)
+        final updatedWorkout = workout.copyWith(
+          dayNumber: newDayNumber,
+          orderIndex:
+              newDayNumber, // Keep orderIndex synchronized with dayNumber
+        );
         success = await provider.updateWorkout(
           updatedWorkout.id,
           updatedWorkout,

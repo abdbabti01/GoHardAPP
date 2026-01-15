@@ -212,6 +212,14 @@ class ProgramsRepository {
     );
   }
 
+  /// Swap two program workouts atomically
+  Future<void> swapWorkouts(int workout1Id, int workout2Id) async {
+    await _apiService.post<void>(
+      '${ApiConfig.programs}/workouts/swap',
+      data: {'workout1Id': workout1Id, 'workout2Id': workout2Id},
+    );
+  }
+
   /// Mark a workout as completed
   Future<void> completeWorkout(int workoutId, {String? notes}) async {
     await _apiService.put<void>(
