@@ -21,6 +21,18 @@ class WorkoutDayCard extends StatelessWidget {
     this.onTap,
   });
 
+  /// Strip day prefix from workout name (e.g., "Monday: Chest" -> "Chest")
+  String _getCleanWorkoutName() {
+    final name = workout.workoutName;
+    // Check if name has day prefix pattern (e.g., "Monday: ", "Tuesday: ")
+    final colonIndex = name.indexOf(':');
+    if (colonIndex != -1 && colonIndex < 15) {
+      // Day name shouldn't be longer than 15 chars
+      return name.substring(colonIndex + 1).trim();
+    }
+    return name;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -92,11 +104,11 @@ class WorkoutDayCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Day name
+            // Day number (Day 1, Day 2, etc.)
             SizedBox(
-              width: 70,
+              width: 55,
               child: Text(
-                workout.dayNameFromNumber,
+                'Day ${workout.dayNumber}',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: isCurrentDay ? FontWeight.bold : FontWeight.w600,
@@ -106,10 +118,10 @@ class WorkoutDayCard extends StatelessWidget {
             ),
             const SizedBox(width: 12),
 
-            // Workout name
+            // Workout name (stripped of day prefix)
             Expanded(
               child: Text(
-                workout.workoutName,
+                _getCleanWorkoutName(),
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight:

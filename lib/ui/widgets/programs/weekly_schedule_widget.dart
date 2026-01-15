@@ -61,6 +61,29 @@ class WeeklyScheduleWidget extends StatelessWidget {
     );
   }
 
+  /// Get weekday name from day number (1=Monday, 7=Sunday)
+  String _getWeekdayName(int dayNumber) {
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    return weekdays[dayNumber - 1];
+  }
+
+  /// Strip day prefix from workout name for display
+  String _getCleanWorkoutName(String workoutName) {
+    final colonIndex = workoutName.indexOf(':');
+    if (colonIndex != -1 && colonIndex < 15) {
+      return workoutName.substring(colonIndex + 1).trim();
+    }
+    return workoutName;
+  }
+
   /// Update workout day number when dropped on a new day
   Future<void> _updateWorkoutDay(
     BuildContext context,
@@ -68,22 +91,41 @@ class WeeklyScheduleWidget extends StatelessWidget {
     int newDayNumber,
   ) async {
     final provider = context.read<ProgramsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
 
     // Update the workout with new day number
     final updatedWorkout = workout.copyWith(dayNumber: newDayNumber);
 
     // Call API to update
-    await provider.updateWorkout(updatedWorkout.id, updatedWorkout);
+    final success = await provider.updateWorkout(
+      updatedWorkout.id,
+      updatedWorkout,
+    );
 
-    // Notify parent to reload
-    onWorkoutMoved?.call();
+    if (success) {
+      // Reload programs to refresh UI with updated data
+      await provider.loadPrograms();
 
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      // Notify parent that workout was moved
+      onWorkoutMoved?.call();
+
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Moved ${_getCleanWorkoutName(workout.workoutName)} to ${_getWeekdayName(newDayNumber)}',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else if (context.mounted) {
+      messenger.showSnackBar(
         SnackBar(
-          content: Text('Moved ${workout.workoutName} to Day $newDayNumber'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
+          content: Text(provider.errorMessage ?? 'Failed to move workout'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
         ),
       );
     }
