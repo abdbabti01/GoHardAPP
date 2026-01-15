@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import '../../../data/models/session.dart';
-import '../../../providers/programs_provider.dart';
-import '../../../routes/route_names.dart';
-import 'status_badge.dart';
 import 'quick_actions_sheet.dart';
 
 /// Card widget for displaying a workout session
@@ -27,6 +23,9 @@ class SessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCompleted = session.status == 'completed';
+    final isInProgress = session.status == 'in_progress';
+
     return Dismissible(
       key: Key('session_${session.id}'),
       direction: DismissDirection.endToStart,
@@ -37,125 +36,156 @@ class SessionCard extends StatelessWidget {
       onDismissed: (direction) {
         onDelete?.call();
       },
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: () => _showQuickActions(context),
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header row with name/date and status
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Name and date
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Workout name
-                          Text(
-                            session.name ?? _getDefaultName(),
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          // Date
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.calendar_today,
-                                size: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                _formatDate(session.date),
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: Colors.grey.shade600),
-                              ),
-                            ],
-                          ),
-                          // Workout type badge (always shown)
-                          const SizedBox(height: 6),
-                          if (session.isFromProgram)
-                            _buildProgramBadge(context)
-                          else
-                            _buildStandaloneBadge(),
-                        ],
-                      ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade800,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: () => _showQuickActions(context),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  // Icon on the left in circular container
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color:
+                          isCompleted
+                              ? Colors.green.withValues(alpha: 0.2)
+                              : (isInProgress
+                                  ? Colors.orange.withValues(alpha: 0.2)
+                                  : Colors.blue.withValues(alpha: 0.2)),
+                      shape: BoxShape.circle,
                     ),
-                    // Status badge
-                    StatusBadge(status: session.status),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Session info row
-                Row(
-                  children: [
-                    // Exercise count
-                    _buildInfoItem(
-                      context,
-                      Icons.fitness_center,
-                      '${session.exercises.length} ${session.exercises.length == 1 ? 'Exercise' : 'Exercises'}',
+                    child: Icon(
+                      isCompleted
+                          ? Icons.check_circle
+                          : (isInProgress
+                              ? Icons.play_circle_filled
+                              : Icons.fitness_center),
+                      color:
+                          isCompleted
+                              ? Colors.green.shade400
+                              : (isInProgress
+                                  ? Colors.orange.shade400
+                                  : Colors.blue.shade400),
+                      size: 24,
                     ),
-                    const SizedBox(width: 16),
+                  ),
+                  const SizedBox(width: 16),
 
-                    // Duration (if available)
-                    if (session.duration != null && session.duration! > 0)
-                      _buildInfoItem(
-                        context,
-                        Icons.timer,
-                        _formatDuration(session.duration!),
-                      ),
-
-                    // Started time (if in progress)
-                    if (session.status == 'in_progress' &&
-                        session.startedAt != null)
-                      _buildInfoItem(
-                        context,
-                        Icons.play_circle_outline,
-                        'Started ${_formatTime(session.startedAt!)}',
-                      ),
-                  ],
-                ),
-
-                // Notes (if available)
-                if (session.notes != null && session.notes!.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.note_outlined,
-                        size: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          session.notes!,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Colors.grey.shade600),
-                          maxLines: 2,
+                  // Workout info in the middle
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Workout name
+                        Text(
+                          session.name ?? _getDefaultName(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        // Date and exercise count
+                        Row(
+                          children: [
+                            Text(
+                              _formatDate(session.date),
+                              style: TextStyle(
+                                color: Colors.grey.shade400,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '•',
+                              style: TextStyle(color: Colors.grey.shade400),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.fitness_center,
+                              size: 12,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${session.exercises.length} ${session.exercises.length == 1 ? 'exercise' : 'exercises'}',
+                              style: TextStyle(
+                                color: Colors.grey.shade400,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
+
+                  // Status indicator on the right
+                  if (isCompleted)
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade600,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.check,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                    )
+                  else if (isInProgress)
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade600,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.grey.shade500,
+                          width: 2,
+                        ),
+                      ),
+                    ),
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -169,21 +199,6 @@ class SessionCard extends StatelessWidget {
       session,
       onReschedule: onReschedule,
       onDuplicate: onDuplicate,
-    );
-  }
-
-  Widget _buildInfoItem(BuildContext context, IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Colors.grey.shade600),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
-        ),
-      ],
     );
   }
 
@@ -267,118 +282,5 @@ class SessionCard extends StatelessWidget {
     } else {
       return DateFormat('MMM d, yyyy').format(date);
     }
-  }
-
-  String _formatTime(DateTime time) {
-    return DateFormat('h:mm a').format(time);
-  }
-
-  String _formatDuration(int seconds) {
-    final duration = Duration(seconds: seconds);
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-
-    if (hours > 0) {
-      return '${hours}h ${minutes}m';
-    } else {
-      return '${minutes}m';
-    }
-  }
-
-  Widget _buildProgramBadge(BuildContext context) {
-    final programsProvider = context.watch<ProgramsProvider>();
-    final program = programsProvider.programs.cast().firstWhere(
-      (p) => p?.id == session.programId,
-      orElse: () => null,
-    );
-
-    return InkWell(
-      onTap:
-          session.programId != null
-              ? () {
-                Navigator.pushNamed(
-                  context,
-                  RouteNames.programDetail,
-                  arguments: session.programId,
-                );
-              }
-              : null,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.blue.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.blue.withValues(alpha: 0.3),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.calendar_view_week,
-              size: 14,
-              color: Colors.blue.shade700,
-            ),
-            const SizedBox(width: 6),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'From Program',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blue.shade700,
-                  ),
-                ),
-                if (program != null)
-                  Text(
-                    program.title,
-                    style: TextStyle(fontSize: 10, color: Colors.blue.shade600),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 10,
-              color: Colors.blue.shade700,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStandaloneBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.green.withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.fitness_center, size: 14, color: Colors.green.shade700),
-          const SizedBox(width: 6),
-          Text(
-            'Standalone',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.green.shade700,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
