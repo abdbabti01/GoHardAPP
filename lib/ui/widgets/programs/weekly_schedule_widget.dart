@@ -135,126 +135,16 @@ class WeeklyScheduleWidget extends StatelessWidget {
     }
   }
 
-  /// Build a compact card for a single workout with drag handle and status
-  Widget _buildWorkoutCard(
-    ProgramWorkout workout,
-    bool isCurrentDay,
-    bool isMissed,
-    bool isCompleted,
-    ThemeData theme, {
-    required bool isDraggable,
-  }) {
-    final isRestDay = workout.isRestDay;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color:
-            isRestDay
-                ? Colors.grey.shade100
-                : (isCurrentDay
-                    ? theme.primaryColor.withValues(alpha: 0.08)
-                    : Colors.white),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color:
-              isRestDay
-                  ? Colors.grey.shade300
-                  : (isCurrentDay
-                      ? theme.primaryColor.withValues(alpha: 0.4)
-                      : Colors.grey.shade300),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          // Drag handle icon (only for draggable workouts)
-          if (isDraggable)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Icon(
-                Icons.drag_indicator,
-                size: 18,
-                color: Colors.grey.shade500,
-              ),
-            )
-          else if (isRestDay)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Icon(
-                Icons.self_improvement,
-                size: 18,
-                color: Colors.grey.shade400,
-              ),
-            ),
-          // Workout name
-          Expanded(
-            child: Text(
-              _getCleanWorkoutName(workout.workoutName),
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color:
-                    isRestDay
-                        ? Colors.grey.shade600
-                        : (isCurrentDay
-                            ? theme.primaryColor
-                            : Colors.grey.shade800),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Status indicators
-          if (isCurrentDay)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              decoration: BoxDecoration(
-                color: theme.primaryColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text(
-                'TODAY',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            )
-          else if (isCompleted)
-            Icon(Icons.check_circle, color: Colors.green.shade600, size: 18)
-          else if (isMissed)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.orange,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text(
-                'MISSED',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// Build a single day slot with fixed weekday label
-  /// Supports multiple workouts per day
-  Widget _buildDaySlot(
+  /// Build a single day card in grid layout
+  /// Shows day name at top, workouts below (Activity Types style)
+  Widget _buildDayCard(
     BuildContext context,
     int dayNumber,
     List<ProgramWorkout> workouts,
     ThemeData theme,
   ) {
     final isRestDay = workouts.isEmpty;
+    final hasCurrentDay = workouts.any((w) => program.isCurrentWorkout(w));
 
     return DragTarget<ProgramWorkout>(
       onWillAcceptWithDetails: (details) => true,
@@ -268,193 +158,237 @@ class WeeklyScheduleWidget extends StatelessWidget {
         final isHighlighted = candidateData.isNotEmpty;
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color:
                 isHighlighted
                     ? theme.primaryColor.withValues(alpha: 0.1)
-                    : Colors.transparent,
+                    : Colors.grey.shade50,
             border: Border.all(
-              color: isHighlighted ? theme.primaryColor : Colors.grey.shade300,
+              color:
+                  isHighlighted
+                      ? theme.primaryColor
+                      : (hasCurrentDay
+                          ? theme.primaryColor.withValues(alpha: 0.4)
+                          : Colors.grey.shade300),
               width: isHighlighted ? 2 : 1,
             ),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Day header with label
-              Row(
-                children: [
-                  SizedBox(
-                    width: 80,
-                    child: Text(
-                      _getWeekdayName(dayNumber),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color:
-                            workouts.any((w) => program.isCurrentWorkout(w))
-                                ? theme.primaryColor
-                                : Colors.grey.shade700,
-                      ),
-                    ),
+              // Day badge at top
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color:
+                      hasCurrentDay
+                          ? theme.primaryColor
+                          : theme.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  _getWeekdayName(dayNumber).substring(0, 3).toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: hasCurrentDay ? Colors.white : theme.primaryColor,
+                    letterSpacing: 0.5,
                   ),
-                  const SizedBox(width: 12),
-                  if (isRestDay)
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.self_improvement,
-                            size: 18,
-                            color: Colors.grey.shade400,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Rest Day',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
+                ),
               ),
+              const SizedBox(height: 12),
 
-              // Multiple workouts (if any)
-              if (!isRestDay) ...[
-                const SizedBox(height: 4),
-                // Show workout count badge if multiple workouts
-                if (workouts.length > 1)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 92, bottom: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.primaryColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: theme.primaryColor.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Text(
-                        '${workouts.length} workouts',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: theme.primaryColor,
-                        ),
-                      ),
-                    ),
-                  ),
-                // Workout cards
-                ...workouts.map((workout) {
-                  final isCurrentDay = program.isCurrentWorkout(workout);
-                  final isMissed = program.isWorkoutMissed(workout);
-                  final isCompleted = workout.isCompleted;
-                  final isRestDayWorkout = workout.isRestDay;
-
-                  // Don't make rest day workouts draggable
-                  if (isRestDayWorkout) {
-                    return Padding(
-                      padding: const EdgeInsets.only(left: 92, bottom: 6),
-                      child: _buildWorkoutCard(
-                        workout,
-                        isCurrentDay,
-                        isMissed,
-                        isCompleted,
-                        theme,
-                        isDraggable: false,
-                      ),
-                    );
-                  }
-
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 92, bottom: 6),
-                    child: LongPressDraggable<ProgramWorkout>(
-                      data: workout,
-                      feedback: Material(
-                        elevation: 6,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          width: 240,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: theme.primaryColor.withValues(alpha: 0.4),
-                              width: 2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: theme.primaryColor.withValues(
-                                  alpha: 0.3,
-                                ),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
+              // Workouts or Rest Day
+              Expanded(
+                child:
+                    isRestDay
+                        ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                Icons.drag_indicator,
-                                size: 20,
-                                color: theme.primaryColor,
+                                Icons.self_improvement,
+                                size: 32,
+                                color: Colors.grey.shade400,
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _getCleanWorkoutName(workout.workoutName),
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.primaryColor,
-                                  ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Rest Day',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade600,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
                             ],
                           ),
+                        )
+                        : SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Show workout count if multiple
+                              if (workouts.length > 1)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Text(
+                                    '${workouts.length} workouts',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ),
+                              // Workout items
+                              ...workouts.map((workout) {
+                                final isCurrentDay = program.isCurrentWorkout(
+                                  workout,
+                                );
+                                final isCompleted = workout.isCompleted;
+                                final isMissed = program.isWorkoutMissed(
+                                  workout,
+                                );
+                                final isRestDayWorkout = workout.isRestDay;
+
+                                Widget workoutItem = Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        isRestDayWorkout
+                                            ? Colors.grey.shade100
+                                            : Colors.white,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color:
+                                          isCurrentDay
+                                              ? theme.primaryColor.withValues(
+                                                alpha: 0.5,
+                                              )
+                                              : Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      if (!isRestDayWorkout)
+                                        Icon(
+                                          Icons.drag_indicator,
+                                          size: 14,
+                                          color: Colors.grey.shade400,
+                                        ),
+                                      if (isRestDayWorkout)
+                                        Icon(
+                                          Icons.self_improvement,
+                                          size: 14,
+                                          color: Colors.grey.shade400,
+                                        ),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          _getCleanWorkoutName(
+                                            workout.workoutName,
+                                          ),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color:
+                                                isRestDayWorkout
+                                                    ? Colors.grey.shade600
+                                                    : (isCurrentDay
+                                                        ? theme.primaryColor
+                                                        : Colors.grey.shade800),
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      if (isCompleted)
+                                        Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green.shade600,
+                                          size: 14,
+                                        )
+                                      else if (isMissed)
+                                        Icon(
+                                          Icons.cancel,
+                                          color: Colors.orange,
+                                          size: 14,
+                                        ),
+                                    ],
+                                  ),
+                                );
+
+                                // Make draggable if not rest day
+                                if (!isRestDayWorkout) {
+                                  return LongPressDraggable<ProgramWorkout>(
+                                    data: workout,
+                                    feedback: Material(
+                                      elevation: 6,
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        width: 150,
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: theme.primaryColor
+                                                .withValues(alpha: 0.5),
+                                            width: 2,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: theme.primaryColor
+                                                  .withValues(alpha: 0.3),
+                                              blurRadius: 12,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          _getCleanWorkoutName(
+                                            workout.workoutName,
+                                          ),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: theme.primaryColor,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    childWhenDragging: Opacity(
+                                      opacity: 0.3,
+                                      child: workoutItem,
+                                    ),
+                                    child: InkWell(
+                                      onTap:
+                                          onWorkoutTap != null
+                                              ? () => onWorkoutTap!(workout)
+                                              : null,
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: workoutItem,
+                                    ),
+                                  );
+                                }
+
+                                return workoutItem;
+                              }),
+                            ],
+                          ),
                         ),
-                      ),
-                      childWhenDragging: Opacity(
-                        opacity: 0.3,
-                        child: _buildWorkoutCard(
-                          workout,
-                          isCurrentDay,
-                          isMissed,
-                          isCompleted,
-                          theme,
-                          isDraggable: true,
-                        ),
-                      ),
-                      child: InkWell(
-                        onTap:
-                            onWorkoutTap != null
-                                ? () => onWorkoutTap!(workout)
-                                : null,
-                        borderRadius: BorderRadius.circular(8),
-                        child: _buildWorkoutCard(
-                          workout,
-                          isCurrentDay,
-                          isMissed,
-                          isCompleted,
-                          theme,
-                          isDraggable: true,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ],
+              ),
             ],
           ),
         );
@@ -516,12 +450,23 @@ class WeeklyScheduleWidget extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // 7 FIXED day slots with draggable workouts
-          ...weekWorkouts.asMap().entries.map((entry) {
-            final dayNumber = entry.key + 1;
-            final dayWorkouts = entry.value;
-            return _buildDaySlot(context, dayNumber, dayWorkouts, theme);
-          }),
+          // 7 day grid layout (2 columns)
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.85,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: 7,
+            itemBuilder: (context, index) {
+              final dayNumber = index + 1;
+              final dayWorkouts = weekWorkouts[index];
+              return _buildDayCard(context, dayNumber, dayWorkouts, theme);
+            },
+          ),
         ],
       ),
     );
