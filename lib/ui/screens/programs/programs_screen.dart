@@ -268,6 +268,9 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             if (!isCompleted) ...[
               const Divider(height: 32),
               WeeklyScheduleWidget(
+                key: ValueKey(
+                  'program_${program.id}_week_${program.currentWeek}',
+                ),
                 program: program,
                 onWorkoutTap: (workout) {
                   // Navigate to workout detail screen to show details first
@@ -292,9 +295,9 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     );
                   }
                 },
-                onWorkoutMoved: () {
+                onWorkoutMoved: () async {
                   // Reload programs when a workout is moved
-                  context.read<ProgramsProvider>().loadPrograms();
+                  await context.read<ProgramsProvider>().loadPrograms();
                 },
               ),
               const SizedBox(height: 16),

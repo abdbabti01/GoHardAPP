@@ -104,11 +104,11 @@ class WorkoutDayCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Day number (Day 1, Day 2, etc.)
+            // Weekday name (Monday, Tuesday, etc.)
             SizedBox(
-              width: 55,
+              width: 80,
               child: Text(
-                'Day ${workout.dayNumber}',
+                workout.dayNameFromNumber,
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: isCurrentDay ? FontWeight.bold : FontWeight.w600,

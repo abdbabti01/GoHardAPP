@@ -90,26 +90,38 @@ class WeeklyScheduleWidget extends StatelessWidget {
     ProgramWorkout workout,
     int newDayNumber,
   ) async {
+    if (!context.mounted) return;
+
     final provider = context.read<ProgramsProvider>();
     final messenger = ScaffoldMessenger.of(context);
 
-    // Update the workout with new day number
-    final updatedWorkout = workout.copyWith(dayNumber: newDayNumber);
-
-    // Call API to update
-    final success = await provider.updateWorkout(
-      updatedWorkout.id,
-      updatedWorkout,
+    // Show loading indicator
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Moving ${_getCleanWorkoutName(workout.workoutName)} to ${_getWeekdayName(newDayNumber)}...',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
     );
 
-    if (success) {
-      // Reload programs to refresh UI with updated data
-      await provider.loadPrograms();
+    try {
+      // Update the workout with new day number
+      final updatedWorkout = workout.copyWith(dayNumber: newDayNumber);
 
-      // Notify parent that workout was moved
-      onWorkoutMoved?.call();
+      // Call API to update
+      final success = await provider.updateWorkout(
+        updatedWorkout.id,
+        updatedWorkout,
+      );
 
-      if (context.mounted) {
+      if (!context.mounted) return;
+
+      if (success) {
+        // Trigger parent reload through callback
+        onWorkoutMoved?.call();
+
+        messenger.clearSnackBars();
         messenger.showSnackBar(
           SnackBar(
             content: Text(
@@ -119,11 +131,23 @@ class WeeklyScheduleWidget extends StatelessWidget {
             duration: const Duration(seconds: 2),
           ),
         );
+      } else {
+        messenger.clearSnackBars();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(provider.errorMessage ?? 'Failed to move workout'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
-    } else if (context.mounted) {
+    } catch (e) {
+      if (!context.mounted) return;
+
+      messenger.clearSnackBars();
       messenger.showSnackBar(
         SnackBar(
-          content: Text(provider.errorMessage ?? 'Failed to move workout'),
+          content: Text('Error: ${e.toString()}'),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 3),
         ),
