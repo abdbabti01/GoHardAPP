@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
-import '../../../data/models/session.dart';
-import '../../../providers/sessions_provider.dart';
 import '../../../providers/programs_provider.dart';
-import 'workout_day_card.dart';
 
-/// Widget that displays a 7-day weekly schedule for a program with drag-and-drop support
+/// Widget that displays a 7-day weekly schedule with drag-and-drop support
+/// Each day slot has a FIXED weekday label, workouts can be dragged between slots
 class WeeklyScheduleWidget extends StatelessWidget {
   final Program program;
   final Function(ProgramWorkout)? onWorkoutTap;
@@ -20,7 +18,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
     this.onWorkoutMoved,
   });
 
-  /// Get workouts for the current week based on calendar
+  /// Get workouts for the current week based on program position
   List<ProgramWorkout?> _getThisWeeksWorkouts() {
     if (program.workouts == null) return List.filled(7, null);
 
@@ -29,36 +27,14 @@ class WeeklyScheduleWidget extends StatelessWidget {
 
     // Get workouts for days 1-7 of current week
     for (int day = 1; day <= 7; day++) {
-      final workout = program.workouts!.firstWhere(
-        (w) => w.weekNumber == currentWeek && w.dayNumber == day,
-        orElse:
-            () => ProgramWorkout(
-              id: 0,
-              programId: program.id,
-              weekNumber: currentWeek,
-              dayNumber: day,
-              workoutName: 'Rest',
-              workoutType: 'rest',
-              exercisesJson: '[]',
-              isCompleted: false,
-              orderIndex: day,
-            ),
+      final workout = program.workouts!.cast<ProgramWorkout?>().firstWhere(
+        (w) => w?.weekNumber == currentWeek && w?.dayNumber == day,
+        orElse: () => null,
       );
       weekWorkouts.add(workout);
     }
 
     return weekWorkouts;
-  }
-
-  /// Find session for a given program workout
-  Session? _findSessionForWorkout(
-    List<Session> sessions,
-    ProgramWorkout workout,
-  ) {
-    return sessions.cast<Session?>().firstWhere(
-      (s) => s?.programWorkoutId == workout.id,
-      orElse: () => null,
-    );
   }
 
   /// Get weekday name from day number (1=Monday, 7=Sunday)
@@ -155,14 +131,197 @@ class WeeklyScheduleWidget extends StatelessWidget {
     }
   }
 
+  /// Build a single day slot with fixed weekday label
+  Widget _buildDaySlot(
+    BuildContext context,
+    int dayNumber,
+    ProgramWorkout? workout,
+    ThemeData theme,
+  ) {
+    final isCurrentDay = workout != null && program.isCurrentWorkout(workout);
+    final isMissed = workout != null && program.isWorkoutMissed(workout);
+    final isCompleted = workout != null && workout.isCompleted;
+    final isRestDay = workout == null;
+
+    return DragTarget<ProgramWorkout>(
+      onWillAcceptWithDetails: (details) => true,
+      onAcceptWithDetails: (details) async {
+        final draggedWorkout = details.data;
+        if (draggedWorkout.dayNumber != dayNumber) {
+          await _updateWorkoutDay(context, draggedWorkout, dayNumber);
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHighlighted = candidateData.isNotEmpty;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color:
+                isHighlighted
+                    ? theme.primaryColor.withValues(alpha: 0.1)
+                    : Colors.transparent,
+            border: Border.all(
+              color: isHighlighted ? theme.primaryColor : Colors.grey.shade300,
+              width: isHighlighted ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              // FIXED weekday label (never changes)
+              SizedBox(
+                width: 80,
+                child: Text(
+                  _getWeekdayName(dayNumber),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color:
+                        isCurrentDay
+                            ? theme.primaryColor
+                            : Colors.grey.shade700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Workout content (draggable if not rest day)
+              Expanded(
+                child:
+                    isRestDay
+                        ? Row(
+                          children: [
+                            Icon(
+                              Icons.self_improvement,
+                              size: 18,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Rest Day',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        )
+                        : LongPressDraggable<ProgramWorkout>(
+                          data: workout,
+                          feedback: Material(
+                            elevation: 6,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              width: 200,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black26,
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                _getCleanWorkoutName(workout!.workoutName),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          childWhenDragging: Opacity(
+                            opacity: 0.3,
+                            child: Text(
+                              _getCleanWorkoutName(workout!.workoutName),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          child: InkWell(
+                            onTap:
+                                onWorkoutTap != null
+                                    ? () => onWorkoutTap!(workout!)
+                                    : null,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Text(
+                                _getCleanWorkoutName(workout!.workoutName),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      isCurrentDay
+                                          ? theme.primaryColor
+                                          : Colors.grey.shade800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+              ),
+
+              // Status indicators
+              if (isCurrentDay)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.primaryColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'TODAY',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
+              else if (isCompleted)
+                const Icon(Icons.check_circle, color: Colors.green, size: 20)
+              else if (isMissed)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'MISSED',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final weekWorkouts = _getThisWeeksWorkouts();
-
-    // Get all sessions from the program to match with workouts
-    final sessionsProvider = context.watch<SessionsProvider>();
-    final programSessions = sessionsProvider.getSessionsFromProgram(program.id);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -213,88 +372,11 @@ class WeeklyScheduleWidget extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // 7-day calendar with drag-and-drop
+          // 7 FIXED day slots with draggable workouts
           ...weekWorkouts.asMap().entries.map((entry) {
             final dayNumber = entry.key + 1;
             final workout = entry.value;
-
-            if (workout == null) return const SizedBox.shrink();
-
-            // Find the session created from this workout
-            final session = _findSessionForWorkout(programSessions, workout);
-
-            // Use session-based logic
-            final isCurrentDay = program.isCurrentWorkout(workout);
-            final isPastDay =
-                !program.isWorkoutFuture(workout) &&
-                !program.isCurrentWorkout(workout);
-            final isMissed = program.isWorkoutMissed(workout);
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: DragTarget<ProgramWorkout>(
-                onWillAcceptWithDetails: (details) => true,
-                onAcceptWithDetails: (details) async {
-                  final draggedWorkout = details.data;
-                  if (draggedWorkout.dayNumber != dayNumber) {
-                    await _updateWorkoutDay(context, draggedWorkout, dayNumber);
-                  }
-                },
-                builder: (context, candidateData, rejectedData) {
-                  final isHighlighted = candidateData.isNotEmpty;
-
-                  return Container(
-                    decoration: BoxDecoration(
-                      border:
-                          isHighlighted
-                              ? Border.all(color: theme.primaryColor, width: 2)
-                              : null,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: LongPressDraggable<ProgramWorkout>(
-                      data: workout,
-                      feedback: Material(
-                        elevation: 6,
-                        borderRadius: BorderRadius.circular(12),
-                        child: SizedBox(
-                          width: MediaQuery.of(context).size.width - 64,
-                          child: WorkoutDayCard(
-                            workout: workout,
-                            session: session,
-                            isCurrentDay: isCurrentDay,
-                            isPastDay: isPastDay,
-                            isMissed: isMissed,
-                            onTap: null,
-                          ),
-                        ),
-                      ),
-                      childWhenDragging: Opacity(
-                        opacity: 0.3,
-                        child: WorkoutDayCard(
-                          workout: workout,
-                          session: session,
-                          isCurrentDay: isCurrentDay,
-                          isPastDay: isPastDay,
-                          isMissed: isMissed,
-                          onTap: null,
-                        ),
-                      ),
-                      child: WorkoutDayCard(
-                        workout: workout,
-                        session: session,
-                        isCurrentDay: isCurrentDay,
-                        isPastDay: isPastDay,
-                        isMissed: isMissed,
-                        onTap:
-                            onWorkoutTap != null
-                                ? () => onWorkoutTap!(workout)
-                                : null,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            );
+            return _buildDaySlot(context, dayNumber, workout, theme);
           }),
         ],
       ),
