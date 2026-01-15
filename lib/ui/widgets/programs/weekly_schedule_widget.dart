@@ -19,19 +19,20 @@ class WeeklyScheduleWidget extends StatelessWidget {
   });
 
   /// Get workouts for the current week based on program position
-  List<ProgramWorkout?> _getThisWeeksWorkouts() {
-    if (program.workouts == null) return List.filled(7, null);
+  /// Returns a list of 7 days, each containing a list of workouts for that day
+  List<List<ProgramWorkout>> _getThisWeeksWorkouts() {
+    if (program.workouts == null) return List.generate(7, (_) => []);
 
     final currentWeek = program.currentWeek;
-    final weekWorkouts = <ProgramWorkout?>[];
+    final weekWorkouts = <List<ProgramWorkout>>[];
 
-    // Get workouts for days 1-7 of current week
+    // Get all workouts for each day (supports multiple workouts per day)
     for (int day = 1; day <= 7; day++) {
-      final workout = program.workouts!.cast<ProgramWorkout?>().firstWhere(
-        (w) => w?.weekNumber == currentWeek && w?.dayNumber == day,
-        orElse: () => null,
-      );
-      weekWorkouts.add(workout);
+      final dayWorkouts =
+          program.workouts!
+              .where((w) => w.weekNumber == currentWeek && w.dayNumber == day)
+              .toList();
+      weekWorkouts.add(dayWorkouts);
     }
 
     return weekWorkouts;
@@ -61,7 +62,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
   }
 
   /// Update workout day number when dropped on a new day
-  /// Implements SWAP logic: if destination day has a workout, swap them
+  /// Implements MOVE logic: workout is moved to new day, allowing multiple workouts per day
   Future<void> _updateWorkoutDay(
     BuildContext context,
     ProgramWorkout workout,
@@ -72,50 +73,27 @@ class WeeklyScheduleWidget extends StatelessWidget {
     final provider = context.read<ProgramsProvider>();
     final messenger = ScaffoldMessenger.of(context);
 
-    // Find workout currently on the destination day (if any)
-    final destinationWorkout = program.workouts
-        ?.cast<ProgramWorkout?>()
-        .firstWhere(
-          (w) =>
-              w?.weekNumber == program.currentWeek &&
-              w?.dayNumber == newDayNumber &&
-              w?.id != workout.id, // Exclude the workout being dragged
-          orElse: () => null,
-        );
-
     // Show loading indicator
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          destinationWorkout != null
-              ? 'Swapping ${_getCleanWorkoutName(workout.workoutName)} with ${_getCleanWorkoutName(destinationWorkout.workoutName)}...'
-              : 'Moving ${_getCleanWorkoutName(workout.workoutName)} to ${_getWeekdayName(newDayNumber)}...',
+          'Moving ${_getCleanWorkoutName(workout.workoutName)} to ${_getWeekdayName(newDayNumber)}...',
         ),
         duration: const Duration(seconds: 1),
       ),
     );
 
     try {
-      bool success = false;
+      // MOVE: Update the workout's day number and order index
+      final updatedWorkout = workout.copyWith(
+        dayNumber: newDayNumber,
+        orderIndex: newDayNumber, // Keep orderIndex synchronized with dayNumber
+      );
 
-      if (destinationWorkout != null) {
-        // SWAP: Use atomic swap endpoint (swaps both dayNumber and orderIndex)
-        success = await provider.swapWorkouts(
-          workout.id,
-          destinationWorkout.id,
-        );
-      } else {
-        // MOVE: Just update the dragged workout (also update orderIndex to match dayNumber)
-        final updatedWorkout = workout.copyWith(
-          dayNumber: newDayNumber,
-          orderIndex:
-              newDayNumber, // Keep orderIndex synchronized with dayNumber
-        );
-        success = await provider.updateWorkout(
-          updatedWorkout.id,
-          updatedWorkout,
-        );
-      }
+      final success = await provider.updateWorkout(
+        updatedWorkout.id,
+        updatedWorkout,
+      );
 
       if (!context.mounted) return;
 
@@ -127,9 +105,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              destinationWorkout != null
-                  ? 'Swapped workouts successfully'
-                  : 'Moved ${_getCleanWorkoutName(workout.workoutName)} to ${_getWeekdayName(newDayNumber)}',
+              'Moved ${_getCleanWorkoutName(workout.workoutName)} to ${_getWeekdayName(newDayNumber)}',
             ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
@@ -159,17 +135,75 @@ class WeeklyScheduleWidget extends StatelessWidget {
     }
   }
 
+  /// Build a single workout row with status indicators
+  Widget _buildWorkoutRow(
+    ProgramWorkout workout,
+    bool isCurrentDay,
+    bool isMissed,
+    bool isCompleted,
+    ThemeData theme,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            _getCleanWorkoutName(workout.workoutName),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isCurrentDay ? theme.primaryColor : Colors.grey.shade800,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Status indicators
+        if (isCurrentDay)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.primaryColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'TODAY',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          )
+        else if (isCompleted)
+          const Icon(Icons.check_circle, color: Colors.green, size: 20)
+        else if (isMissed)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.orange,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              'MISSED',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   /// Build a single day slot with fixed weekday label
+  /// Supports multiple workouts per day
   Widget _buildDaySlot(
     BuildContext context,
     int dayNumber,
-    ProgramWorkout? workout,
+    List<ProgramWorkout> workouts,
     ThemeData theme,
   ) {
-    final isCurrentDay = workout != null && program.isCurrentWorkout(workout);
-    final isMissed = workout != null && program.isWorkoutMissed(workout);
-    final isCompleted = workout != null && workout.isCompleted;
-    final isRestDay = workout == null;
+    final isRestDay = workouts.isEmpty;
 
     return DragTarget<ProgramWorkout>(
       onWillAcceptWithDetails: (details) => true,
@@ -196,149 +230,116 @@ class WeeklyScheduleWidget extends StatelessWidget {
             ),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // FIXED weekday label (never changes)
-              SizedBox(
-                width: 80,
-                child: Text(
-                  _getWeekdayName(dayNumber),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color:
-                        isCurrentDay
-                            ? theme.primaryColor
-                            : Colors.grey.shade700,
+              // Day header with label
+              Row(
+                children: [
+                  SizedBox(
+                    width: 80,
+                    child: Text(
+                      _getWeekdayName(dayNumber),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color:
+                            workouts.any((w) => program.isCurrentWorkout(w))
+                                ? theme.primaryColor
+                                : Colors.grey.shade700,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  if (isRestDay)
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.self_improvement,
+                            size: 18,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Rest Day',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(width: 12),
 
-              // Workout content (draggable if not rest day)
-              Expanded(
-                child:
-                    isRestDay
-                        ? Row(
-                          children: [
-                            Icon(
-                              Icons.self_improvement,
-                              size: 18,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Rest Day',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        )
-                        : LongPressDraggable<ProgramWorkout>(
-                          data: workout,
-                          feedback: Material(
-                            elevation: 6,
+              // Multiple workouts (if any)
+              if (!isRestDay) ...[
+                const SizedBox(height: 8),
+                ...workouts.map((workout) {
+                  final isCurrentDay = program.isCurrentWorkout(workout);
+                  final isMissed = program.isWorkoutMissed(workout);
+                  final isCompleted = workout.isCompleted;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 92, bottom: 8),
+                    child: LongPressDraggable<ProgramWorkout>(
+                      data: workout,
+                      feedback: Material(
+                        elevation: 6,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          width: 200,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              width: 200,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Colors.black26,
-                                    blurRadius: 8,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
                               ),
-                              child: Text(
-                                _getCleanWorkoutName(workout.workoutName),
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
+                            ],
                           ),
-                          childWhenDragging: Opacity(
-                            opacity: 0.3,
-                            child: Text(
-                              _getCleanWorkoutName(workout.workoutName),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          child: InkWell(
-                            onTap:
-                                onWorkoutTap != null
-                                    ? () => onWorkoutTap!(workout)
-                                    : null,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Text(
-                                _getCleanWorkoutName(workout.workoutName),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color:
-                                      isCurrentDay
-                                          ? theme.primaryColor
-                                          : Colors.grey.shade800,
-                                ),
-                              ),
+                          child: Text(
+                            _getCleanWorkoutName(workout.workoutName),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-              ),
-
-              // Status indicators
-              if (isCurrentDay)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.primaryColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'TODAY',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      ),
+                      childWhenDragging: Opacity(
+                        opacity: 0.3,
+                        child: _buildWorkoutRow(
+                          workout,
+                          isCurrentDay,
+                          isMissed,
+                          isCompleted,
+                          theme,
+                        ),
+                      ),
+                      child: InkWell(
+                        onTap:
+                            onWorkoutTap != null
+                                ? () => onWorkoutTap!(workout)
+                                : null,
+                        borderRadius: BorderRadius.circular(8),
+                        child: _buildWorkoutRow(
+                          workout,
+                          isCurrentDay,
+                          isMissed,
+                          isCompleted,
+                          theme,
+                        ),
+                      ),
                     ),
-                  ),
-                )
-              else if (isCompleted)
-                const Icon(Icons.check_circle, color: Colors.green, size: 20)
-              else if (isMissed)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.orange,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'MISSED',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+                  );
+                }),
+              ],
             ],
           ),
         );
@@ -403,8 +404,8 @@ class WeeklyScheduleWidget extends StatelessWidget {
           // 7 FIXED day slots with draggable workouts
           ...weekWorkouts.asMap().entries.map((entry) {
             final dayNumber = entry.key + 1;
-            final workout = entry.value;
-            return _buildDaySlot(context, dayNumber, workout, theme);
+            final dayWorkouts = entry.value;
+            return _buildDaySlot(context, dayNumber, dayWorkouts, theme);
           }),
         ],
       ),
