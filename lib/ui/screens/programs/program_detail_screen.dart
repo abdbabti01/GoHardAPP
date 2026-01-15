@@ -19,7 +19,7 @@ class ProgramDetailScreen extends StatefulWidget {
 }
 
 class _ProgramDetailScreenState extends State<ProgramDetailScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   Program? _program;
   bool _isLoading = true;
   int _selectedWeek = 1;
@@ -29,7 +29,17 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadProgram();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Reload program when app comes back to foreground
+    if (state == AppLifecycleState.resumed) {
+      _loadProgram();
+    }
   }
 
   Future<void> _loadProgram() async {
@@ -61,10 +71,21 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_program != null) {
       _tabController.dispose();
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload program when dependencies change (e.g., when navigating back to this screen)
+    // This ensures data is always fresh when viewing the detail screen
+    if (!_isLoading && _program != null) {
+      _loadProgram();
+    }
   }
 
   @override
