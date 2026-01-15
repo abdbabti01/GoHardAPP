@@ -141,37 +141,65 @@ class WeeklyScheduleWidget extends StatelessWidget {
     bool isCurrentDay,
     bool isMissed,
     bool isCompleted,
-    ThemeData theme,
-  ) {
+    ThemeData theme, {
+    required bool isDraggable,
+  }) {
+    final isRestDay = workout.isRestDay;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color:
-            isCurrentDay
-                ? theme.primaryColor.withValues(alpha: 0.05)
-                : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
+            isRestDay
+                ? Colors.grey.shade100
+                : (isCurrentDay
+                    ? theme.primaryColor.withValues(alpha: 0.08)
+                    : Colors.white),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(
           color:
-              isCurrentDay
-                  ? theme.primaryColor.withValues(alpha: 0.3)
-                  : Colors.grey.shade300,
+              isRestDay
+                  ? Colors.grey.shade300
+                  : (isCurrentDay
+                      ? theme.primaryColor.withValues(alpha: 0.4)
+                      : Colors.grey.shade300),
           width: 1,
         ),
       ),
       child: Row(
         children: [
-          // Drag handle icon
-          Icon(Icons.drag_indicator, size: 18, color: Colors.grey.shade400),
-          const SizedBox(width: 8),
+          // Drag handle icon (only for draggable workouts)
+          if (isDraggable)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Icon(
+                Icons.drag_indicator,
+                size: 18,
+                color: Colors.grey.shade500,
+              ),
+            )
+          else if (isRestDay)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Icon(
+                Icons.self_improvement,
+                size: 18,
+                color: Colors.grey.shade400,
+              ),
+            ),
           // Workout name
           Expanded(
             child: Text(
               _getCleanWorkoutName(workout.workoutName),
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isCurrentDay ? theme.primaryColor : Colors.grey.shade800,
+                color:
+                    isRestDay
+                        ? Colors.grey.shade600
+                        : (isCurrentDay
+                            ? theme.primaryColor
+                            : Colors.grey.shade800),
               ),
             ),
           ),
@@ -179,35 +207,37 @@ class WeeklyScheduleWidget extends StatelessWidget {
           // Status indicators
           if (isCurrentDay)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               decoration: BoxDecoration(
                 color: theme.primaryColor,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: const Text(
                 'TODAY',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
+                  letterSpacing: 0.5,
                 ),
               ),
             )
           else if (isCompleted)
-            const Icon(Icons.check_circle, color: Colors.green, size: 20)
+            Icon(Icons.check_circle, color: Colors.green.shade600, size: 18)
           else if (isMissed)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.orange,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: const Text(
                 'MISSED',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
@@ -329,6 +359,22 @@ class WeeklyScheduleWidget extends StatelessWidget {
                   final isCurrentDay = program.isCurrentWorkout(workout);
                   final isMissed = program.isWorkoutMissed(workout);
                   final isCompleted = workout.isCompleted;
+                  final isRestDayWorkout = workout.isRestDay;
+
+                  // Don't make rest day workouts draggable
+                  if (isRestDayWorkout) {
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 92, bottom: 6),
+                      child: _buildWorkoutCard(
+                        workout,
+                        isCurrentDay,
+                        isMissed,
+                        isCompleted,
+                        theme,
+                        isDraggable: false,
+                      ),
+                    );
+                  }
 
                   return Padding(
                     padding: const EdgeInsets.only(left: 92, bottom: 6),
@@ -339,19 +385,21 @@ class WeeklyScheduleWidget extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
                           width: 240,
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: theme.primaryColor.withValues(alpha: 0.3),
-                              width: 1.5,
+                              color: theme.primaryColor.withValues(alpha: 0.4),
+                              width: 2,
                             ),
-                            boxShadow: const [
+                            boxShadow: [
                               BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 8,
-                                offset: Offset(0, 2),
+                                color: theme.primaryColor.withValues(
+                                  alpha: 0.3,
+                                ),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
                               ),
                             ],
                           ),
@@ -359,16 +407,17 @@ class WeeklyScheduleWidget extends StatelessWidget {
                             children: [
                               Icon(
                                 Icons.drag_indicator,
-                                size: 18,
-                                color: Colors.grey.shade400,
+                                size: 20,
+                                color: theme.primaryColor,
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   _getCleanWorkoutName(workout.workoutName),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.primaryColor,
                                   ),
                                 ),
                               ),
@@ -384,6 +433,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
                           isMissed,
                           isCompleted,
                           theme,
+                          isDraggable: true,
                         ),
                       ),
                       child: InkWell(
@@ -398,6 +448,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
                           isMissed,
                           isCompleted,
                           theme,
+                          isDraggable: true,
                         ),
                       ),
                     ),

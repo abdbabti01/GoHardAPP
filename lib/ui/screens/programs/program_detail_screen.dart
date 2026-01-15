@@ -19,7 +19,7 @@ class ProgramDetailScreen extends StatefulWidget {
 }
 
 class _ProgramDetailScreenState extends State<ProgramDetailScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   Program? _program;
   bool _isLoading = true;
   int _selectedWeek = 1;
@@ -27,25 +27,22 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
   late TabController _tabController;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _loadProgram();
-  }
+  bool get wantKeepAlive => true;
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    // Reload program when app comes back to foreground
-    if (state == AppLifecycleState.resumed) {
-      _loadProgram();
-    }
+  void initState() {
+    super.initState();
+    _loadProgram();
   }
 
   Future<void> _loadProgram() async {
     setState(() => _isLoading = true);
     final provider = context.read<ProgramsProvider>();
+
+    // Force refresh from server to get latest data
+    await provider.loadPrograms();
     final program = await provider.getProgramById(widget.programId);
+
     if (program != null && mounted) {
       setState(() {
         _program = program;
@@ -71,7 +68,6 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     if (_program != null) {
       _tabController.dispose();
     }
@@ -79,17 +75,9 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Reload program when dependencies change (e.g., when navigating back to this screen)
-    // This ensures data is always fresh when viewing the detail screen
-    if (!_isLoading && _program != null) {
-      _loadProgram();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Program Details')),
@@ -111,6 +99,12 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       appBar: AppBar(
         title: Text(program.title),
         actions: [
+          // Refresh button to reload latest data
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: _loadProgram,
+          ),
           // Advance to next workout button
           if (!program.isCompleted &&
               program.currentWorkout != null &&
