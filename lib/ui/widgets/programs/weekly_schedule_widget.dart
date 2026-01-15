@@ -228,7 +228,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
                                 ],
                               ),
                               child: Text(
-                                _getCleanWorkoutName(workout!.workoutName),
+                                _getCleanWorkoutName(workout.workoutName),
                                 style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
@@ -239,7 +239,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
                           childWhenDragging: Opacity(
                             opacity: 0.3,
                             child: Text(
-                              _getCleanWorkoutName(workout!.workoutName),
+                              _getCleanWorkoutName(workout.workoutName),
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -249,13 +249,13 @@ class WeeklyScheduleWidget extends StatelessWidget {
                           child: InkWell(
                             onTap:
                                 onWorkoutTap != null
-                                    ? () => onWorkoutTap!(workout!)
+                                    ? () => onWorkoutTap!(workout)
                                     : null,
                             borderRadius: BorderRadius.circular(8),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 4),
                               child: Text(
-                                _getCleanWorkoutName(workout!.workoutName),
+                                _getCleanWorkoutName(workout.workoutName),
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
