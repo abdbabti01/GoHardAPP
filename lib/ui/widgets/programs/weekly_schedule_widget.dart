@@ -61,6 +61,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
   }
 
   /// Update workout day number when dropped on a new day
+  /// Implements SWAP logic: if destination day has a workout, swap them
   Future<void> _updateWorkoutDay(
     BuildContext context,
     ProgramWorkout workout,
@@ -70,26 +71,57 @@ class WeeklyScheduleWidget extends StatelessWidget {
 
     final provider = context.read<ProgramsProvider>();
     final messenger = ScaffoldMessenger.of(context);
+    final oldDayNumber = workout.dayNumber;
+
+    // Find workout currently on the destination day (if any)
+    final destinationWorkout = program.workouts?.cast<ProgramWorkout?>().firstWhere(
+      (w) => w?.weekNumber == program.currentWeek &&
+             w?.dayNumber == newDayNumber &&
+             w?.id != workout.id, // Exclude the workout being dragged
+      orElse: () => null,
+    );
 
     // Show loading indicator
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          'Moving ${_getCleanWorkoutName(workout.workoutName)} to ${_getWeekdayName(newDayNumber)}...',
+          destinationWorkout != null
+              ? 'Swapping ${_getCleanWorkoutName(workout.workoutName)} with ${_getCleanWorkoutName(destinationWorkout.workoutName)}...'
+              : 'Moving ${_getCleanWorkoutName(workout.workoutName)} to ${_getWeekdayName(newDayNumber)}...',
         ),
         duration: const Duration(seconds: 1),
       ),
     );
 
     try {
-      // Update the workout with new day number
-      final updatedWorkout = workout.copyWith(dayNumber: newDayNumber);
+      bool success = false;
 
-      // Call API to update
-      final success = await provider.updateWorkout(
-        updatedWorkout.id,
-        updatedWorkout,
-      );
+      if (destinationWorkout != null) {
+        // SWAP: Update both workouts
+        final updatedWorkout = workout.copyWith(dayNumber: newDayNumber);
+        final swappedWorkout = destinationWorkout.copyWith(dayNumber: oldDayNumber);
+
+        // Update first workout
+        final success1 = await provider.updateWorkout(
+          updatedWorkout.id,
+          updatedWorkout,
+        );
+
+        // Update second workout (swap)
+        final success2 = await provider.updateWorkout(
+          swappedWorkout.id,
+          swappedWorkout,
+        );
+
+        success = success1 && success2;
+      } else {
+        // MOVE: Just update the dragged workout
+        final updatedWorkout = workout.copyWith(dayNumber: newDayNumber);
+        success = await provider.updateWorkout(
+          updatedWorkout.id,
+          updatedWorkout,
+        );
+      }
 
       if (!context.mounted) return;
 
@@ -101,7 +133,9 @@ class WeeklyScheduleWidget extends StatelessWidget {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              'Moved ${_getCleanWorkoutName(workout.workoutName)} to ${_getWeekdayName(newDayNumber)}',
+              destinationWorkout != null
+                  ? 'Swapped workouts successfully'
+                  : 'Moved ${_getCleanWorkoutName(workout.workoutName)} to ${_getWeekdayName(newDayNumber)}',
             ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),

@@ -402,6 +402,15 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     );
   }
 
+  /// Strip day prefix from workout name for display
+  String _getCleanWorkoutName(String workoutName) {
+    final colonIndex = workoutName.indexOf(':');
+    if (colonIndex != -1 && colonIndex < 15) {
+      return workoutName.substring(colonIndex + 1).trim();
+    }
+    return workoutName;
+  }
+
   Widget _buildWeekView(
     BuildContext context,
     List<ProgramWorkout> weekWorkouts,
@@ -534,7 +543,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          workout.workoutName,
+                          _getCleanWorkoutName(workout.workoutName),
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
