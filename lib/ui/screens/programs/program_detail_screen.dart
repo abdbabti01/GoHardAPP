@@ -517,7 +517,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      'Day ${workout.dayNumber}',
+                      workout.dayNameFromNumber.substring(0, 3),
                       style: TextStyle(
                         color:
                             isCurrentWorkout || workout.isCompleted || isMissed
