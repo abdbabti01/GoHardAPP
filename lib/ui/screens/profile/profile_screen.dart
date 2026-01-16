@@ -6,13 +6,13 @@ import '../../../providers/sessions_provider.dart';
 import '../../../providers/active_workout_provider.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../routes/route_names.dart';
-import '../../../core/utils/unit_converter.dart';
 import '../../../core/constants/api_config.dart';
+import '../../widgets/common/dark_selection_card.dart';
 import 'edit_profile_screen.dart';
 import '../body_metrics/body_metrics_screen.dart';
 
 /// Profile screen for viewing user information and settings
-/// Matches ProfilePage.xaml from MAUI app
+/// Now serves as the "More" tab with dark card styling
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -39,8 +39,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('Logout'),
-            content: const Text('Are you sure you want to logout?'),
+            backgroundColor: const Color(0xFF1C1C1E),
+            title: const Text('Logout', style: TextStyle(color: Colors.white)),
+            content: const Text(
+              'Are you sure you want to logout?',
+              style: TextStyle(color: Color(0xFFB0B0B0)),
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -79,39 +83,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.of(context).pushNamed(RouteNames.settings);
-            },
-            tooltip: 'Settings',
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const EditProfileScreen(),
-                ),
-              );
-              // Refresh after returning from edit screen
-              if (mounted) {
-                _handleRefresh();
-              }
-            },
-            tooltip: 'Edit Profile',
-          ),
-        ],
-      ),
+      backgroundColor: const Color(0xFF121212),
       body: Consumer<ProfileProvider>(
         builder: (context, provider, child) {
           // Loading state
           if (provider.isLoading && provider.currentUser == null) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF34C759)),
+            );
           }
 
           // Error state
@@ -127,9 +106,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: Colors.red.shade300,
                   ),
                   const SizedBox(height: 16),
-                  Text(
+                  const Text(
                     'Error Loading Profile',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Padding(
@@ -137,17 +120,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Text(
                       provider.errorMessage!,
                       textAlign: TextAlign.center,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                      style: const TextStyle(color: Color(0xFF8E8E93)),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: _handleRefresh,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
-                  ),
+                  DarkActionButton(label: 'Retry', onPressed: _handleRefresh),
                 ],
               ),
             );
@@ -155,62 +132,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           return RefreshIndicator(
             onRefresh: _handleRefresh,
+            color: const Color(0xFF34C759),
+            backgroundColor: const Color(0xFF1C1C1E),
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  // Profile header
-                  _buildProfileHeader(context, provider),
-                  const SizedBox(height: 24),
-
-                  // User info card
-                  _buildUserInfoCard(context, provider),
-                  const SizedBox(height: 16),
-
-                  // Stats card
-                  _buildStatsCard(context, provider),
-                  const SizedBox(height: 16),
-
-                  // Tracking menu card
-                  _buildTrackingMenuCard(context),
-                  const SizedBox(height: 24),
-
-                  // Logout button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _handleLogout,
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Logout'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+              child: SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      child: Text(
+                        'More',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 24),
+                    // Profile header card
+                    _buildProfileHeader(context, provider),
+                    const SizedBox(height: 16),
 
-                  // App info
-                  Text(
-                    'GoHard - Workout Tracker',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Version 1.0.0',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                  ),
-                ],
+                    // Quick Stats
+                    _buildQuickStats(context, provider),
+                    const SizedBox(height: 16),
+
+                    // Menu items
+                    _buildMenuSection(context),
+                    const SizedBox(height: 16),
+
+                    // App section
+                    _buildAppSection(context),
+                    const SizedBox(height: 100),
+                  ],
+                ),
               ),
             ),
           );
@@ -222,341 +181,263 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileHeader(BuildContext context, ProfileProvider provider) {
     final user = provider.currentUser;
 
-    return Column(
-      children: [
-        // Avatar with profile photo
-        CircleAvatar(
-          radius: 50,
-          backgroundColor: Theme.of(
-            context,
-          ).colorScheme.primary.withValues(alpha: 0.2),
-          backgroundImage:
-              user?.profilePhotoUrl != null
-                  ? NetworkImage(ApiConfig.getPhotoUrl(user!.profilePhotoUrl!))
-                  : null,
-          child:
-              user?.profilePhotoUrl == null
-                  ? Icon(
-                    Icons.person,
-                    size: 50,
-                    color: Theme.of(context).colorScheme.primary,
-                  )
-                  : null,
-        ),
-        const SizedBox(height: 16),
-
-        // Name
-        FutureBuilder<String>(
-          future: provider.getUserName(),
-          builder: (context, snapshot) {
-            return Text(
-              snapshot.data ?? 'Loading...',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-            );
-          },
-        ),
-        const SizedBox(height: 4),
-
-        // Email
-        FutureBuilder<String>(
-          future: provider.getUserEmail(),
-          builder: (context, snapshot) {
-            return Text(
-              snapshot.data ?? '',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUserInfoCard(BuildContext context, ProfileProvider provider) {
-    final user = provider.currentUser;
-    final unitPreference = user?.unitPreference ?? 'Metric';
-
-    return Card(
-      child: Padding(
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const EditProfileScreen()),
+        );
+        if (mounted) {
+          _handleRefresh();
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1C1E),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF38383A), width: 1),
+        ),
+        child: Row(
           children: [
-            Text(
-              'Profile Information',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            // Avatar
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: const Color(0xFF2C2C2E),
+              backgroundImage:
+                  user?.profilePhotoUrl != null
+                      ? NetworkImage(
+                        ApiConfig.getPhotoUrl(user!.profilePhotoUrl!),
+                      )
+                      : null,
+              child:
+                  user?.profilePhotoUrl == null
+                      ? const Icon(
+                        Icons.person,
+                        size: 30,
+                        color: Color(0xFF8E8E93),
+                      )
+                      : null,
             ),
-            const SizedBox(height: 16),
-
-            // Bio
-            if (user?.bio != null && user!.bio!.isNotEmpty) ...[
-              _buildInfoRow(context, Icons.info, 'Bio', user.bio!),
-              const Divider(height: 24),
-            ],
-
-            // Age & Date of Birth
-            if (user?.age != null) ...[
-              _buildInfoRow(
-                context,
-                Icons.cake,
-                'Age',
-                '${user!.age} years old',
+            const SizedBox(width: 16),
+            // Name and email
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FutureBuilder<String>(
+                    future: provider.getUserName(),
+                    builder: (context, snapshot) {
+                      return Text(
+                        snapshot.data ?? 'Loading...',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  FutureBuilder<String>(
+                    future: provider.getUserEmail(),
+                    builder: (context, snapshot) {
+                      return Text(
+                        snapshot.data ?? '',
+                        style: const TextStyle(
+                          color: Color(0xFF8E8E93),
+                          fontSize: 14,
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
-              const Divider(height: 24),
-            ],
-
-            // Gender
-            if (user?.gender != null) ...[
-              _buildInfoRow(context, Icons.wc, 'Gender', user!.gender!),
-              const Divider(height: 24),
-            ],
-
-            // Height with unit conversion
-            if (user?.height != null) ...[
-              _buildInfoRow(
-                context,
-                Icons.height,
-                'Height',
-                UnitConverter.formatHeight(user!.height, unitPreference),
-              ),
-              const Divider(height: 24),
-            ],
-
-            // Weight with unit conversion
-            if (user?.weight != null) ...[
-              _buildInfoRow(
-                context,
-                Icons.monitor_weight,
-                'Current Weight',
-                UnitConverter.formatWeight(user!.weight, unitPreference),
-              ),
-              const Divider(height: 24),
-            ],
-
-            // Target Weight
-            if (user?.targetWeight != null) ...[
-              _buildInfoRow(
-                context,
-                Icons.flag,
-                'Target Weight',
-                UnitConverter.formatWeight(user!.targetWeight, unitPreference),
-              ),
-              const Divider(height: 24),
-            ],
-
-            // Body Fat Percentage
-            if (user?.bodyFatPercentage != null) ...[
-              _buildInfoRow(
-                context,
-                Icons.percent,
-                'Body Fat',
-                '${user!.bodyFatPercentage!.toStringAsFixed(1)}%',
-              ),
-              const Divider(height: 24),
-            ],
-
-            // BMI
-            if (user?.bmi != null) ...[
-              _buildInfoRow(
-                context,
-                Icons.analytics,
-                'BMI',
-                user!.bmi!.toStringAsFixed(1),
-              ),
-              const Divider(height: 24),
-            ],
-
-            // Experience Level
-            if (user?.experienceLevel != null) ...[
-              _buildInfoRow(
-                context,
-                Icons.star,
-                'Experience Level',
-                user!.experienceLevel!,
-              ),
-              const Divider(height: 24),
-            ],
-
-            // Favorite Exercises
-            if (user?.favoriteExercises != null &&
-                user!.favoriteExercises!.isNotEmpty) ...[
-              _buildInfoRow(
-                context,
-                Icons.favorite,
-                'Favorite Exercises',
-                user.favoriteExercises!,
-              ),
-              const Divider(height: 24),
-            ],
-
-            // Member since
-            _buildInfoRow(
-              context,
-              Icons.calendar_today,
-              'Member Since',
-              user?.dateCreated != null
-                  ? _formatDate(user!.dateCreated)
-                  : 'Unknown',
             ),
+            const Icon(Icons.chevron_right, color: Color(0xFF8E8E93), size: 24),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatsCard(BuildContext context, ProfileProvider provider) {
+  Widget _buildQuickStats(BuildContext context, ProfileProvider provider) {
     final user = provider.currentUser;
     final stats = user?.stats;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Quick Stats',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatItem(
-                  context,
-                  Icons.fitness_center,
-                  stats?.totalWorkouts.toString() ?? '-',
-                  'Workouts',
-                ),
-                Container(width: 1, height: 40, color: Colors.grey.shade300),
-                _buildStatItem(
-                  context,
-                  Icons.local_fire_department,
-                  stats?.currentStreak.toString() ?? '-',
-                  'Streak',
-                ),
-                Container(width: 1, height: 40, color: Colors.grey.shade300),
-                _buildStatItem(
-                  context,
-                  Icons.trending_up,
-                  stats?.personalRecords.toString() ?? '-',
-                  'PR\'s',
-                ),
-              ],
-            ),
-          ],
-        ),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF38383A), width: 1),
       ),
-    );
-  }
-
-  Widget _buildTrackingMenuCard(BuildContext context) {
-    return Card(
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          ListTile(
-            leading: Icon(
-              Icons.monitor_weight,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            title: const Text('Body Metrics'),
-            subtitle: const Text('Log and track body measurements'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const BodyMetricsScreen()),
-              );
-            },
+          _buildStatItem(
+            Icons.fitness_center,
+            stats?.totalWorkouts.toString() ?? '-',
+            'Workouts',
+          ),
+          Container(width: 1, height: 50, color: const Color(0xFF38383A)),
+          _buildStatItem(
+            Icons.local_fire_department,
+            stats?.currentStreak.toString() ?? '-',
+            'Streak',
+          ),
+          Container(width: 1, height: 50, color: const Color(0xFF38383A)),
+          _buildStatItem(
+            Icons.trending_up,
+            stats?.personalRecords.toString() ?? '-',
+            'PRs',
           ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(
-    BuildContext context,
-    IconData icon,
-    String label,
-    String value,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatItem(
-    BuildContext context,
-    IconData icon,
-    String value,
-    String label,
-  ) {
+  Widget _buildStatItem(IconData icon, String value, String label) {
     return Column(
       children: [
-        Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
+        Icon(icon, size: 28, color: const Color(0xFF34C759)),
         const SizedBox(height: 8),
         Text(
           value,
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
           label,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
+          style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 12),
         ),
       ],
     );
   }
 
-  String _formatDate(DateTime date) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  Widget _buildMenuSection(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF38383A), width: 1),
+      ),
+      child: Column(
+        children: [
+          _buildMenuItem(
+            icon: Icons.list,
+            label: 'Exercises',
+            onTap: () => Navigator.pushNamed(context, RouteNames.exercises),
+          ),
+          _buildMenuDivider(),
+          _buildMenuItem(
+            icon: Icons.analytics,
+            label: 'Analytics',
+            onTap: () => Navigator.pushNamed(context, RouteNames.analytics),
+          ),
+          _buildMenuDivider(),
+          _buildMenuItem(
+            icon: Icons.monitor_weight,
+            label: 'Body Metrics',
+            onTap:
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BodyMetricsScreen()),
+                ),
+          ),
+          _buildMenuDivider(),
+          _buildMenuItem(
+            icon: Icons.bookmark,
+            label: 'Templates',
+            onTap: () => Navigator.pushNamed(context, RouteNames.templates),
+          ),
+          _buildMenuDivider(),
+          _buildMenuItem(
+            icon: Icons.people,
+            label: 'Community',
+            onTap: () => Navigator.pushNamed(context, RouteNames.community),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C2C2E),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Color(0xFF8E8E93), size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuDivider() {
+    return Container(
+      margin: const EdgeInsets.only(left: 66),
+      height: 0.5,
+      color: const Color(0xFF38383A),
+    );
+  }
+
+  Widget _buildAppSection(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF38383A), width: 1),
+      ),
+      child: Column(
+        children: [
+          _buildMenuItem(
+            icon: Icons.settings,
+            label: 'Settings',
+            onTap: () => Navigator.pushNamed(context, RouteNames.settings),
+          ),
+          _buildMenuDivider(),
+          _buildMenuItem(
+            icon: Icons.logout,
+            label: 'Logout',
+            onTap: _handleLogout,
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -1,15 +1,15 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'sessions/sessions_screen.dart';
-import 'exercises/exercises_screen.dart';
-import 'goals/goals_screen.dart';
+import 'analytics/analytics_screen.dart';
 import 'chat/chat_list_screen.dart';
 import 'profile/profile_screen.dart';
 import '../../core/services/tab_navigation_service.dart';
+import '../widgets/common/curved_navigation_bar.dart';
 
 /// Main screen wrapper with bottom navigation
-/// Provides 5-tab navigation: Workouts, Goals & Stats, AI Coach, Exercises, Profile
+/// Provides 4-tab navigation: Dashboard, Diary, Plans, More
+/// Features curved notch navigation bar with centered FAB
 class MainScreen extends StatefulWidget {
   final int? initialTab;
   final int? initialSubTab;
@@ -38,122 +38,167 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     // Create screens with initial sub-tab if provided
+    // 4 tabs: Dashboard (Sessions), Diary (Analytics), Plans (AI Coach), More (Profile with exercises)
     _screens = [
       SessionsScreen(initialTab: widget.initialSubTab),
-      const GoalsScreen(),
+      const AnalyticsScreen(),
       const ChatListScreen(),
-      const ExercisesScreen(),
       const ProfileScreen(),
     ];
   }
 
-  void _onFabPressed(BuildContext context, int currentTab) {
-    // Contextual FAB action based on current tab
-    switch (currentTab) {
-      case 0: // Workouts tab
-        // Navigate to new workout/session creation
-        Navigator.pushNamed(context, '/new-session');
-        break;
-      case 1: // Goals & Stats tab
-        // Could create new goal - for now, show a message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Create new goal - Coming soon!'),
-            duration: Duration(seconds: 2),
+  void _onFabPressed(BuildContext context) {
+    // Show quick action menu
+    _showQuickActionsMenu(context);
+  }
+
+  void _showQuickActionsMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder:
+          (context) => Container(
+            margin: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C1C1E),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF48484A),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    'Quick Actions',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _QuickActionItem(
+                  icon: Icons.fitness_center,
+                  label: 'Start Workout',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/new-session');
+                  },
+                ),
+                _QuickActionItem(
+                  icon: Icons.calendar_today,
+                  label: 'Plan Workout',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/plan-workout');
+                  },
+                ),
+                _QuickActionItem(
+                  icon: Icons.psychology,
+                  label: 'Ask AI Coach',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/chat');
+                  },
+                ),
+                _QuickActionItem(
+                  icon: Icons.add_circle_outline,
+                  label: 'Add Exercise',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/add-exercise');
+                  },
+                ),
+                SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+              ],
+            ),
           ),
-        );
-        break;
-      case 2: // AI Coach tab
-        // Navigate to new chat/conversation
-        Navigator.pushNamed(context, '/chat');
-        break;
-      default:
-        break;
-    }
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final tabService = context.watch<TabNavigationService>();
-    final theme = Theme.of(context);
-
-    // Only show FAB on certain tabs
-    final showFab =
-        tabService.currentTab == 0 || // Workouts
-        tabService.currentTab == 2; // AI Coach
 
     return Scaffold(
+      backgroundColor: const Color(0xFF121212),
       body: IndexedStack(index: tabService.currentTab, children: _screens),
-      floatingActionButton:
-          showFab
-              ? FloatingActionButton(
-                onPressed: () => _onFabPressed(context, tabService.currentTab),
-                backgroundColor: theme.colorScheme.primary,
-                elevation: 8, // Higher elevation for floating effect
-                child: const Icon(Icons.add, size: 28, color: Colors.white),
-              )
-              : null,
-      floatingActionButtonLocation:
-          FloatingActionButtonLocation.centerFloat, // Float above, not docked
-      bottomNavigationBar: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
-        ),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(
-                0xFF1C1C1E,
-              ).withValues(alpha: 0.85), // Semi-transparent for blur effect
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(24),
-                topRight: Radius.circular(24),
-              ),
-              border: const Border(
-                top: BorderSide(
-                  color: Color(0xFF38383A), // Subtle top border
-                  width: 0.5,
-                ),
-              ),
-            ),
-            child: BottomNavigationBar(
-              currentIndex: tabService.currentTab,
-              onTap: (index) {
-                tabService.switchTab(index);
-              },
-              backgroundColor: Colors.transparent,
-              selectedItemColor: theme.colorScheme.primary, // Green from theme
-              unselectedItemColor: const Color(0xFF8E8E93), // Grey from theme
-              type: BottomNavigationBarType.fixed,
-              elevation: 0,
-              selectedFontSize: 12,
-              unselectedFontSize: 11,
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.fitness_center),
-                  label: 'Workouts',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.flag),
-                  label: 'Goals & Stats',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.psychology),
-                  label: 'AI Coach',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.list),
-                  label: 'Exercises',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.person),
-                  label: 'Profile',
-                ),
-              ],
-            ),
+      bottomNavigationBar: CurvedNavigationBar(
+        currentIndex: tabService.currentTab,
+        onTap: (index) {
+          tabService.switchTab(index);
+        },
+        onFabTap: () => _onFabPressed(context),
+        items: const [
+          CurvedNavigationBarItem(
+            icon: Icons.dashboard_rounded,
+            label: 'Dashboard',
           ),
+          CurvedNavigationBarItem(icon: Icons.book_outlined, label: 'Diary'),
+          CurvedNavigationBarItem(
+            icon: Icons.calendar_view_week_rounded,
+            label: 'Plans',
+          ),
+          CurvedNavigationBarItem(icon: Icons.menu, label: 'More'),
+        ],
+      ),
+    );
+  }
+}
+
+/// Quick action item widget for the bottom sheet menu
+class _QuickActionItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickActionItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C2C2E),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: Colors.white, size: 22),
+            ),
+            const SizedBox(width: 16),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const Spacer(),
+            const Icon(Icons.chevron_right, color: Color(0xFF8E8E93), size: 24),
+          ],
         ),
       ),
     );

@@ -383,9 +383,10 @@ class _SessionsScreenState extends State<SessionsScreen>
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.primary,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF8E8E93),
         ),
       ),
     );
@@ -397,40 +398,33 @@ class _SessionsScreenState extends State<SessionsScreen>
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         children: [
-          Icon(
-            Icons.history,
-            size: 20,
-            color: Theme.of(context).colorScheme.primary,
-          ),
+          const Icon(Icons.history, size: 20, color: Color(0xFF34C759)),
           const SizedBox(width: 8),
-          Text(
+          const Text(
             'Past Workouts',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            style: TextStyle(
+              fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
+              color: Color(0xFF34C759),
             ),
           ),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.1),
+              color: const Color(0xFF2C2C2E),
               borderRadius: BorderRadius.circular(20),
             ),
             child: DropdownButton<String>(
               value: _pastWorkoutsFilter,
               underline: const SizedBox(),
               isDense: true,
-              icon: Icon(
-                Icons.arrow_drop_down,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              style: TextStyle(
+              dropdownColor: const Color(0xFF2C2C2E),
+              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF34C759)),
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.primary,
+                color: Color(0xFF34C759),
               ),
               items: const [
                 DropdownMenuItem(value: 'Last Week', child: Text('Last Week')),
@@ -471,31 +465,30 @@ class _SessionsScreenState extends State<SessionsScreen>
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+          Icon(icon, size: 20, color: const Color(0xFF34C759)),
           const SizedBox(width: 8),
           Text(
             label,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            style: const TextStyle(
+              fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
+              color: Color(0xFF34C759),
             ),
           ),
           if (count != null) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.1),
+                color: const Color(0xFF34C759).withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 '$count',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: Color(0xFF34C759),
                 ),
               ),
             ),
@@ -508,35 +501,48 @@ class _SessionsScreenState extends State<SessionsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        title: const Text('Workouts'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.people),
-            onPressed: () {
-              Navigator.pushNamed(context, RouteNames.community);
-            },
-            tooltip: 'Community',
-          ),
-          IconButton(
-            icon: const Icon(Icons.bookmark),
-            onPressed: () {
-              Navigator.pushNamed(context, RouteNames.templates);
-            },
-            tooltip: 'Templates',
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelStyle: const TextStyle(
-            fontSize: 16,
+        backgroundColor: const Color(0xFF121212),
+        elevation: 0,
+        title: const Text(
+          'Dashboard',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 28,
             fontWeight: FontWeight.bold,
           ),
-          unselectedLabelStyle: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C1C1E),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                color: const Color(0xFF34C759),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorPadding: const EdgeInsets.all(4),
+              labelColor: Colors.white,
+              unselectedLabelColor: const Color(0xFF8E8E93),
+              labelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              dividerColor: Colors.transparent,
+              tabs: const [Tab(text: 'My Workouts'), Tab(text: 'Programs')],
+            ),
           ),
-          tabs: const [Tab(text: 'My Workouts'), Tab(text: 'Programs')],
         ),
       ),
       body: TabBarView(
@@ -852,105 +858,49 @@ class _SessionsScreenState extends State<SessionsScreen>
           const ProgramsScreen(),
         ],
       ),
-      floatingActionButton: _buildFloatingActionButton(),
-    );
-  }
-
-  Widget _buildFloatingActionButton() {
-    final isMyWorkoutsTab = _tabController.index == 0;
-    final buttonText = isMyWorkoutsTab ? 'New Workout' : 'Create Program';
-    final buttonIcon = isMyWorkoutsTab ? Icons.fitness_center : Icons.add;
-    final onTap =
-        isMyWorkoutsTab ? _showWorkoutOptionsSheet : _showCreateProgramOptions;
-
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(28),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  buttonIcon,
-                  color: Theme.of(context).colorScheme.onPrimary,
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  buttonText,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
   void _showCreateProgramOptions() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder:
-          (context) => Padding(
-            padding: const EdgeInsets.all(24),
+          (context) => Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C1C1E),
+              borderRadius: BorderRadius.circular(20),
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Create New Program',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF48484A),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
+                const Text(
+                  'Create New Program',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
 
                 // AI-Generated Option
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.purple.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.auto_awesome, color: Colors.purple),
-                  ),
-                  title: const Text(
-                    'Create with AI',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text(
-                    'Let AI generate a personalized program',
-                  ),
+                _buildProgramOptionTile(
+                  icon: Icons.auto_awesome,
+                  iconColor: Colors.purple,
+                  title: 'Create with AI',
+                  subtitle: 'Let AI generate a personalized program',
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.pushNamed(context, RouteNames.workoutPlanForm);
@@ -959,34 +909,83 @@ class _SessionsScreenState extends State<SessionsScreen>
                 const SizedBox(height: 12),
 
                 // Manual Creation Option
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.edit, color: Colors.blue),
-                  ),
-                  title: const Text(
-                    'Create Manually',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text('Build your own custom program'),
+                _buildProgramOptionTile(
+                  icon: Icons.edit,
+                  iconColor: Colors.blue,
+                  title: 'Create Manually',
+                  subtitle: 'Build your own custom program',
                   onTap: () {
                     Navigator.pop(context);
-                    // TODO: Navigate to manual program creation screen
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Manual program creation coming soon!'),
+                        backgroundColor: Color(0xFF2C2C2E),
                       ),
                     );
                   },
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
               ],
             ),
           ),
+    );
+  }
+
+  Widget _buildProgramOptionTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2C2C2E),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: Color(0xFF8E8E93),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Color(0xFF8E8E93), size: 22),
+          ],
+        ),
+      ),
     );
   }
 }
