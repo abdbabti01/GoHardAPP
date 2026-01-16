@@ -8,8 +8,6 @@ import '../../../core/services/sync_service.dart';
 import '../../../core/services/tab_navigation_service.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../widgets/sessions/session_card.dart';
-import '../../widgets/sessions/workout_name_dialog.dart';
-import '../../widgets/sessions/workout_options_sheet.dart';
 import '../../widgets/sessions/weekly_progress_card.dart';
 import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/active_workout_banner.dart';
@@ -89,35 +87,6 @@ class _SessionsScreenState extends State<SessionsScreen>
     }
   }
 
-  Future<void> _handleStartNewWorkout() async {
-    // Show dialog to select workout name
-    final workoutName = await _showWorkoutNameDialog();
-
-    if (workoutName == null || !mounted) return; // User cancelled or unmounted
-
-    final provider = context.read<SessionsProvider>();
-    final session = await provider.startNewWorkout(name: workoutName);
-
-    if (session != null && mounted) {
-      // Navigate to active workout screen and reload sessions when returning
-      await Navigator.of(
-        context,
-      ).pushNamed(RouteNames.activeWorkout, arguments: session.id);
-
-      // Reload sessions to reflect any status changes
-      if (mounted) {
-        await provider.loadSessions();
-      }
-    }
-  }
-
-  Future<String?> _showWorkoutNameDialog() async {
-    return showDialog<String>(
-      context: context,
-      builder: (context) => const WorkoutNameDialog(),
-    );
-  }
-
   Future<void> _handleDeleteSession(int sessionId) async {
     final sessionsProvider = context.read<SessionsProvider>();
     final activeWorkoutProvider = context.read<ActiveWorkoutProvider>();
@@ -192,35 +161,6 @@ class _SessionsScreenState extends State<SessionsScreen>
         await sessionsProvider.loadSessions(showLoading: false);
       }
     }
-  }
-
-  Future<void> _handlePlanWorkout() async {
-    final result = await Navigator.of(
-      context,
-    ).pushNamed(RouteNames.planWorkout);
-
-    // Reload sessions if workout was created
-    if (result == true && mounted) {
-      await context.read<SessionsProvider>().loadSessions();
-    }
-  }
-
-  void _showWorkoutOptionsSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder:
-          (context) => WorkoutOptionsSheet(
-            onStartNow: () {
-              Navigator.pop(context);
-              _handleStartNewWorkout();
-            },
-            onPlanLater: () {
-              Navigator.pop(context);
-              _handlePlanWorkout();
-            },
-          ),
-    );
   }
 
   Future<void> _handleSessionTap(int sessionId, String status) async {
@@ -857,134 +797,6 @@ class _SessionsScreenState extends State<SessionsScreen>
           // Programs tab
           const ProgramsScreen(),
         ],
-      ),
-    );
-  }
-
-  void _showCreateProgramOptions() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder:
-          (context) => Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1C1C1E),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF48484A),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Create New Program',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // AI-Generated Option
-                _buildProgramOptionTile(
-                  icon: Icons.auto_awesome,
-                  iconColor: Colors.purple,
-                  title: 'Create with AI',
-                  subtitle: 'Let AI generate a personalized program',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, RouteNames.workoutPlanForm);
-                  },
-                ),
-                const SizedBox(height: 12),
-
-                // Manual Creation Option
-                _buildProgramOptionTile(
-                  icon: Icons.edit,
-                  iconColor: Colors.blue,
-                  title: 'Create Manually',
-                  subtitle: 'Build your own custom program',
-                  onTap: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Manual program creation coming soon!'),
-                        backgroundColor: Color(0xFF2C2C2E),
-                      ),
-                    );
-                  },
-                ),
-                SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
-              ],
-            ),
-          ),
-    );
-  }
-
-  Widget _buildProgramOptionTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF2C2C2E),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF8E8E93),
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: Color(0xFF8E8E93), size: 22),
-          ],
-        ),
       ),
     );
   }
