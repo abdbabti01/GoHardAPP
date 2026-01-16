@@ -109,7 +109,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildKeyStatsGrid(BuildContext context, WorkoutStats stats, AnalyticsProvider provider) {
+  Widget _buildKeyStatsGrid(
+    BuildContext context,
+    WorkoutStats stats,
+    AnalyticsProvider provider,
+  ) {
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,

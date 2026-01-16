@@ -401,7 +401,12 @@ class _SessionsScreenState extends State<SessionsScreen>
   }
 
   /// Build section header widget
-  Widget _buildSectionHeader(BuildContext context, String label, IconData icon, int? count) {
+  Widget _buildSectionHeader(
+    BuildContext context,
+    String label,
+    IconData icon,
+    int? count,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
@@ -711,7 +716,12 @@ class _SessionsScreenState extends State<SessionsScreen>
 
                           // Today Section
                           if (todaySessions.isNotEmpty) ...[
-                            _buildSectionHeader(context, 'Today', Icons.today, null),
+                            _buildSectionHeader(
+                              context,
+                              'Today',
+                              Icons.today,
+                              null,
+                            ),
                             ...todaySessions.map(
                               (session) => SessionCard(
                                 session: session,

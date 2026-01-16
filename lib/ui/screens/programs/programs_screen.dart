@@ -148,10 +148,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12), // iOS corner radius
         side: BorderSide(
-          color:
-              isCompleted
-                  ? theme.colorScheme.primary
-                  : context.border,
+          color: isCompleted ? theme.colorScheme.primary : context.border,
           width: isCompleted ? 1.5 : 0.5,
         ),
       ),
@@ -418,11 +415,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Icon(
-                    Icons.celebration,
-                    size: 20,
-                    color: context.success,
-                  ),
+                  Icon(Icons.celebration, size: 20, color: context.success),
                   const SizedBox(width: 8),
                   Text(
                     'Program Completed!',

@@ -166,10 +166,7 @@ class CurvedNavigationBar extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: fabBgColor,
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: borderColor,
-                      width: 2,
-                    ),
+                    border: Border.all(color: borderColor, width: 2),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.3),
@@ -178,7 +175,11 @@ class CurvedNavigationBar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Icon(Icons.add, color: context.textOnPrimary, size: 28),
+                  child: Icon(
+                    Icons.add,
+                    color: context.textOnPrimary,
+                    size: 28,
+                  ),
                 ),
               ),
             ),

@@ -109,7 +109,10 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
-  Widget _buildDiscoverTab(BuildContext context, SharedWorkoutProvider provider) {
+  Widget _buildDiscoverTab(
+    BuildContext context,
+    SharedWorkoutProvider provider,
+  ) {
     final workouts = provider.sharedWorkouts;
 
     if (workouts.isEmpty) {
@@ -181,7 +184,10 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
-  Widget _buildMySharesTab(BuildContext context, SharedWorkoutProvider provider) {
+  Widget _buildMySharesTab(
+    BuildContext context,
+    SharedWorkoutProvider provider,
+  ) {
     final workouts = provider.mySharedWorkouts;
 
     if (workouts.isEmpty) {

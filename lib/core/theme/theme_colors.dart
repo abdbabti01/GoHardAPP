@@ -29,9 +29,8 @@ extension ThemeColors on BuildContext {
 
   /// Surface for input fields
   /// Dark: #2C2C2E, Light: #F2F2F7
-  Color get inputSurface => isDarkMode
-      ? AppColors.iosDarkGray2
-      : AppColors.iosGray1;
+  Color get inputSurface =>
+      isDarkMode ? AppColors.iosDarkGray2 : AppColors.iosGray1;
 
   // ============ TEXT COLORS ============
 
@@ -45,9 +44,8 @@ extension ThemeColors on BuildContext {
 
   /// Tertiary/hint text color (placeholders, disabled)
   /// Dark: #8E8E93, Light: #3C3C43 (30%)
-  Color get textTertiary => isDarkMode
-      ? AppColors.iosGray6
-      : AppColors.iosTertiaryLabel;
+  Color get textTertiary =>
+      isDarkMode ? AppColors.iosGray6 : AppColors.iosTertiaryLabel;
 
   /// Text on primary color buttons/surfaces
   Color get textOnPrimary => colorScheme.onPrimary;
@@ -56,15 +54,12 @@ extension ThemeColors on BuildContext {
 
   /// Border color for cards, containers
   /// Dark: #38383A, Light: #D1D1D6
-  Color get border => isDarkMode
-      ? AppColors.iosDarkGray3
-      : AppColors.iosGray3;
+  Color get border => isDarkMode ? AppColors.iosDarkGray3 : AppColors.iosGray3;
 
   /// Subtle border for inputs, dividers
   /// Dark: #48484A, Light: #E5E5EA
-  Color get borderSubtle => isDarkMode
-      ? AppColors.iosDarkGray4
-      : AppColors.iosGray2;
+  Color get borderSubtle =>
+      isDarkMode ? AppColors.iosDarkGray4 : AppColors.iosGray2;
 
   /// Divider color
   Color get divider => Theme.of(this).dividerTheme.color ?? border;
@@ -82,9 +77,8 @@ extension ThemeColors on BuildContext {
   Color get accent => AppColors.iosSystemGreen;
 
   /// Selected/active state color
-  Color get selected => isDarkMode
-      ? AppColors.iosSystemGreen
-      : AppColors.goHardBlack;
+  Color get selected =>
+      isDarkMode ? AppColors.iosSystemGreen : AppColors.goHardBlack;
 
   /// Unselected/inactive state color
   Color get unselected => textTertiary;
@@ -106,34 +100,29 @@ extension ThemeColors on BuildContext {
   // ============ NAVIGATION BAR COLORS ============
 
   /// Navigation bar background
-  Color get navBarBackground => isDarkMode
-      ? AppColors.iosDarkGray1
-      : AppColors.iosSystemBackground;
+  Color get navBarBackground =>
+      isDarkMode ? AppColors.iosDarkGray1 : AppColors.iosSystemBackground;
 
   /// Navigation bar selected item color
-  Color get navBarSelected => isDarkMode
-      ? AppColors.iosSystemGreen
-      : AppColors.goHardBlack;
+  Color get navBarSelected =>
+      isDarkMode ? AppColors.iosSystemGreen : AppColors.goHardBlack;
 
   /// Navigation bar unselected item color
   Color get navBarUnselected => AppColors.iosGray6;
 
   /// FAB/action button background in nav bar
-  Color get navBarFabBackground => isDarkMode
-      ? AppColors.iosDarkGray2
-      : AppColors.goHardBlack;
+  Color get navBarFabBackground =>
+      isDarkMode ? AppColors.iosDarkGray2 : AppColors.goHardBlack;
 
   // ============ CHIP/TAG COLORS ============
 
   /// Chip background (unselected)
-  Color get chipBackground => isDarkMode
-      ? AppColors.iosDarkGray2
-      : AppColors.iosGray1;
+  Color get chipBackground =>
+      isDarkMode ? AppColors.iosDarkGray2 : AppColors.iosGray1;
 
   /// Chip background (selected)
-  Color get chipSelected => isDarkMode
-      ? AppColors.iosSystemGreen
-      : AppColors.goHardBlack;
+  Color get chipSelected =>
+      isDarkMode ? AppColors.iosSystemGreen : AppColors.goHardBlack;
 
   /// Chip text color
   Color get chipText => textPrimary;
@@ -147,9 +136,8 @@ extension ThemeColors on BuildContext {
   Color get userMessageText => textOnPrimary;
 
   /// AI/other message bubble background
-  Color get aiMessageBubble => isDarkMode
-      ? AppColors.iosDarkGray2
-      : AppColors.iosGray1;
+  Color get aiMessageBubble =>
+      isDarkMode ? AppColors.iosDarkGray2 : AppColors.iosGray1;
 
   /// AI/other message text color
   Color get aiMessageText => textPrimary;
@@ -163,9 +151,8 @@ extension ThemeColors on BuildContext {
   Color get cardBorder => border;
 
   /// Card with hover/selected state
-  Color get cardSelected => isDarkMode
-      ? AppColors.iosDarkGray2
-      : AppColors.iosGray1;
+  Color get cardSelected =>
+      isDarkMode ? AppColors.iosDarkGray2 : AppColors.iosGray1;
 }
 
 /// Helper class for getting theme colors without context

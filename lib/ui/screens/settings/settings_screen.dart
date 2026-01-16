@@ -314,10 +314,7 @@ class SettingsScreen extends StatelessWidget {
                   : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color:
-                isSelected
-                    ? Theme.of(context).primaryColor
-                    : context.border,
+            color: isSelected ? Theme.of(context).primaryColor : context.border,
             width: isSelected ? 2 : 1,
           ),
         ),

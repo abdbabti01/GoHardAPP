@@ -544,7 +544,8 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                           fontSize: 16,
                                         ),
                                         code: TextStyle(
-                                          backgroundColor: context.surfaceElevated,
+                                          backgroundColor:
+                                              context.surfaceElevated,
                                           color: context.textPrimary,
                                           fontFamily: 'monospace',
                                         ),

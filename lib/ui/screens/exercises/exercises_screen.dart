@@ -494,11 +494,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: context.error,
-                  ),
+                  Icon(Icons.error_outline, size: 64, color: context.error),
                   const SizedBox(height: 16),
                   Text(
                     'Error Loading Exercises',
@@ -512,9 +508,9 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                     child: Text(
                       provider.errorMessage!,
                       textAlign: TextAlign.center,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: context.textSecondary),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: context.textSecondary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -557,9 +553,9 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                           ? 'Try adjusting your filters'
                           : 'Pull down to refresh',
                       textAlign: TextAlign.center,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: context.textSecondary),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: context.textSecondary,
+                      ),
                     ),
                   ),
                   if (hasActiveFilters) ...[

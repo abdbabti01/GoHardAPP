@@ -101,11 +101,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: context.error,
-                  ),
+                  Icon(Icons.error_outline, size: 64, color: context.error),
                   const SizedBox(height: 16),
                   Text(
                     'Error Loading Profile',
@@ -303,7 +299,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStatItem(BuildContext context, IconData icon, String value, String label) {
+  Widget _buildStatItem(
+    BuildContext context,
+    IconData icon,
+    String value,
+    String label,
+  ) {
     return Column(
       children: [
         Icon(icon, size: 28, color: context.accent),

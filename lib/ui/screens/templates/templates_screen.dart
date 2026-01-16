@@ -86,7 +86,10 @@ class _TemplatesScreenState extends State<TemplatesScreen>
     );
   }
 
-  Widget _buildErrorView(BuildContext context, WorkoutTemplateProvider provider) {
+  Widget _buildErrorView(
+    BuildContext context,
+    WorkoutTemplateProvider provider,
+  ) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -108,7 +111,10 @@ class _TemplatesScreenState extends State<TemplatesScreen>
     );
   }
 
-  Widget _buildMyTemplatesTab(BuildContext context, WorkoutTemplateProvider provider) {
+  Widget _buildMyTemplatesTab(
+    BuildContext context,
+    WorkoutTemplateProvider provider,
+  ) {
     final templates = provider.templates;
 
     if (templates.isEmpty) {
@@ -149,7 +155,10 @@ class _TemplatesScreenState extends State<TemplatesScreen>
     );
   }
 
-  Widget _buildCommunityTab(BuildContext context, WorkoutTemplateProvider provider) {
+  Widget _buildCommunityTab(
+    BuildContext context,
+    WorkoutTemplateProvider provider,
+  ) {
     final templates = provider.communityTemplates;
 
     if (templates.isEmpty) {
