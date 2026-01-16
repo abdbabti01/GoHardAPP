@@ -158,29 +158,24 @@ class WeeklyScheduleWidget extends StatelessWidget {
         final isHighlighted = candidateData.isNotEmpty;
 
         return Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color:
                 isHighlighted
-                    ? theme.primaryColor.withValues(alpha: 0.2)
-                    : const Color(0xFF2C2C2E), // Dark grey card
+                    ? theme.primaryColor.withValues(alpha: 0.15)
+                    : const Color(
+                      0xFF1C1C1E,
+                    ), // Slightly darker than parent for layering
             border: Border.all(
               color:
                   isHighlighted
                       ? theme.primaryColor
                       : (hasCurrentDay
-                          ? theme.primaryColor.withValues(alpha: 0.6)
+                          ? theme.primaryColor.withValues(alpha: 0.5)
                           : const Color(0xFF38383A)),
-              width: isHighlighted ? 2 : 1,
+              width: isHighlighted ? 1.5 : 0.5, // Subtle borders
             ),
-            borderRadius: BorderRadius.circular(16), // More rounded
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.15),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(10), // iOS corner radius
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,18 +400,14 @@ class WeeklyScheduleWidget extends StatelessWidget {
     final weekWorkouts = _getThisWeeksWorkouts();
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E), // Dark grey background
-        borderRadius: BorderRadius.circular(24), // More rounded
-        border: Border.all(color: const Color(0xFF38383A), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: const Color(0xFF2C2C2E), // Lighter iOS grey
+        borderRadius: BorderRadius.circular(12), // iOS corner radius
+        border: Border.all(
+          color: const Color(0xFF38383A),
+          width: 0.5, // Hair-thin border
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -426,11 +417,11 @@ class WeeklyScheduleWidget extends StatelessWidget {
             children: [
               Icon(Icons.calendar_today, size: 20, color: theme.primaryColor),
               const SizedBox(width: 8),
-              Text(
+              const Text(
                 'THIS WEEK\'S SCHEDULE',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+                style: TextStyle(
+                  fontSize: 13, // iOS subheadline
+                  fontWeight: FontWeight.w600, // iOS semibold
                   color: Colors.white,
                   letterSpacing: 0.5,
                 ),
@@ -440,8 +431,8 @@ class WeeklyScheduleWidget extends StatelessWidget {
                 'Week ${program.currentWeek}/${program.totalWeeks}',
                 style: const TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFB0B0B0),
+                  fontWeight: FontWeight.w400, // iOS regular
+                  color: Color(0xFF8E8E93), // iOS secondary text
                 ),
               ),
             ],
@@ -464,8 +455,8 @@ class WeeklyScheduleWidget extends StatelessWidget {
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               childAspectRatio: 0.85,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
+              crossAxisSpacing: 10, // iOS spacing
+              mainAxisSpacing: 10, // iOS spacing
             ),
             itemCount: 7,
             itemBuilder: (context, index) {

@@ -83,17 +83,24 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
         return RefreshIndicator(
           onRefresh: () => provider.loadPrograms(),
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(
+              vertical: 20,
+            ), // iOS inset group style
             children: [
               // Active Programs
               if (provider.activePrograms.isNotEmpty) ...[
-                Text(
-                  'Active Programs',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    'ACTIVE PROGRAMS',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF8E8E93), // iOS section header grey
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 ...provider.activePrograms.map(
                   (program) => _buildProgramCard(context, program),
                 ),
@@ -102,14 +109,18 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
 
               // Completed Programs
               if (provider.completedPrograms.isNotEmpty) ...[
-                Text(
-                  'Completed Programs',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade600,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    'COMPLETED PROGRAMS',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF8E8E93), // iOS section header grey
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 ...provider.completedPrograms.map(
                   (program) => _buildProgramCard(context, program),
                 ),
@@ -126,19 +137,26 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     final isCompleted = program.isCompleted;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 6, // Higher elevation for floating effect
-      shadowColor: Colors.black.withValues(alpha: 0.3),
-      color: const Color(0xFF1C1C1E), // Dark grey card
+      margin: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 8,
+      ), // iOS inset style
+      elevation: 0, // No elevation for iOS style
+      shadowColor: Colors.transparent,
+      color: const Color(0xFF2C2C2E), // Lighter iOS grey
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24), // More rounded corners
-        side:
-            isCompleted
-                ? BorderSide(color: theme.colorScheme.primary, width: 2)
-                : BorderSide.none,
+        borderRadius: BorderRadius.circular(12), // iOS corner radius
+        side: BorderSide(
+          color:
+              isCompleted
+                  ? theme.colorScheme.primary
+                  : const Color(0xFF38383A), // Subtle border
+          width: isCompleted ? 1.5 : 0.5,
+        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20), // Keep generous iOS padding
+
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -164,19 +182,22 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     children: [
                       Text(
                         program.title,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                        style: const TextStyle(
+                          fontSize: 20, // iOS title size
+                          fontWeight: FontWeight.w600, // iOS semibold
+                          color: Colors.white,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (program.description != null) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
                           program.description!,
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 14,
+                          style: const TextStyle(
+                            color: Color(0xFF8E8E93), // iOS secondary text
+                            fontSize: 15, // iOS body size
+                            fontWeight: FontWeight.w400, // iOS regular
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -196,16 +217,16 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 Text(
                   'Week ${program.currentWeek} of ${program.totalWeeks}',
                   style: TextStyle(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w600, // iOS semibold
                     color: theme.primaryColor,
                     fontSize: 15,
                   ),
                 ),
                 Text(
                   '${program.progressPercentage.toStringAsFixed(0)}% Complete',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w400, // iOS regular
+                    color: Color(0xFF8E8E93), // iOS secondary text
                     fontSize: 15,
                   ),
                 ),

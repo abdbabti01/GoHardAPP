@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'sessions/sessions_screen.dart';
@@ -94,60 +95,64 @@ class _MainScreenState extends State<MainScreen> {
               : null,
       floatingActionButtonLocation:
           FloatingActionButtonLocation.centerFloat, // Float above, not docked
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1C1C1E), // Dark grey matching theme
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x4D000000), // Black with 0.3 alpha
-              blurRadius: 10,
-              offset: Offset(0, -2),
-            ),
-          ],
+      bottomNavigationBar: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
         ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-          child: BottomNavigationBar(
-            currentIndex: tabService.currentTab,
-            onTap: (index) {
-              tabService.switchTab(index);
-            },
-            backgroundColor: Colors.transparent,
-            selectedItemColor: theme.colorScheme.primary, // Green from theme
-            unselectedItemColor: const Color(0xFF8E8E93), // Grey from theme
-            type: BottomNavigationBarType.fixed,
-            elevation: 0,
-            selectedFontSize: 12,
-            unselectedFontSize: 11,
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.fitness_center),
-                label: 'Workouts',
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(
+                0xFF1C1C1E,
+              ).withValues(alpha: 0.85), // Semi-transparent for blur effect
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(24),
+                topRight: Radius.circular(24),
               ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.flag),
-                label: 'Goals & Stats',
+              border: const Border(
+                top: BorderSide(
+                  color: Color(0xFF38383A), // Subtle top border
+                  width: 0.5,
+                ),
               ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.psychology),
-                label: 'AI Coach',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.list),
-                label: 'Exercises',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.person),
-                label: 'Profile',
-              ),
-            ],
+            ),
+            child: BottomNavigationBar(
+              currentIndex: tabService.currentTab,
+              onTap: (index) {
+                tabService.switchTab(index);
+              },
+              backgroundColor: Colors.transparent,
+              selectedItemColor: theme.colorScheme.primary, // Green from theme
+              unselectedItemColor: const Color(0xFF8E8E93), // Grey from theme
+              type: BottomNavigationBarType.fixed,
+              elevation: 0,
+              selectedFontSize: 12,
+              unselectedFontSize: 11,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.fitness_center),
+                  label: 'Workouts',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.flag),
+                  label: 'Goals & Stats',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.psychology),
+                  label: 'AI Coach',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.list),
+                  label: 'Exercises',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person),
+                  label: 'Profile',
+                ),
+              ],
+            ),
           ),
         ),
       ),

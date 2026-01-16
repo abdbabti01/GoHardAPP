@@ -37,31 +37,27 @@ class SessionCard extends StatelessWidget {
         onDelete?.call();
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        margin: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 6,
+        ), // iOS inset style
         decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1E), // Dark grey matching theme
-          borderRadius: BorderRadius.circular(20), // More rounded
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 12, // Softer, more spread shadow
-              offset: const Offset(0, 4),
-            ),
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color: const Color(0xFF2C2C2E), // Lighter iOS grey
+          borderRadius: BorderRadius.circular(12), // iOS corner radius
+          border: Border.all(
+            color: const Color(0xFF38383A), // Subtle border instead of shadow
+            width: 0.5,
+          ),
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
             onLongPress: () => _showQuickActions(context),
-            borderRadius: BorderRadius.circular(20), // Match container radius
+            borderRadius: BorderRadius.circular(12), // Match container radius
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18), // iOS padding
+
               child: Row(
                 children: [
                   // Icon on the left in circular container
@@ -104,40 +100,42 @@ class SessionCard extends StatelessWidget {
                           session.name ?? _getDefaultName(),
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 17, // iOS body size
+                            fontWeight: FontWeight.w600, // iOS semibold
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         // Date and exercise count
                         Row(
                           children: [
                             Text(
                               _formatDate(session.date),
-                              style: TextStyle(
-                                color: Colors.grey.shade400,
-                                fontSize: 13,
+                              style: const TextStyle(
+                                color: Color(0xFF8E8E93), // iOS secondary text
+                                fontSize: 15, // iOS footnote/caption
+                                fontWeight: FontWeight.w400, // iOS regular
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text(
+                            const Text(
                               '•',
-                              style: TextStyle(color: Colors.grey.shade400),
+                              style: TextStyle(color: Color(0xFF8E8E93)),
                             ),
                             const SizedBox(width: 8),
-                            Icon(
+                            const Icon(
                               Icons.fitness_center,
-                              size: 12,
-                              color: Colors.grey.shade400,
+                              size: 13,
+                              color: Color(0xFF8E8E93),
                             ),
                             const SizedBox(width: 4),
                             Text(
                               '${session.exercises.length} ${session.exercises.length == 1 ? 'exercise' : 'exercises'}',
-                              style: TextStyle(
-                                color: Colors.grey.shade400,
-                                fontSize: 13,
+                              style: const TextStyle(
+                                color: Color(0xFF8E8E93), // iOS secondary text
+                                fontSize: 15,
+                                fontWeight: FontWeight.w400, // iOS regular
                               ),
                             ),
                           ],
