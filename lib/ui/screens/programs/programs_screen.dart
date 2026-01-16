@@ -124,17 +124,16 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
   Widget _buildProgramCard(BuildContext context, Program program) {
     final theme = Theme.of(context);
     final isCompleted = program.isCompleted;
-    final cardColor = isCompleted ? Colors.grey.shade50 : Colors.white;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 2,
-      color: cardColor,
+      color: const Color(0xFF1C1C1E), // Dark grey card
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side:
             isCompleted
-                ? BorderSide(color: Colors.green.shade200, width: 2)
+                ? BorderSide(color: theme.colorScheme.primary, width: 2)
                 : BorderSide.none,
       ),
       child: Padding(
@@ -148,12 +147,12 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: theme.primaryColor.withValues(alpha: 0.1),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     isCompleted ? Icons.check_circle : Icons.fitness_center,
-                    color: isCompleted ? Colors.green : theme.primaryColor,
+                    color: theme.colorScheme.primary,
                     size: 28,
                   ),
                 ),

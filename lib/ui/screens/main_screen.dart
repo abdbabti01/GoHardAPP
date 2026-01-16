@@ -80,23 +80,23 @@ class _MainScreenState extends State<MainScreen> {
       body: IndexedStack(index: tabService.currentTab, children: _screens),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _onFabPressed(context, tabService.currentTab),
-        backgroundColor: theme.primaryColor,
+        backgroundColor: theme.colorScheme.primary,
         elevation: 6,
         child: const Icon(Icons.add, size: 32, color: Colors.white),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.grey.shade900,
-          borderRadius: const BorderRadius.only(
+        decoration: const BoxDecoration(
+          color: Color(0xFF1C1C1E), // Dark grey matching theme
+          borderRadius: BorderRadius.only(
             topLeft: Radius.circular(24),
             topRight: Radius.circular(24),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
+              color: Color(0x4D000000), // Black with 0.3 alpha
               blurRadius: 10,
-              offset: const Offset(0, -2),
+              offset: Offset(0, -2),
             ),
           ],
         ),
@@ -111,8 +111,8 @@ class _MainScreenState extends State<MainScreen> {
               tabService.switchTab(index);
             },
             backgroundColor: Colors.transparent,
-            selectedItemColor: Colors.green,
-            unselectedItemColor: Colors.grey.shade400,
+            selectedItemColor: theme.colorScheme.primary, // Green from theme
+            unselectedItemColor: const Color(0xFF8E8E93), // Grey from theme
             type: BottomNavigationBarType.fixed,
             elevation: 0,
             selectedFontSize: 12,
