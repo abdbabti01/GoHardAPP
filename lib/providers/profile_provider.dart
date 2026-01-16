@@ -57,6 +57,7 @@ class ProfileProvider extends ChangeNotifier {
 
   /// Get current theme mode based on user preference
   /// Uses cached theme from local storage first (offline-first)
+  /// Defaults to dark mode for the new UI design
   ThemeMode get themeMode {
     // First check cached theme (from local storage - fast!)
     final preference = _cachedThemePreference ?? _currentUser?.themePreference;
@@ -66,7 +67,7 @@ class ProfileProvider extends ChangeNotifier {
       case 'dark':
         return ThemeMode.dark;
       default:
-        return ThemeMode.system;
+        return ThemeMode.dark; // Default to dark mode
     }
   }
 

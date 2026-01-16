@@ -162,81 +162,84 @@ class AppTheme {
     );
   }
 
-  /// Dark theme configuration
+  /// Dark theme configuration - Smooth dark UI with soft elevation
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
 
-      // Color Scheme - GoHard Brand (Dark) - White on Black like logo
-      colorScheme: ColorScheme.dark(
-        primary: AppColors.goHardWhite,
+      // Color Scheme - Dark with green accents matching nav bar
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.iosSystemGreen, // Green accent color
         secondary: AppColors.iosSystemGreen,
-        tertiary: AppColors.goHardSilver,
+        tertiary: AppColors.gray400,
         error: AppColors.errorRed,
-        surface: AppColors.goHardBlack,
-        surfaceContainerHighest: AppColors.goHardDarkGray,
-        onPrimary: AppColors.goHardBlack,
-        onSecondary: AppColors.goHardBlack,
-        onTertiary: AppColors.goHardBlack,
-        onError: AppColors.goHardBlack,
-        onSurface: AppColors.goHardWhite,
-        onSurfaceVariant: AppColors.goHardSilver,
+        surface: Color(0xFF1C1C1E), // Dark grey for cards (grey.shade900 equivalent)
+        surfaceContainerHighest: Color(0xFF2C2C2E), // Darker grey for elevated cards
+        onPrimary: Colors.white,
+        onSecondary: Colors.white,
+        onTertiary: Colors.white,
+        onError: Colors.white,
+        onSurface: Colors.white,
+        onSurfaceVariant: Color(0xFFB0B0B0), // Light grey text
       ),
 
-      // Scaffold
-      scaffoldBackgroundColor: AppColors.goHardBlack,
+      // Scaffold - Very dark background
+      scaffoldBackgroundColor: const Color(0xFF121212), // Almost black background
 
-      // AppBar
+      // AppBar - Matches scaffold with no elevation
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.goHardBlack,
-        foregroundColor: AppColors.goHardWhite,
+        backgroundColor: Color(0xFF121212),
+        foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
+        scrolledUnderElevation: 0, // No elevation when scrolled
         titleTextStyle: TextStyle(
-          color: AppColors.goHardWhite,
-          fontSize: 34,
+          color: Colors.white,
+          fontSize: 32,
           fontWeight: FontWeight.bold,
         ),
       ),
 
-      // Card
+      // Card - Dark grey with soft elevation
       cardTheme: CardTheme(
-        color: AppColors.goHardDarkGray,
+        color: const Color(0xFF1C1C1E), // grey.shade900 equivalent
         elevation: 2,
+        shadowColor: Colors.black.withValues(alpha: 0.2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       ),
 
-      // Bottom Navigation Bar
+      // Bottom Navigation Bar - Transparent (custom implementation in main_screen.dart)
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: AppColors.goHardBlack,
-        selectedItemColor: AppColors.goHardWhite,
-        unselectedItemColor: AppColors.goHardSilver,
+        backgroundColor: Colors.transparent,
+        selectedItemColor: AppColors.iosSystemGreen,
+        unselectedItemColor: Color(0xFF9E9E9E),
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
       ),
 
-      // Floating Action Button
+      // Floating Action Button - Green with soft elevation
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.goHardWhite,
-        foregroundColor: AppColors.goHardBlack,
-        elevation: 4,
+        backgroundColor: AppColors.iosSystemGreen,
+        foregroundColor: Colors.white,
+        elevation: 6,
         shape: CircleBorder(),
       ),
 
-      // Input Decoration
+      // Input Decoration - Dark inputs with green focus
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.goHardDarkGray,
+        fillColor: const Color(0xFF2C2C2E),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.goHardWhite, width: 2),
+          borderSide:
+              const BorderSide(color: AppColors.iosSystemGreen, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -246,14 +249,16 @@ class AppTheme {
           horizontal: 16,
           vertical: 16,
         ),
+        hintStyle: const TextStyle(color: Color(0xFF8E8E93)),
       ),
 
-      // Elevated Button
+      // Elevated Button - Green buttons
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.goHardWhite,
-          foregroundColor: AppColors.goHardBlack,
-          elevation: 0,
+          backgroundColor: AppColors.iosSystemGreen,
+          foregroundColor: Colors.white,
+          elevation: 2,
+          shadowColor: Colors.black.withValues(alpha: 0.2),
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -262,65 +267,107 @@ class AppTheme {
         ),
       ),
 
-      // Text Button
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.goHardWhite,
+      // Outlined Button - Green outline
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.iosSystemGreen,
+          side: const BorderSide(color: AppColors.iosSystemGreen, width: 2),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
         ),
       ),
 
-      // Text Theme
+      // Text Button - Green text
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.iosSystemGreen,
+          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+        ),
+      ),
+
+      // Text Theme - White/grey text on dark background
       textTheme: const TextTheme(
         displayLarge: TextStyle(
           fontSize: 34,
           fontWeight: FontWeight.bold,
-          color: AppColors.goHardWhite,
+          color: Colors.white,
         ),
         displayMedium: TextStyle(
           fontSize: 28,
           fontWeight: FontWeight.bold,
-          color: AppColors.goHardWhite,
+          color: Colors.white,
         ),
         displaySmall: TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.bold,
-          color: AppColors.goHardWhite,
+          color: Colors.white,
         ),
         headlineMedium: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          color: AppColors.goHardWhite,
+          color: Colors.white,
         ),
         titleLarge: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
-          color: AppColors.goHardWhite,
+          color: Colors.white,
         ),
-        bodyLarge: TextStyle(fontSize: 17, color: AppColors.iosDarkLabel),
+        titleMedium: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+        bodyLarge: TextStyle(fontSize: 17, color: Colors.white),
         bodyMedium: TextStyle(
           fontSize: 15,
-          color: AppColors.iosDarkSecondaryLabel,
+          color: Color(0xFFB0B0B0), // Light grey
         ),
         bodySmall: TextStyle(
           fontSize: 13,
-          color: AppColors.iosDarkTertiaryLabel,
+          color: Color(0xFF8E8E93), // Medium grey
         ),
       ),
 
-      // Divider
+      // Divider - Subtle dark dividers
       dividerTheme: const DividerThemeData(
-        color: AppColors.iosDarkGray3,
+        color: Color(0xFF38383A),
         thickness: 0.5,
         space: 1,
       ),
 
-      // Chip
+      // Chip - Dark chips with green selection
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.goHardDarkGray,
-        selectedColor: AppColors.goHardWhite,
-        labelStyle: const TextStyle(color: AppColors.goHardWhite),
+        backgroundColor: const Color(0xFF2C2C2E),
+        selectedColor: AppColors.iosSystemGreen,
+        labelStyle: const TextStyle(color: Colors.white),
+        secondaryLabelStyle: const TextStyle(color: Colors.white),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        side: BorderSide.none,
+      ),
+
+      // Dialog - Dark dialogs with soft elevation
+      dialogTheme: DialogTheme(
+        backgroundColor: const Color(0xFF1C1C1E),
+        elevation: 8,
+        shadowColor: Colors.black.withValues(alpha: 0.3),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+
+      // SnackBar - Dark with green action
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: const Color(0xFF2C2C2E),
+        contentTextStyle: const TextStyle(color: Colors.white),
+        actionTextColor: AppColors.iosSystemGreen,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        behavior: SnackBarBehavior.floating,
+      ),
+
+      // Progress Indicator - Green
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppColors.iosSystemGreen,
       ),
     );
   }

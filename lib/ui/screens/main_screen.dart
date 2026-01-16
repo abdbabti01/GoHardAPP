@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'sessions/sessions_screen.dart';
+import 'exercises/exercises_screen.dart';
 import 'goals/goals_screen.dart';
-import 'programs/programs_screen.dart';
+import 'chat/chat_list_screen.dart';
 import 'profile/profile_screen.dart';
 import '../../core/services/tab_navigation_service.dart';
 
 /// Main screen wrapper with bottom navigation
-/// Provides 4-tab navigation: Dashboard (Sessions), Diary (Goals), Plans (Programs), More (Profile)
+/// Provides 5-tab navigation: Workouts, Goals & Stats, AI Coach, Exercises, Profile
 class MainScreen extends StatefulWidget {
   final int? initialTab;
   final int? initialSubTab;
@@ -37,21 +38,22 @@ class _MainScreenState extends State<MainScreen> {
 
     // Create screens with initial sub-tab if provided
     _screens = [
-      SessionsScreen(initialTab: widget.initialSubTab), // Dashboard
-      const GoalsScreen(), // Diary
-      const ProgramsScreen(), // Plans
-      const ProfileScreen(), // More
+      SessionsScreen(initialTab: widget.initialSubTab),
+      const GoalsScreen(),
+      const ChatListScreen(),
+      const ExercisesScreen(),
+      const ProfileScreen(),
     ];
   }
 
   void _onFabPressed(BuildContext context, int currentTab) {
     // Contextual FAB action based on current tab
     switch (currentTab) {
-      case 0: // Dashboard tab (Sessions)
+      case 0: // Workouts tab
         // Navigate to new workout/session creation
         Navigator.pushNamed(context, '/new-session');
         break;
-      case 1: // Diary tab (Goals)
+      case 1: // Goals & Stats tab
         // Could create new goal - for now, show a message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -60,12 +62,9 @@ class _MainScreenState extends State<MainScreen> {
           ),
         );
         break;
-      case 2: // Plans tab (Programs)
-        // Navigate to AI workout plan generator
-        Navigator.pushNamed(context, '/workout-plan-form');
-        break;
-      case 3: // More tab (Profile)
-        // No action needed for profile tab
+      case 2: // AI Coach tab
+        // Navigate to new chat/conversation
+        Navigator.pushNamed(context, '/chat');
         break;
       default:
         break;
@@ -120,18 +119,25 @@ class _MainScreenState extends State<MainScreen> {
             unselectedFontSize: 11,
             items: const [
               BottomNavigationBarItem(
-                icon: Icon(Icons.grid_view_rounded),
-                label: 'Dashboard',
+                icon: Icon(Icons.fitness_center),
+                label: 'Workouts',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.calendar_today),
-                label: 'Diary',
+                icon: Icon(Icons.flag),
+                label: 'Goals & Stats',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.assignment),
-                label: 'Plans',
+                icon: Icon(Icons.psychology),
+                label: 'AI Coach',
               ),
-              BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'More'),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.list),
+                label: 'Exercises',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person),
+                label: 'Profile',
+              ),
             ],
           ),
         ),
