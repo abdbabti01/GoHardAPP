@@ -37,14 +37,19 @@ class SessionCard extends StatelessWidget {
         onDelete?.call();
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.grey.shade800,
-          borderRadius: BorderRadius.circular(16),
+          color: const Color(0xFF1C1C1E), // Dark grey matching theme
+          borderRadius: BorderRadius.circular(20), // More rounded
           boxShadow: [
             BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 12, // Softer, more spread shadow
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
               color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 4,
+              blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],
@@ -54,7 +59,7 @@ class SessionCard extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             onLongPress: () => _showQuickActions(context),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20), // Match container radius
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(

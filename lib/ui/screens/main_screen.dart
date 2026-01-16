@@ -76,15 +76,24 @@ class _MainScreenState extends State<MainScreen> {
     final tabService = context.watch<TabNavigationService>();
     final theme = Theme.of(context);
 
+    // Only show FAB on certain tabs
+    final showFab =
+        tabService.currentTab == 0 || // Workouts
+        tabService.currentTab == 2; // AI Coach
+
     return Scaffold(
       body: IndexedStack(index: tabService.currentTab, children: _screens),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _onFabPressed(context, tabService.currentTab),
-        backgroundColor: theme.colorScheme.primary,
-        elevation: 6,
-        child: const Icon(Icons.add, size: 32, color: Colors.white),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton:
+          showFab
+              ? FloatingActionButton(
+                onPressed: () => _onFabPressed(context, tabService.currentTab),
+                backgroundColor: theme.colorScheme.primary,
+                elevation: 8, // Higher elevation for floating effect
+                child: const Icon(Icons.add, size: 28, color: Colors.white),
+              )
+              : null,
+      floatingActionButtonLocation:
+          FloatingActionButtonLocation.centerFloat, // Float above, not docked
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: Color(0xFF1C1C1E), // Dark grey matching theme

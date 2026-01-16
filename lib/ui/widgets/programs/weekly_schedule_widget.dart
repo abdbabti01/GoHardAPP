@@ -158,7 +158,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
         final isHighlighted = candidateData.isNotEmpty;
 
         return Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color:
                 isHighlighted
@@ -173,7 +173,14 @@ class WeeklyScheduleWidget extends StatelessWidget {
                           : const Color(0xFF38383A)),
               width: isHighlighted ? 2 : 1,
             ),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16), // More rounded
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -398,11 +405,18 @@ class WeeklyScheduleWidget extends StatelessWidget {
     final weekWorkouts = _getThisWeeksWorkouts();
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xFF1C1C1E), // Dark grey background
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24), // More rounded
         border: Border.all(color: const Color(0xFF38383A), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

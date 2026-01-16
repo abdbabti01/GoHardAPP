@@ -127,10 +127,11 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
+      elevation: 6, // Higher elevation for floating effect
+      shadowColor: Colors.black.withValues(alpha: 0.3),
       color: const Color(0xFF1C1C1E), // Dark grey card
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24), // More rounded corners
         side:
             isCompleted
                 ? BorderSide(color: theme.colorScheme.primary, width: 2)
