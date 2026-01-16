@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../providers/analytics_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../data/models/workout_stats.dart';
@@ -38,9 +39,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            Icon(Icons.error_outline, size: 64, color: context.error),
             const SizedBox(height: 16),
-            Text(provider.errorMessage!),
+            Text(
+              provider.errorMessage!,
+              style: TextStyle(color: context.textSecondary),
+            ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () => provider.refresh(),
@@ -98,14 +102,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
 
             // Key Stats (4 most important)
-            _buildKeyStatsGrid(stats, provider),
+            _buildKeyStatsGrid(context, stats, provider),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildKeyStatsGrid(WorkoutStats stats, AnalyticsProvider provider) {
+  Widget _buildKeyStatsGrid(BuildContext context, WorkoutStats stats, AnalyticsProvider provider) {
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -115,24 +119,28 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       childAspectRatio: 1.3,
       children: [
         _buildStatCard(
+          context,
           'Total Workouts',
           stats.totalWorkouts.toString(),
           Icons.fitness_center,
           Colors.blue,
         ),
         _buildStatCard(
+          context,
           'Current Streak',
           '${stats.currentStreak} days',
           Icons.local_fire_department,
           Colors.orange,
         ),
         _buildStatCard(
+          context,
           'This Week',
           stats.workoutsThisWeek.toString(),
           Icons.calendar_today,
           Colors.teal,
         ),
         _buildStatCard(
+          context,
           'Personal Records',
           provider.personalRecords.length.toString(),
           Icons.emoji_events,
@@ -143,6 +151,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _buildStatCard(
+    BuildContext context,
     String title,
     String value,
     IconData icon,
@@ -150,6 +159,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   ) {
     return Card(
       elevation: 2,
+      color: context.surface,
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Column(
@@ -168,7 +178,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             const SizedBox(height: 2),
             Text(
               title,
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
+              style: TextStyle(fontSize: 11, color: context.textSecondary),
               textAlign: TextAlign.center,
             ),
           ],

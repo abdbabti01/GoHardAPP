@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/session.dart';
 import 'quick_actions_sheet.dart';
 
@@ -42,10 +43,10 @@ class SessionCard extends StatelessWidget {
           vertical: 6,
         ), // iOS inset style
         decoration: BoxDecoration(
-          color: const Color(0xFF2C2C2E), // Lighter iOS grey
+          color: context.surface, // Theme-aware surface
           borderRadius: BorderRadius.circular(12), // iOS corner radius
           border: Border.all(
-            color: const Color(0xFF38383A), // Subtle border instead of shadow
+            color: context.border, // Theme-aware border
             width: 0.5,
           ),
         ),
@@ -98,8 +99,8 @@ class SessionCard extends StatelessWidget {
                         // Workout name
                         Text(
                           session.name ?? _getDefaultName(),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.textPrimary,
                             fontSize: 17, // iOS body size
                             fontWeight: FontWeight.w600, // iOS semibold
                           ),
@@ -112,28 +113,28 @@ class SessionCard extends StatelessWidget {
                           children: [
                             Text(
                               _formatDate(session.date),
-                              style: const TextStyle(
-                                color: Color(0xFF8E8E93), // iOS secondary text
+                              style: TextStyle(
+                                color: context.textSecondary,
                                 fontSize: 15, // iOS footnote/caption
                                 fontWeight: FontWeight.w400, // iOS regular
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Text(
+                            Text(
                               '•',
-                              style: TextStyle(color: Color(0xFF8E8E93)),
+                              style: TextStyle(color: context.textSecondary),
                             ),
                             const SizedBox(width: 8),
-                            const Icon(
+                            Icon(
                               Icons.fitness_center,
                               size: 13,
-                              color: Color(0xFF8E8E93),
+                              color: context.textSecondary,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               '${session.exercises.length} ${session.exercises.length == 1 ? 'exercise' : 'exercises'}',
-                              style: const TextStyle(
-                                color: Color(0xFF8E8E93), // iOS secondary text
+                              style: TextStyle(
+                                color: context.textSecondary,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w400, // iOS regular
                               ),
@@ -182,7 +183,7 @@ class SessionCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.grey.shade500,
+                          color: context.textTertiary,
                           width: 2,
                         ),
                       ),

@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'sessions/sessions_screen.dart';
 import 'analytics/analytics_screen.dart';
-import 'chat/chat_list_screen.dart';
+import 'exercises/exercises_screen.dart';
 import 'profile/profile_screen.dart';
 import '../../core/services/tab_navigation_service.dart';
+import '../../core/theme/theme_colors.dart';
 import '../widgets/common/curved_navigation_bar.dart';
 
 /// Main screen wrapper with bottom navigation
-/// Provides 4-tab navigation: Dashboard, Diary, Plans, More
-/// Features curved notch navigation bar with centered FAB
+/// Provides 4-tab navigation: Dashboard, Diary, Exercises, More
+/// Features convex bump navigation bar with AI Coach FAB on top
 class MainScreen extends StatefulWidget {
   final int? initialTab;
   final int? initialSubTab;
@@ -38,11 +39,11 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     // Create screens with initial sub-tab if provided
-    // 4 tabs: Dashboard (Sessions), Diary (Analytics), Plans (AI Coach), More (Profile with exercises)
+    // 4 tabs: Dashboard (Sessions), Diary (Analytics), Exercises, More (Profile)
     _screens = [
       SessionsScreen(initialTab: widget.initialSubTab),
       const AnalyticsScreen(),
-      const ChatListScreen(),
+      const ExercisesScreen(),
       const ProfileScreen(),
     ];
   }
@@ -58,10 +59,10 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder:
-          (context) => Container(
+          (ctx) => Container(
             margin: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1C1C1E),
+              color: ctx.surface,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
@@ -72,17 +73,17 @@ class _MainScreenState extends State<MainScreen> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF48484A),
+                    color: ctx.borderSubtle,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Text(
                     'Quick Actions',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: ctx.textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
@@ -133,7 +134,7 @@ class _MainScreenState extends State<MainScreen> {
     final tabService = context.watch<TabNavigationService>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: context.scaffoldBackground,
       body: IndexedStack(index: tabService.currentTab, children: _screens),
       bottomNavigationBar: CurvedNavigationBar(
         currentIndex: tabService.currentTab,
@@ -148,8 +149,8 @@ class _MainScreenState extends State<MainScreen> {
           ),
           CurvedNavigationBarItem(icon: Icons.book_outlined, label: 'Diary'),
           CurvedNavigationBarItem(
-            icon: Icons.calendar_view_week_rounded,
-            label: 'Plans',
+            icon: Icons.fitness_center,
+            label: 'Exercises',
           ),
           CurvedNavigationBarItem(icon: Icons.menu, label: 'More'),
         ],
@@ -182,22 +183,22 @@ class _QuickActionItem extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFF2C2C2E),
+                color: context.surfaceElevated,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: Colors.white, size: 22),
+              child: Icon(icon, color: context.textPrimary, size: 22),
             ),
             const SizedBox(width: 16),
             Text(
               label,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
             ),
             const Spacer(),
-            const Icon(Icons.chevron_right, color: Color(0xFF8E8E93), size: 24),
+            Icon(Icons.chevron_right, color: context.textTertiary, size: 24),
           ],
         ),
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../providers/goals_provider.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
@@ -75,12 +76,12 @@ class _GoalsScreenState extends State<GoalsScreen>
               }
 
               if (provider.errorMessage != null) {
-                return _buildErrorState(provider);
+                return _buildErrorState(context, provider);
               }
 
               if (provider.activeGoals.isEmpty &&
                   provider.completedGoals.isEmpty) {
-                return _buildEmptyState();
+                return _buildEmptyState(context);
               }
 
               return RefreshIndicator(
@@ -93,17 +94,19 @@ class _GoalsScreenState extends State<GoalsScreen>
                       // Active Goals Section
                       if (provider.activeGoals.isNotEmpty) ...[
                         _buildSectionHeader(
+                          context,
                           'Active Goals',
                           provider.activeGoals.length,
                         ),
                         ...provider.activeGoals.map(
-                          (goal) => _buildEnhancedGoalCard(goal),
+                          (goal) => _buildEnhancedGoalCard(context, goal),
                         ),
                       ],
 
                       // Completed Goals Section
                       if (provider.completedGoals.isNotEmpty) ...[
                         _buildSectionHeader(
+                          context,
                           'Completed',
                           provider.completedGoals.length,
                         ),
@@ -125,20 +128,24 @@ class _GoalsScreenState extends State<GoalsScreen>
     );
   }
 
-  Widget _buildSectionHeader(String title, int count) {
+  Widget _buildSectionHeader(BuildContext context, String title, int count) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
       child: Row(
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: context.textPrimary,
+            ),
           ),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.grey.shade200,
+              color: context.surfaceElevated,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -146,7 +153,7 @@ class _GoalsScreenState extends State<GoalsScreen>
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey.shade700,
+                color: context.textSecondary,
               ),
             ),
           ),
@@ -170,7 +177,7 @@ class _GoalsScreenState extends State<GoalsScreen>
     }
   }
 
-  Widget _buildEnhancedGoalCard(Goal goal) {
+  Widget _buildEnhancedGoalCard(BuildContext context, Goal goal) {
     final progress = (goal.progressPercentage / 100).clamp(0.0, 1.0);
     final isCompleted = goal.progressPercentage >= 100;
     final goalColor = _getGoalColor(goal.goalType); // Keep original color
@@ -180,13 +187,13 @@ class _GoalsScreenState extends State<GoalsScreen>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white, // Keep white background
+        color: context.surface,
         borderRadius: BorderRadius.circular(20),
         // Add subtle green left border accent when completed
         border:
             isCompleted
-                ? Border(left: BorderSide(color: Colors.green, width: 4))
-                : null,
+                ? Border(left: BorderSide(color: context.success, width: 4))
+                : Border.all(color: context.border, width: 0.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -236,9 +243,10 @@ class _GoalsScreenState extends State<GoalsScreen>
                     children: [
                       Text(
                         _formatGoalType(goal.goalType),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
+                          color: context.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -246,7 +254,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                         goal.getProgressDescription(),
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey.shade600,
+                          color: context.textSecondary,
                         ),
                       ),
                     ],
@@ -254,7 +262,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                 ),
                 // Menu
                 PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert, color: Colors.grey.shade600),
+                  icon: Icon(Icons.more_vert, color: context.textSecondary),
                   itemBuilder:
                       (context) => [
                         const PopupMenuItem(
@@ -951,24 +959,28 @@ class _GoalsScreenState extends State<GoalsScreen>
     }
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.flag_outlined, size: 80, color: Colors.grey.shade300),
+            Icon(Icons.flag_outlined, size: 80, color: context.textTertiary),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'No Goals Yet',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: context.textPrimary,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               'Set your first goal and start tracking your progress',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 16, color: context.textSecondary),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -988,14 +1000,17 @@ class _GoalsScreenState extends State<GoalsScreen>
     );
   }
 
-  Widget _buildErrorState(GoalsProvider provider) {
+  Widget _buildErrorState(BuildContext context, GoalsProvider provider) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 64, color: Colors.red),
+          Icon(Icons.error_outline, size: 64, color: context.error),
           const SizedBox(height: 16),
-          Text(provider.errorMessage!),
+          Text(
+            provider.errorMessage!,
+            style: TextStyle(color: context.textSecondary),
+          ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: () => provider.loadGoals(),

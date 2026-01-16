@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/theme_colors.dart';
 
 /// Reusable empty state widget
 /// Provides consistent empty state UI across the app
@@ -28,7 +29,7 @@ class EmptyState extends StatelessWidget {
             Icon(
               icon,
               size: 80,
-              color: const Color(0xFF38383A), // Dark grey for icons
+              color: context.textTertiary,
             ),
             const SizedBox(height: 16),
             Text(
@@ -41,7 +42,7 @@ class EmptyState extends StatelessWidget {
               message,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF8E8E93), // Medium grey for descriptions
+                color: context.textSecondary,
               ),
             ),
             if (action != null) ...[const SizedBox(height: 24), action!],

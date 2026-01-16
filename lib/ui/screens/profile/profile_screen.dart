@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../providers/profile_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/sessions_provider.dart';
@@ -38,22 +39,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder:
-          (context) => AlertDialog(
-            backgroundColor: const Color(0xFF1C1C1E),
-            title: const Text('Logout', style: TextStyle(color: Colors.white)),
-            content: const Text(
+          (ctx) => AlertDialog(
+            backgroundColor: ctx.surface,
+            title: Text('Logout', style: TextStyle(color: ctx.textPrimary)),
+            content: Text(
               'Are you sure you want to logout?',
-              style: TextStyle(color: Color(0xFFB0B0B0)),
+              style: TextStyle(color: ctx.textSecondary),
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
+                onPressed: () => Navigator.of(ctx).pop(false),
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
+                onPressed: () => Navigator.of(ctx).pop(true),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
+                  backgroundColor: ctx.error,
                   foregroundColor: Colors.white,
                 ),
                 child: const Text('Logout'),
@@ -83,13 +84,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: context.scaffoldBackground,
       body: Consumer<ProfileProvider>(
         builder: (context, provider, child) {
           // Loading state
           if (provider.isLoading && provider.currentUser == null) {
-            return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF34C759)),
+            return Center(
+              child: CircularProgressIndicator(color: context.accent),
             );
           }
 
@@ -103,13 +104,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Icon(
                     Icons.error_outline,
                     size: 64,
-                    color: Colors.red.shade300,
+                    color: context.error,
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Error Loading Profile',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: context.textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
@@ -120,7 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Text(
                       provider.errorMessage!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Color(0xFF8E8E93)),
+                      style: TextStyle(color: context.textSecondary),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -132,8 +133,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           return RefreshIndicator(
             onRefresh: _handleRefresh,
-            color: const Color(0xFF34C759),
-            backgroundColor: const Color(0xFF1C1C1E),
+            color: context.accent,
+            backgroundColor: context.surface,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: SafeArea(
@@ -141,12 +142,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Header
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                       child: Text(
                         'More',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: context.textPrimary,
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
                         ),
@@ -195,16 +196,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 16),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1C1C1E),
+          color: context.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF38383A), width: 1),
+          border: Border.all(color: context.border, width: 1),
         ),
         child: Row(
           children: [
             // Avatar
             CircleAvatar(
               radius: 30,
-              backgroundColor: const Color(0xFF2C2C2E),
+              backgroundColor: context.surfaceElevated,
               backgroundImage:
                   user?.profilePhotoUrl != null
                       ? NetworkImage(
@@ -213,10 +214,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : null,
               child:
                   user?.profilePhotoUrl == null
-                      ? const Icon(
+                      ? Icon(
                         Icons.person,
                         size: 30,
-                        color: Color(0xFF8E8E93),
+                        color: context.textTertiary,
                       )
                       : null,
             ),
@@ -231,8 +232,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     builder: (context, snapshot) {
                       return Text(
                         snapshot.data ?? 'Loading...',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.textPrimary,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
@@ -245,8 +246,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     builder: (context, snapshot) {
                       return Text(
                         snapshot.data ?? '',
-                        style: const TextStyle(
-                          color: Color(0xFF8E8E93),
+                        style: TextStyle(
+                          color: context.textSecondary,
                           fontSize: 14,
                         ),
                       );
@@ -255,7 +256,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Color(0xFF8E8E93), size: 24),
+            Icon(Icons.chevron_right, color: context.textTertiary, size: 24),
           ],
         ),
       ),
@@ -270,26 +271,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
+        color: context.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF38383A), width: 1),
+        border: Border.all(color: context.border, width: 1),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildStatItem(
+            context,
             Icons.fitness_center,
             stats?.totalWorkouts.toString() ?? '-',
             'Workouts',
           ),
-          Container(width: 1, height: 50, color: const Color(0xFF38383A)),
+          Container(width: 1, height: 50, color: context.border),
           _buildStatItem(
+            context,
             Icons.local_fire_department,
             stats?.currentStreak.toString() ?? '-',
             'Streak',
           ),
-          Container(width: 1, height: 50, color: const Color(0xFF38383A)),
+          Container(width: 1, height: 50, color: context.border),
           _buildStatItem(
+            context,
             Icons.trending_up,
             stats?.personalRecords.toString() ?? '-',
             'PRs',
@@ -299,15 +303,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStatItem(IconData icon, String value, String label) {
+  Widget _buildStatItem(BuildContext context, IconData icon, String value, String label) {
     return Column(
       children: [
-        Icon(icon, size: 28, color: const Color(0xFF34C759)),
+        Icon(icon, size: 28, color: context.accent),
         const SizedBox(height: 8),
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: context.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -315,7 +319,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 4),
         Text(
           label,
-          style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 12),
+          style: TextStyle(color: context.textSecondary, fontSize: 12),
         ),
       ],
     );
@@ -325,25 +329,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
+        color: context.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF38383A), width: 1),
+        border: Border.all(color: context.border, width: 1),
       ),
       child: Column(
         children: [
           _buildMenuItem(
+            context: context,
             icon: Icons.list,
             label: 'Exercises',
             onTap: () => Navigator.pushNamed(context, RouteNames.exercises),
           ),
-          _buildMenuDivider(),
+          _buildMenuDivider(context),
           _buildMenuItem(
+            context: context,
             icon: Icons.analytics,
             label: 'Analytics',
             onTap: () => Navigator.pushNamed(context, RouteNames.analytics),
           ),
-          _buildMenuDivider(),
+          _buildMenuDivider(context),
           _buildMenuItem(
+            context: context,
             icon: Icons.monitor_weight,
             label: 'Body Metrics',
             onTap:
@@ -352,14 +359,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   MaterialPageRoute(builder: (_) => const BodyMetricsScreen()),
                 ),
           ),
-          _buildMenuDivider(),
+          _buildMenuDivider(context),
           _buildMenuItem(
+            context: context,
             icon: Icons.bookmark,
             label: 'Templates',
             onTap: () => Navigator.pushNamed(context, RouteNames.templates),
           ),
-          _buildMenuDivider(),
+          _buildMenuDivider(context),
           _buildMenuItem(
+            context: context,
             icon: Icons.people,
             label: 'Community',
             onTap: () => Navigator.pushNamed(context, RouteNames.community),
@@ -370,6 +379,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildMenuItem({
+    required BuildContext context,
     required IconData icon,
     required String label,
     required VoidCallback onTap,
@@ -384,34 +394,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: const Color(0xFF2C2C2E),
+                color: context.surfaceElevated,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: Colors.white, size: 20),
+              child: Icon(icon, color: context.textPrimary, size: 20),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-            const Icon(Icons.chevron_right, color: Color(0xFF8E8E93), size: 22),
+            Icon(Icons.chevron_right, color: context.textTertiary, size: 22),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMenuDivider() {
+  Widget _buildMenuDivider(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(left: 66),
       height: 0.5,
-      color: const Color(0xFF38383A),
+      color: context.border,
     );
   }
 
@@ -419,19 +429,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
+        color: context.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF38383A), width: 1),
+        border: Border.all(color: context.border, width: 1),
       ),
       child: Column(
         children: [
           _buildMenuItem(
+            context: context,
             icon: Icons.settings,
             label: 'Settings',
             onTap: () => Navigator.pushNamed(context, RouteNames.settings),
           ),
-          _buildMenuDivider(),
+          _buildMenuDivider(context),
           _buildMenuItem(
+            context: context,
             icon: Icons.logout,
             label: 'Logout',
             onTap: _handleLogout,

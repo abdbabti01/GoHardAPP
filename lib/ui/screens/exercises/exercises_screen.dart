@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../providers/exercises_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/exercises/exercise_card.dart';
@@ -307,7 +308,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
       selectedColor: chipColor.withValues(alpha: 0.2),
       checkmarkColor: chipColor,
       labelStyle: TextStyle(
-        color: isSelected ? chipColor : Colors.grey.shade700,
+        color: isSelected ? chipColor : context.textSecondary,
         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
       ),
     );
@@ -333,7 +334,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
         color: Theme.of(context).colorScheme.primary,
       ),
       onDeleted: onRemove,
-      backgroundColor: Colors.white,
+      backgroundColor: context.surface,
       side: BorderSide(
         color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
       ),
@@ -398,8 +399,8 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                       ),
                       child: Text(
                         difficulty.toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.textOnPrimary,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 0.5,
@@ -410,7 +411,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                     Text(
                       '${exercises.length} exercise${exercises.length == 1 ? '' : 's'}',
                       style: TextStyle(
-                        color: Colors.grey.shade600,
+                        color: context.textSecondary,
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
@@ -496,12 +497,14 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                   Icon(
                     Icons.error_outline,
                     size: 64,
-                    color: Colors.red.shade300,
+                    color: context.error,
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'Error Loading Exercises',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: context.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Padding(
@@ -511,7 +514,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                       textAlign: TextAlign.center,
                       style: Theme.of(
                         context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                      ).textTheme.bodyMedium?.copyWith(color: context.textSecondary),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -536,13 +539,15 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.search_off, size: 80, color: Colors.grey.shade300),
+                  Icon(Icons.search_off, size: 80, color: context.textTertiary),
                   const SizedBox(height: 16),
                   Text(
                     hasActiveFilters
                         ? 'No Exercises Match Filters'
                         : 'No Exercises Found',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: context.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Padding(
@@ -554,7 +559,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                       textAlign: TextAlign.center,
                       style: Theme.of(
                         context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                      ).textTheme.bodyMedium?.copyWith(color: context.textSecondary),
                     ),
                   ),
                   if (hasActiveFilters) ...[

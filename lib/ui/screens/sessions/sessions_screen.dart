@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/exercises_provider.dart';
 import '../../../providers/active_workout_provider.dart';
@@ -131,9 +132,9 @@ class _SessionsScreenState extends State<SessionsScreen>
           final archived = await sessionsProvider.archiveSession(sessionId);
           if (archived && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Workout archived successfully'),
-                backgroundColor: Colors.green,
+              SnackBar(
+                content: const Text('Workout archived successfully'),
+                backgroundColor: context.success,
               ),
             );
             // Reload without sync to avoid server overwriting archived status
@@ -148,7 +149,7 @@ class _SessionsScreenState extends State<SessionsScreen>
               content: Text(
                 sessionsProvider.errorMessage ?? 'Failed to delete session',
               ),
-              backgroundColor: Colors.red,
+              backgroundColor: context.error,
             ),
           );
         }
@@ -318,53 +319,53 @@ class _SessionsScreenState extends State<SessionsScreen>
   }
 
   /// Build week header widget
-  Widget _buildWeekHeader(String label) {
+  Widget _buildWeekHeader(BuildContext context, String label) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF8E8E93),
+          color: context.textSecondary,
         ),
       ),
     );
   }
 
   /// Build past workouts filter dropdown
-  Widget _buildPastWorkoutsFilter() {
+  Widget _buildPastWorkoutsFilter(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         children: [
-          const Icon(Icons.history, size: 20, color: Color(0xFF34C759)),
+          Icon(Icons.history, size: 20, color: context.accent),
           const SizedBox(width: 8),
-          const Text(
+          Text(
             'Past Workouts',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF34C759),
+              color: context.accent,
             ),
           ),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF2C2C2E),
+              color: context.surfaceElevated,
               borderRadius: BorderRadius.circular(20),
             ),
             child: DropdownButton<String>(
               value: _pastWorkoutsFilter,
               underline: const SizedBox(),
               isDense: true,
-              dropdownColor: const Color(0xFF2C2C2E),
-              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF34C759)),
-              style: const TextStyle(
+              dropdownColor: context.surfaceElevated,
+              icon: Icon(Icons.arrow_drop_down, color: context.accent),
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF34C759),
+                color: context.accent,
               ),
               items: const [
                 DropdownMenuItem(value: 'Last Week', child: Text('Last Week')),
@@ -400,19 +401,19 @@ class _SessionsScreenState extends State<SessionsScreen>
   }
 
   /// Build section header widget
-  Widget _buildSectionHeader(String label, IconData icon, int? count) {
+  Widget _buildSectionHeader(BuildContext context, String label, IconData icon, int? count) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: const Color(0xFF34C759)),
+          Icon(icon, size: 20, color: context.accent),
           const SizedBox(width: 8),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF34C759),
+              color: context.accent,
             ),
           ),
           if (count != null) ...[
@@ -420,15 +421,15 @@ class _SessionsScreenState extends State<SessionsScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: const Color(0xFF34C759).withValues(alpha: 0.2),
+                color: context.accent.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 '$count',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF34C759),
+                  color: context.accent,
                 ),
               ),
             ),
@@ -441,14 +442,14 @@ class _SessionsScreenState extends State<SessionsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: context.scaffoldBackground,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF121212),
+        backgroundColor: context.scaffoldBackground,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Dashboard',
           style: TextStyle(
-            color: Colors.white,
+            color: context.textPrimary,
             fontSize: 28,
             fontWeight: FontWeight.bold,
           ),
@@ -458,19 +459,19 @@ class _SessionsScreenState extends State<SessionsScreen>
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1C1C1E),
+              color: context.surface,
               borderRadius: BorderRadius.circular(12),
             ),
             child: TabBar(
               controller: _tabController,
               indicator: BoxDecoration(
-                color: const Color(0xFF34C759),
+                color: context.accent,
                 borderRadius: BorderRadius.circular(10),
               ),
               indicatorSize: TabBarIndicatorSize.tab,
               indicatorPadding: const EdgeInsets.all(4),
-              labelColor: Colors.white,
-              unselectedLabelColor: const Color(0xFF8E8E93),
+              labelColor: context.textOnPrimary,
+              unselectedLabelColor: context.textSecondary,
               labelStyle: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -511,7 +512,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                             Icon(
                               Icons.error_outline,
                               size: 64,
-                              color: Colors.red.shade300,
+                              color: context.error,
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -527,7 +528,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                                 provider.errorMessage!,
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: Colors.grey),
+                                    ?.copyWith(color: context.textSecondary),
                               ),
                             ),
                             const SizedBox(height: 24),
@@ -550,7 +551,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                             Icon(
                               Icons.fitness_center,
                               size: 80,
-                              color: Colors.grey.shade300,
+                              color: context.textTertiary,
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -566,7 +567,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                                 'Start your first workout by tapping the + button below',
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: Colors.grey),
+                                    ?.copyWith(color: context.textSecondary),
                               ),
                             ),
                           ],
@@ -710,7 +711,7 @@ class _SessionsScreenState extends State<SessionsScreen>
 
                           // Today Section
                           if (todaySessions.isNotEmpty) ...[
-                            _buildSectionHeader('Today', Icons.today, null),
+                            _buildSectionHeader(context, 'Today', Icons.today, null),
                             ...todaySessions.map(
                               (session) => SessionCard(
                                 session: session,
@@ -728,6 +729,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                           // This Week Section (Monday to yesterday)
                           if (thisWeekSessions.isNotEmpty) ...[
                             _buildSectionHeader(
+                              context,
                               'This Week',
                               Icons.calendar_today,
                               null,
@@ -749,6 +751,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                           // Upcoming Workouts Section (Planned workouts)
                           if (upcomingSessions.isNotEmpty) ...[
                             _buildSectionHeader(
+                              context,
                               'Upcoming Workouts',
                               Icons.schedule,
                               upcomingSessions.length,
@@ -769,9 +772,9 @@ class _SessionsScreenState extends State<SessionsScreen>
 
                           // Past Sessions with Filter
                           if (pastSessions.isNotEmpty) ...[
-                            _buildPastWorkoutsFilter(),
+                            _buildPastWorkoutsFilter(context),
                             for (final label in pastWeekLabels) ...[
-                              _buildWeekHeader(label),
+                              _buildWeekHeader(context, label),
                               ...groupedPast[label]!.map(
                                 (session) => SessionCard(
                                   session: session,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../providers/settings_provider.dart';
 import '../../../providers/profile_provider.dart';
 import '../../../core/enums/profile_enums.dart';
@@ -316,7 +317,7 @@ class SettingsScreen extends StatelessWidget {
             color:
                 isSelected
                     ? Theme.of(context).primaryColor
-                    : Colors.grey.withValues(alpha: 0.3),
+                    : context.border,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -327,7 +328,7 @@ class SettingsScreen extends StatelessWidget {
               color:
                   isSelected
                       ? Theme.of(context).primaryColor
-                      : Colors.grey.shade600,
+                      : context.textSecondary,
             ),
             const SizedBox(height: 4),
             Text(
@@ -338,7 +339,7 @@ class SettingsScreen extends StatelessWidget {
                 color:
                     isSelected
                         ? Theme.of(context).primaryColor
-                        : Colors.grey.shade600,
+                        : context.textSecondary,
               ),
             ),
           ],

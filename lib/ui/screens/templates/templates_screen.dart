@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../providers/workout_template_provider.dart';
 import '../../../data/models/workout_template.dart';
 import '../../widgets/common/offline_banner.dart';
@@ -66,12 +67,12 @@ class _TemplatesScreenState extends State<TemplatesScreen>
                 provider.isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : provider.errorMessage != null
-                    ? _buildErrorView(provider)
+                    ? _buildErrorView(context, provider)
                     : TabBarView(
                       controller: _tabController,
                       children: [
-                        _buildMyTemplatesTab(provider),
-                        _buildCommunityTab(provider),
+                        _buildMyTemplatesTab(context, provider),
+                        _buildCommunityTab(context, provider),
                       ],
                     ),
           ),
@@ -85,14 +86,17 @@ class _TemplatesScreenState extends State<TemplatesScreen>
     );
   }
 
-  Widget _buildErrorView(WorkoutTemplateProvider provider) {
+  Widget _buildErrorView(BuildContext context, WorkoutTemplateProvider provider) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 64, color: Colors.red),
+          Icon(Icons.error_outline, size: 64, color: context.error),
           const SizedBox(height: 16),
-          Text(provider.errorMessage!),
+          Text(
+            provider.errorMessage!,
+            style: TextStyle(color: context.textSecondary),
+          ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: () => provider.refresh(),
@@ -104,7 +108,7 @@ class _TemplatesScreenState extends State<TemplatesScreen>
     );
   }
 
-  Widget _buildMyTemplatesTab(WorkoutTemplateProvider provider) {
+  Widget _buildMyTemplatesTab(BuildContext context, WorkoutTemplateProvider provider) {
     final templates = provider.templates;
 
     if (templates.isEmpty) {
@@ -112,16 +116,16 @@ class _TemplatesScreenState extends State<TemplatesScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.fitness_center, size: 64, color: Colors.grey[400]),
+            Icon(Icons.fitness_center, size: 64, color: context.textTertiary),
             const SizedBox(height: 16),
             Text(
               'No templates yet',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 16, color: context.textSecondary),
             ),
             const SizedBox(height: 8),
             Text(
               'Create your first workout template!',
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 14, color: context.textTertiary),
             ),
           ],
         ),
@@ -145,7 +149,7 @@ class _TemplatesScreenState extends State<TemplatesScreen>
     );
   }
 
-  Widget _buildCommunityTab(WorkoutTemplateProvider provider) {
+  Widget _buildCommunityTab(BuildContext context, WorkoutTemplateProvider provider) {
     final templates = provider.communityTemplates;
 
     if (templates.isEmpty) {
@@ -153,16 +157,16 @@ class _TemplatesScreenState extends State<TemplatesScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
+            Icon(Icons.people_outline, size: 64, color: context.textTertiary),
             const SizedBox(height: 16),
             Text(
               'No community templates',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 16, color: context.textSecondary),
             ),
             const SizedBox(height: 8),
             Text(
               'Check back later for shared templates',
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 14, color: context.textTertiary),
             ),
           ],
         ),
@@ -214,7 +218,7 @@ class _TemplatesScreenState extends State<TemplatesScreen>
                           const SizedBox(height: 4),
                           Text(
                             template.description!,
-                            style: TextStyle(color: Colors.grey[700]),
+                            style: TextStyle(color: context.textSecondary),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -234,19 +238,19 @@ class _TemplatesScreenState extends State<TemplatesScreen>
               // Schedule info
               Row(
                 children: [
-                  Icon(Icons.schedule, size: 16, color: Colors.grey[600]),
+                  Icon(Icons.schedule, size: 16, color: context.textSecondary),
                   const SizedBox(width: 4),
                   Text(
                     template.recurrenceDisplay,
-                    style: TextStyle(color: Colors.grey[700]),
+                    style: TextStyle(color: context.textSecondary),
                   ),
                   const SizedBox(width: 16),
                   if (template.estimatedDuration != null) ...[
-                    Icon(Icons.timer, size: 16, color: Colors.grey[600]),
+                    Icon(Icons.timer, size: 16, color: context.textSecondary),
                     const SizedBox(width: 4),
                     Text(
                       '${template.estimatedDuration} min',
-                      style: TextStyle(color: Colors.grey[700]),
+                      style: TextStyle(color: context.textSecondary),
                     ),
                   ],
                 ],

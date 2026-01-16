@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/goals_provider.dart';
@@ -480,7 +481,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                 'Start the conversation below',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey[500],
+                                  color: context.textSecondary,
                                 ),
                               ),
                             ],
@@ -519,8 +520,8 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                               decoration: BoxDecoration(
                                 color:
                                     isUser
-                                        ? Theme.of(context).primaryColor
-                                        : Colors.grey[200],
+                                        ? context.userMessageBubble
+                                        : context.aiMessageBubble,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Column(
@@ -529,8 +530,8 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                   if (isUser)
                                     Text(
                                       message.content,
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: context.userMessageText,
                                         fontSize: 16,
                                       ),
                                     )
@@ -538,16 +539,17 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                     MarkdownBody(
                                       data: message.content,
                                       styleSheet: MarkdownStyleSheet(
-                                        p: const TextStyle(
-                                          color: Colors.black87,
+                                        p: TextStyle(
+                                          color: context.aiMessageText,
                                           fontSize: 16,
                                         ),
                                         code: TextStyle(
-                                          backgroundColor: Colors.grey[300],
+                                          backgroundColor: context.surfaceElevated,
+                                          color: context.textPrimary,
                                           fontFamily: 'monospace',
                                         ),
                                         codeblockDecoration: BoxDecoration(
-                                          color: Colors.grey[300],
+                                          color: context.surfaceElevated,
                                           borderRadius: BorderRadius.circular(
                                             4,
                                           ),
@@ -584,7 +586,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                         'Model: ${message.model}',
                                         style: TextStyle(
                                           fontSize: 10,
-                                          color: Colors.grey[600],
+                                          color: context.textTertiary,
                                         ),
                                       ),
                                     ),
@@ -613,7 +615,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                             Text(
                               'AI is thinking...',
                               style: TextStyle(
-                                color: Colors.grey[600],
+                                color: context.textSecondary,
                                 fontSize: 14,
                               ),
                             ),
@@ -625,7 +627,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                     return Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: context.surface,
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.05),

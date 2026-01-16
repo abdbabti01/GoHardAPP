@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/program.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../routes/route_names.dart';
@@ -35,12 +36,12 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                Icon(Icons.error_outline, size: 64, color: context.error),
                 const SizedBox(height: 16),
                 Text(
                   provider.errorMessage!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red),
+                  style: TextStyle(color: context.error),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
@@ -60,20 +61,20 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 Icon(
                   Icons.fitness_center,
                   size: 80,
-                  color: Colors.grey.shade400,
+                  color: context.textTertiary,
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'No Programs Yet',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.grey.shade600,
+                    color: context.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Create a goal and generate\na workout plan to get started!',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+                  style: TextStyle(color: context.textSecondary, fontSize: 16),
                 ),
               ],
             ),
@@ -95,7 +96,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     'ACTIVE PROGRAMS',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF8E8E93), // iOS section header grey
+                      color: context.textSecondary,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -115,7 +116,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     'COMPLETED PROGRAMS',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF8E8E93), // iOS section header grey
+                      color: context.textSecondary,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -143,14 +144,14 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       ), // iOS inset style
       elevation: 0, // No elevation for iOS style
       shadowColor: Colors.transparent,
-      color: const Color(0xFF2C2C2E), // Lighter iOS grey
+      color: context.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12), // iOS corner radius
         side: BorderSide(
           color:
               isCompleted
                   ? theme.colorScheme.primary
-                  : const Color(0xFF38383A), // Subtle border
+                  : context.border,
           width: isCompleted ? 1.5 : 0.5,
         ),
       ),
@@ -182,10 +183,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     children: [
                       Text(
                         program.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 20, // iOS title size
                           fontWeight: FontWeight.w600, // iOS semibold
-                          color: Colors.white,
+                          color: context.textPrimary,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -194,8 +195,8 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                         const SizedBox(height: 6),
                         Text(
                           program.description!,
-                          style: const TextStyle(
-                            color: Color(0xFF8E8E93), // iOS secondary text
+                          style: TextStyle(
+                            color: context.textSecondary,
                             fontSize: 15, // iOS body size
                             fontWeight: FontWeight.w400, // iOS regular
                           ),
@@ -224,9 +225,9 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 ),
                 Text(
                   '${program.progressPercentage.toStringAsFixed(0)}% Complete',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w400, // iOS regular
-                    color: Color(0xFF8E8E93), // iOS secondary text
+                    color: context.textSecondary,
                     fontSize: 15,
                   ),
                 ),
@@ -240,9 +241,9 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
               child: LinearProgressIndicator(
                 value: program.progressPercentage / 100,
                 minHeight: 8,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: context.surfaceElevated,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  isCompleted ? Colors.green : theme.primaryColor,
+                  isCompleted ? context.success : theme.primaryColor,
                 ),
               ),
             ),
@@ -310,7 +311,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                         content: const Text(
                           'Rest day - Recovery is part of the program!',
                         ),
-                        backgroundColor: Colors.blue.shade700,
+                        backgroundColor: context.accent,
                         duration: const Duration(seconds: 2),
                       ),
                     );
@@ -326,18 +327,18 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
 
             // Today's Workout Section
             if (!isCompleted && program.currentWorkout != null) ...[
-              const Divider(height: 1),
+              Divider(height: 1, color: context.border),
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Icon(Icons.today, size: 20, color: Colors.grey.shade600),
+                  Icon(Icons.today, size: 20, color: context.textSecondary),
                   const SizedBox(width: 8),
                   Text(
                     'TODAY\'S WORKOUT',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade600,
+                      color: context.textSecondary,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -362,9 +363,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                         children: [
                           Text(
                             program.currentWorkout!.workoutName,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
+                              color: context.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -375,13 +377,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                                 Icon(
                                   Icons.access_time,
                                   size: 14,
-                                  color: Colors.grey.shade600,
+                                  color: context.textSecondary,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${program.currentWorkout!.estimatedDuration} min',
                                   style: TextStyle(
-                                    color: Colors.grey.shade600,
+                                    color: context.textSecondary,
                                     fontSize: 13,
                                   ),
                                 ),
@@ -390,13 +392,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                               Icon(
                                 Icons.fitness_center,
                                 size: 14,
-                                color: Colors.grey.shade600,
+                                color: context.textSecondary,
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 '${program.currentWorkout!.exerciseCount} exercises',
                                 style: TextStyle(
-                                  color: Colors.grey.shade600,
+                                  color: context.textSecondary,
                                   fontSize: 13,
                                 ),
                               ),
@@ -412,14 +414,14 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
 
             // Completed Badge
             if (isCompleted) ...[
-              const Divider(height: 1),
+              Divider(height: 1, color: context.border),
               const SizedBox(height: 16),
               Row(
                 children: [
                   Icon(
                     Icons.celebration,
                     size: 20,
-                    color: Colors.green.shade700,
+                    color: context.success,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -427,7 +429,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: Colors.green.shade700,
+                      color: context.success,
                     ),
                   ),
                   const Spacer(),
@@ -435,7 +437,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     Text(
                       '${program.completedAt!.month}/${program.completedAt!.day}/${program.completedAt!.year}',
                       style: TextStyle(
-                        color: Colors.grey.shade600,
+                        color: context.textSecondary,
                         fontSize: 13,
                       ),
                     ),

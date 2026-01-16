@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../providers/shared_workout_provider.dart';
 import '../../../data/models/shared_workout.dart';
 import '../../widgets/common/offline_banner.dart';
@@ -71,13 +72,13 @@ class _CommunityScreenState extends State<CommunityScreen>
                 provider.isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : provider.errorMessage != null
-                    ? _buildErrorView(provider)
+                    ? _buildErrorView(context, provider)
                     : TabBarView(
                       controller: _tabController,
                       children: [
-                        _buildDiscoverTab(provider),
-                        _buildSavedTab(provider),
-                        _buildMySharesTab(provider),
+                        _buildDiscoverTab(context, provider),
+                        _buildSavedTab(context, provider),
+                        _buildMySharesTab(context, provider),
                       ],
                     ),
           ),
@@ -86,14 +87,17 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
-  Widget _buildErrorView(SharedWorkoutProvider provider) {
+  Widget _buildErrorView(BuildContext context, SharedWorkoutProvider provider) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 64, color: Colors.red),
+          Icon(Icons.error_outline, size: 64, color: context.error),
           const SizedBox(height: 16),
-          Text(provider.errorMessage!),
+          Text(
+            provider.errorMessage!,
+            style: TextStyle(color: context.textSecondary),
+          ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: () => provider.refresh(),
@@ -105,7 +109,7 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
-  Widget _buildDiscoverTab(SharedWorkoutProvider provider) {
+  Widget _buildDiscoverTab(BuildContext context, SharedWorkoutProvider provider) {
     final workouts = provider.sharedWorkouts;
 
     if (workouts.isEmpty) {
@@ -113,16 +117,16 @@ class _CommunityScreenState extends State<CommunityScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.explore_off, size: 64, color: Colors.grey[400]),
+            Icon(Icons.explore_off, size: 64, color: context.textTertiary),
             const SizedBox(height: 16),
             Text(
               'No shared workouts found',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 16, color: context.textSecondary),
             ),
             const SizedBox(height: 8),
             Text(
               'Be the first to share a workout!',
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 14, color: context.textTertiary),
             ),
           ],
         ),
@@ -141,7 +145,7 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
-  Widget _buildSavedTab(SharedWorkoutProvider provider) {
+  Widget _buildSavedTab(BuildContext context, SharedWorkoutProvider provider) {
     final workouts = provider.savedWorkouts;
 
     if (workouts.isEmpty) {
@@ -149,16 +153,16 @@ class _CommunityScreenState extends State<CommunityScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.bookmark_border, size: 64, color: Colors.grey[400]),
+            Icon(Icons.bookmark_border, size: 64, color: context.textTertiary),
             const SizedBox(height: 16),
             Text(
               'No saved workouts',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 16, color: context.textSecondary),
             ),
             const SizedBox(height: 8),
             Text(
               'Save workouts to access them later',
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 14, color: context.textTertiary),
             ),
           ],
         ),
@@ -177,7 +181,7 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
-  Widget _buildMySharesTab(SharedWorkoutProvider provider) {
+  Widget _buildMySharesTab(BuildContext context, SharedWorkoutProvider provider) {
     final workouts = provider.mySharedWorkouts;
 
     if (workouts.isEmpty) {
@@ -185,16 +189,16 @@ class _CommunityScreenState extends State<CommunityScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.share_outlined, size: 64, color: Colors.grey[400]),
+            Icon(Icons.share_outlined, size: 64, color: context.textTertiary),
             const SizedBox(height: 16),
             Text(
               'You haven\'t shared any workouts',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 16, color: context.textSecondary),
             ),
             const SizedBox(height: 8),
             Text(
               'Share your workouts with the community!',
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 14, color: context.textTertiary),
             ),
           ],
         ),
@@ -249,7 +253,7 @@ class _CommunityScreenState extends State<CommunityScreen>
                           workout.timeSinceShared,
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey[600],
+                            color: context.textSecondary,
                           ),
                         ),
                       ],
@@ -259,7 +263,7 @@ class _CommunityScreenState extends State<CommunityScreen>
                     IconButton(
                       icon: const Icon(Icons.delete_outline),
                       onPressed: () => _confirmDelete(workout, provider),
-                      color: Colors.red,
+                      color: context.error,
                     ),
                 ],
               ),
@@ -277,7 +281,7 @@ class _CommunityScreenState extends State<CommunityScreen>
                 const SizedBox(height: 4),
                 Text(
                   workout.description!,
-                  style: TextStyle(color: Colors.grey[700]),
+                  style: TextStyle(color: context.textSecondary),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
