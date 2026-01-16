@@ -174,8 +174,12 @@ class AppTheme {
         secondary: AppColors.iosSystemGreen,
         tertiary: AppColors.gray400,
         error: AppColors.errorRed,
-        surface: Color(0xFF1C1C1E), // Dark grey for cards (grey.shade900 equivalent)
-        surfaceContainerHighest: Color(0xFF2C2C2E), // Darker grey for elevated cards
+        surface: Color(
+          0xFF1C1C1E,
+        ), // Dark grey for cards (grey.shade900 equivalent)
+        surfaceContainerHighest: Color(
+          0xFF2C2C2E,
+        ), // Darker grey for elevated cards
         onPrimary: Colors.white,
         onSecondary: Colors.white,
         onTertiary: Colors.white,
@@ -185,8 +189,9 @@ class AppTheme {
       ),
 
       // Scaffold - Very dark background
-      scaffoldBackgroundColor: const Color(0xFF121212), // Almost black background
-
+      scaffoldBackgroundColor: const Color(
+        0xFF121212,
+      ), // Almost black background
       // AppBar - Matches scaffold with no elevation
       appBarTheme: const AppBarTheme(
         backgroundColor: Color(0xFF121212),
@@ -238,8 +243,10 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: AppColors.iosSystemGreen, width: 2),
+          borderSide: const BorderSide(
+            color: AppColors.iosSystemGreen,
+            width: 2,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
