@@ -59,6 +59,7 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _startWorkout(BuildContext context) async {
     // Store references before async gap
     final sessionsProvider = context.read<SessionsProvider>();
+    final tabService = context.read<TabNavigationService>();
     final navigator = Navigator.of(context);
 
     // Show workout name dialog
@@ -73,6 +74,8 @@ class _MainScreenState extends State<MainScreen> {
     final session = await sessionsProvider.startNewWorkout(name: workoutName);
 
     if (session != null && mounted) {
+      // Switch to workouts tab first so when user comes back they're on workouts
+      tabService.switchTab(0);
       // Navigate to active workout screen with session ID
       navigator.pushNamed(RouteNames.activeWorkout, arguments: session.id);
     }
@@ -126,9 +129,16 @@ class _MainScreenState extends State<MainScreen> {
                 _QuickActionItem(
                   icon: Icons.calendar_today,
                   label: 'Plan Workout',
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
-                    Navigator.pushNamed(context, '/plan-workout');
+                    final result = await Navigator.pushNamed(
+                      context,
+                      '/plan-workout',
+                    );
+                    // Switch to workouts tab after planning
+                    if (result == true && context.mounted) {
+                      context.read<TabNavigationService>().switchTab(0);
+                    }
                   },
                 ),
                 _QuickActionItem(

@@ -135,6 +135,12 @@ class WeeklyScheduleWidget extends StatelessWidget {
     }
   }
 
+  /// Get today's day number (1=Monday, 7=Sunday)
+  int _getTodayDayNumber() {
+    final now = DateTime.now();
+    return now.weekday; // DateTime.weekday: 1=Monday, 7=Sunday
+  }
+
   /// Build a single day card in grid layout
   /// Shows day name at top, workouts below (Activity Types style)
   Widget _buildDayCard(
@@ -145,6 +151,7 @@ class WeeklyScheduleWidget extends StatelessWidget {
   ) {
     final isRestDay = workouts.isEmpty;
     final hasCurrentDay = workouts.any((w) => program.isCurrentWorkout(w));
+    final isToday = dayNumber == _getTodayDayNumber();
 
     return DragTarget<ProgramWorkout>(
       onWillAcceptWithDetails: (details) => true,
@@ -163,6 +170,8 @@ class WeeklyScheduleWidget extends StatelessWidget {
             color:
                 isHighlighted
                     ? theme.primaryColor.withValues(alpha: 0.15)
+                    : isToday
+                    ? theme.primaryColor.withValues(alpha: 0.1)
                     : const Color(
                       0xFF1C1C1E,
                     ), // Slightly darker than parent for layering
@@ -170,10 +179,12 @@ class WeeklyScheduleWidget extends StatelessWidget {
               color:
                   isHighlighted
                       ? theme.primaryColor
+                      : isToday
+                      ? theme.primaryColor
                       : (hasCurrentDay
                           ? theme.primaryColor.withValues(alpha: 0.5)
                           : const Color(0xFF38383A)),
-              width: isHighlighted ? 1.5 : 0.5, // Subtle borders
+              width: isHighlighted || isToday ? 2 : 0.5, // Subtle borders
             ),
             borderRadius: BorderRadius.circular(10), // iOS corner radius
           ),
@@ -186,19 +197,35 @@ class WeeklyScheduleWidget extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color:
-                      hasCurrentDay
+                      isToday || hasCurrentDay
                           ? theme.primaryColor
                           : theme.primaryColor.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text(
-                  _getWeekdayName(dayNumber).substring(0, 3).toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _getWeekdayName(dayNumber).substring(0, 3).toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    if (isToday) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               const SizedBox(height: 12),
