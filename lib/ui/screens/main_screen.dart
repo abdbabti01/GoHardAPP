@@ -124,6 +124,14 @@ class _MainScreenState extends State<MainScreen> {
                   },
                 ),
                 _QuickActionItem(
+                  icon: Icons.calendar_today,
+                  label: 'Plan Workout',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/plan-workout');
+                  },
+                ),
+                _QuickActionItem(
                   icon: Icons.psychology,
                   label: 'Ask AI Coach',
                   onTap: () {
