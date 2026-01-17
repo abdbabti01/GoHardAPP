@@ -15,7 +15,6 @@ class CurvedNavigationBar extends StatelessWidget {
   final Color? fabColor;
   final double notchMargin;
   final double height;
-  final String fabLabel;
 
   const CurvedNavigationBar({
     super.key,
@@ -29,7 +28,6 @@ class CurvedNavigationBar extends StatelessWidget {
     this.fabColor,
     this.notchMargin = 8.0,
     this.height = 65,
-    this.fabLabel = 'AI Coach',
   });
 
   @override
@@ -135,44 +133,30 @@ class CurvedNavigationBar extends StatelessWidget {
             right: 0,
             top: -fabSize / 2 + 8,
             child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: onFabTap,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      width: fabSize,
-                      height: fabSize,
-                      decoration: BoxDecoration(
-                        color: fabBgColor,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: borderColor, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+              child: GestureDetector(
+                onTap: onFabTap,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: fabSize,
+                  height: fabSize,
+                  decoration: BoxDecoration(
+                    color: fabBgColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: borderColor, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
                       ),
-                      child: Icon(
-                        Icons.add,
-                        color: context.textOnPrimary,
-                        size: 28,
-                      ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    fabLabel,
-                    style: TextStyle(
-                      color: inactiveColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  child: Icon(
+                    Icons.add,
+                    color: context.textOnPrimary,
+                    size: 28,
                   ),
-                ],
+                ),
               ),
             ),
           ),

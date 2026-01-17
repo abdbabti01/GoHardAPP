@@ -6,7 +6,10 @@ import 'exercises/exercises_screen.dart';
 import 'profile/profile_screen.dart';
 import '../../core/services/tab_navigation_service.dart';
 import '../../core/theme/theme_colors.dart';
+import '../../providers/sessions_provider.dart';
+import '../../routes/route_names.dart';
 import '../widgets/common/curved_navigation_bar.dart';
+import '../widgets/sessions/workout_name_dialog.dart';
 
 /// Main screen wrapper with bottom navigation
 /// Provides 4-tab navigation: Dashboard, Diary, Exercises, More
@@ -53,6 +56,31 @@ class _MainScreenState extends State<MainScreen> {
     _showQuickActionsMenu(context);
   }
 
+  Future<void> _startWorkout(BuildContext context) async {
+    // Store references before async gap
+    final sessionsProvider = context.read<SessionsProvider>();
+    final navigator = Navigator.of(context);
+
+    // Show workout name dialog
+    final workoutName = await showDialog<String>(
+      context: context,
+      builder: (context) => const WorkoutNameDialog(),
+    );
+
+    if (workoutName == null || !mounted) return;
+
+    // Create new workout session
+    final session = await sessionsProvider.startNewWorkout(name: workoutName);
+
+    if (session != null && mounted) {
+      // Navigate to active workout screen with session ID
+      navigator.pushNamed(
+        RouteNames.activeWorkout,
+        arguments: session.id,
+      );
+    }
+  }
+
   void _showQuickActionsMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -95,15 +123,7 @@ class _MainScreenState extends State<MainScreen> {
                   label: 'Start Workout',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.pushNamed(context, '/active-workout');
-                  },
-                ),
-                _QuickActionItem(
-                  icon: Icons.calendar_today,
-                  label: 'Plan Workout',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, '/plan-workout');
+                    _startWorkout(context);
                   },
                 ),
                 _QuickActionItem(
