@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'sessions/sessions_screen.dart';
-import 'analytics/analytics_screen.dart';
 import 'goals/goals_screen.dart';
+import 'exercises/exercises_screen.dart';
 import 'profile/profile_screen.dart';
 import '../../core/services/tab_navigation_service.dart';
 import '../../core/theme/theme_colors.dart';
@@ -39,11 +39,11 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     // Create screens with initial sub-tab if provided
-    // 4 tabs: Dashboard (Sessions), Diary (Analytics), Goals, More (Profile)
+    // 4 tabs: Dashboard (Sessions), Goals, Exercises, More (Profile)
     _screens = [
       SessionsScreen(initialTab: widget.initialSubTab),
-      const AnalyticsScreen(),
       const GoalsScreen(),
+      const ExercisesScreen(),
       const ProfileScreen(),
     ];
   }
@@ -147,8 +147,11 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icons.dashboard_rounded,
             label: 'Dashboard',
           ),
-          CurvedNavigationBarItem(icon: Icons.book_outlined, label: 'Diary'),
           CurvedNavigationBarItem(icon: Icons.flag_outlined, label: 'Goals'),
+          CurvedNavigationBarItem(
+            icon: Icons.fitness_center,
+            label: 'Exercises',
+          ),
           CurvedNavigationBarItem(icon: Icons.menu, label: 'More'),
         ],
       ),
