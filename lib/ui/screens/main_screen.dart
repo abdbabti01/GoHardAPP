@@ -74,10 +74,7 @@ class _MainScreenState extends State<MainScreen> {
 
     if (session != null && mounted) {
       // Navigate to active workout screen with session ID
-      navigator.pushNamed(
-        RouteNames.activeWorkout,
-        arguments: session.id,
-      );
+      navigator.pushNamed(RouteNames.activeWorkout, arguments: session.id);
     }
   }
 
