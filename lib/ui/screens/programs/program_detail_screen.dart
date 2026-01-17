@@ -21,11 +21,11 @@ class ProgramDetailScreen extends StatefulWidget {
 
 class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
-  Program? _program;
   bool _isLoading = true;
   int _selectedWeek = 1;
   bool _showCalendarView = false;
-  late TabController _tabController;
+  TabController? _tabController;
+  int? _lastTotalWeeks;
 
   @override
   bool get wantKeepAlive => true;
@@ -42,36 +42,44 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
 
     // Force refresh from server to get latest data
     await provider.loadPrograms();
-    final program = await provider.getProgramById(widget.programId);
+
+    // Get program from cache (now updated by loadPrograms)
+    final program = provider.getProgramFromCache(widget.programId);
 
     if (program != null && mounted) {
+      _initTabController(program);
       setState(() {
-        _program = program;
         _selectedWeek = program.currentWeek;
         _isLoading = false;
-      });
-      _tabController = TabController(
-        length: program.totalWeeks,
-        vsync: this,
-        initialIndex: program.currentWeek - 1,
-      );
-      _tabController.addListener(() {
-        if (!_tabController.indexIsChanging) {
-          setState(() {
-            _selectedWeek = _tabController.index + 1;
-          });
-        }
       });
     } else if (mounted) {
       setState(() => _isLoading = false);
     }
   }
 
+  void _initTabController(Program program) {
+    // Only recreate tab controller if total weeks changed
+    if (_tabController == null || _lastTotalWeeks != program.totalWeeks) {
+      _tabController?.dispose();
+      _tabController = TabController(
+        length: program.totalWeeks,
+        vsync: this,
+        initialIndex: program.currentWeek - 1,
+      );
+      _tabController!.addListener(() {
+        if (!_tabController!.indexIsChanging) {
+          setState(() {
+            _selectedWeek = _tabController!.index + 1;
+          });
+        }
+      });
+      _lastTotalWeeks = program.totalWeeks;
+    }
+  }
+
   @override
   void dispose() {
-    if (_program != null) {
-      _tabController.dispose();
-    }
+    _tabController?.dispose();
     super.dispose();
   }
 
@@ -86,15 +94,21 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       );
     }
 
-    if (_program == null) {
+    // Watch the provider for changes and get program from cache
+    final provider = context.watch<ProgramsProvider>();
+    final program = provider.getProgramFromCache(widget.programId);
+
+    if (program == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Program Details')),
         body: const Center(child: Text('Program not found')),
       );
     }
 
+    // Initialize tab controller if needed
+    _initTabController(program);
+
     final theme = Theme.of(context);
-    final program = _program!;
 
     return Scaffold(
       appBar: AppBar(
