@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
@@ -208,7 +209,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
             decoration: BoxDecoration(
               color: theme.primaryColor.withValues(alpha: 0.05),
               border: Border(
-                bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+                bottom: BorderSide(color: context.border, width: 1),
               ),
             ),
             child: Column(
@@ -233,7 +234,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                             'Phase ${program.currentPhase}: ${program.phaseName}',
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey.shade600,
+                              color: context.textSecondary,
                             ),
                           ),
                         ],
@@ -254,7 +255,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                           'Complete',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade600,
+                            color: context.textSecondary,
                           ),
                         ),
                       ],
@@ -267,7 +268,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                   child: LinearProgressIndicator(
                     value: program.progressPercentage / 100,
                     minHeight: 10,
-                    backgroundColor: Colors.grey.shade200,
+                    backgroundColor: context.surfaceElevated,
                     valueColor: AlwaysStoppedAnimation<Color>(
                       theme.primaryColor,
                     ),
@@ -277,7 +278,10 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                   const SizedBox(height: 12),
                   Text(
                     program.description!,
-                    style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+                    style: TextStyle(
+                      color: context.textSecondary,
+                      fontSize: 14,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -362,7 +366,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                 isScrollable: true,
                 indicatorColor: theme.primaryColor,
                 labelColor: theme.primaryColor,
-                unselectedLabelColor: Colors.grey.shade600,
+                unselectedLabelColor: context.textSecondary,
                 tabs: List.generate(
                   program.totalWeeks,
                   (index) => Tab(text: 'Week ${index + 1}'),
@@ -380,13 +384,13 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                             Icon(
                               Icons.fitness_center,
                               size: 64,
-                              color: Colors.grey.shade400,
+                              color: context.textTertiary,
                             ),
                             const SizedBox(height: 16),
                             Text(
                               'No workouts in this program yet',
                               style: TextStyle(
-                                color: Colors.grey.shade600,
+                                color: context.textSecondary,
                                 fontSize: 16,
                               ),
                             ),
@@ -436,11 +440,11 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.self_improvement, size: 64, color: Colors.grey.shade400),
+            Icon(Icons.self_improvement, size: 64, color: context.textTertiary),
             const SizedBox(height: 16),
             Text(
               'Rest week - Recovery time!',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+              style: TextStyle(color: context.textSecondary, fontSize: 16),
             ),
           ],
         ),
@@ -537,7 +541,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                               ? Colors.green
                               : isMissed
                               ? Colors.orange
-                              : Colors.grey.shade300,
+                              : context.surfaceElevated,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -546,7 +550,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                         color:
                             isCurrentWorkout || workout.isCompleted || isMissed
                                 ? Colors.white
-                                : Colors.grey.shade700,
+                                : context.textSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
@@ -559,9 +563,10 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                       children: [
                         Text(
                           _getCleanWorkoutName(workout.workoutName),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
+                            color: context.textPrimary,
                           ),
                         ),
                         if (workout.workoutType != null) ...[
@@ -570,7 +575,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                             workout.workoutType!,
                             style: TextStyle(
                               fontSize: 13,
-                              color: Colors.grey.shade600,
+                              color: context.textSecondary,
                             ),
                           ),
                         ],
@@ -627,7 +632,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                 const SizedBox(height: 8),
                 Text(
                   workout.description!,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  style: TextStyle(color: context.textSecondary, fontSize: 14),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -639,13 +644,13 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     Icon(
                       Icons.access_time,
                       size: 16,
-                      color: Colors.grey.shade600,
+                      color: context.textSecondary,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       '${workout.estimatedDuration} min',
                       style: TextStyle(
-                        color: Colors.grey.shade600,
+                        color: context.textSecondary,
                         fontSize: 13,
                       ),
                     ),
@@ -654,12 +659,15 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                   Icon(
                     Icons.fitness_center,
                     size: 16,
-                    color: Colors.grey.shade600,
+                    color: context.textSecondary,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     '${workout.exerciseCount} exercises',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    style: TextStyle(
+                      color: context.textSecondary,
+                      fontSize: 13,
+                    ),
                   ),
                   if (workout.isRestDay) ...[
                     const SizedBox(width: 16),

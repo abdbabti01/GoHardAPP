@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/theme_colors.dart';
 
-/// Custom bottom navigation bar with convex bump and FAB on top
-/// Features upward curve in center with AI Coach button
+/// Custom bottom navigation bar with notched FAB
+/// Features downward curve in center with FAB inside
 /// Automatically adapts to light/dark theme
 class CurvedNavigationBar extends StatelessWidget {
   final int currentIndex;
@@ -28,7 +28,7 @@ class CurvedNavigationBar extends StatelessWidget {
     this.unselectedColor,
     this.fabColor,
     this.notchMargin = 8.0,
-    this.height = 80,
+    this.height = 65,
     this.fabLabel = 'AI Coach',
   });
 
@@ -41,15 +41,15 @@ class CurvedNavigationBar extends StatelessWidget {
     final fabBgColor = fabColor ?? context.navBarFabBackground;
     final borderColor = context.border;
 
-    const double bumpHeight = 28;
+    const double notchRadius = 35;
     const double fabSize = 56;
 
     return SizedBox(
-      height: height + MediaQuery.of(context).padding.bottom + bumpHeight,
+      height: height + MediaQuery.of(context).padding.bottom,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Background with upward curve (convex bump)
+          // Background with notch curve
           Positioned(
             left: 0,
             right: 0,
@@ -57,18 +57,17 @@ class CurvedNavigationBar extends StatelessWidget {
             child: CustomPaint(
               size: Size(
                 MediaQuery.of(context).size.width,
-                height + MediaQuery.of(context).padding.bottom + bumpHeight,
+                height + MediaQuery.of(context).padding.bottom,
               ),
-              painter: _ConvexBumpPainter(
+              painter: _NotchedNavBarPainter(
                 backgroundColor: bgColor,
                 borderColor: borderColor,
-                bumpRadius: 50,
-                bumpHeight: bumpHeight,
+                notchRadius: notchRadius,
                 bottomPadding: MediaQuery.of(context).padding.bottom,
               ),
             ),
           ),
-          // Navigation items (left side)
+          // Navigation items
           Positioned(
             left: 0,
             right: 0,
@@ -101,29 +100,8 @@ class CurvedNavigationBar extends StatelessWidget {
                             .toList(),
                   ),
                 ),
-                // Center space for FAB label
-                SizedBox(
-                  width: 80,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      GestureDetector(
-                        onTap: onFabTap,
-                        behavior: HitTestBehavior.opaque,
-                        child: Text(
-                          fabLabel,
-                          style: TextStyle(
-                            color: inactiveColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.normal,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
+                // Center space for FAB
+                const SizedBox(width: 80),
                 // Right items
                 Expanded(
                   child: Row(
@@ -151,36 +129,50 @@ class CurvedNavigationBar extends StatelessWidget {
               ],
             ),
           ),
-          // FAB on top of the bump
+          // FAB in the notch
           Positioned(
             left: 0,
             right: 0,
-            top: 0,
+            top: -fabSize / 2 + 8,
             child: Center(
-              child: GestureDetector(
-                onTap: onFabTap,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  width: fabSize,
-                  height: fabSize,
-                  decoration: BoxDecoration(
-                    color: fabBgColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: borderColor, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: onFabTap,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      width: fabSize,
+                      height: fabSize,
+                      decoration: BoxDecoration(
+                        color: fabBgColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: borderColor, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
+                      child: Icon(
+                        Icons.add,
+                        color: context.textOnPrimary,
+                        size: 28,
+                      ),
+                    ),
                   ),
-                  child: Icon(
-                    Icons.add,
-                    color: context.textOnPrimary,
-                    size: 28,
+                  const SizedBox(height: 4),
+                  Text(
+                    fabLabel,
+                    style: TextStyle(
+                      color: inactiveColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -235,18 +227,16 @@ class CurvedNavigationBarItem {
   const CurvedNavigationBarItem({required this.icon, required this.label});
 }
 
-class _ConvexBumpPainter extends CustomPainter {
+class _NotchedNavBarPainter extends CustomPainter {
   final Color backgroundColor;
   final Color borderColor;
-  final double bumpRadius;
-  final double bumpHeight;
+  final double notchRadius;
   final double bottomPadding;
 
-  _ConvexBumpPainter({
+  _NotchedNavBarPainter({
     required this.backgroundColor,
     required this.borderColor,
-    required this.bumpRadius,
-    required this.bumpHeight,
+    required this.notchRadius,
     required this.bottomPadding,
   });
 
@@ -259,46 +249,39 @@ class _ConvexBumpPainter extends CustomPainter {
 
     final path = Path();
     final centerX = size.width / 2;
-    final bumpWidth = bumpRadius * 2 + 40;
-    final topY = bumpHeight;
+    final notchWidth = notchRadius * 2 + 20;
 
-    // Start from top-left (below bump level)
-    path.moveTo(0, topY + 20);
+    // Start from top-left
+    path.moveTo(0, 0);
 
-    // Left rounded corner
-    path.quadraticBezierTo(0, topY, 20, topY);
+    // Top edge to notch start
+    path.lineTo(centerX - notchWidth / 2, 0);
 
-    // Top edge to bump start
-    path.lineTo(centerX - bumpWidth / 2, topY);
-
-    // Bump curve (left side going up)
+    // Notch curve (going down into the bar)
     path.quadraticBezierTo(
-      centerX - bumpWidth / 2 + 20,
-      topY,
-      centerX - bumpRadius,
-      8,
+      centerX - notchWidth / 2 + 15,
+      0,
+      centerX - notchRadius,
+      notchRadius - 5,
     );
 
-    // Bump top arc (curves upward)
+    // Bottom of notch arc
     path.arcToPoint(
-      Offset(centerX + bumpRadius, 8),
-      radius: Radius.circular(bumpRadius),
+      Offset(centerX + notchRadius, notchRadius - 5),
+      radius: Radius.circular(notchRadius + 5),
       clockwise: false,
     );
 
-    // Bump curve (right side going down)
+    // Notch curve (coming back up)
     path.quadraticBezierTo(
-      centerX + bumpWidth / 2 - 20,
-      topY,
-      centerX + bumpWidth / 2,
-      topY,
+      centerX + notchWidth / 2 - 15,
+      0,
+      centerX + notchWidth / 2,
+      0,
     );
 
-    // Top edge from bump to right
-    path.lineTo(size.width - 20, topY);
-
-    // Right rounded corner
-    path.quadraticBezierTo(size.width, topY, size.width, topY + 20);
+    // Top edge from notch to right
+    path.lineTo(size.width, 0);
 
     // Right edge
     path.lineTo(size.width, size.height);
@@ -307,7 +290,7 @@ class _ConvexBumpPainter extends CustomPainter {
     path.lineTo(0, size.height);
 
     // Left edge
-    path.lineTo(0, topY + 20);
+    path.lineTo(0, 0);
 
     path.close();
 
@@ -321,28 +304,26 @@ class _ConvexBumpPainter extends CustomPainter {
           ..strokeWidth = 0.5;
 
     final borderPath = Path();
-    borderPath.moveTo(0, topY + 20);
-    borderPath.quadraticBezierTo(0, topY, 20, topY);
-    borderPath.lineTo(centerX - bumpWidth / 2, topY);
+    borderPath.moveTo(0, 0);
+    borderPath.lineTo(centerX - notchWidth / 2, 0);
     borderPath.quadraticBezierTo(
-      centerX - bumpWidth / 2 + 20,
-      topY,
-      centerX - bumpRadius,
-      8,
+      centerX - notchWidth / 2 + 15,
+      0,
+      centerX - notchRadius,
+      notchRadius - 5,
     );
     borderPath.arcToPoint(
-      Offset(centerX + bumpRadius, 8),
-      radius: Radius.circular(bumpRadius),
+      Offset(centerX + notchRadius, notchRadius - 5),
+      radius: Radius.circular(notchRadius + 5),
       clockwise: false,
     );
     borderPath.quadraticBezierTo(
-      centerX + bumpWidth / 2 - 20,
-      topY,
-      centerX + bumpWidth / 2,
-      topY,
+      centerX + notchWidth / 2 - 15,
+      0,
+      centerX + notchWidth / 2,
+      0,
     );
-    borderPath.lineTo(size.width - 20, topY);
-    borderPath.quadraticBezierTo(size.width, topY, size.width, topY + 20);
+    borderPath.lineTo(size.width, 0);
 
     canvas.drawPath(borderPath, borderPaint);
   }
