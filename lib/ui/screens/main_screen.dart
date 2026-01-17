@@ -95,7 +95,7 @@ class _MainScreenState extends State<MainScreen> {
                   label: 'Start Workout',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.pushNamed(context, '/new-session');
+                    Navigator.pushNamed(context, '/active-workout');
                   },
                 ),
                 _QuickActionItem(
@@ -112,14 +112,6 @@ class _MainScreenState extends State<MainScreen> {
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.pushNamed(context, '/chat');
-                  },
-                ),
-                _QuickActionItem(
-                  icon: Icons.add_circle_outline,
-                  label: 'Add Exercise',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, '/add-exercise');
                   },
                 ),
                 SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
