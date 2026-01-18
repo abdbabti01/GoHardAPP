@@ -7,6 +7,7 @@ import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 
 /// Widget that displays a 7-day weekly schedule with enhanced drag-and-drop
+/// Redesigned with a timeline-style vertical layout for better multi-workout support
 class WeeklyScheduleWidget extends StatefulWidget {
   final Program program;
   final Function(ProgramWorkout)? onWorkoutTap;
@@ -23,9 +24,31 @@ class WeeklyScheduleWidget extends StatefulWidget {
   State<WeeklyScheduleWidget> createState() => _WeeklyScheduleWidgetState();
 }
 
-class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
+class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget>
+    with SingleTickerProviderStateMixin {
   bool _isDragging = false;
   int? _draggedFromDay;
+  int? _hoveredDay;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   List<List<ProgramWorkout>> _getThisWeeksWorkouts() {
     if (widget.program.workouts == null) return List.generate(7, (_) => []);
@@ -37,7 +60,8 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
       final dayWorkouts =
           widget.program.workouts!
               .where((w) => w.weekNumber == currentWeek && w.dayNumber == day)
-              .toList();
+              .toList()
+            ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
       weekWorkouts.add(dayWorkouts);
     }
 
@@ -80,7 +104,6 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
     final provider = context.read<ProgramsProvider>();
     final messenger = ScaffoldMessenger.of(context);
 
-    // Haptic feedback
     HapticFeedback.mediumImpact();
 
     try {
@@ -148,171 +171,185 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
     final todayNumber = _getTodayDayNumber();
 
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: context.surfaceElevated,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.border, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: theme.primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.calendar_month_rounded,
-                  size: 22,
-                  color: theme.primaryColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Week ${widget.program.currentWeek}',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: context.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      '${widget.program.totalWeeks - widget.program.currentWeek + 1} weeks remaining',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.primaryColor,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${widget.program.progressPercentage.toStringAsFixed(0)}%',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+          _buildHeader(theme),
 
           // Drag hint
-          AnimatedOpacity(
-            opacity: _isDragging ? 0.0 : 1.0,
-            duration: const Duration(milliseconds: 200),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: theme.primaryColor.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.touch_app_rounded,
-                    size: 16,
-                    color: theme.primaryColor,
+          _buildDragHint(theme),
+
+          // Timeline days
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              children: List.generate(7, (index) {
+                final dayNumber = index + 1;
+                final isLast = dayNumber == 7;
+                return _buildDayRow(
+                  context,
+                  dayNumber,
+                  weekWorkouts[index],
+                  theme,
+                  todayNumber,
+                  isLast,
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.primaryColor.withValues(alpha: 0.08),
+            theme.primaryColor.withValues(alpha: 0.02),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.primaryColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.calendar_month_rounded,
+              size: 24,
+              color: theme.primaryColor,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Week ${widget.program.currentWeek}',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: context.textPrimary,
+                    letterSpacing: -0.5,
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Hold & drag workouts to reschedule',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.primaryColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${widget.program.totalWeeks - widget.program.currentWeek + 1} weeks remaining • ${widget.program.phaseName}',
+                  style: TextStyle(fontSize: 13, color: context.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  theme.primaryColor,
+                  theme.primaryColor.withValues(alpha: 0.8),
                 ],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: theme.primaryColor.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              '${widget.program.progressPercentage.toStringAsFixed(0)}%',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Days in grid: 4 days first row, 3 days second row
-          // Row 1: Mon, Tue, Wed, Thu
-          _buildDayRow(context, weekWorkouts, theme, todayNumber, 1, 4),
-          const SizedBox(height: 8),
-          // Row 2: Fri, Sat, Sun
-          _buildDayRow(context, weekWorkouts, theme, todayNumber, 5, 7),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDragHint(ThemeData theme) {
+    return AnimatedOpacity(
+      opacity: _isDragging ? 0.0 : 1.0,
+      duration: const Duration(milliseconds: 200),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: theme.primaryColor.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: theme.primaryColor.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.swipe_rounded, size: 18, color: theme.primaryColor),
+            const SizedBox(width: 8),
+            Text(
+              'Hold & drag workouts to reschedule',
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.primaryColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildDayRow(
     BuildContext context,
-    List<List<ProgramWorkout>> weekWorkouts,
-    ThemeData theme,
-    int todayNumber,
-    int startDay,
-    int endDay,
-  ) {
-    final dayCount = endDay - startDay + 1;
-
-    return SizedBox(
-      height: 160,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: List.generate(dayCount, (index) {
-          final dayNumber = startDay + index;
-          return Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: index == 0 ? 0 : 4,
-                right: index == dayCount - 1 ? 0 : 4,
-              ),
-              child: _buildDayCard(
-                context,
-                dayNumber,
-                weekWorkouts[dayNumber - 1],
-                theme,
-                todayNumber,
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildDayCard(
-    BuildContext context,
     int dayNumber,
     List<ProgramWorkout> workouts,
     ThemeData theme,
     int todayNumber,
+    bool isLast,
   ) {
     final isToday = dayNumber == todayNumber;
     final hasWorkout = workouts.isNotEmpty;
     final allCompleted = hasWorkout && workouts.every((w) => w.isCompleted);
     final hasMissed = workouts.any((w) => widget.program.isWorkoutMissed(w));
+    final isHovered = _hoveredDay == dayNumber;
     final isDragSource = _draggedFromDay == dayNumber;
 
     return DragTarget<ProgramWorkout>(
       onWillAcceptWithDetails: (details) {
         HapticFeedback.selectionClick();
+        setState(() => _hoveredDay = dayNumber);
         return true;
       },
       onAcceptWithDetails: (details) async {
@@ -323,165 +360,360 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
         setState(() {
           _isDragging = false;
           _draggedFromDay = null;
+          _hoveredDay = null;
         });
       },
       onLeave: (data) {
-        // Optional: handle when drag leaves
+        setState(() => _hoveredDay = null);
       },
       builder: (context, candidateData, rejectedData) {
-        final isHighlighted = candidateData.isNotEmpty;
+        final isHighlighted = candidateData.isNotEmpty || isHovered;
 
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOutCubic,
-          transform: Matrix4.identity()..scale(isHighlighted ? 1.03 : 1.0),
-          decoration: BoxDecoration(
-            color:
-                isHighlighted
-                    ? theme.primaryColor.withValues(alpha: 0.15)
-                    : isDragSource
-                    ? context.surface.withValues(alpha: 0.5)
-                    : isToday
-                    ? theme.primaryColor.withValues(alpha: 0.08)
-                    : context.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color:
-                  isHighlighted
-                      ? theme.primaryColor
-                      : isToday
-                      ? theme.primaryColor
-                      : allCompleted
-                      ? Colors.green.withValues(alpha: 0.5)
-                      : context.border,
-              width: isHighlighted || isToday ? 2 : 1,
-            ),
-            boxShadow:
-                isHighlighted
-                    ? [
-                      BoxShadow(
-                        color: theme.primaryColor.withValues(alpha: 0.25),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                    : null,
-          ),
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 150),
-            opacity: isDragSource ? 0.4 : 1.0,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                children: [
-                  // Day header with name
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color:
-                          isToday
-                              ? theme.primaryColor
-                              : allCompleted
-                              ? Colors.green
-                              : hasMissed
-                              ? Colors.orange
-                              : theme.primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _getWeekdayName(dayNumber),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color:
-                                isToday || allCompleted || hasMissed
-                                    ? Colors.white
-                                    : theme.primaryColor,
-                          ),
-                        ),
-                        if (isToday) ...[
-                          const SizedBox(width: 4),
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ] else if (allCompleted) ...[
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.check,
-                            size: 14,
-                            color: Colors.white,
-                          ),
-                        ] else if (hasMissed) ...[
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.priority_high,
-                            size: 14,
-                            color: Colors.white,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+          margin: EdgeInsets.only(bottom: isLast ? 0 : 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Timeline indicator
+              _buildTimelineIndicator(
+                theme,
+                isToday,
+                allCompleted,
+                hasMissed,
+                hasWorkout,
+                isLast,
+                isHighlighted,
+              ),
 
-                  // Workouts list or rest day
-                  Expanded(
+              // Day badge
+              _buildDayBadge(
+                theme,
+                dayNumber,
+                isToday,
+                allCompleted,
+                hasMissed,
+                isHighlighted,
+              ),
+
+              const SizedBox(width: 12),
+
+              // Workouts area
+              Expanded(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        isHighlighted
+                            ? theme.primaryColor.withValues(alpha: 0.1)
+                            : isDragSource
+                            ? context.surface.withValues(alpha: 0.3)
+                            : context.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color:
+                          isHighlighted
+                              ? theme.primaryColor
+                              : isToday
+                              ? theme.primaryColor.withValues(alpha: 0.4)
+                              : context.borderSubtle,
+                      width: isHighlighted ? 2 : 1,
+                    ),
+                    boxShadow:
+                        isHighlighted
+                            ? [
+                              BoxShadow(
+                                color: theme.primaryColor.withValues(
+                                  alpha: 0.15,
+                                ),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                            : null,
+                  ),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 150),
+                    opacity: isDragSource ? 0.4 : 1.0,
                     child:
                         workouts.isEmpty
-                            ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.hotel_rounded,
-                                    size: 24,
-                                    color: context.textTertiary,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Rest Day',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: context.textTertiary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                            : SingleChildScrollView(
-                              child: Column(
-                                children:
-                                    workouts.map((workout) {
-                                      return _buildWorkoutItem(
-                                        context,
-                                        workout,
-                                        theme,
-                                        dayNumber,
-                                      );
-                                    }).toList(),
-                              ),
+                            ? _buildRestDayContent(context, theme)
+                            : _buildWorkoutsContent(
+                              context,
+                              workouts,
+                              theme,
+                              dayNumber,
                             ),
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         );
       },
     );
   }
 
-  Widget _buildWorkoutItem(
+  Widget _buildTimelineIndicator(
+    ThemeData theme,
+    bool isToday,
+    bool allCompleted,
+    bool hasMissed,
+    bool hasWorkout,
+    bool isLast,
+    bool isHighlighted,
+  ) {
+    Color dotColor;
+    if (isHighlighted) {
+      dotColor = theme.primaryColor;
+    } else if (allCompleted) {
+      dotColor = Colors.green;
+    } else if (hasMissed) {
+      dotColor = Colors.orange;
+    } else if (isToday) {
+      dotColor = theme.primaryColor;
+    } else if (hasWorkout) {
+      dotColor = context.textTertiary;
+    } else {
+      dotColor = context.borderSubtle;
+    }
+
+    return SizedBox(
+      width: 24,
+      child: Column(
+        children: [
+          const SizedBox(height: 14),
+          AnimatedBuilder(
+            animation:
+                isToday ? _pulseAnimation : const AlwaysStoppedAnimation(1.0),
+            builder: (context, child) {
+              return Transform.scale(
+                scale: isToday ? _pulseAnimation.value : 1.0,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: dotColor,
+                    shape: BoxShape.circle,
+                    boxShadow:
+                        isToday || isHighlighted
+                            ? [
+                              BoxShadow(
+                                color: dotColor.withValues(alpha: 0.4),
+                                blurRadius: 6,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                            : null,
+                  ),
+                  child:
+                      allCompleted
+                          ? const Icon(
+                            Icons.check,
+                            size: 8,
+                            color: Colors.white,
+                          )
+                          : null,
+                ),
+              );
+            },
+          ),
+          if (!isLast)
+            Container(
+              width: 2,
+              height: 40,
+              margin: const EdgeInsets.only(top: 6),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    dotColor.withValues(alpha: 0.5),
+                    context.borderSubtle.withValues(alpha: 0.3),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayBadge(
+    ThemeData theme,
+    int dayNumber,
+    bool isToday,
+    bool allCompleted,
+    bool hasMissed,
+    bool isHighlighted,
+  ) {
+    Color bgColor;
+    Color textColor;
+
+    if (isHighlighted) {
+      bgColor = theme.primaryColor;
+      textColor = Colors.white;
+    } else if (isToday) {
+      bgColor = theme.primaryColor;
+      textColor = Colors.white;
+    } else if (allCompleted) {
+      bgColor = Colors.green;
+      textColor = Colors.white;
+    } else if (hasMissed) {
+      bgColor = Colors.orange;
+      textColor = Colors.white;
+    } else {
+      bgColor = context.surface;
+      textColor = context.textSecondary;
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: 44,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow:
+            isToday || isHighlighted
+                ? [
+                  BoxShadow(
+                    color: bgColor.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+                : null,
+      ),
+      child: Column(
+        children: [
+          Text(
+            _getWeekdayName(dayNumber),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          if (isToday) ...[
+            const SizedBox(height: 2),
+            Container(
+              width: 4,
+              height: 4,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRestDayContent(BuildContext context, ThemeData theme) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: context.textTertiary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            Icons.self_improvement_rounded,
+            size: 20,
+            color: context.textTertiary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          'Rest Day',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: context.textTertiary,
+          ),
+        ),
+        const Spacer(),
+        Icon(
+          Icons.spa_outlined,
+          size: 16,
+          color: context.textTertiary.withValues(alpha: 0.5),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkoutsContent(
+    BuildContext context,
+    List<ProgramWorkout> workouts,
+    ThemeData theme,
+    int dayNumber,
+  ) {
+    // For single workout, show inline
+    if (workouts.length == 1) {
+      return _buildSingleWorkoutRow(context, workouts.first, theme, dayNumber);
+    }
+
+    // For multiple workouts, show as horizontal scrollable chips
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: theme.primaryColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '${workouts.length} workouts',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: theme.primaryColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children:
+                workouts.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final workout = entry.value;
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      right: index < workouts.length - 1 ? 10 : 0,
+                    ),
+                    child: _buildWorkoutChip(
+                      context,
+                      workout,
+                      theme,
+                      dayNumber,
+                    ),
+                  );
+                }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSingleWorkoutRow(
     BuildContext context,
     ProgramWorkout workout,
     ThemeData theme,
@@ -491,181 +723,105 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
     final isMissed = widget.program.isWorkoutMissed(workout);
     final isRestDay = workout.isRestDay;
 
-    // Workout card
-    Widget workoutCard = Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color:
-            isCompleted
-                ? Colors.green.withValues(alpha: 0.12)
-                : isMissed
-                ? Colors.orange.withValues(alpha: 0.12)
-                : context.surfaceElevated,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color:
-              isCompleted
-                  ? Colors.green.withValues(alpha: 0.4)
-                  : isMissed
-                  ? Colors.orange.withValues(alpha: 0.4)
-                  : context.borderSubtle,
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          // Status indicator bar
-          Container(
-            width: 3,
-            height: 36,
-            decoration: BoxDecoration(
-              color:
-                  isCompleted
-                      ? Colors.green
-                      : isMissed
-                      ? Colors.orange
-                      : theme.primaryColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Workout info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _getCleanWorkoutName(workout.workoutName),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: context.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${workout.exerciseCount} exercises',
-                  style: TextStyle(fontSize: 10, color: context.textTertiary),
-                ),
-              ],
-            ),
-          ),
-          // Status icon
-          if (isCompleted)
-            Icon(Icons.check_circle, size: 16, color: Colors.green)
-          else if (!isRestDay)
-            Icon(Icons.drag_indicator, size: 16, color: context.textTertiary),
-        ],
-      ),
-    );
+    Color accentColor;
+    if (isCompleted) {
+      accentColor = Colors.green;
+    } else if (isMissed) {
+      accentColor = Colors.orange;
+    } else {
+      accentColor = theme.primaryColor;
+    }
 
-    // Make draggable if not rest day and not completed
-    if (!isRestDay && !isCompleted) {
-      return LongPressDraggable<ProgramWorkout>(
-        data: workout,
-        delay: const Duration(milliseconds: 150),
-        hapticFeedbackOnStart: true,
-        onDragStarted: () {
-          HapticFeedback.mediumImpact();
-          setState(() {
-            _isDragging = true;
-            _draggedFromDay = dayNumber;
-          });
-        },
-        onDragEnd: (details) {
-          setState(() {
-            _isDragging = false;
-            _draggedFromDay = null;
-          });
-        },
-        onDraggableCanceled: (velocity, offset) {
-          setState(() {
-            _isDragging = false;
-            _draggedFromDay = null;
-          });
-        },
-        feedback: Transform.scale(
-          scale: 1.1,
-          child: Material(
-            elevation: 16,
-            shadowColor: theme.primaryColor.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              width: 140,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: context.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: theme.primaryColor, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.primaryColor.withValues(alpha: 0.3),
-                    blurRadius: 16,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+    Widget content = Row(
+      children: [
+        // Accent bar
+        Container(
+          width: 4,
+          height: 44,
+          decoration: BoxDecoration(
+            color: accentColor,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 12),
+
+        // Workout info
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _getCleanWorkoutName(workout.workoutName),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: context.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              const SizedBox(height: 3),
+              Row(
                 children: [
                   Icon(
                     Icons.fitness_center_rounded,
-                    size: 20,
-                    color: theme.primaryColor,
+                    size: 12,
+                    color: context.textTertiary,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _getCleanWorkoutName(workout.workoutName),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: context.textPrimary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 2),
+                  const SizedBox(width: 4),
                   Text(
                     '${workout.exerciseCount} exercises',
-                    style: TextStyle(fontSize: 9, color: context.textSecondary),
+                    style: TextStyle(fontSize: 12, color: context.textTertiary),
                   ),
+                  if (workout.estimatedDuration != null) ...[
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 12,
+                      color: context.textTertiary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${workout.estimatedDuration} min',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.textTertiary,
+                      ),
+                    ),
+                  ],
                 ],
               ),
-            ),
+            ],
           ),
         ),
-        childWhenDragging: Container(
-          margin: const EdgeInsets.only(bottom: 6),
-          height: 52,
-          decoration: BoxDecoration(
-            color: theme.primaryColor.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: theme.primaryColor.withValues(alpha: 0.3),
-              style: BorderStyle.solid,
+
+        // Status/Drag indicator
+        if (isCompleted)
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
             ),
-          ),
-          child: Center(
-            child: Icon(
-              Icons.open_with_rounded,
-              color: theme.primaryColor.withValues(alpha: 0.4),
-              size: 20,
+            child: const Icon(
+              Icons.check_rounded,
+              size: 18,
+              color: Colors.green,
             ),
+          )
+        else if (!isRestDay)
+          Icon(
+            Icons.drag_indicator_rounded,
+            size: 20,
+            color: context.textTertiary,
           ),
-        ),
-        child: GestureDetector(
-          onTap:
-              widget.onWorkoutTap != null
-                  ? () => widget.onWorkoutTap!(workout)
-                  : null,
-          child: workoutCard,
-        ),
-      );
+      ],
+    );
+
+    // Wrap with drag functionality
+    if (!isRestDay && !isCompleted) {
+      return _wrapWithDraggable(content, workout, theme, dayNumber);
     }
 
     return GestureDetector(
@@ -673,7 +829,254 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
           widget.onWorkoutTap != null
               ? () => widget.onWorkoutTap!(workout)
               : null,
-      child: workoutCard,
+      child: content,
+    );
+  }
+
+  Widget _buildWorkoutChip(
+    BuildContext context,
+    ProgramWorkout workout,
+    ThemeData theme,
+    int dayNumber,
+  ) {
+    final isCompleted = workout.isCompleted;
+    final isMissed = widget.program.isWorkoutMissed(workout);
+    final isRestDay = workout.isRestDay;
+
+    Color accentColor;
+    Color bgColor;
+    if (isCompleted) {
+      accentColor = Colors.green;
+      bgColor = Colors.green.withValues(alpha: 0.1);
+    } else if (isMissed) {
+      accentColor = Colors.orange;
+      bgColor = Colors.orange.withValues(alpha: 0.1);
+    } else {
+      accentColor = theme.primaryColor;
+      bgColor = theme.primaryColor.withValues(alpha: 0.08);
+    }
+
+    Widget chip = Container(
+      constraints: const BoxConstraints(minWidth: 140, maxWidth: 200),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  _getCleanWorkoutName(workout.workoutName),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: context.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isCompleted) ...[
+                const SizedBox(width: 6),
+                Icon(Icons.check_circle, size: 14, color: Colors.green),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.fitness_center_rounded,
+                size: 11,
+                color: context.textTertiary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${workout.exerciseCount} ex.',
+                style: TextStyle(fontSize: 11, color: context.textTertiary),
+              ),
+              if (!isRestDay && !isCompleted) ...[
+                const Spacer(),
+                Icon(
+                  Icons.drag_indicator_rounded,
+                  size: 14,
+                  color: context.textTertiary,
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+
+    // Wrap with drag functionality
+    if (!isRestDay && !isCompleted) {
+      return _wrapWithDraggable(chip, workout, theme, dayNumber);
+    }
+
+    return GestureDetector(
+      onTap:
+          widget.onWorkoutTap != null
+              ? () => widget.onWorkoutTap!(workout)
+              : null,
+      child: chip,
+    );
+  }
+
+  Widget _wrapWithDraggable(
+    Widget child,
+    ProgramWorkout workout,
+    ThemeData theme,
+    int dayNumber,
+  ) {
+    return LongPressDraggable<ProgramWorkout>(
+      data: workout,
+      delay: const Duration(milliseconds: 150),
+      hapticFeedbackOnStart: true,
+      onDragStarted: () {
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _isDragging = true;
+          _draggedFromDay = dayNumber;
+        });
+      },
+      onDragEnd: (details) {
+        setState(() {
+          _isDragging = false;
+          _draggedFromDay = null;
+          _hoveredDay = null;
+        });
+      },
+      onDraggableCanceled: (velocity, offset) {
+        setState(() {
+          _isDragging = false;
+          _draggedFromDay = null;
+          _hoveredDay = null;
+        });
+      },
+      feedback: Transform.scale(
+        scale: 1.05,
+        child: Material(
+          elevation: 20,
+          shadowColor: theme.primaryColor.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 180,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: theme.primaryColor, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: theme.primaryColor.withValues(alpha: 0.25),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: theme.primaryColor.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.fitness_center_rounded,
+                    size: 24,
+                    color: theme.primaryColor,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _getCleanWorkoutName(workout.workoutName),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: context.textPrimary,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${workout.exerciseCount} exercises',
+                  style: TextStyle(fontSize: 12, color: context.textSecondary),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.primaryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Drop on a day',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: theme.primaryColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: theme.primaryColor.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: theme.primaryColor.withValues(alpha: 0.2),
+            style: BorderStyle.solid,
+          ),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Icon(
+              Icons.open_with_rounded,
+              color: theme.primaryColor.withValues(alpha: 0.4),
+              size: 24,
+            ),
+          ),
+        ),
+      ),
+      child: GestureDetector(
+        onTap:
+            widget.onWorkoutTap != null
+                ? () => widget.onWorkoutTap!(workout)
+                : null,
+        child: child,
+      ),
     );
   }
 }

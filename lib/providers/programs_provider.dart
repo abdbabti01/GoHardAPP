@@ -124,10 +124,26 @@ class ProgramsProvider extends ChangeNotifier {
     try {
       await _programsRepository.updateProgram(id, program);
 
-      // Update in local list
+      // Update in local list, preserving workouts if the incoming program doesn't have them
       final index = _programs.indexWhere((p) => p.id == id);
       if (index != -1) {
-        _programs[index] = program;
+        final existingProgram = _programs[index];
+
+        // If the incoming program has no workouts but the existing one does,
+        // preserve the existing workouts to avoid data loss
+        final workoutsToKeep =
+            (program.workouts == null || program.workouts!.isEmpty)
+                ? existingProgram.workouts
+                : program.workouts;
+
+        // Also preserve the goal object if not provided in the update
+        final goalToKeep = program.goal ?? existingProgram.goal;
+
+        _programs[index] = program.copyWith(
+          workouts: workoutsToKeep,
+          goal: goalToKeep,
+        );
+
         _activePrograms = _programs.where((p) => p.isActive).toList();
         _completedPrograms = _programs.where((p) => p.isCompleted).toList();
       }
