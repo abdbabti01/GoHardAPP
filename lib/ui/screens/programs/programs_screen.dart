@@ -287,12 +287,9 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             if (!isCompleted) ...[
               const Divider(height: 32),
               WeeklyScheduleWidget(
-                key: ValueKey(
-                  'program_${program.id}_week_${program.currentWeek}',
-                ),
+                key: ValueKey('program_${program.id}'),
                 program: program,
                 onWorkoutTap: (workout) {
-                  // Navigate to workout detail screen to show details first
                   if (!workout.isRestDay) {
                     Navigator.pushNamed(
                       context,
@@ -314,10 +311,8 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     );
                   }
                 },
-                onWorkoutMoved: () async {
-                  // Reload programs when a workout is moved
-                  await context.read<ProgramsProvider>().loadPrograms();
-                },
+                // Widget now watches provider directly, no need for full reload
+                onWorkoutMoved: null,
               ),
               const SizedBox(height: 16),
             ],
