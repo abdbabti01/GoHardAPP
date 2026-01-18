@@ -45,7 +45,7 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
   }
 
   String _getWeekdayName(int dayNumber) {
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
     return weekdays[dayNumber - 1];
   }
 
@@ -250,26 +250,28 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
           ),
           const SizedBox(height: 16),
 
-          // Horizontal scrollable days
+          // All 7 days in a row
           SizedBox(
-            height: 200,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              itemCount: 7,
-              separatorBuilder: (context, index) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                return SizedBox(
-                  width: 150,
-                  child: _buildDayCard(
-                    context,
-                    index + 1,
-                    weekWorkouts[index],
-                    theme,
-                    todayNumber,
+            height: 220,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: List.generate(7, (index) {
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: index == 0 ? 0 : 3,
+                      right: index == 6 ? 0 : 3,
+                    ),
+                    child: _buildDayCard(
+                      context,
+                      index + 1,
+                      weekWorkouts[index],
+                      theme,
+                      todayNumber,
+                    ),
                   ),
                 );
-              },
+              }),
             ),
           ),
         ],
@@ -314,7 +316,7 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOutCubic,
-          transform: Matrix4.identity()..scale(isHighlighted ? 1.02 : 1.0),
+          transform: Matrix4.identity()..scale(isHighlighted ? 1.03 : 1.0),
           decoration: BoxDecoration(
             color:
                 isHighlighted
@@ -324,7 +326,7 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
                     : isToday
                     ? theme.primaryColor.withValues(alpha: 0.08)
                     : context.surface,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color:
                   isHighlighted
@@ -334,15 +336,15 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
                       : allCompleted
                       ? Colors.green.withValues(alpha: 0.5)
                       : context.border,
-              width: isHighlighted || isToday ? 2.5 : 1,
+              width: isHighlighted || isToday ? 2 : 1,
             ),
             boxShadow:
                 isHighlighted
                     ? [
                       BoxShadow(
-                        color: theme.primaryColor.withValues(alpha: 0.2),
-                        blurRadius: 12,
-                        spreadRadius: 2,
+                        color: theme.primaryColor.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                        spreadRadius: 1,
                       ),
                     ]
                     : null,
@@ -351,33 +353,30 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
             duration: const Duration(milliseconds: 150),
             opacity: isDragSource ? 0.4 : 1.0,
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(6),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Day header
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color:
-                              isToday
-                                  ? theme.primaryColor
-                                  : allCompleted
-                                  ? Colors.green
-                                  : hasMissed
-                                  ? Colors.orange
-                                  : theme.primaryColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
+                  // Day header - centered single letter
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      color:
+                          isToday
+                              ? theme.primaryColor
+                              : allCompleted
+                              ? Colors.green
+                              : hasMissed
+                              ? Colors.orange
+                              : theme.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
                           _getWeekdayName(dayNumber),
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color:
                                 isToday || allCompleted || hasMissed
@@ -385,43 +384,28 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
                                     : theme.primaryColor,
                           ),
                         ),
-                      ),
-                      const Spacer(),
-                      if (isToday)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.primaryColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'TODAY',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: theme.primaryColor,
-                              letterSpacing: 0.5,
+                        if (isToday)
+                          Container(
+                            margin: const EdgeInsets.only(top: 2),
+                            width: 4,
+                            height: 4,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
                             ),
+                          )
+                        else if (allCompleted)
+                          const Icon(Icons.check, size: 12, color: Colors.white)
+                        else if (hasMissed)
+                          const Icon(
+                            Icons.priority_high,
+                            size: 12,
+                            color: Colors.white,
                           ),
-                        )
-                      else if (allCompleted)
-                        const Icon(
-                          Icons.check_circle,
-                          size: 18,
-                          color: Colors.green,
-                        )
-                      else if (hasMissed)
-                        const Icon(
-                          Icons.warning_rounded,
-                          size: 18,
-                          color: Colors.orange,
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 6),
 
                   // Workouts list or rest day
                   Expanded(
@@ -432,15 +416,15 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
-                                    Icons.spa_rounded,
-                                    size: 28,
+                                    Icons.remove,
+                                    size: 20,
                                     color: context.textTertiary,
                                   ),
-                                  const SizedBox(height: 6),
+                                  const SizedBox(height: 2),
                                   Text(
-                                    'Rest Day',
+                                    'Rest',
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 10,
                                       fontWeight: FontWeight.w500,
                                       color: context.textTertiary,
                                     ),
@@ -481,23 +465,24 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
     final isMissed = widget.program.isWorkoutMissed(workout);
     final isRestDay = workout.isRestDay;
 
+    // Compact workout card for narrow columns
     Widget workoutCard = Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color:
             isCompleted
-                ? Colors.green.withValues(alpha: 0.1)
+                ? Colors.green.withValues(alpha: 0.15)
                 : isMissed
-                ? Colors.orange.withValues(alpha: 0.1)
+                ? Colors.orange.withValues(alpha: 0.15)
                 : context.surfaceElevated,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color:
               isCompleted
-                  ? Colors.green.withValues(alpha: 0.3)
+                  ? Colors.green.withValues(alpha: 0.4)
                   : isMissed
-                  ? Colors.orange.withValues(alpha: 0.3)
+                  ? Colors.orange.withValues(alpha: 0.4)
                   : context.borderSubtle,
           width: 1,
         ),
@@ -505,77 +490,53 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              // Status indicator bar
-              Container(
-                width: 4,
-                height: 32,
-                decoration: BoxDecoration(
-                  color:
-                      isCompleted
-                          ? Colors.green
-                          : isMissed
-                          ? Colors.orange
-                          : theme.primaryColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Workout info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _getCleanWorkoutName(workout.workoutName),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: context.textPrimary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.fitness_center_rounded,
-                          size: 12,
-                          color: context.textTertiary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${workout.exerciseCount} exercises',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: context.textTertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              // Status or drag handle
-              if (isCompleted)
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.check, size: 14, color: Colors.green),
-                )
-              else if (!isRestDay)
-                Icon(
-                  Icons.drag_indicator_rounded,
-                  size: 20,
-                  color: context.textTertiary,
-                ),
-            ],
+          // Status bar at top
+          Container(
+            width: double.infinity,
+            height: 3,
+            margin: const EdgeInsets.only(bottom: 4),
+            decoration: BoxDecoration(
+              color:
+                  isCompleted
+                      ? Colors.green
+                      : isMissed
+                      ? Colors.orange
+                      : theme.primaryColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
+          // Workout name
+          Text(
+            _getCleanWorkoutName(workout.workoutName),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: context.textPrimary,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          // Exercise count
+          Text(
+            '${workout.exerciseCount} ex',
+            style: TextStyle(fontSize: 9, color: context.textTertiary),
+          ),
+          // Status icon
+          if (isCompleted)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Icon(Icons.check_circle, size: 14, color: Colors.green),
+            )
+          else if (!isRestDay)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Icon(
+                Icons.drag_indicator,
+                size: 12,
+                color: context.textTertiary,
+              ),
+            ),
         ],
       ),
     );
@@ -606,87 +567,73 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
           });
         },
         feedback: Transform.scale(
-          scale: 1.05,
+          scale: 1.1,
           child: Material(
-            elevation: 20,
-            shadowColor: theme.primaryColor.withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(14),
+            elevation: 16,
+            shadowColor: theme.primaryColor.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(10),
             child: Container(
-              width: 180,
-              padding: const EdgeInsets.all(14),
+              width: 140,
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: context.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: theme.primaryColor, width: 2.5),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: theme.primaryColor, width: 2),
                 boxShadow: [
                   BoxShadow(
                     color: theme.primaryColor.withValues(alpha: 0.3),
-                    blurRadius: 20,
+                    blurRadius: 16,
                     spreadRadius: 2,
-                    offset: const Offset(0, 8),
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
-              child: Row(
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.primaryColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.fitness_center_rounded,
-                      size: 18,
-                      color: theme.primaryColor,
-                    ),
+                  Icon(
+                    Icons.fitness_center_rounded,
+                    size: 20,
+                    color: theme.primaryColor,
                   ),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _getCleanWorkoutName(workout.workoutName),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: context.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          '${workout.exerciseCount} exercises',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: context.textSecondary,
-                          ),
-                        ),
-                      ],
+                  const SizedBox(height: 6),
+                  Text(
+                    _getCleanWorkoutName(workout.workoutName),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: context.textPrimary,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${workout.exerciseCount} exercises',
+                    style: TextStyle(fontSize: 9, color: context.textSecondary),
                   ),
                 ],
               ),
             ),
           ),
         ),
-        childWhenDragging: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.only(bottom: 8),
-          height: 60,
+        childWhenDragging: Container(
+          margin: const EdgeInsets.only(bottom: 4),
+          height: 40,
           decoration: BoxDecoration(
-            color: context.border.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: context.border, style: BorderStyle.solid),
+            color: theme.primaryColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: theme.primaryColor.withValues(alpha: 0.3),
+              style: BorderStyle.solid,
+            ),
           ),
           child: Center(
             child: Icon(
-              Icons.add_rounded,
-              color: context.textTertiary,
-              size: 20,
+              Icons.drag_indicator,
+              color: theme.primaryColor.withValues(alpha: 0.5),
+              size: 16,
             ),
           ),
         ),
