@@ -138,10 +138,12 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
           ),
           const SizedBox(height: 20),
 
-          // Week grid
-          _buildWeekRow(context, workouts, theme, today, 1, 4),
+          // Week grid (3 columns per row)
+          _buildWeekRow(context, workouts, theme, today, 1, 3),
           const SizedBox(height: 12),
-          _buildWeekRow(context, workouts, theme, today, 5, 7),
+          _buildWeekRow(context, workouts, theme, today, 4, 6),
+          const SizedBox(height: 12),
+          _buildWeekRow(context, workouts, theme, today, 7, 7),
         ],
       ),
     );
@@ -161,8 +163,8 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
       return _buildDayCell(context, day, workouts[day - 1], theme, today);
     });
 
-    // Pad to 4 columns for alignment
-    while (items.length < 4) {
+    // Pad to 3 columns for alignment
+    while (items.length < 3) {
       items.add(const Expanded(child: SizedBox()));
     }
 
