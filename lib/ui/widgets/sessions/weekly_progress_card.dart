@@ -43,33 +43,36 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: context.isDarkMode
-            ? LinearGradient(
-                colors: [
-                  AppColors.darkSurface,
-                  AppColors.darkSurfaceElevated,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
+        gradient:
+            context.isDarkMode
+                ? LinearGradient(
+                  colors: [
+                    AppColors.darkSurface,
+                    AppColors.darkSurfaceElevated,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+                : null,
         color: context.isDarkMode ? null : context.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isOnFire
-              ? AppColors.goHardGreen.withValues(alpha: 0.3)
-              : context.border,
+          color:
+              isOnFire
+                  ? AppColors.goHardGreen.withValues(alpha: 0.3)
+                  : context.border,
           width: isOnFire ? 1.5 : 0.5,
         ),
-        boxShadow: isOnFire
-            ? [
-                BoxShadow(
-                  color: AppColors.goHardGreen.withValues(alpha: 0.15),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ]
-            : null,
+        boxShadow:
+            isOnFire
+                ? [
+                  BoxShadow(
+                    color: AppColors.goHardGreen.withValues(alpha: 0.15),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+                : null,
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -259,10 +262,7 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
             if (percentage >= 80)
               Padding(
                 padding: const EdgeInsets.only(left: 8, bottom: 8),
-                child: Text(
-                  '🔥',
-                  style: TextStyle(fontSize: 28),
-                ),
+                child: Text('🔥', style: TextStyle(fontSize: 28)),
               ),
           ],
         ),
@@ -309,10 +309,7 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
                 ),
                 Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: context.textSecondary,
-                  ),
+                  style: TextStyle(fontSize: 11, color: context.textSecondary),
                 ),
               ],
             ),
@@ -372,8 +369,9 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
                       borderRadius: BorderRadius.circular(4),
                       boxShadow: [
                         BoxShadow(
-                          color: _getProgressColor(percentage)
-                              .withValues(alpha: 0.4),
+                          color: _getProgressColor(
+                            percentage,
+                          ).withValues(alpha: 0.4),
                           blurRadius: 4,
                         ),
                       ],
@@ -399,9 +397,7 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
           ],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.goHardGreen.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: AppColors.goHardGreen.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [

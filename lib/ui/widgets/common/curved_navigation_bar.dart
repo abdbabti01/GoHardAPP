@@ -195,9 +195,10 @@ class CurvedNavigationBar extends StatelessWidget {
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? activeColor.withValues(alpha: 0.12)
-                    : Colors.transparent,
+                color:
+                    isSelected
+                        ? activeColor.withValues(alpha: 0.12)
+                        : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(

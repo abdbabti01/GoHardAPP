@@ -26,11 +26,15 @@ extension ThemeColors on BuildContext {
 
   /// Surface for input fields
   Color get inputSurface =>
-      isDarkMode ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated;
+      isDarkMode
+          ? AppColors.darkSurfaceElevated
+          : AppColors.lightSurfaceElevated;
 
   /// Highlighted/hover surface
   Color get surfaceHighlight =>
-      isDarkMode ? AppColors.darkSurfaceHighlight : AppColors.lightSurfaceElevated;
+      isDarkMode
+          ? AppColors.darkSurfaceHighlight
+          : AppColors.lightSurfaceElevated;
 
   // ============ TEXT COLORS ============
 
@@ -50,8 +54,7 @@ extension ThemeColors on BuildContext {
   // ============ BORDER/DIVIDER COLORS ============
 
   /// Border color for cards, containers
-  Color get border =>
-      isDarkMode ? const Color(0xFF2A2A2A) : AppColors.iosGray3;
+  Color get border => isDarkMode ? const Color(0xFF2A2A2A) : AppColors.iosGray3;
 
   /// Subtle border for inputs, dividers
   Color get borderSubtle =>
@@ -120,7 +123,9 @@ extension ThemeColors on BuildContext {
 
   /// Chip background (unselected)
   Color get chipBackground =>
-      isDarkMode ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated;
+      isDarkMode
+          ? AppColors.darkSurfaceElevated
+          : AppColors.lightSurfaceElevated;
 
   /// Chip background (selected) - Electric Green
   Color get chipSelected => AppColors.goHardGreen;
@@ -138,7 +143,9 @@ extension ThemeColors on BuildContext {
 
   /// AI/other message bubble background
   Color get aiMessageBubble =>
-      isDarkMode ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated;
+      isDarkMode
+          ? AppColors.darkSurfaceElevated
+          : AppColors.lightSurfaceElevated;
 
   /// AI/other message text color
   Color get aiMessageText => textPrimary;

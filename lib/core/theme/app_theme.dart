@@ -123,10 +123,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.goHardGreen,
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
 
@@ -257,9 +254,7 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: AppColors.glassBorder.withValues(alpha: 0.1),
-          ),
+          side: BorderSide(color: AppColors.glassBorder.withValues(alpha: 0.1)),
         ),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       ),
@@ -336,10 +331,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
 
@@ -347,10 +339,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.goHardGreen,
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
 
@@ -389,14 +378,8 @@ class AppTheme {
           color: Colors.white,
         ),
         bodyLarge: TextStyle(fontSize: 17, color: Colors.white),
-        bodyMedium: TextStyle(
-          fontSize: 15,
-          color: Color(0xFFB0B0B0),
-        ),
-        bodySmall: TextStyle(
-          fontSize: 13,
-          color: Color(0xFF8E8E93),
-        ),
+        bodyMedium: TextStyle(fontSize: 15, color: Color(0xFFB0B0B0)),
+        bodySmall: TextStyle(fontSize: 13, color: Color(0xFF8E8E93)),
       ),
 
       // Divider

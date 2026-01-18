@@ -29,13 +29,17 @@ class SessionCard extends StatelessWidget {
     final isPlanned = session.status == 'planned';
 
     // Status-based colors
-    final statusColor = isCompleted
-        ? AppColors.goHardGreen
-        : (isInProgress ? AppColors.goHardOrange : AppColors.goHardBlue);
+    final statusColor =
+        isCompleted
+            ? AppColors.goHardGreen
+            : (isInProgress ? AppColors.goHardOrange : AppColors.goHardBlue);
 
-    final statusGradient = isCompleted
-        ? AppColors.successGradient
-        : (isInProgress ? AppColors.activeGradient : AppColors.secondaryGradient);
+    final statusGradient =
+        isCompleted
+            ? AppColors.successGradient
+            : (isInProgress
+                ? AppColors.activeGradient
+                : AppColors.secondaryGradient);
 
     return Dismissible(
       key: Key('session_${session.id}'),
@@ -53,20 +57,22 @@ class SessionCard extends StatelessWidget {
           color: context.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isInProgress
-                ? statusColor.withValues(alpha: 0.3)
-                : context.border,
+            color:
+                isInProgress
+                    ? statusColor.withValues(alpha: 0.3)
+                    : context.border,
             width: isInProgress ? 1.5 : 0.5,
           ),
-          boxShadow: isInProgress
-              ? [
-                  BoxShadow(
-                    color: statusColor.withValues(alpha: 0.15),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
+          boxShadow:
+              isInProgress
+                  ? [
+                    BoxShadow(
+                      color: statusColor.withValues(alpha: 0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                  : null,
         ),
         child: Material(
           color: Colors.transparent,
@@ -83,22 +89,23 @@ class SessionCard extends StatelessWidget {
                     width: 52,
                     height: 52,
                     decoration: BoxDecoration(
-                      gradient: isCompleted || isInProgress
-                          ? statusGradient
-                          : null,
-                      color: isPlanned
-                          ? statusColor.withValues(alpha: 0.15)
-                          : null,
+                      gradient:
+                          isCompleted || isInProgress ? statusGradient : null,
+                      color:
+                          isPlanned
+                              ? statusColor.withValues(alpha: 0.15)
+                              : null,
                       borderRadius: BorderRadius.circular(14),
-                      boxShadow: isCompleted || isInProgress
-                          ? [
-                              BoxShadow(
-                                color: statusColor.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ]
-                          : null,
+                      boxShadow:
+                          isCompleted || isInProgress
+                              ? [
+                                BoxShadow(
+                                  color: statusColor.withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                              : null,
                     ),
                     child: Icon(
                       isCompleted
@@ -106,9 +113,10 @@ class SessionCard extends StatelessWidget {
                           : (isInProgress
                               ? Icons.play_arrow_rounded
                               : Icons.event_rounded),
-                      color: isCompleted || isInProgress
-                          ? Colors.white
-                          : statusColor,
+                      color:
+                          isCompleted || isInProgress
+                              ? Colors.white
+                              : statusColor,
                       size: 26,
                     ),
                   ),
@@ -175,7 +183,12 @@ class SessionCard extends StatelessWidget {
                   ),
 
                   // Status badge
-                  _buildStatusBadge(context, isCompleted, isInProgress, statusColor),
+                  _buildStatusBadge(
+                    context,
+                    isCompleted,
+                    isInProgress,
+                    statusColor,
+                  ),
                 ],
               ),
             ),

@@ -55,10 +55,7 @@ class EmptyState extends StatelessWidget {
                 height: 1.5,
               ),
             ),
-            if (action != null) ...[
-              const SizedBox(height: 32),
-              action!,
-            ],
+            if (action != null) ...[const SizedBox(height: 32), action!],
           ],
         ),
       ),
@@ -89,16 +86,9 @@ class EmptyState extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         shape: BoxShape.circle,
-        border: Border.all(
-          color: color.withValues(alpha: 0.2),
-          width: 2,
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 2),
       ),
-      child: Icon(
-        icon,
-        size: 44,
-        color: color,
-      ),
+      child: Icon(icon, size: 44, color: color),
     );
   }
 }
@@ -157,10 +147,7 @@ class EmptyStateIllustrated extends StatelessWidget {
                   ),
                 ),
               ),
-              if (action != null) ...[
-                const SizedBox(height: 32),
-                action!,
-              ],
+              if (action != null) ...[const SizedBox(height: 32), action!],
             ],
           ),
         ),
@@ -192,10 +179,7 @@ class EmptyStateIllustrated extends StatelessWidget {
           decoration: BoxDecoration(
             color: context.surfaceElevated,
             shape: BoxShape.circle,
-            border: Border.all(
-              color: context.border,
-              width: 2,
-            ),
+            border: Border.all(color: context.border, width: 2),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.05),
@@ -204,11 +188,7 @@ class EmptyStateIllustrated extends StatelessWidget {
               ),
             ],
           ),
-          child: Icon(
-            fallbackIcon,
-            size: 44,
-            color: context.textTertiary,
-          ),
+          child: Icon(fallbackIcon, size: 44, color: context.textTertiary),
         ),
         // Decorative elements
         Positioned(
