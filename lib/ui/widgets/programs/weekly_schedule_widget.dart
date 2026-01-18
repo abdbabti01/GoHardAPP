@@ -45,7 +45,7 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
   }
 
   String _getWeekdayName(int dayNumber) {
-    const weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return weekdays[dayNumber - 1];
   }
 
@@ -250,31 +250,49 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
           ),
           const SizedBox(height: 16),
 
-          // All 7 days in a row
-          SizedBox(
-            height: 220,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: List.generate(7, (index) {
-                return Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      left: index == 0 ? 0 : 3,
-                      right: index == 6 ? 0 : 3,
-                    ),
-                    child: _buildDayCard(
-                      context,
-                      index + 1,
-                      weekWorkouts[index],
-                      theme,
-                      todayNumber,
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
+          // Days in grid: 4 days first row, 3 days second row
+          // Row 1: Mon, Tue, Wed, Thu
+          _buildDayRow(context, weekWorkouts, theme, todayNumber, 1, 4),
+          const SizedBox(height: 8),
+          // Row 2: Fri, Sat, Sun
+          _buildDayRow(context, weekWorkouts, theme, todayNumber, 5, 7),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDayRow(
+    BuildContext context,
+    List<List<ProgramWorkout>> weekWorkouts,
+    ThemeData theme,
+    int todayNumber,
+    int startDay,
+    int endDay,
+  ) {
+    final dayCount = endDay - startDay + 1;
+
+    return SizedBox(
+      height: 160,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: List.generate(dayCount, (index) {
+          final dayNumber = startDay + index;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: index == 0 ? 0 : 4,
+                right: index == dayCount - 1 ? 0 : 4,
+              ),
+              child: _buildDayCard(
+                context,
+                dayNumber,
+                weekWorkouts[dayNumber - 1],
+                theme,
+                todayNumber,
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -353,13 +371,13 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
             duration: const Duration(milliseconds: 150),
             opacity: isDragSource ? 0.4 : 1.0,
             child: Padding(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(8),
               child: Column(
                 children: [
-                  // Day header - centered single letter
+                  // Day header with name
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
                       color:
                           isToday
@@ -371,12 +389,13 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
                               : theme.primaryColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Column(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           _getWeekdayName(dayNumber),
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: FontWeight.bold,
                             color:
                                 isToday || allCompleted || hasMissed
@@ -384,28 +403,35 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
                                     : theme.primaryColor,
                           ),
                         ),
-                        if (isToday)
+                        if (isToday) ...[
+                          const SizedBox(width: 4),
                           Container(
-                            margin: const EdgeInsets.only(top: 2),
-                            width: 4,
-                            height: 4,
+                            width: 6,
+                            height: 6,
                             decoration: const BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
                             ),
-                          )
-                        else if (allCompleted)
-                          const Icon(Icons.check, size: 12, color: Colors.white)
-                        else if (hasMissed)
+                          ),
+                        ] else if (allCompleted) ...[
+                          const SizedBox(width: 4),
                           const Icon(
-                            Icons.priority_high,
-                            size: 12,
+                            Icons.check,
+                            size: 14,
                             color: Colors.white,
                           ),
+                        ] else if (hasMissed) ...[
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.priority_high,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
 
                   // Workouts list or rest day
                   Expanded(
@@ -416,15 +442,15 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
-                                    Icons.remove,
-                                    size: 20,
+                                    Icons.hotel_rounded,
+                                    size: 24,
                                     color: context.textTertiary,
                                   ),
-                                  const SizedBox(height: 2),
+                                  const SizedBox(height: 4),
                                   Text(
-                                    'Rest',
+                                    'Rest Day',
                                     style: TextStyle(
-                                      fontSize: 10,
+                                      fontSize: 11,
                                       fontWeight: FontWeight.w500,
                                       color: context.textTertiary,
                                     ),
@@ -465,18 +491,18 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
     final isMissed = widget.program.isWorkoutMissed(workout);
     final isRestDay = workout.isRestDay;
 
-    // Compact workout card for narrow columns
+    // Workout card
     Widget workoutCard = Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.all(6),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color:
             isCompleted
-                ? Colors.green.withValues(alpha: 0.15)
+                ? Colors.green.withValues(alpha: 0.12)
                 : isMissed
-                ? Colors.orange.withValues(alpha: 0.15)
+                ? Colors.orange.withValues(alpha: 0.12)
                 : context.surfaceElevated,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color:
               isCompleted
@@ -487,14 +513,12 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
           width: 1,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          // Status bar at top
+          // Status indicator bar
           Container(
-            width: double.infinity,
-            height: 3,
-            margin: const EdgeInsets.only(bottom: 4),
+            width: 3,
+            height: 36,
             decoration: BoxDecoration(
               color:
                   isCompleted
@@ -505,38 +529,35 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          // Workout name
-          Text(
-            _getCleanWorkoutName(workout.workoutName),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: context.textPrimary,
+          const SizedBox(width: 8),
+          // Workout info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _getCleanWorkoutName(workout.workoutName),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: context.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${workout.exerciseCount} exercises',
+                  style: TextStyle(fontSize: 10, color: context.textTertiary),
+                ),
+              ],
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          // Exercise count
-          Text(
-            '${workout.exerciseCount} ex',
-            style: TextStyle(fontSize: 9, color: context.textTertiary),
           ),
           // Status icon
           if (isCompleted)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Icon(Icons.check_circle, size: 14, color: Colors.green),
-            )
+            Icon(Icons.check_circle, size: 16, color: Colors.green)
           else if (!isRestDay)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Icon(
-                Icons.drag_indicator,
-                size: 12,
-                color: context.textTertiary,
-              ),
-            ),
+            Icon(Icons.drag_indicator, size: 16, color: context.textTertiary),
         ],
       ),
     );
@@ -619,11 +640,11 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
           ),
         ),
         childWhenDragging: Container(
-          margin: const EdgeInsets.only(bottom: 4),
-          height: 40,
+          margin: const EdgeInsets.only(bottom: 6),
+          height: 52,
           decoration: BoxDecoration(
-            color: theme.primaryColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+            color: theme.primaryColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: theme.primaryColor.withValues(alpha: 0.3),
               style: BorderStyle.solid,
@@ -631,9 +652,9 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
           ),
           child: Center(
             child: Icon(
-              Icons.drag_indicator,
-              color: theme.primaryColor.withValues(alpha: 0.5),
-              size: 16,
+              Icons.open_with_rounded,
+              color: theme.primaryColor.withValues(alpha: 0.4),
+              size: 20,
             ),
           ),
         ),
