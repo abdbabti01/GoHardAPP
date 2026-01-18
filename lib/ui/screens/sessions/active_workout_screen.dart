@@ -485,9 +485,10 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
           ),
         ),
         onPressed: () async {
+          final navigator = Navigator.of(context);
           final shouldLeave = await _handleBackPressed();
           if (shouldLeave && mounted) {
-            Navigator.pop(context);
+            navigator.pop();
           }
         },
       ),
