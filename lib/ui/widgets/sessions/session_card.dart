@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/session.dart';
 import 'quick_actions_sheet.dart';
 
-/// Card widget for displaying a workout session
-/// Matches SessionCard from MAUI app
+/// Premium card widget for displaying a workout session
 class SessionCard extends StatelessWidget {
   final Session session;
   final VoidCallback? onTap;
@@ -26,6 +26,16 @@ class SessionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCompleted = session.status == 'completed';
     final isInProgress = session.status == 'in_progress';
+    final isPlanned = session.status == 'planned';
+
+    // Status-based colors
+    final statusColor = isCompleted
+        ? AppColors.goHardGreen
+        : (isInProgress ? AppColors.goHardOrange : AppColors.goHardBlue);
+
+    final statusGradient = isCompleted
+        ? AppColors.successGradient
+        : (isInProgress ? AppColors.activeGradient : AppColors.secondaryGradient);
 
     return Dismissible(
       key: Key('session_${session.id}'),
@@ -38,105 +48,124 @@ class SessionCard extends StatelessWidget {
         onDelete?.call();
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 6,
-        ), // iOS inset style
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
-          color: context.surface, // Theme-aware surface
-          borderRadius: BorderRadius.circular(12), // iOS corner radius
+          color: context.surface,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: context.border, // Theme-aware border
-            width: 0.5,
+            color: isInProgress
+                ? statusColor.withValues(alpha: 0.3)
+                : context.border,
+            width: isInProgress ? 1.5 : 0.5,
           ),
+          boxShadow: isInProgress
+              ? [
+                  BoxShadow(
+                    color: statusColor.withValues(alpha: 0.15),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
             onLongPress: () => _showQuickActions(context),
-            borderRadius: BorderRadius.circular(12), // Match container radius
+            borderRadius: BorderRadius.circular(16),
             child: Padding(
-              padding: const EdgeInsets.all(18), // iOS padding
-
+              padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  // Icon on the left in circular container
+                  // Premium gradient icon container
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 52,
+                    height: 52,
                     decoration: BoxDecoration(
-                      color:
-                          isCompleted
-                              ? Colors.green.withValues(alpha: 0.2)
-                              : (isInProgress
-                                  ? Colors.orange.withValues(alpha: 0.2)
-                                  : Colors.blue.withValues(alpha: 0.2)),
-                      shape: BoxShape.circle,
+                      gradient: isCompleted || isInProgress
+                          ? statusGradient
+                          : null,
+                      color: isPlanned
+                          ? statusColor.withValues(alpha: 0.15)
+                          : null,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: isCompleted || isInProgress
+                          ? [
+                              BoxShadow(
+                                color: statusColor.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
                     ),
                     child: Icon(
                       isCompleted
-                          ? Icons.check_circle
+                          ? Icons.check_rounded
                           : (isInProgress
-                              ? Icons.play_circle_filled
-                              : Icons.fitness_center),
-                      color:
-                          isCompleted
-                              ? Colors.green.shade400
-                              : (isInProgress
-                                  ? Colors.orange.shade400
-                                  : Colors.blue.shade400),
-                      size: 24,
+                              ? Icons.play_arrow_rounded
+                              : Icons.event_rounded),
+                      color: isCompleted || isInProgress
+                          ? Colors.white
+                          : statusColor,
+                      size: 26,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
 
-                  // Workout info in the middle
+                  // Workout info
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Workout name
+                        // Workout name - bolder
                         Text(
                           session.name ?? _getDefaultName(),
                           style: TextStyle(
                             color: context.textPrimary,
-                            fontSize: 17, // iOS body size
-                            fontWeight: FontWeight.w600, // iOS semibold
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 6),
-                        // Date and exercise count
+                        // Meta info row
                         Row(
                           children: [
+                            // Date
                             Text(
                               _formatDate(session.date),
                               style: TextStyle(
                                 color: context.textSecondary,
-                                fontSize: 15, // iOS footnote/caption
-                                fontWeight: FontWeight.w400, // iOS regular
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '•',
-                              style: TextStyle(color: context.textSecondary),
+                            Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 8),
+                              width: 4,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: context.textTertiary,
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                            const SizedBox(width: 8),
+                            // Exercise count with icon
                             Icon(
-                              Icons.fitness_center,
-                              size: 13,
+                              Icons.fitness_center_rounded,
+                              size: 14,
                               color: context.textSecondary,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${session.exercises.length} ${session.exercises.length == 1 ? 'exercise' : 'exercises'}',
+                              '${session.exercises.length}',
                               style: TextStyle(
                                 color: context.textSecondary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w400, // iOS regular
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -145,49 +174,8 @@ class SessionCard extends StatelessWidget {
                     ),
                   ),
 
-                  // Status indicator on the right
-                  if (isCompleted)
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade600,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: const Icon(
-                        Icons.check,
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                    )
-                  else if (isInProgress)
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade600,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow,
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                    )
-                  else
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: context.textTertiary,
-                          width: 2,
-                        ),
-                      ),
-                    ),
+                  // Status badge
+                  _buildStatusBadge(context, isCompleted, isInProgress, statusColor),
                 ],
               ),
             ),
@@ -195,6 +183,74 @@ class SessionCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildStatusBadge(
+    BuildContext context,
+    bool isCompleted,
+    bool isInProgress,
+    Color statusColor,
+  ) {
+    if (isCompleted) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: statusColor.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_rounded, size: 14, color: statusColor),
+            const SizedBox(width: 4),
+            Text(
+              'Done',
+              style: TextStyle(
+                color: statusColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (isInProgress) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          gradient: AppColors.activeGradient,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: statusColor.withValues(alpha: 0.3),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.play_arrow_rounded, size: 14, color: Colors.white),
+            SizedBox(width: 4),
+            Text(
+              'Active',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return Icon(
+        Icons.chevron_right_rounded,
+        color: context.textTertiary,
+        size: 24,
+      );
+    }
   }
 
   void _showQuickActions(BuildContext context) {

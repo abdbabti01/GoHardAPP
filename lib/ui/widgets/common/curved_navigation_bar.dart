@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
 
-/// Custom bottom navigation bar with notched FAB
-/// Features downward curve in center with FAB inside
-/// Automatically adapts to light/dark theme
+/// Premium bottom navigation bar with notched FAB
+/// Features electric green FAB with glow effect
 class CurvedNavigationBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -27,20 +27,20 @@ class CurvedNavigationBar extends StatelessWidget {
     this.unselectedColor,
     this.fabColor,
     this.notchMargin = 8.0,
-    this.height = 65,
+    this.height = 70,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Use theme-aware colors as defaults
+    // Premium theme-aware colors
     final bgColor = backgroundColor ?? context.navBarBackground;
     final activeColor = selectedColor ?? context.navBarSelected;
     final inactiveColor = unselectedColor ?? context.navBarUnselected;
-    final fabBgColor = fabColor ?? context.navBarFabBackground;
+    final fabBgColor = fabColor ?? AppColors.goHardGreen;
     final borderColor = context.border;
 
-    const double notchRadius = 35;
-    const double fabSize = 56;
+    const double notchRadius = 38;
+    const double fabSize = 60;
 
     return SizedBox(
       height: height + MediaQuery.of(context).padding.bottom,
@@ -88,6 +88,7 @@ class CurvedNavigationBar extends StatelessWidget {
                               final index = entry.key;
                               final item = entry.value;
                               return _buildNavItem(
+                                context: context,
                                 item: item,
                                 index: index,
                                 isSelected: currentIndex == index,
@@ -99,7 +100,7 @@ class CurvedNavigationBar extends StatelessWidget {
                   ),
                 ),
                 // Center space for FAB
-                const SizedBox(width: 80),
+                const SizedBox(width: 84),
                 // Right items
                 Expanded(
                   child: Row(
@@ -114,6 +115,7 @@ class CurvedNavigationBar extends StatelessWidget {
                               final index = entry.key + items.length ~/ 2;
                               final item = entry.value;
                               return _buildNavItem(
+                                context: context,
                                 item: item,
                                 index: index,
                                 isSelected: currentIndex == index,
@@ -127,11 +129,11 @@ class CurvedNavigationBar extends StatelessWidget {
               ],
             ),
           ),
-          // FAB in the notch
+          // Premium FAB with glow
           Positioned(
             left: 0,
             right: 0,
-            top: -fabSize / 2 + 8,
+            top: -fabSize / 2 + 6,
             child: Center(
               child: GestureDetector(
                 onTap: onFabTap,
@@ -140,10 +142,17 @@ class CurvedNavigationBar extends StatelessWidget {
                   width: fabSize,
                   height: fabSize,
                   decoration: BoxDecoration(
-                    color: fabBgColor,
+                    gradient: AppColors.primaryGradient,
                     shape: BoxShape.circle,
-                    border: Border.all(color: borderColor, width: 2),
                     boxShadow: [
+                      // Glow effect
+                      BoxShadow(
+                        color: fabBgColor.withValues(alpha: 0.4),
+                        blurRadius: 16,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 4),
+                      ),
+                      // Subtle dark shadow for depth
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 8,
@@ -151,10 +160,10 @@ class CurvedNavigationBar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Icon(
-                    Icons.add,
-                    color: context.textOnPrimary,
-                    size: 28,
+                  child: const Icon(
+                    Icons.add_rounded,
+                    color: AppColors.goHardBlack,
+                    size: 32,
                   ),
                 ),
               ),
@@ -166,6 +175,7 @@ class CurvedNavigationBar extends StatelessWidget {
   }
 
   Widget _buildNavItem({
+    required BuildContext context,
     required CurvedNavigationBarItem item,
     required int index,
     required bool isSelected,
@@ -176,22 +186,34 @@ class CurvedNavigationBar extends StatelessWidget {
       onTap: () => onTap(index),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 70,
+        width: 72,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              item.icon,
-              color: isSelected ? activeColor : inactiveColor,
-              size: 24,
+            // Icon with selection indicator
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? activeColor.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                item.icon,
+                color: isSelected ? activeColor : inactiveColor,
+                size: 24,
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               item.label,
               style: TextStyle(
                 color: isSelected ? activeColor : inactiveColor,
-                fontSize: isSelected ? 12 : 11,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                letterSpacing: -0.2,
               ),
               textAlign: TextAlign.center,
               maxLines: 1,

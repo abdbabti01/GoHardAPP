@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../core/constants/colors.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/session.dart';
+import '../common/animations.dart';
 
-/// Widget displaying workout streak information
+/// Premium streak counter widget with animations
 class StreakCounter extends StatelessWidget {
   final List<Session> sessions;
   final int weeklyGoal;
@@ -12,57 +15,119 @@ class StreakCounter extends StatelessWidget {
   Widget build(BuildContext context) {
     final streakData = _calculateStreaks();
     final thisWeekCount = _getThisWeekCount();
+    final currentStreak = streakData['current']!;
+    final longestStreak = streakData['longest']!;
+    final isOnFire = currentStreak >= 3;
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color:
+              isOnFire
+                  ? AppColors.goHardOrange.withValues(alpha: 0.3)
+                  : context.border,
+          width: isOnFire ? 1.5 : 0.5,
+        ),
+        boxShadow:
+            isOnFire
+                ? [
+                  BoxShadow(
+                    color: AppColors.goHardOrange.withValues(alpha: 0.1),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+                : null,
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header
             Row(
               children: [
-                Icon(
-                  Icons.local_fire_department,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.activeGradient,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.goHardOrange.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.local_fire_department_rounded,
+                    size: 22,
+                    color: Colors.white,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'Streaks & Goals',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Streaks & Goals',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: context.textPrimary,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    Text(
+                      'Keep the momentum going',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: context.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Streak stats row
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStreakStat(
+                    context,
+                    value: currentStreak,
+                    label: 'Current\nStreak',
+                    icon: Icons.whatshot_rounded,
+                    color:
+                        currentStreak > 0
+                            ? AppColors.goHardOrange
+                            : context.textTertiary,
+                    isMain: true,
+                  ),
+                ),
+                Container(width: 1, height: 80, color: context.border),
+                Expanded(
+                  child: _buildStreakStat(
+                    context,
+                    value: longestStreak,
+                    label: 'Longest\nStreak',
+                    icon: Icons.emoji_events_rounded,
+                    color: AppColors.goHardAmber,
+                    isMain: false,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStreakItem(
-                    context,
-                    'Current Streak',
-                    streakData['current']!,
-                    Icons.whatshot,
-                    streakData['current']! > 0 ? Colors.orange : Colors.grey,
-                  ),
-                ),
-                Container(width: 1, height: 50, color: Colors.grey.shade300),
-                Expanded(
-                  child: _buildStreakItem(
-                    context,
-                    'Longest Streak',
-                    streakData['longest']!,
-                    Icons.emoji_events,
-                    Colors.amber,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+
+            // Weekly goal
             _buildWeeklyGoal(context, thisWeekCount),
           ],
         ),
@@ -70,36 +135,58 @@ class StreakCounter extends StatelessWidget {
     );
   }
 
-  Widget _buildStreakItem(
-    BuildContext context,
-    String label,
-    int value,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildStreakStat(
+    BuildContext context, {
+    required int value,
+    required String label,
+    required IconData icon,
+    required Color color,
+    required bool isMain,
+  }) {
     return Column(
       children: [
-        Icon(icon, size: 28, color: color),
-        const SizedBox(height: 4),
-        Text(
-          '$value',
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color,
+        // Icon with glow for active streak
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow:
+                isMain && value > 0
+                    ? [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.3),
+                        blurRadius: 12,
+                      ),
+                    ]
+                    : null,
+          ),
+          child: Icon(icon, size: 26, color: color),
+        ),
+        const SizedBox(height: 12),
+        // Animated counter
+        AnimatedCounter(
+          value: value,
+          style: TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.w800,
+            color: value > 0 ? color : context.textTertiary,
           ),
         ),
+        const SizedBox(height: 4),
         Text(
           label,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
+          style: TextStyle(
+            fontSize: 12,
+            color: context.textSecondary,
+            height: 1.3,
+          ),
           textAlign: TextAlign.center,
         ),
         Text(
           'day${value != 1 ? 's' : ''}',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
+          style: TextStyle(fontSize: 11, color: context.textTertiary),
         ),
       ],
     );
@@ -107,14 +194,33 @@ class StreakCounter extends StatelessWidget {
 
   Widget _buildWeeklyGoal(BuildContext context, int thisWeekCount) {
     final progress = thisWeekCount / weeklyGoal;
-    final progressClamped = progress > 1.0 ? 1.0 : progress;
+    final progressClamped = progress.clamp(0.0, 1.0);
     final isGoalMet = thisWeekCount >= weeklyGoal;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isGoalMet ? Colors.green.shade50 : Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(8),
+        gradient: LinearGradient(
+          colors:
+              isGoalMet
+                  ? [
+                    AppColors.goHardGreen.withValues(alpha: 0.12),
+                    AppColors.goHardCyan.withValues(alpha: 0.08),
+                  ]
+                  : [
+                    AppColors.goHardBlue.withValues(alpha: 0.08),
+                    AppColors.goHardCyan.withValues(alpha: 0.05),
+                  ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color:
+              isGoalMet
+                  ? AppColors.goHardGreen.withValues(alpha: 0.3)
+                  : AppColors.goHardBlue.withValues(alpha: 0.2),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,65 +228,141 @@ class StreakCounter extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Weekly Goal',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color:
-                      isGoalMet ? Colors.green.shade700 : Colors.blue.shade700,
-                ),
+              Row(
+                children: [
+                  Icon(
+                    Icons.flag_rounded,
+                    size: 18,
+                    color:
+                        isGoalMet
+                            ? AppColors.goHardGreen
+                            : AppColors.goHardBlue,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Weekly Goal',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color:
+                          isGoalMet
+                              ? AppColors.goHardGreen
+                              : AppColors.goHardBlue,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                '$thisWeekCount / $weeklyGoal',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
                   color:
-                      isGoalMet ? Colors.green.shade700 : Colors.blue.shade700,
+                      isGoalMet
+                          ? AppColors.goHardGreen.withValues(alpha: 0.15)
+                          : AppColors.goHardBlue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$thisWeekCount / $weeklyGoal',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color:
+                        isGoalMet
+                            ? AppColors.goHardGreen
+                            : AppColors.goHardBlue,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progressClamped,
-              minHeight: 6,
-              backgroundColor: Colors.grey.shade300,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                isGoalMet ? Colors.green : Colors.blue,
+          const SizedBox(height: 14),
+
+          // Progress bar
+          Container(
+            height: 8,
+            decoration: BoxDecoration(
+              color: context.surfaceElevated,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: progressClamped),
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, child) {
+                  return FractionallySizedBox(
+                    widthFactor: value,
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient:
+                            isGoalMet
+                                ? AppColors.successGradient
+                                : AppColors.secondaryGradient,
+                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isGoalMet
+                                    ? AppColors.goHardGreen
+                                    : AppColors.goHardBlue)
+                                .withValues(alpha: 0.4),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
-          if (isGoalMet) ...[
-            const SizedBox(height: 8),
+          const SizedBox(height: 10),
+
+          // Status message
+          if (isGoalMet)
             Row(
               children: [
-                Icon(
-                  Icons.check_circle,
-                  size: 14,
-                  color: Colors.green.shade700,
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.successGradient,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    size: 12,
+                    color: Colors.white,
+                  ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 8),
                 Text(
-                  'Goal achieved! 🎉',
+                  'Goal achieved! Keep crushing it!',
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.green.shade700,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                    color: AppColors.goHardGreen,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
-            ),
-          ] else if (thisWeekCount > 0) ...[
-            const SizedBox(height: 8),
+            )
+          else if (thisWeekCount > 0)
             Text(
-              '${weeklyGoal - thisWeekCount} more to reach your goal',
-              style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+              '${weeklyGoal - thisWeekCount} more workout${weeklyGoal - thisWeekCount != 1 ? 's' : ''} to reach your goal',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.goHardBlue,
+                fontWeight: FontWeight.w500,
+              ),
+            )
+          else
+            Text(
+              'Start your first workout this week!',
+              style: TextStyle(fontSize: 13, color: context.textSecondary),
             ),
-          ],
         ],
       ),
     );
@@ -191,7 +373,6 @@ class StreakCounter extends StatelessWidget {
       return {'current': 0, 'longest': 0};
     }
 
-    // Filter completed sessions and sort by date
     final completedSessions =
         sessions.where((s) => s.status == 'completed').toList()
           ..sort((a, b) => b.date.compareTo(a.date));
@@ -203,7 +384,6 @@ class StreakCounter extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // Get unique workout dates
     final workoutDates = <DateTime>{};
     for (final session in completedSessions) {
       workoutDates.add(
@@ -213,7 +393,6 @@ class StreakCounter extends StatelessWidget {
 
     final sortedDates = workoutDates.toList()..sort((a, b) => b.compareTo(a));
 
-    // Calculate current streak
     int currentStreak = 0;
     DateTime checkDate = today;
 
@@ -222,12 +401,10 @@ class StreakCounter extends StatelessWidget {
         currentStreak++;
         checkDate = checkDate.subtract(const Duration(days: 1));
       } else if (date.isBefore(checkDate)) {
-        // Gap found, break
         break;
       }
     }
 
-    // Calculate longest streak
     int longestStreak = 0;
     int tempStreak = 1;
 

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 
 /// Extension on BuildContext for easy theme-aware color access
-/// Use this instead of hardcoding colors to ensure light/dark mode consistency
+/// Premium fitness app color system
 extension ThemeColors on BuildContext {
   /// Quick access to current theme's color scheme
   ColorScheme get colorScheme => Theme.of(this).colorScheme;
@@ -16,36 +16,33 @@ extension ThemeColors on BuildContext {
   // ============ SURFACE COLORS ============
 
   /// Main scaffold/page background
-  /// Dark: #121212, Light: #FFFFFF
   Color get scaffoldBackground => Theme.of(this).scaffoldBackgroundColor;
 
   /// Card/container surface color
-  /// Dark: #1C1C1E, Light: #FFFFFF
   Color get surface => colorScheme.surface;
 
   /// Elevated surface (modals, dialogs, raised cards)
-  /// Dark: #2C2C2E, Light: #F2F2F7
   Color get surfaceElevated => colorScheme.surfaceContainerHighest;
 
   /// Surface for input fields
-  /// Dark: #2C2C2E, Light: #F2F2F7
   Color get inputSurface =>
-      isDarkMode ? AppColors.iosDarkGray2 : AppColors.iosGray1;
+      isDarkMode ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated;
+
+  /// Highlighted/hover surface
+  Color get surfaceHighlight =>
+      isDarkMode ? AppColors.darkSurfaceHighlight : AppColors.lightSurfaceElevated;
 
   // ============ TEXT COLORS ============
 
   /// Primary text color (titles, important text)
-  /// Dark: White, Light: Black
   Color get textPrimary => colorScheme.onSurface;
 
   /// Secondary text color (subtitles, descriptions)
-  /// Dark: #B0B0B0, Light: #3C3C43 (60%)
   Color get textSecondary => colorScheme.onSurfaceVariant;
 
   /// Tertiary/hint text color (placeholders, disabled)
-  /// Dark: #8E8E93, Light: #3C3C43 (30%)
   Color get textTertiary =>
-      isDarkMode ? AppColors.iosGray6 : AppColors.iosTertiaryLabel;
+      isDarkMode ? const Color(0xFF6B6B6B) : AppColors.iosGray5;
 
   /// Text on primary color buttons/surfaces
   Color get textOnPrimary => colorScheme.onPrimary;
@@ -53,32 +50,35 @@ extension ThemeColors on BuildContext {
   // ============ BORDER/DIVIDER COLORS ============
 
   /// Border color for cards, containers
-  /// Dark: #38383A, Light: #D1D1D6
-  Color get border => isDarkMode ? AppColors.iosDarkGray3 : AppColors.iosGray3;
+  Color get border =>
+      isDarkMode ? const Color(0xFF2A2A2A) : AppColors.iosGray3;
 
   /// Subtle border for inputs, dividers
-  /// Dark: #48484A, Light: #E5E5EA
   Color get borderSubtle =>
-      isDarkMode ? AppColors.iosDarkGray4 : AppColors.iosGray2;
+      isDarkMode ? const Color(0xFF1E1E1E) : AppColors.iosGray2;
 
   /// Divider color
   Color get divider => Theme.of(this).dividerTheme.color ?? border;
 
   // ============ INTERACTIVE COLORS ============
 
-  /// Primary action color (buttons, links, selections)
-  /// Dark: Green (#34C759), Light: Black
+  /// Primary action color - Electric Green
   Color get primary => colorScheme.primary;
 
-  /// Secondary action color
+  /// Secondary action color - Electric Blue
   Color get secondary => colorScheme.secondary;
 
-  /// Accent/highlight color (always green for GoHard brand)
-  Color get accent => AppColors.iosSystemGreen;
+  /// Accent/highlight color - Always Electric Green
+  Color get accent => AppColors.goHardGreen;
+
+  /// Blue accent for variety
+  Color get accentBlue => AppColors.goHardBlue;
+
+  /// Cyan accent for gradients
+  Color get accentCyan => AppColors.goHardCyan;
 
   /// Selected/active state color
-  Color get selected =>
-      isDarkMode ? AppColors.iosSystemGreen : AppColors.goHardBlack;
+  Color get selected => AppColors.goHardGreen;
 
   /// Unselected/inactive state color
   Color get unselected => textTertiary;
@@ -101,43 +101,44 @@ extension ThemeColors on BuildContext {
 
   /// Navigation bar background
   Color get navBarBackground =>
-      isDarkMode ? AppColors.iosDarkGray1 : AppColors.iosSystemBackground;
+      isDarkMode ? AppColors.darkSurface : AppColors.lightSurface;
 
-  /// Navigation bar selected item color
-  Color get navBarSelected =>
-      isDarkMode ? AppColors.iosSystemGreen : AppColors.goHardBlack;
+  /// Navigation bar selected item color - Electric Green
+  Color get navBarSelected => AppColors.goHardGreen;
 
   /// Navigation bar unselected item color
-  Color get navBarUnselected => AppColors.iosGray6;
+  Color get navBarUnselected =>
+      isDarkMode ? const Color(0xFF6B6B6B) : AppColors.iosGray6;
 
-  /// FAB/action button background in nav bar
-  Color get navBarFabBackground =>
-      isDarkMode ? AppColors.iosDarkGray2 : AppColors.goHardBlack;
+  /// FAB/action button background in nav bar - Electric Green
+  Color get navBarFabBackground => AppColors.goHardGreen;
+
+  /// FAB foreground color
+  Color get navBarFabForeground => AppColors.goHardBlack;
 
   // ============ CHIP/TAG COLORS ============
 
   /// Chip background (unselected)
   Color get chipBackground =>
-      isDarkMode ? AppColors.iosDarkGray2 : AppColors.iosGray1;
+      isDarkMode ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated;
 
-  /// Chip background (selected)
-  Color get chipSelected =>
-      isDarkMode ? AppColors.iosSystemGreen : AppColors.goHardBlack;
+  /// Chip background (selected) - Electric Green
+  Color get chipSelected => AppColors.goHardGreen;
 
   /// Chip text color
   Color get chipText => textPrimary;
 
   // ============ MESSAGE BUBBLE COLORS ============
 
-  /// User message bubble background
-  Color get userMessageBubble => primary;
+  /// User message bubble background - Electric Green
+  Color get userMessageBubble => AppColors.goHardGreen;
 
   /// User message text color
-  Color get userMessageText => textOnPrimary;
+  Color get userMessageText => AppColors.goHardBlack;
 
   /// AI/other message bubble background
   Color get aiMessageBubble =>
-      isDarkMode ? AppColors.iosDarkGray2 : AppColors.iosGray1;
+      isDarkMode ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated;
 
   /// AI/other message text color
   Color get aiMessageText => textPrimary;
@@ -151,8 +152,21 @@ extension ThemeColors on BuildContext {
   Color get cardBorder => border;
 
   /// Card with hover/selected state
-  Color get cardSelected =>
-      isDarkMode ? AppColors.iosDarkGray2 : AppColors.iosGray1;
+  Color get cardSelected => surfaceHighlight;
+
+  // ============ GRADIENT COLORS ============
+
+  /// Primary gradient (Green to Cyan)
+  LinearGradient get primaryGradient => AppColors.primaryGradient;
+
+  /// Secondary gradient (Blue to Cyan)
+  LinearGradient get secondaryGradient => AppColors.secondaryGradient;
+
+  /// Success gradient
+  LinearGradient get successGradient => AppColors.successGradient;
+
+  /// Active/In-progress gradient
+  LinearGradient get activeGradient => AppColors.activeGradient;
 }
 
 /// Helper class for getting theme colors without context
@@ -167,7 +181,9 @@ class ThemeColorHelper {
 
   Color get surface => colorScheme.surface;
   Color get surfaceElevated => colorScheme.surfaceContainerHighest;
-  Color get border => isDarkMode ? AppColors.iosDarkGray3 : AppColors.iosGray3;
+  Color get border => isDarkMode ? const Color(0xFF2A2A2A) : AppColors.iosGray3;
   Color get textPrimary => colorScheme.onSurface;
   Color get textSecondary => colorScheme.onSurfaceVariant;
+  Color get accent => AppColors.goHardGreen;
+  Color get accentBlue => AppColors.goHardBlue;
 }

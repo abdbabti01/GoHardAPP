@@ -1,160 +1,151 @@
 import 'package:flutter/material.dart';
+import '../../../core/constants/colors.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/exercise_template.dart';
-import 'category_badge.dart';
 
-/// Card widget for displaying an exercise template
-/// Matches ExerciseCard from MAUI app
+/// Premium exercise card with modern design
 class ExerciseCard extends StatelessWidget {
   final ExerciseTemplate exercise;
   final VoidCallback? onTap;
   final Widget? trailing;
+  final bool showDetails;
 
   const ExerciseCard({
     super.key,
     required this.exercise,
     this.onTap,
     this.trailing,
+    this.showDetails = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Exercise icon
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  _getExerciseIcon(),
-                  size: 28,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 16),
+    final categoryColor = _getCategoryColor();
 
-              // Exercise details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Exercise name
-                    Text(
-                      exercise.name,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.border, width: 0.5),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                // Exercise icon with category color
+                _buildIconContainer(context, categoryColor),
+                const SizedBox(width: 14),
+
+                // Exercise details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Exercise name
+                      Text(
+                        exercise.name,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: context.textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-
-                    // Category and muscle group
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        if (exercise.category != null)
-                          CategoryBadge(category: exercise.category),
-                        if (exercise.muscleGroup != null)
-                          _buildInfoChip(
-                            context,
-                            exercise.muscleGroup!,
-                            Colors.blue,
-                          ),
-                      ],
-                    ),
-
-                    // Equipment and difficulty
-                    if (exercise.equipment != null ||
-                        exercise.difficulty != null) ...[
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          if (exercise.equipment != null) ...[
-                            Icon(
-                              Icons.fitness_center,
-                              size: 14,
-                              color: Colors.grey.shade600,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              exercise.equipment!,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: Colors.grey.shade600),
-                            ),
-                          ],
-                          if (exercise.equipment != null &&
-                              exercise.difficulty != null)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              child: Text(
-                                '•',
-                                style: TextStyle(color: Colors.grey.shade400),
-                              ),
-                            ),
-                          if (exercise.difficulty != null) ...[
-                            Icon(
-                              _getDifficultyIcon(exercise.difficulty!),
-                              size: 14,
-                              color: _getDifficultyColor(exercise.difficulty!),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              exercise.difficulty!,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: _getDifficultyColor(
-                                  exercise.difficulty!,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
 
-              // Trailing widget (optional)
-              if (trailing != null) trailing!,
-            ],
+                      // Tags row
+                      _buildTagsRow(context, categoryColor),
+
+                      // Equipment and difficulty
+                      if (showDetails &&
+                          (exercise.equipment != null ||
+                              exercise.difficulty != null)) ...[
+                        const SizedBox(height: 8),
+                        _buildDetailsRow(context),
+                      ],
+                    ],
+                  ),
+                ),
+
+                // Trailing widget
+                if (trailing != null) ...[
+                  const SizedBox(width: 8),
+                  trailing!,
+                ] else
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: context.textTertiary,
+                    size: 22,
+                  ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildInfoChip(BuildContext context, String label, Color color) {
+  Widget _buildIconContainer(BuildContext context, Color categoryColor) {
+    return Container(
+      width: 52,
+      height: 52,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            categoryColor.withValues(alpha: 0.2),
+            categoryColor.withValues(alpha: 0.1),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: categoryColor.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Icon(_getExerciseIcon(), size: 24, color: categoryColor),
+    );
+  }
+
+  Widget _buildTagsRow(BuildContext context, Color categoryColor) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        if (exercise.category != null)
+          _buildTag(context, exercise.category!, categoryColor, filled: true),
+        if (exercise.muscleGroup != null)
+          _buildTag(context, exercise.muscleGroup!, AppColors.goHardBlue),
+      ],
+    );
+  }
+
+  Widget _buildTag(
+    BuildContext context,
+    String label,
+    Color color, {
+    bool filled = false,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
+        color: filled ? color.withValues(alpha: 0.15) : context.surfaceElevated,
+        borderRadius: BorderRadius.circular(6),
+        border: filled ? null : Border.all(color: context.border, width: 0.5),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: color,
+          color: filled ? color : context.textSecondary,
           fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
@@ -162,46 +153,232 @@ class ExerciseCard extends StatelessWidget {
     );
   }
 
-  IconData _getExerciseIcon() {
-    if (exercise.category == null) return Icons.fitness_center;
+  Widget _buildDetailsRow(BuildContext context) {
+    return Row(
+      children: [
+        if (exercise.equipment != null) ...[
+          Icon(
+            Icons.fitness_center_rounded,
+            size: 13,
+            color: context.textTertiary,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            exercise.equipment!,
+            style: TextStyle(
+              fontSize: 12,
+              color: context.textTertiary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+        if (exercise.equipment != null && exercise.difficulty != null)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            width: 3,
+            height: 3,
+            decoration: BoxDecoration(
+              color: context.textTertiary,
+              shape: BoxShape.circle,
+            ),
+          ),
+        if (exercise.difficulty != null) ...[
+          _buildDifficultyIndicator(context),
+          const SizedBox(width: 4),
+          Text(
+            exercise.difficulty!,
+            style: TextStyle(
+              fontSize: 12,
+              color: _getDifficultyColor(exercise.difficulty!),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildDifficultyIndicator(BuildContext context) {
+    final difficulty = exercise.difficulty?.toLowerCase() ?? 'intermediate';
+    final color = _getDifficultyColor(difficulty);
+    final bars =
+        difficulty == 'beginner'
+            ? 1
+            : difficulty == 'advanced'
+            ? 3
+            : 2;
+
+    return Row(
+      children: List.generate(3, (index) {
+        return Container(
+          width: 3,
+          height: 8 + (index * 2).toDouble(),
+          margin: const EdgeInsets.only(right: 2),
+          decoration: BoxDecoration(
+            color: index < bars ? color : context.border,
+            borderRadius: BorderRadius.circular(1),
+          ),
+        );
+      }),
+    );
+  }
+
+  Color _getCategoryColor() {
+    if (exercise.category == null) return AppColors.goHardGreen;
 
     switch (exercise.category!.toLowerCase()) {
       case 'strength':
-        return Icons.fitness_center;
+        return AppColors.strengthRed;
       case 'cardio':
-        return Icons.directions_run;
+        return AppColors.cardioBlue;
       case 'flexibility':
-        return Icons.self_improvement;
+        return AppColors.flexibilityGreen;
       case 'balance':
-        return Icons.accessibility_new;
+      case 'core':
+        return AppColors.coreOrange;
       default:
-        return Icons.fitness_center;
+        return AppColors.goHardGreen;
     }
   }
 
-  IconData _getDifficultyIcon(String difficulty) {
-    switch (difficulty.toLowerCase()) {
-      case 'beginner':
-        return Icons.signal_cellular_alt_1_bar;
-      case 'intermediate':
-        return Icons.signal_cellular_alt_2_bar;
-      case 'advanced':
-        return Icons.signal_cellular_alt;
+  IconData _getExerciseIcon() {
+    if (exercise.category == null) return Icons.fitness_center_rounded;
+
+    switch (exercise.category!.toLowerCase()) {
+      case 'strength':
+        return Icons.fitness_center_rounded;
+      case 'cardio':
+        return Icons.directions_run_rounded;
+      case 'flexibility':
+        return Icons.self_improvement_rounded;
+      case 'balance':
+        return Icons.accessibility_new_rounded;
+      case 'core':
+        return Icons.sports_martial_arts_rounded;
       default:
-        return Icons.signal_cellular_alt_2_bar;
+        return Icons.fitness_center_rounded;
     }
   }
 
   Color _getDifficultyColor(String difficulty) {
     switch (difficulty.toLowerCase()) {
       case 'beginner':
-        return Colors.green;
+        return AppColors.goHardGreen;
       case 'intermediate':
-        return Colors.orange;
+        return AppColors.goHardOrange;
       case 'advanced':
-        return Colors.red;
+        return AppColors.errorRed;
       default:
-        return Colors.grey;
+        return AppColors.goHardGreen;
+    }
+  }
+}
+
+/// Compact exercise card for lists within active workout
+class ExerciseCardCompact extends StatelessWidget {
+  final ExerciseTemplate exercise;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+  final int? setCount;
+  final bool isActive;
+
+  const ExerciseCardCompact({
+    super.key,
+    required this.exercise,
+    this.onTap,
+    this.trailing,
+    this.setCount,
+    this.isActive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final categoryColor = _getCategoryColor();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: isActive ? context.surfaceHighlight : context.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color:
+              isActive
+                  ? AppColors.goHardGreen.withValues(alpha: 0.3)
+                  : context.border,
+          width: isActive ? 1.5 : 0.5,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                // Category indicator
+                Container(
+                  width: 4,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: categoryColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Exercise name and sets
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        exercise.name,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: context.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (setCount != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '$setCount ${setCount == 1 ? 'set' : 'sets'}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                // Trailing
+                if (trailing != null) trailing!,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getCategoryColor() {
+    if (exercise.category == null) return AppColors.goHardGreen;
+
+    switch (exercise.category!.toLowerCase()) {
+      case 'strength':
+        return AppColors.strengthRed;
+      case 'cardio':
+        return AppColors.cardioBlue;
+      case 'flexibility':
+        return AppColors.flexibilityGreen;
+      default:
+        return AppColors.goHardGreen;
     }
   }
 }

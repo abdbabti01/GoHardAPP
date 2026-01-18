@@ -1,19 +1,52 @@
 import 'package:flutter/material.dart';
 
-/// App color constants matching the MAUI app design
+/// Premium fitness app color constants
+/// Inspired by Hevy, Strong, Nike Training Club, Apple Fitness+
 class AppColors {
   AppColors._(); // Private constructor to prevent instantiation
 
-  // GoHard Brand Colors - Monochrome from Logo
-  static const Color goHardBlack = Color(
-    0xFF000000,
-  ); // Pure black from logo background
-  static const Color goHardDarkGray = Color(0xFF1A1A1A); // Very dark gray
-  static const Color goHardWhite = Color(
-    0xFFFFFFFF,
-  ); // Pure white from logo text
-  static const Color goHardSilver = Color(0xFFB0B0B0); // Silver/gray from logo
-  static const Color goHardLightGray = Color(0xFFE5E5E5); // Light gray accent
+  // ============ GOHARD PREMIUM BRAND COLORS ============
+
+  // Primary Brand - Electric Green
+  static const Color goHardGreen = Color(0xFF00E676); // Vibrant electric green
+  static const Color goHardGreenLight = Color(0xFF69F0AE); // Light variant
+  static const Color goHardGreenDark = Color(0xFF00C853); // Dark variant
+
+  // Secondary Brand - Electric Blue
+  static const Color goHardBlue = Color(0xFF2979FF); // Electric blue
+  static const Color goHardBlueLight = Color(0xFF82B1FF); // Light variant
+  static const Color goHardBlueDark = Color(0xFF2962FF); // Dark variant
+  static const Color goHardCyan = Color(0xFF00E5FF); // Cyan for gradients
+
+  // Accent Colors
+  static const Color goHardOrange = Color(0xFFFF6D00); // Warning/active states
+  static const Color goHardAmber = Color(0xFFFFAB00); // Highlights
+
+  // Neutral Palette
+  static const Color goHardBlack = Color(0xFF000000);
+  static const Color goHardDarkGray = Color(0xFF1A1A1A);
+  static const Color goHardWhite = Color(0xFFFFFFFF);
+  static const Color goHardSilver = Color(0xFFB0B0B0);
+  static const Color goHardLightGray = Color(0xFFE5E5E5);
+
+  // ============ PREMIUM DARK MODE SURFACES ============
+
+  static const Color darkBackground = Color(0xFF0A0A0A); // Deep black
+  static const Color darkSurface = Color(0xFF141414); // Card background
+  static const Color darkSurfaceElevated = Color(0xFF1E1E1E); // Elevated cards
+  static const Color darkSurfaceHighlight = Color(0xFF282828); // Hover/selected
+
+  // ============ PREMIUM LIGHT MODE SURFACES ============
+
+  static const Color lightBackground = Color(0xFFF8F9FA); // Soft white
+  static const Color lightSurface = Color(0xFFFFFFFF); // Card background
+  static const Color lightSurfaceElevated = Color(0xFFF0F2F5); // Elevated
+
+  // ============ GLASSMORPHISM ============
+
+  static const Color glassWhite = Color(0x1AFFFFFF); // 10% white
+  static const Color glassBorder = Color(0x33FFFFFF); // 20% white
+  static const Color glassBlack = Color(0x1A000000); // 10% black
 
   // iOS System Colors (for compatibility)
   static const Color iosSystemBlue = Color(0xFF007AFF);
@@ -106,7 +139,55 @@ class AppColors {
   static const Color coreOrange = Color(0xFFFB8C00);
   static const Color defaultCategory = Color(0xFF9E9E9E);
 
-  // Gradient Definitions
+  // ============ PREMIUM GRADIENT DEFINITIONS ============
+
+  // Primary gradient - Electric Green to Cyan
+  static const LinearGradient primaryGradient = LinearGradient(
+    colors: [goHardGreen, goHardCyan],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Secondary gradient - Electric Blue
+  static const LinearGradient secondaryGradient = LinearGradient(
+    colors: [goHardBlue, goHardCyan],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Success gradient - Green shades
+  static const LinearGradient successGradient = LinearGradient(
+    colors: [goHardGreen, goHardGreenLight],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Active/In-progress gradient - Orange/Amber
+  static const LinearGradient activeGradient = LinearGradient(
+    colors: [goHardOrange, goHardAmber],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Card gradient for dark mode (subtle)
+  static const LinearGradient cardGradientDark = LinearGradient(
+    colors: [darkSurface, darkSurfaceElevated],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+
+  // Shimmer/glow effect
+  static const LinearGradient glowGradient = LinearGradient(
+    colors: [
+      Color(0x0000E676), // transparent green
+      Color(0x3300E676), // 20% green
+      Color(0x0000E676), // transparent green
+    ],
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+  );
+
+  // Legacy gradients (for compatibility)
   static const LinearGradient fitnessGradient = LinearGradient(
     colors: [fitnessGradientStart, fitnessGradientEnd],
     begin: Alignment.topLeft,
