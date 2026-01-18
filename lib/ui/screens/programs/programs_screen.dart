@@ -287,7 +287,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             if (!isCompleted) ...[
               const Divider(height: 32),
               WeeklyScheduleWidget(
-                key: ValueKey('program_${program.id}'),
+                // Key includes workout days hash to force rebuild when workouts move
+                key: ValueKey(
+                  'program_${program.id}_${program.workouts?.map((w) => '${w.id}:${w.dayNumber}').join(',') ?? ''}',
+                ),
                 program: program,
                 onWorkoutTap: (workout) {
                   if (!workout.isRestDay) {
@@ -311,8 +314,6 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     );
                   }
                 },
-                // Widget now watches provider directly, no need for full reload
-                onWorkoutMoved: null,
               ),
               const SizedBox(height: 16),
             ],

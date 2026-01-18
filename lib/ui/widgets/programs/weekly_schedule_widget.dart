@@ -6,8 +6,8 @@ import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 
-/// Compact weekly schedule widget with drag-and-drop support
-/// Shows days as horizontal strip with expandable workout lists
+/// Simple weekly schedule widget - shows all workouts at a glance
+/// No tap to expand - workouts visible directly under each day
 class WeeklyScheduleWidget extends StatefulWidget {
   final Program program;
   final Function(ProgramWorkout)? onWorkoutTap;
@@ -27,17 +27,16 @@ class WeeklyScheduleWidget extends StatefulWidget {
 class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
   bool _isDragging = false;
   int? _hoveredDay;
-  int? _expandedDay;
 
-  List<List<ProgramWorkout>> _getThisWeeksWorkouts(Program program) {
-    if (program.workouts == null) return List.generate(7, (_) => []);
+  List<List<ProgramWorkout>> _getThisWeeksWorkouts() {
+    if (widget.program.workouts == null) return List.generate(7, (_) => []);
 
-    final currentWeek = program.currentWeek;
+    final currentWeek = widget.program.currentWeek;
     final weekWorkouts = <List<ProgramWorkout>>[];
 
     for (int day = 1; day <= 7; day++) {
       final dayWorkouts =
-          program.workouts!
+          widget.program.workouts!
               .where((w) => w.weekNumber == currentWeek && w.dayNumber == day)
               .toList()
             ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
@@ -47,8 +46,8 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
     return weekWorkouts;
   }
 
-  String _getDayAbbr(int dayNumber) {
-    const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  String _getDayLabel(int dayNumber) {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return days[dayNumber - 1];
   }
 
@@ -65,382 +64,65 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
     return days[dayNumber - 1];
   }
 
-  String _getCleanWorkoutName(String workoutName) {
-    final colonIndex = workoutName.indexOf(':');
+  String _cleanName(String name) {
+    final colonIndex = name.indexOf(':');
     if (colonIndex != -1 && colonIndex < 15) {
-      return workoutName.substring(colonIndex + 1).trim();
+      return name.substring(colonIndex + 1).trim();
     }
-    return workoutName;
+    return name;
   }
 
-  Future<void> _updateWorkoutDay(
-    BuildContext context,
-    ProgramWorkout workout,
-    int newDayNumber,
-  ) async {
-    if (!context.mounted) return;
+  Future<void> _moveWorkout(ProgramWorkout workout, int newDay) async {
+    if (!mounted) return;
 
     final provider = context.read<ProgramsProvider>();
-    final messenger = ScaffoldMessenger.of(context);
-
     HapticFeedback.mediumImpact();
 
-    try {
-      final updatedWorkout = workout.copyWith(
-        dayNumber: newDayNumber,
-        orderIndex: newDayNumber * 10, // Space for multiple workouts per day
-      );
+    final updated = workout.copyWith(
+      dayNumber: newDay,
+      orderIndex: newDay * 10,
+    );
+    final success = await provider.updateWorkout(workout.id, updated);
 
-      final success = await provider.updateWorkout(
-        updatedWorkout.id,
-        updatedWorkout,
-      );
+    if (!mounted) return;
 
-      if (!context.mounted) return;
-
-      if (success) {
-        // Force rebuild with new data
-        setState(() {
-          _expandedDay = newDayNumber;
-        });
-        widget.onWorkoutMoved?.call();
-        HapticFeedback.lightImpact();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white, size: 18),
-                const SizedBox(width: 8),
-                Text('Moved to ${_getFullDayName(newDayNumber)}'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      } else {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(provider.errorMessage ?? 'Failed to move workout'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      messenger.showSnackBar(
+    if (success) {
+      widget.onWorkoutMoved?.call();
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
+          content: Text('Moved to ${_getFullDayName(newDay)}'),
+          backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 1),
         ),
       );
     }
   }
 
-  int _getTodayDayNumber() => DateTime.now().weekday;
+  int _getToday() => DateTime.now().weekday;
 
   @override
   Widget build(BuildContext context) {
-    // Watch provider for changes
-    final provider = context.watch<ProgramsProvider>();
-    final program =
-        provider.getProgramFromCache(widget.program.id) ?? widget.program;
-
     final theme = Theme.of(context);
-    final weekWorkouts = _getThisWeeksWorkouts(program);
-    final todayNumber = _getTodayDayNumber();
+    final workouts = _getThisWeeksWorkouts();
+    final today = _getToday();
 
     return Container(
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: context.surfaceElevated,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.border, width: 1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          // Compact Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.calendar_today_rounded,
-                  size: 18,
-                  color: theme.primaryColor,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Week ${program.currentWeek}',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: context.textPrimary,
-                  ),
-                ),
-                const Spacer(),
-                if (_isDragging)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.open_with,
-                          size: 14,
-                          color: theme.primaryColor,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Drop on a day',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: theme.primaryColor,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  Text(
-                    '${program.completedWorkoutsCount}/${program.totalWorkoutsCount} done',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: context.textSecondary,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Days Strip - Horizontal scrollable
-          SizedBox(
-            height: 56,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: 7,
-              itemBuilder: (context, index) {
-                final dayNumber = index + 1;
-                return _buildDayChip(
-                  context,
-                  dayNumber,
-                  weekWorkouts[index],
-                  theme,
-                  todayNumber,
-                  program,
-                );
-              },
-            ),
-          ),
-
-          // Expanded workouts for selected day
-          if (_expandedDay != null) ...[
-            const Divider(height: 1),
-            _buildExpandedDayWorkouts(
-              context,
-              _expandedDay!,
-              weekWorkouts[_expandedDay! - 1],
-              theme,
-              program,
-            ),
-          ],
-
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDayChip(
-    BuildContext context,
-    int dayNumber,
-    List<ProgramWorkout> workouts,
-    ThemeData theme,
-    int todayNumber,
-    Program program,
-  ) {
-    final isToday = dayNumber == todayNumber;
-    final hasWorkout = workouts.isNotEmpty;
-    final allCompleted = hasWorkout && workouts.every((w) => w.isCompleted);
-    final hasMissed = workouts.any((w) => program.isWorkoutMissed(w));
-    final isExpanded = _expandedDay == dayNumber;
-    final isHovered = _hoveredDay == dayNumber;
-
-    Color bgColor;
-    Color textColor;
-    Color borderColor;
-
-    if (isHovered && _isDragging) {
-      bgColor = theme.primaryColor;
-      textColor = Colors.white;
-      borderColor = theme.primaryColor;
-    } else if (isExpanded) {
-      bgColor = theme.primaryColor.withValues(alpha: 0.15);
-      textColor = theme.primaryColor;
-      borderColor = theme.primaryColor;
-    } else if (isToday) {
-      bgColor = theme.primaryColor;
-      textColor = Colors.white;
-      borderColor = theme.primaryColor;
-    } else if (allCompleted) {
-      bgColor = Colors.green.withValues(alpha: 0.15);
-      textColor = Colors.green;
-      borderColor = Colors.green;
-    } else if (hasMissed) {
-      bgColor = Colors.orange.withValues(alpha: 0.15);
-      textColor = Colors.orange;
-      borderColor = Colors.orange;
-    } else if (hasWorkout) {
-      bgColor = context.surface;
-      textColor = context.textPrimary;
-      borderColor = context.border;
-    } else {
-      bgColor = context.surface;
-      textColor = context.textTertiary;
-      borderColor = context.borderSubtle;
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-      child: DragTarget<ProgramWorkout>(
-        onWillAcceptWithDetails: (details) {
-          HapticFeedback.selectionClick();
-          setState(() => _hoveredDay = dayNumber);
-          return true;
-        },
-        onAcceptWithDetails: (details) async {
-          final draggedWorkout = details.data;
-          if (draggedWorkout.dayNumber != dayNumber) {
-            await _updateWorkoutDay(context, draggedWorkout, dayNumber);
-          }
-          setState(() {
-            _isDragging = false;
-            _hoveredDay = null;
-          });
-        },
-        onLeave: (data) => setState(() => _hoveredDay = null),
-        builder: (context, candidateData, rejectedData) {
-          final isDropTarget = candidateData.isNotEmpty || isHovered;
-
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            transform: Matrix4.identity()..scale(isDropTarget ? 1.1 : 1.0),
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _expandedDay = _expandedDay == dayNumber ? null : dayNumber;
-                });
-              },
-              child: Container(
-                width: 44,
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: borderColor,
-                    width: isDropTarget ? 2 : 1,
-                  ),
-                  boxShadow:
-                      isDropTarget
-                          ? [
-                            BoxShadow(
-                              color: theme.primaryColor.withValues(alpha: 0.3),
-                              blurRadius: 8,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                          : null,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _getDayAbbr(dayNumber),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    // Workout indicator dots
-                    if (hasWorkout)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          workouts.length.clamp(1, 3),
-                          (i) => Container(
-                            width: 5,
-                            height: 5,
-                            margin: const EdgeInsets.symmetric(horizontal: 1),
-                            decoration: BoxDecoration(
-                              color:
-                                  allCompleted
-                                      ? Colors.green
-                                      : hasMissed
-                                      ? Colors.orange
-                                      : isToday
-                                      ? Colors.white
-                                      : theme.primaryColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      Container(
-                        width: 5,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: textColor.withValues(alpha: 0.3),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildExpandedDayWorkouts(
-    BuildContext context,
-    int dayNumber,
-    List<ProgramWorkout> workouts,
-    ThemeData theme,
-    Program program,
-  ) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Day title
+          // Header row
           Row(
             children: [
               Text(
-                _getFullDayName(dayNumber),
+                'Week ${widget.program.currentWeek}',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -448,229 +130,277 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
                 ),
               ),
               const Spacer(),
-              IconButton(
-                icon: Icon(Icons.close, size: 18, color: context.textSecondary),
-                onPressed: () => setState(() => _expandedDay = null),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
+              if (_isDragging)
+                Text(
+                  'Drop on a day',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.primaryColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                )
+              else
+                Text(
+                  '${widget.program.completedWorkoutsCount}/${widget.program.totalWorkoutsCount}',
+                  style: TextStyle(fontSize: 12, color: context.textSecondary),
+                ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
-          // Workouts list
-          if (workouts.isEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.self_improvement,
-                    size: 20,
-                    color: context.textTertiary,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Rest Day',
-                    style: TextStyle(fontSize: 14, color: context.textTertiary),
-                  ),
-                ],
-              ),
-            )
-          else
-            ...workouts.map(
-              (workout) => _buildWorkoutTile(
-                context,
-                workout,
-                theme,
-                dayNumber,
-                program,
-              ),
-            ),
+          // 7-day grid - 2 rows
+          _buildWeekGrid(context, workouts, theme, today),
         ],
       ),
     );
   }
 
-  Widget _buildWorkoutTile(
+  Widget _buildWeekGrid(
+    BuildContext context,
+    List<List<ProgramWorkout>> workouts,
+    ThemeData theme,
+    int today,
+  ) {
+    return Column(
+      children: [
+        // Row 1: Mon-Thu
+        Row(
+          children: List.generate(4, (i) {
+            final day = i + 1;
+            return Expanded(
+              child: _buildDayColumn(context, day, workouts[i], theme, today),
+            );
+          }),
+        ),
+        const SizedBox(height: 8),
+        // Row 2: Fri-Sun (+ empty space)
+        Row(
+          children: [
+            ...List.generate(3, (i) {
+              final day = i + 5;
+              return Expanded(
+                child: _buildDayColumn(
+                  context,
+                  day,
+                  workouts[day - 1],
+                  theme,
+                  today,
+                ),
+              );
+            }),
+            const Expanded(child: SizedBox()), // Empty 4th column for balance
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDayColumn(
+    BuildContext context,
+    int day,
+    List<ProgramWorkout> dayWorkouts,
+    ThemeData theme,
+    int today,
+  ) {
+    final isToday = day == today;
+    final hasWorkouts = dayWorkouts.isNotEmpty;
+    final allDone = hasWorkouts && dayWorkouts.every((w) => w.isCompleted);
+    final hasMissed = dayWorkouts.any((w) => widget.program.isWorkoutMissed(w));
+    final isHovered = _hoveredDay == day && _isDragging;
+
+    return DragTarget<ProgramWorkout>(
+      onWillAcceptWithDetails: (d) {
+        HapticFeedback.selectionClick();
+        setState(() => _hoveredDay = day);
+        return true;
+      },
+      onAcceptWithDetails: (d) async {
+        if (d.data.dayNumber != day) {
+          await _moveWorkout(d.data, day);
+        }
+        setState(() {
+          _isDragging = false;
+          _hoveredDay = null;
+        });
+      },
+      onLeave: (_) => setState(() => _hoveredDay = null),
+      builder: (context, candidates, rejected) {
+        final isTarget = candidates.isNotEmpty || isHovered;
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color:
+                isTarget
+                    ? theme.primaryColor.withValues(alpha: 0.15)
+                    : isToday
+                    ? theme.primaryColor.withValues(alpha: 0.08)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color:
+                  isTarget
+                      ? theme.primaryColor
+                      : isToday
+                      ? theme.primaryColor.withValues(alpha: 0.3)
+                      : Colors.transparent,
+              width: isTarget ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              // Day label
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color:
+                      isToday
+                          ? theme.primaryColor
+                          : allDone
+                          ? Colors.green
+                          : hasMissed
+                          ? Colors.orange
+                          : context.surface,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  _getDayLabel(day),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color:
+                        isToday || allDone || hasMissed
+                            ? Colors.white
+                            : context.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // Workouts - shown directly
+              if (!hasWorkouts)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Rest',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: context.textTertiary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                )
+              else
+                ...dayWorkouts.map(
+                  (w) => _buildWorkoutChip(context, w, theme, day),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWorkoutChip(
     BuildContext context,
     ProgramWorkout workout,
     ThemeData theme,
-    int dayNumber,
-    Program program,
+    int day,
   ) {
-    final isCompleted = workout.isCompleted;
-    final isMissed = program.isWorkoutMissed(workout);
-    final isRestDay = workout.isRestDay;
+    final done = workout.isCompleted;
+    final missed = widget.program.isWorkoutMissed(workout);
+    final isRest = workout.isRestDay;
 
-    Color accentColor;
-    if (isCompleted) {
-      accentColor = Colors.green;
-    } else if (isMissed) {
-      accentColor = Colors.orange;
+    Color color;
+    if (done) {
+      color = Colors.green;
+    } else if (missed) {
+      color = Colors.orange;
     } else {
-      accentColor = theme.primaryColor;
+      color = theme.primaryColor;
     }
 
-    Widget tile = Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+    Widget chip = Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Status indicator
-          Container(
-            width: 4,
-            height: 40,
-            decoration: BoxDecoration(
-              color: accentColor,
-              borderRadius: BorderRadius.circular(2),
+          if (done)
+            Padding(
+              padding: const EdgeInsets.only(right: 3),
+              child: Icon(Icons.check, size: 10, color: Colors.green),
             ),
-          ),
-          const SizedBox(width: 12),
-
-          // Workout info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _getCleanWorkoutName(workout.workoutName),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: context.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.fitness_center,
-                      size: 12,
-                      color: context.textTertiary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${workout.exerciseCount} exercises',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.textTertiary,
-                      ),
-                    ),
-                    if (workout.estimatedDuration != null) ...[
-                      const SizedBox(width: 12),
-                      Icon(
-                        Icons.schedule,
-                        size: 12,
-                        color: context.textTertiary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${workout.estimatedDuration} min',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: context.textTertiary,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Status icon or drag handle
-          if (isCompleted)
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
+          Flexible(
+            child: Text(
+              _cleanName(workout.workoutName),
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: context.textPrimary,
               ),
-              child: const Icon(Icons.check, size: 16, color: Colors.green),
-            )
-          else if (!isRestDay)
-            Icon(Icons.drag_indicator, size: 20, color: context.textTertiary),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
 
-    // Wrap with drag functionality
-    if (!isRestDay && !isCompleted) {
+    // Draggable if not completed and not rest day
+    if (!done && !isRest) {
       return LongPressDraggable<ProgramWorkout>(
         data: workout,
         delay: const Duration(milliseconds: 150),
         hapticFeedbackOnStart: true,
         onDragStarted: () {
           HapticFeedback.mediumImpact();
-          setState(() {
-            _isDragging = true;
-          });
+          setState(() => _isDragging = true);
         },
-        onDragEnd: (details) {
-          setState(() {
-            _isDragging = false;
-            _hoveredDay = null;
-          });
-        },
-        onDraggableCanceled: (velocity, offset) {
-          setState(() {
-            _isDragging = false;
-            _hoveredDay = null;
-          });
-        },
+        onDragEnd:
+            (_) => setState(() {
+              _isDragging = false;
+              _hoveredDay = null;
+            }),
+        onDraggableCanceled:
+            (_, __) => setState(() {
+              _isDragging = false;
+              _hoveredDay = null;
+            }),
         feedback: Material(
-          elevation: 12,
-          borderRadius: BorderRadius.circular(12),
-          shadowColor: theme.primaryColor.withValues(alpha: 0.3),
+          elevation: 8,
+          borderRadius: BorderRadius.circular(8),
           child: Container(
-            width: 200,
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: context.surface,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: theme.primaryColor, width: 2),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.fitness_center, size: 24, color: theme.primaryColor),
-                const SizedBox(height: 8),
-                Text(
-                  _getCleanWorkoutName(workout.workoutName),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: context.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${workout.exerciseCount} exercises',
-                  style: TextStyle(fontSize: 12, color: context.textSecondary),
-                ),
-              ],
+            child: Text(
+              _cleanName(workout.workoutName),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: context.textPrimary,
+              ),
             ),
           ),
         ),
-        childWhenDragging: Opacity(opacity: 0.3, child: tile),
+        childWhenDragging: Opacity(opacity: 0.3, child: chip),
         child: GestureDetector(
           onTap:
               widget.onWorkoutTap != null
                   ? () => widget.onWorkoutTap!(workout)
                   : null,
-          child: tile,
+          child: chip,
         ),
       );
     }
@@ -680,7 +410,7 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
           widget.onWorkoutTap != null
               ? () => widget.onWorkoutTap!(workout)
               : null,
-      child: tile,
+      child: chip,
     );
   }
 }
