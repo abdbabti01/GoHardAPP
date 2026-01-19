@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../providers/exercises_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/exercises/exercise_card.dart';
+import '../../widgets/common/loading_indicator.dart';
+import '../../widgets/common/animations.dart';
 
 /// Exercises screen displaying exercise library
 /// Matches ExercisesPage.xaml from MAUI app
@@ -234,7 +238,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                                 isSelected:
                                     provider.selectedDifficulty == 'Beginner',
                                 label: 'Beginner',
-                                color: Colors.green,
+                                color: AppColors.goHardGreen,
                                 onTap:
                                     () =>
                                         provider.filterByDifficulty('Beginner'),
@@ -245,7 +249,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                                     provider.selectedDifficulty ==
                                     'Intermediate',
                                 label: 'Intermediate',
-                                color: Colors.orange,
+                                color: AppColors.goHardOrange,
                                 onTap:
                                     () => provider.filterByDifficulty(
                                       'Intermediate',
@@ -256,7 +260,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                                 isSelected:
                                     provider.selectedDifficulty == 'Advanced',
                                 label: 'Advanced',
-                                color: Colors.red,
+                                color: AppColors.errorRed,
                                 onTap:
                                     () =>
                                         provider.filterByDifficulty('Advanced'),
@@ -453,17 +457,17 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     );
   }
 
-  /// Get color for difficulty level
+  /// Get color for difficulty level - Premium colors
   Color _getDifficultyColor(String difficulty) {
     switch (difficulty) {
       case 'Beginner':
-        return Colors.green;
+        return AppColors.goHardGreen;
       case 'Intermediate':
-        return Colors.orange;
+        return AppColors.goHardOrange;
       case 'Advanced':
-        return Colors.red;
+        return AppColors.errorRed;
       default:
-        return Colors.grey;
+        return AppColors.slate;
     }
   }
 
@@ -482,49 +486,109 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
       ),
       body: Consumer<ExercisesProvider>(
         builder: (context, provider, child) {
-          // Loading state
+          // Loading state - Premium skeleton
           if (provider.isLoading && provider.exercises.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+            return ListView(
+              padding: const EdgeInsets.only(top: 16),
+              children: [
+                // Skeleton difficulty section
+                for (int section = 0; section < 3; section++) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: SkeletonLoader(
+                      width: 120,
+                      height: 28,
+                      borderRadius: 12,
+                    ),
+                  ),
+                  for (int i = 0; i < 3; i++) const SkeletonCard(),
+                ],
+              ],
+            );
           }
 
-          // Error state
+          // Error state - Premium styling
           if (provider.errorMessage != null &&
               provider.errorMessage!.isNotEmpty) {
             return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: context.error),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error Loading Exercises',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: context.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      provider.errorMessage!,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: context.textSecondary,
+              child: FadeSlideAnimation(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: AppColors.errorRed.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.error_outline_rounded,
+                        size: 40,
+                        color: AppColors.errorRed,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: _handleRefresh,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    Text(
+                      'Error Loading Exercises',
+                      style: TextStyle(
+                        color: context.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Text(
+                        provider.errorMessage!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: context.textSecondary),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ScaleTapAnimation(
+                      onTap: _handleRefresh,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.refresh_rounded,
+                              size: 18,
+                              color: AppColors.goHardBlack,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Retry',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.goHardBlack,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           }
 
-          // Empty state
+          // Empty state - Premium styling
           if (provider.filteredExercises.isEmpty) {
             final hasActiveFilters =
                 provider.selectedCategory != null ||
@@ -532,40 +596,92 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                 provider.selectedDifficulty != null;
 
             return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search_off, size: 80, color: context.textTertiary),
-                  const SizedBox(height: 16),
-                  Text(
-                    hasActiveFilters
-                        ? 'No Exercises Match Filters'
-                        : 'No Exercises Found',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: context.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 48),
-                    child: Text(
-                      hasActiveFilters
-                          ? 'Try adjusting your filters'
-                          : 'Pull down to refresh',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: context.textSecondary,
+              child: FadeSlideAnimation(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: AppColors.goHardBlue.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        hasActiveFilters
+                            ? Icons.filter_alt_off_rounded
+                            : Icons.search_off_rounded,
+                        size: 48,
+                        color: AppColors.goHardBlue,
                       ),
                     ),
-                  ),
-                  if (hasActiveFilters) ...[
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => provider.clearFilters(),
-                      child: const Text('Clear All Filters'),
+                    const SizedBox(height: 24),
+                    Text(
+                      hasActiveFilters
+                          ? 'No Exercises Match Filters'
+                          : 'No Exercises Found',
+                      style: TextStyle(
+                        color: context.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 48),
+                      child: Text(
+                        hasActiveFilters
+                            ? 'Try adjusting your filters'
+                            : 'Pull down to refresh',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: context.textSecondary,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    if (hasActiveFilters) ...[
+                      const SizedBox(height: 24),
+                      ScaleTapAnimation(
+                        onTap: () => provider.clearFilters(),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.goHardBlue.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.goHardBlue.withValues(
+                                alpha: 0.3,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.clear_all_rounded,
+                                size: 18,
+                                color: AppColors.goHardBlue,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Clear All Filters',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.goHardBlue,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             );
           }
@@ -647,7 +763,12 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
               // Exercise list organized by difficulty
               Expanded(
                 child: RefreshIndicator(
-                  onRefresh: _handleRefresh,
+                  onRefresh: () async {
+                    HapticService.refresh();
+                    await _handleRefresh();
+                  },
+                  color: AppColors.goHardGreen,
+                  backgroundColor: context.surface,
                   child: _buildDifficultyOrganizedList(provider),
                 ),
               ),

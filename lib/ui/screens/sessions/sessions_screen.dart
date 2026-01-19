@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/exercises_provider.dart';
 import '../../../providers/active_workout_provider.dart';
@@ -12,6 +14,8 @@ import '../../widgets/sessions/session_card.dart';
 import '../../widgets/sessions/weekly_progress_card.dart';
 import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/active_workout_banner.dart';
+import '../../widgets/common/loading_indicator.dart';
+import '../../widgets/common/animations.dart';
 import '../programs/programs_screen.dart';
 
 /// Sessions screen with tabs for My Workouts and Programs
@@ -318,17 +322,31 @@ class _SessionsScreenState extends State<SessionsScreen>
     }
   }
 
-  /// Build week header widget
+  /// Build week header widget - Premium styling
   Widget _buildWeekHeader(BuildContext context, String label) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: context.textSecondary,
-        ),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              color: AppColors.goHardGreen.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: context.textSecondary,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -400,7 +418,7 @@ class _SessionsScreenState extends State<SessionsScreen>
     );
   }
 
-  /// Build section header widget
+  /// Build section header widget - Premium styling
   Widget _buildSectionHeader(
     BuildContext context,
     String label,
@@ -408,33 +426,42 @@ class _SessionsScreenState extends State<SessionsScreen>
     int? count,
   ) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: context.accent),
-          const SizedBox(width: 8),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.goHardGreen.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: AppColors.goHardGreen),
+          ),
+          const SizedBox(width: 12),
           Text(
             label,
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: context.accent,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: context.textPrimary,
+              letterSpacing: -0.3,
             ),
           ),
           if (count != null) ...[
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: context.accent.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 '$count',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: context.accent,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.goHardBlack,
                 ),
               ),
             ),
@@ -502,80 +529,216 @@ class _SessionsScreenState extends State<SessionsScreen>
               Expanded(
                 child: Consumer<SessionsProvider>(
                   builder: (context, provider, child) {
-                    // Loading state
+                    // Loading state - Premium skeleton cards
                     if (provider.isLoading && provider.sessions.isEmpty) {
-                      return const Center(child: CircularProgressIndicator());
+                      return ListView(
+                        padding: const EdgeInsets.only(top: 16),
+                        children: [
+                          // Skeleton for progress card
+                          Container(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            height: 140,
+                            child: SkeletonLoader(
+                              width: double.infinity,
+                              height: 140,
+                              borderRadius: 20,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          // Skeleton section header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: SkeletonLoader(
+                              width: 100,
+                              height: 20,
+                              borderRadius: 6,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Skeleton session cards
+                          for (int i = 0; i < 4; i++) ...[const SkeletonCard()],
+                        ],
+                      );
                     }
 
-                    // Error state
+                    // Error state - Premium styling
                     if (provider.errorMessage != null &&
                         provider.errorMessage!.isNotEmpty) {
                       return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              size: 64,
-                              color: context.error,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Error Loading Workouts',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 32,
+                        child: FadeSlideAnimation(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: AppColors.errorRed.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.error_outline_rounded,
+                                  size: 40,
+                                  color: AppColors.errorRed,
+                                ),
                               ),
-                              child: Text(
-                                provider.errorMessage!,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: context.textSecondary),
+                              const SizedBox(height: 24),
+                              Text(
+                                'Error Loading Workouts',
+                                style: TextStyle(
+                                  color: context.textPrimary,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 24),
-                            ElevatedButton.icon(
-                              onPressed: _handleRefresh,
-                              icon: const Icon(Icons.refresh),
-                              label: const Text('Retry'),
-                            ),
-                          ],
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                ),
+                                child: Text(
+                                  provider.errorMessage!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: context.textSecondary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              ScaleTapAnimation(
+                                onTap: _handleRefresh,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 32,
+                                    vertical: 14,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.primaryGradient,
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.refresh_rounded,
+                                        size: 18,
+                                        color: AppColors.goHardBlack,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'Retry',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.goHardBlack,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     }
 
-                    // Empty state
+                    // Empty state - Premium styling
                     if (provider.sessions.isEmpty) {
                       return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.fitness_center,
-                              size: 80,
-                              color: context.textTertiary,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No Workouts Yet',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 48,
+                        child: FadeSlideAnimation(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  gradient: AppColors.primaryGradient,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.goHardGreen.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.fitness_center_rounded,
+                                  size: 48,
+                                  color: AppColors.goHardBlack,
+                                ),
                               ),
-                              child: Text(
-                                'Start your first workout by tapping the + button below',
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: context.textSecondary),
+                              const SizedBox(height: 24),
+                              Text(
+                                'No Workouts Yet',
+                                style: TextStyle(
+                                  color: context.textPrimary,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 48,
+                                ),
+                                child: Text(
+                                  'Start your first workout by tapping the + button below',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: context.textSecondary,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.goHardGreen.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.goHardGreen.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.arrow_downward_rounded,
+                                      size: 16,
+                                      color: AppColors.goHardGreen,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Tap + to begin',
+                                      style: TextStyle(
+                                        color: AppColors.goHardGreen,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     }
@@ -701,7 +864,12 @@ class _SessionsScreenState extends State<SessionsScreen>
                         DateGroupingUtils.getOrderedWeekLabels(groupedPast);
 
                     return RefreshIndicator(
-                      onRefresh: _handleRefresh,
+                      onRefresh: () async {
+                        HapticService.refresh();
+                        await _handleRefresh();
+                      },
+                      color: AppColors.goHardGreen,
+                      backgroundColor: context.surface,
                       child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.only(bottom: 80),
