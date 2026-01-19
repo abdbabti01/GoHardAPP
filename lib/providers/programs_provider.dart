@@ -17,6 +17,7 @@ class ProgramsProvider extends ChangeNotifier {
   bool _isCreating = false;
   bool _isUpdating = false;
   String? _errorMessage;
+  int? _newlyCreatedProgramId; // Used to auto-select after creation
 
   StreamSubscription<bool>? _connectivitySubscription;
 
@@ -40,6 +41,18 @@ class ProgramsProvider extends ChangeNotifier {
   bool get isCreating => _isCreating;
   bool get isUpdating => _isUpdating;
   String? get errorMessage => _errorMessage;
+  int? get newlyCreatedProgramId => _newlyCreatedProgramId;
+
+  /// Set the newly created program ID (for auto-selection)
+  void setNewlyCreatedProgramId(int? id) {
+    _newlyCreatedProgramId = id;
+    notifyListeners();
+  }
+
+  /// Clear the newly created program ID after selection
+  void clearNewlyCreatedProgramId() {
+    _newlyCreatedProgramId = null;
+  }
 
   /// Load all programs for the current user
   Future<void> loadPrograms({bool? isActive}) async {

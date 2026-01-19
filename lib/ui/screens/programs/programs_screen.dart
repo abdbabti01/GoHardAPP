@@ -45,20 +45,36 @@ class _ProgramsScreenState extends State<ProgramsScreen>
     await provider.loadPrograms();
 
     if (mounted && provider.programs.isNotEmpty) {
-      // Auto-select first active program, or first completed if no active
-      final defaultProgram =
-          provider.activePrograms.isNotEmpty
-              ? provider.activePrograms.first
-              : provider.completedPrograms.isNotEmpty
-              ? provider.completedPrograms.first
-              : null;
+      Program? programToSelect;
 
-      if (defaultProgram != null) {
+      // Check if there's a newly created program to auto-select
+      if (provider.newlyCreatedProgramId != null) {
+        programToSelect = provider.programs.firstWhere(
+          (p) => p.id == provider.newlyCreatedProgramId,
+          orElse:
+              () =>
+                  provider.activePrograms.isNotEmpty
+                      ? provider.activePrograms.first
+                      : provider.completedPrograms.first,
+        );
+        // Clear the ID after selection
+        provider.clearNewlyCreatedProgramId();
+      } else {
+        // Auto-select first active program, or first completed if no active
+        programToSelect =
+            provider.activePrograms.isNotEmpty
+                ? provider.activePrograms.first
+                : provider.completedPrograms.isNotEmpty
+                ? provider.completedPrograms.first
+                : null;
+      }
+
+      if (programToSelect != null) {
         setState(() {
-          _selectedProgramId = defaultProgram.id;
-          _selectedWeek = defaultProgram.currentWeek;
+          _selectedProgramId = programToSelect!.id;
+          _selectedWeek = programToSelect.currentWeek;
         });
-        _initTabController(defaultProgram);
+        _initTabController(programToSelect);
       }
     }
   }

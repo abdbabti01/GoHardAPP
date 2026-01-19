@@ -139,16 +139,27 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         await chatProvider.deleteConversation(conversationId);
       }
 
-      // Refresh programs list
+      // Set the newly created program ID for auto-selection
       if (mounted) {
+        final programsProvider = context.read<ProgramsProvider>();
+        programsProvider.setNewlyCreatedProgramId(programId);
+
         debugPrint('🔄 Refreshing programs after creating workout plan...');
-        await context.read<ProgramsProvider>().loadPrograms();
+        await programsProvider.loadPrograms();
         debugPrint('✅ Programs refreshed after program creation');
       }
 
-      // Navigate to the created program detail screen
+      // Navigate to the Programs tab (Sessions screen, tab index 1)
       if (mounted) {
-        navigator.pushNamed(RouteNames.programDetail, arguments: programId);
+        // Pop all screens and go to main with Programs tab selected
+        navigator.pushNamedAndRemoveUntil(
+          RouteNames.main,
+          (route) => false,
+          arguments: {
+            'tab': 0,
+            'subTab': 1,
+          }, // Sessions tab (0), Programs sub-tab (1)
+        );
 
         // Show success message
         scaffoldMessenger.showSnackBar(
