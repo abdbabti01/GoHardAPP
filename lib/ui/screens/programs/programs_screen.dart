@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
-import '../../../core/theme/typography.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
@@ -10,13 +10,13 @@ import '../../../providers/sessions_provider.dart';
 import '../../../providers/goals_provider.dart';
 import '../../../core/services/tab_navigation_service.dart';
 import '../../../routes/route_names.dart';
+import '../../widgets/programs/premium_week_calendar_widget.dart';
 import '../../widgets/programs/program_calendar_widget.dart';
-import '../../widgets/programs/premium_program_card.dart';
 import '../../widgets/common/empty_state.dart';
 import '../../widgets/common/loading_indicator.dart';
 import '../../widgets/common/premium_bottom_sheet.dart';
 
-/// Programs screen that shows program detail directly with selector
+/// Premium Programs screen with calendar-first design
 class ProgramsScreen extends StatefulWidget {
   const ProgramsScreen({super.key});
 
@@ -24,13 +24,10 @@ class ProgramsScreen extends StatefulWidget {
   State<ProgramsScreen> createState() => _ProgramsScreenState();
 }
 
-class _ProgramsScreenState extends State<ProgramsScreen>
-    with SingleTickerProviderStateMixin {
+class _ProgramsScreenState extends State<ProgramsScreen> {
   int? _selectedProgramId;
   int _selectedWeek = 1;
-  bool _showCalendarView = false;
-  TabController? _tabController;
-  int? _lastTotalWeeks;
+  bool _showMonthView = false;
 
   @override
   void initState() {
@@ -57,7 +54,6 @@ class _ProgramsScreenState extends State<ProgramsScreen>
                       ? provider.activePrograms.first
                       : provider.completedPrograms.first,
         );
-        // Clear the ID after selection
         provider.clearNewlyCreatedProgramId();
       } else {
         // Auto-select first active program, or first completed if no active
@@ -74,30 +70,7 @@ class _ProgramsScreenState extends State<ProgramsScreen>
           _selectedProgramId = programToSelect!.id;
           _selectedWeek = programToSelect.currentWeek;
         });
-        _initTabController(programToSelect);
       }
-    }
-  }
-
-  void _initTabController(Program program) {
-    if (_tabController == null || _lastTotalWeeks != program.totalWeeks) {
-      _tabController?.dispose();
-      _tabController = TabController(
-        length: program.totalWeeks,
-        vsync: this,
-        initialIndex: (program.currentWeek - 1).clamp(
-          0,
-          program.totalWeeks - 1,
-        ),
-      );
-      _tabController!.addListener(() {
-        if (!_tabController!.indexIsChanging) {
-          setState(() {
-            _selectedWeek = _tabController!.index + 1;
-          });
-        }
-      });
-      _lastTotalWeeks = program.totalWeeks;
     }
   }
 
@@ -105,15 +78,7 @@ class _ProgramsScreenState extends State<ProgramsScreen>
     setState(() {
       _selectedProgramId = program.id;
       _selectedWeek = program.currentWeek;
-      _lastTotalWeeks = null; // Force tab controller rebuild
     });
-    _initTabController(program);
-  }
-
-  @override
-  void dispose() {
-    _tabController?.dispose();
-    super.dispose();
   }
 
   @override
@@ -146,18 +111,31 @@ class _ProgramsScreenState extends State<ProgramsScreen>
           });
         }
 
-        // Initialize tab controller
-        _initTabController(program);
-
         return RefreshIndicator(
           onRefresh: () => provider.loadPrograms(),
-          child: Column(
-            children: [
-              // Program Selector
-              _buildProgramSelector(context, provider, program),
+          color: Theme.of(context).primaryColor,
+          child: CustomScrollView(
+            slivers: [
+              // Program Header
+              SliverToBoxAdapter(
+                child: _buildProgramHeader(context, provider, program),
+              ),
 
-              // Program Detail Content
-              Expanded(child: _buildProgramDetail(context, program, provider)),
+              // Calendar or Month View
+              SliverToBoxAdapter(
+                child:
+                    _showMonthView
+                        ? _buildMonthCalendar(context, program)
+                        : _buildWeekCalendar(context, program),
+              ),
+
+              // Upcoming Workouts Section
+              SliverToBoxAdapter(
+                child: _buildUpcomingWorkoutsSection(context, program),
+              ),
+
+              // Bottom padding
+              const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           ),
         );
@@ -210,19 +188,19 @@ class _ProgramsScreenState extends State<ProgramsScreen>
     );
   }
 
-  Widget _buildProgramSelector(
+  Widget _buildProgramHeader(
     BuildContext context,
     ProgramsProvider provider,
-    Program selectedProgram,
+    Program program,
   ) {
     final theme = Theme.of(context);
-    final activePrograms = provider.activePrograms;
-    final completedPrograms = provider.completedPrograms;
+    final phaseColor = _getPhaseColor(program.phaseName);
+    final progress = program.progressPercentage / 100;
     final hasMultiplePrograms =
-        activePrograms.length + completedPrograms.length > 1;
+        provider.activePrograms.length + provider.completedPrograms.length > 1;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       decoration: BoxDecoration(
         color: context.surface,
         border: Border(bottom: BorderSide(color: context.border, width: 0.5)),
@@ -230,129 +208,373 @@ class _ProgramsScreenState extends State<ProgramsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Program dropdown/selector row
+          // Top row with program selector and actions
           Row(
             children: [
               Expanded(
                 child:
                     hasMultiplePrograms
-                        ? _buildProgramDropdown(
+                        ? _buildProgramSelector(
                           context,
                           provider,
-                          selectedProgram,
+                          program,
                           theme,
                         )
                         : Text(
-                          selectedProgram.title,
+                          program.title,
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: 22,
                             fontWeight: FontWeight.w700,
                             color: context.textPrimary,
+                            letterSpacing: -0.5,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
               ),
+              const SizedBox(width: 12),
+              // View toggle
+              _buildViewToggle(context, theme),
               const SizedBox(width: 8),
-              // Calendar toggle
-              IconButton(
-                icon: Icon(
-                  _showCalendarView ? Icons.view_week : Icons.calendar_month,
-                  color: theme.primaryColor,
-                ),
-                onPressed: () {
-                  setState(() => _showCalendarView = !_showCalendarView);
-                },
-                tooltip: _showCalendarView ? 'Week View' : 'Calendar View',
-              ),
               // Menu
-              if (!selectedProgram.isCompleted)
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert, color: context.textSecondary),
-                  onSelected:
-                      (value) => _handleMenuAction(value, selectedProgram),
-                  itemBuilder:
-                      (context) => [
-                        if (selectedProgram.goalId == null)
-                          const PopupMenuItem(
-                            value: 'link_goal',
-                            child: Row(
-                              children: [
-                                Icon(Icons.link),
-                                SizedBox(width: 12),
-                                Text('Link to Goal'),
-                              ],
-                            ),
-                          )
-                        else
-                          const PopupMenuItem(
-                            value: 'unlink_goal',
-                            child: Row(
-                              children: [
-                                Icon(Icons.link_off),
-                                SizedBox(width: 12),
-                                Text('Unlink from Goal'),
-                              ],
-                            ),
-                          ),
-                        const PopupMenuItem(
-                          value: 'complete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.check_circle_outline),
-                              SizedBox(width: 12),
-                              Text('Mark as Complete'),
-                            ],
-                          ),
+              if (!program.isCompleted) _buildMenuButton(context, program),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Progress Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  phaseColor.withValues(alpha: 0.08),
+                  phaseColor.withValues(alpha: 0.03),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: phaseColor.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                // Progress Ring
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 72,
+                      height: 72,
+                      child: CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 6,
+                        backgroundColor: phaseColor.withValues(alpha: 0.15),
+                        valueColor: AlwaysStoppedAnimation(
+                          program.isCompleted
+                              ? AppColors.accentGreen
+                              : phaseColor,
                         ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete_outline, color: Colors.red),
-                              SizedBox(width: 12),
-                              Text(
-                                'Delete Program',
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            ],
+                        strokeCap: StrokeCap.round,
+                      ),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${program.progressPercentage.toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: context.textPrimary,
                           ),
                         ),
                       ],
+                    ),
+                  ],
                 ),
-            ],
+
+                const SizedBox(width: 16),
+
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Phase badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: phaseColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          program.phaseName,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: phaseColor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${program.completedWorkoutsCount} of ${program.totalWorkoutsCount} workouts',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: context.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${program.totalWeeks} weeks total',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: context.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Completed badge
+          if (program.isCompleted) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                gradient: AppColors.successGradient,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accentGreen.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.emoji_events_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Program Completed!',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Goal badge
+          if (program.goal != null && !program.isCompleted) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () {
+                context.read<TabNavigationService>().switchTab(1);
+                Navigator.popUntil(context, (route) => route.isFirst);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.accentSky.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.accentSky.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.flag_rounded,
+                      size: 14,
+                      color: AppColors.accentSky,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Goal: ${program.goal!.goalType}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.accentSky,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 10,
+                      color: AppColors.accentSky,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewToggle(BuildContext context, ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.surfaceHighlight,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleButton(
+            context,
+            Icons.calendar_view_week_rounded,
+            !_showMonthView,
+            () => setState(() => _showMonthView = false),
+          ),
+          _buildToggleButton(
+            context,
+            Icons.calendar_month_rounded,
+            _showMonthView,
+            () => setState(() => _showMonthView = true),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProgramDropdown(
+  Widget _buildToggleButton(
+    BuildContext context,
+    IconData icon,
+    bool isActive,
+    VoidCallback onTap,
+  ) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isActive ? theme.primaryColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: isActive ? Colors.white : context.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuButton(BuildContext context, Program program) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert_rounded, color: context.textSecondary),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onSelected: (value) => _handleMenuAction(value, program),
+      itemBuilder:
+          (context) => [
+            if (program.goalId == null)
+              const PopupMenuItem(
+                value: 'link_goal',
+                child: Row(
+                  children: [
+                    Icon(Icons.link_rounded, size: 20),
+                    SizedBox(width: 12),
+                    Text('Link to Goal'),
+                  ],
+                ),
+              )
+            else
+              const PopupMenuItem(
+                value: 'unlink_goal',
+                child: Row(
+                  children: [
+                    Icon(Icons.link_off_rounded, size: 20),
+                    SizedBox(width: 12),
+                    Text('Unlink from Goal'),
+                  ],
+                ),
+              ),
+            const PopupMenuItem(
+              value: 'complete',
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline_rounded, size: 20),
+                  SizedBox(width: 12),
+                  Text('Mark as Complete'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.delete_outline_rounded,
+                    size: 20,
+                    color: Colors.red,
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Delete Program',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ],
+              ),
+            ),
+          ],
+    );
+  }
+
+  Widget _buildProgramSelector(
     BuildContext context,
     ProgramsProvider provider,
     Program selectedProgram,
     ThemeData theme,
   ) {
-    final activePrograms = provider.activePrograms;
-    final completedPrograms = provider.completedPrograms;
-
     return PopupMenuButton<int>(
-      offset: const Offset(0, 40),
+      offset: const Offset(0, 44),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: theme.primaryColor.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: theme.primaryColor.withValues(alpha: 0.2)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.primaryColor.withValues(alpha: 0.15)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               selectedProgram.isCompleted
-                  ? Icons.check_circle
-                  : Icons.fitness_center,
-              size: 20,
+                  ? Icons.check_circle_rounded
+                  : Icons.fitness_center_rounded,
+              size: 18,
               color: theme.primaryColor,
             ),
             const SizedBox(width: 8),
@@ -369,13 +591,17 @@ class _ProgramsScreenState extends State<ProgramsScreen>
               ),
             ),
             const SizedBox(width: 4),
-            Icon(Icons.arrow_drop_down, color: theme.primaryColor),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: theme.primaryColor,
+              size: 20,
+            ),
           ],
         ),
       ),
       itemBuilder:
           (context) => [
-            if (activePrograms.isNotEmpty) ...[
+            if (provider.activePrograms.isNotEmpty) ...[
               const PopupMenuItem(
                 enabled: false,
                 height: 32,
@@ -383,18 +609,18 @@ class _ProgramsScreenState extends State<ProgramsScreen>
                   'ACTIVE',
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
                   ),
                 ),
               ),
-              ...activePrograms.map(
+              ...provider.activePrograms.map(
                 (p) => PopupMenuItem(
                   value: p.id,
                   child: Row(
                     children: [
                       Icon(
-                        Icons.fitness_center,
+                        Icons.fitness_center_rounded,
                         size: 18,
                         color:
                             p.id == selectedProgram.id
@@ -427,7 +653,7 @@ class _ProgramsScreenState extends State<ProgramsScreen>
                 ),
               ),
             ],
-            if (completedPrograms.isNotEmpty) ...[
+            if (provider.completedPrograms.isNotEmpty) ...[
               const PopupMenuDivider(),
               const PopupMenuItem(
                 enabled: false,
@@ -436,17 +662,21 @@ class _ProgramsScreenState extends State<ProgramsScreen>
                   'COMPLETED',
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
                   ),
                 ),
               ),
-              ...completedPrograms.map(
+              ...provider.completedPrograms.map(
                 (p) => PopupMenuItem(
                   value: p.id,
                   child: Row(
                     children: [
-                      Icon(Icons.check_circle, size: 18, color: Colors.green),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 18,
+                        color: Colors.green,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -476,258 +706,336 @@ class _ProgramsScreenState extends State<ProgramsScreen>
     );
   }
 
-  Widget _buildProgramDetail(
-    BuildContext context,
-    Program program,
-    ProgramsProvider provider,
-  ) {
-    final theme = Theme.of(context);
-
-    return Column(
-      children: [
-        // Header with progress
-        _buildProgramHeader(context, program, theme),
-
-        // Calendar or Week tabs view
-        if (_showCalendarView)
-          Expanded(
-            child: ProgramCalendarWidget(
-              program: program,
-              onDateTapped: (date, workout) {
-                if (workout != null && !workout.isRestDay) {
-                  Navigator.pushNamed(
-                    context,
-                    RouteNames.programWorkout,
-                    arguments: {
-                      'workoutId': workout.id,
-                      'programId': program.id,
-                    },
-                  );
-                }
-              },
-            ),
-          )
-        else ...[
-          // Week tabs
-          if (program.workouts != null && program.workouts!.isNotEmpty)
-            TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              indicatorColor: theme.primaryColor,
-              labelColor: theme.primaryColor,
-              unselectedLabelColor: context.textSecondary,
-              tabs: List.generate(
-                program.totalWeeks,
-                (index) => Tab(text: 'Week ${index + 1}'),
-              ),
-            ),
-
-          // Workouts list
-          Expanded(
-            child:
-                program.workouts == null || program.workouts!.isEmpty
-                    ? _buildNoWorkoutsState()
-                    : TabBarView(
-                      controller: _tabController,
-                      children: List.generate(program.totalWeeks, (weekIndex) {
-                        final weekNumber = weekIndex + 1;
-                        final weekWorkouts =
-                            program.workouts!
-                                .where((w) => w.weekNumber == weekNumber)
-                                .toList()
-                              ..sort(
-                                (a, b) => a.dayNumber.compareTo(b.dayNumber),
-                              );
-
-                        return _buildWeekView(context, weekWorkouts, program);
-                      }),
-                    ),
-          ),
-        ],
-      ],
+  Widget _buildWeekCalendar(BuildContext context, Program program) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: PremiumWeekCalendarWidget(
+        program: program,
+        selectedWeek: _selectedWeek,
+        onWeekChanged: (week) => setState(() => _selectedWeek = week),
+        onWorkoutTap: (workout) {
+          if (!workout.isRestDay) {
+            Navigator.pushNamed(
+              context,
+              RouteNames.programWorkout,
+              arguments: {'workoutId': workout.id, 'programId': program.id},
+            );
+          }
+        },
+      ),
     );
   }
 
-  Widget _buildProgramHeader(
-    BuildContext context,
-    Program program,
-    ThemeData theme,
-  ) {
-    final phaseColor = _getPhaseColor(program.phaseName);
-    final progress = program.progressPercentage / 100;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [context.surface, phaseColor.withValues(alpha: 0.04)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border(bottom: BorderSide(color: context.border, width: 0.5)),
+  Widget _buildMonthCalendar(BuildContext context, Program program) {
+    return SizedBox(
+      height: 480,
+      child: ProgramCalendarWidget(
+        program: program,
+        onDateTapped: (date, workout) {
+          if (workout != null && !workout.isRestDay) {
+            Navigator.pushNamed(
+              context,
+              RouteNames.programWorkout,
+              arguments: {'workoutId': workout.id, 'programId': program.id},
+            );
+          }
+        },
       ),
+    );
+  }
+
+  Widget _buildUpcomingWorkoutsSection(BuildContext context, Program program) {
+    final weekWorkouts =
+        program.workouts
+            ?.where((w) => w.weekNumber == _selectedWeek && !w.isRestDay)
+            .toList() ??
+        [];
+    weekWorkouts.sort((a, b) => a.dayNumber.compareTo(b.dayNumber));
+
+    if (weekWorkouts.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Filter to show only incomplete workouts
+    final upcomingWorkouts = weekWorkouts.where((w) => !w.isCompleted).toList();
+
+    if (upcomingWorkouts.isEmpty) {
+      return _buildAllCompletedCard(context);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Progress row with ring
           Row(
             children: [
-              // Progress ring
-              Stack(
-                alignment: Alignment.center,
+              Text(
+                'Remaining This Week',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: context.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${upcomingWorkouts.length} workout${upcomingWorkouts.length != 1 ? 's' : ''}',
+                style: TextStyle(fontSize: 13, color: context.textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...upcomingWorkouts.map(
+            (workout) => _buildWorkoutListItem(context, workout, program),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAllCompletedCard(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.accentGreen.withValues(alpha: 0.1),
+              AppColors.accentGreen.withValues(alpha: 0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.accentGreen.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.accentGreen.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.celebration_rounded,
+                color: AppColors.accentGreen,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 72,
-                    height: 72,
-                    child: CircularProgressIndicator(
-                      value: progress,
-                      strokeWidth: 6,
-                      backgroundColor: phaseColor.withValues(alpha: 0.12),
-                      valueColor: AlwaysStoppedAnimation(
-                        program.isCompleted
-                            ? AppColors.accentGreen
-                            : phaseColor,
-                      ),
-                      strokeCap: StrokeCap.round,
+                  Text(
+                    'Week Complete!',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimary,
                     ),
                   ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
+                  const SizedBox(height: 2),
+                  Text(
+                    'All workouts for this week are done',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: context.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWorkoutListItem(
+    BuildContext context,
+    ProgramWorkout workout,
+    Program program,
+  ) {
+    final theme = Theme.of(context);
+    final isMissed = program.isWorkoutMissed(workout);
+    final isToday =
+        workout.weekNumber == program.currentWeek &&
+        workout.dayNumber == DateTime.now().weekday;
+    final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushNamed(
+          context,
+          RouteNames.programWorkout,
+          arguments: {'workoutId': workout.id, 'programId': program.id},
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: context.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color:
+                isToday
+                    ? theme.primaryColor.withValues(alpha: 0.3)
+                    : isMissed
+                    ? AppColors.accentCoral.withValues(alpha: 0.3)
+                    : context.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Day badge
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color:
+                    isToday
+                        ? theme.primaryColor
+                        : isMissed
+                        ? AppColors.accentCoral.withValues(alpha: 0.1)
+                        : context.surfaceHighlight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    dayNames[workout.dayNumber - 1],
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color:
+                          isToday
+                              ? Colors.white
+                              : isMissed
+                              ? AppColors.accentCoral
+                              : context.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Workout info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        '${program.progressPercentage.toStringAsFixed(0)}%',
-                        style: AppTypography.statSmall.copyWith(
-                          color: context.textPrimary,
+                      Expanded(
+                        child: Text(
+                          _cleanWorkoutName(workout.workoutName),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: context.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (isToday)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.primaryColor,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'TODAY',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      if (isMissed && !isToday)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentCoral.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'MISSED',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.accentCoral,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (workout.exerciseCount > 0) ...[
+                        Icon(
+                          Icons.format_list_numbered_rounded,
+                          size: 14,
+                          color: context.textTertiary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${workout.exerciseCount} exercises',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
+                      if (workout.estimatedDuration != null) ...[
+                        if (workout.exerciseCount > 0)
+                          const SizedBox(width: 12),
+                        Icon(
+                          Icons.timer_outlined,
+                          size: 14,
+                          color: context.textTertiary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${workout.estimatedDuration} min',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],
               ),
-              const SizedBox(width: 20),
-              // Week info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: phaseColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'Phase ${program.currentPhase}: ${program.phaseName}',
-                        style: AppTypography.labelMedium.copyWith(
-                          color: phaseColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Week $_selectedWeek of ${program.totalWeeks}',
-                      style: AppTypography.titleLarge.copyWith(
-                        color: context.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${program.completedWorkoutsCount}/${program.totalWorkoutsCount} workouts completed',
-                      style: AppTypography.cardMeta.copyWith(
-                        color: context.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Goal badge
-          if (program.goal != null) ...[
-            const SizedBox(height: 16),
-            InkWell(
-              onTap: () {
-                context.read<TabNavigationService>().switchTab(1);
-                Navigator.popUntil(context, (route) => route.isFirst);
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.accentSky.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.accentSky.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.flag_rounded,
-                      size: 16,
-                      color: AppColors.accentSky,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Goal: ${program.goal!.goalType}',
-                      style: AppTypography.labelLarge.copyWith(
-                        color: AppColors.accentSky,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      size: 12,
-                      color: AppColors.accentSky,
-                    ),
-                  ],
-                ),
-              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: context.textTertiary,
+              size: 22,
             ),
           ],
-
-          // Completed badge
-          if (program.isCompleted) ...[
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                gradient: AppColors.successGradient,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.accentGreen.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.emoji_events, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Program Completed!',
-                    style: AppTypography.titleMedium.copyWith(
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -745,73 +1053,12 @@ class _ProgramsScreenState extends State<ProgramsScreen>
     }
   }
 
-  Widget _buildNoWorkoutsState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.fitness_center, size: 64, color: context.textTertiary),
-          const SizedBox(height: 16),
-          Text(
-            'No workouts in this program yet',
-            style: TextStyle(color: context.textSecondary, fontSize: 16),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWeekView(
-    BuildContext context,
-    List<ProgramWorkout> weekWorkouts,
-    Program program,
-  ) {
-    if (weekWorkouts.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.self_improvement, size: 64, color: context.textTertiary),
-            const SizedBox(height: 16),
-            Text(
-              'Rest week - Recovery time!',
-              style: TextStyle(color: context.textSecondary, fontSize: 16),
-            ),
-          ],
-        ),
-      );
+  String _cleanWorkoutName(String name) {
+    final colonIndex = name.indexOf(':');
+    if (colonIndex != -1 && colonIndex < 15) {
+      return name.substring(colonIndex + 1).trim();
     }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: weekWorkouts.length,
-      itemBuilder: (context, index) {
-        final workout = weekWorkouts[index];
-        return _buildWorkoutCard(context, workout, program);
-      },
-    );
-  }
-
-  Widget _buildWorkoutCard(
-    BuildContext context,
-    ProgramWorkout workout,
-    Program program,
-  ) {
-    final isCurrentWorkout = program.isCurrentWorkout(workout);
-    final isMissed = program.isWorkoutMissed(workout);
-
-    return PremiumWorkoutCard(
-      workout: workout,
-      isToday: isCurrentWorkout,
-      isMissed: isMissed,
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          RouteNames.programWorkout,
-          arguments: {'workoutId': workout.id, 'programId': program.id},
-        );
-      },
-    );
+    return name;
   }
 
   void _handleMenuAction(String value, Program program) async {
@@ -831,6 +1078,9 @@ class _ProgramsScreenState extends State<ProgramsScreen>
       context: context,
       builder:
           (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Text('Complete Program?'),
             content: Text(
               'Mark "${program.title}" as completed? You can still view it in your completed programs.',
@@ -877,6 +1127,9 @@ class _ProgramsScreenState extends State<ProgramsScreen>
         context: this.context,
         builder:
             (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               title: const Text('Delete Program?'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -913,7 +1166,6 @@ class _ProgramsScreenState extends State<ProgramsScreen>
           messenger.showSnackBar(
             const SnackBar(content: Text('Program deleted')),
           );
-          // Select another program
           _loadPrograms();
         }
       }
@@ -947,6 +1199,9 @@ class _ProgramsScreenState extends State<ProgramsScreen>
       context: context,
       builder:
           (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Text('Link to Goal'),
             content: SizedBox(
               width: double.maxFinite,
