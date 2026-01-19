@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/theme/typography.dart';
 import 'animations.dart';
 
 /// Celebration overlay with confetti animation
@@ -74,13 +75,13 @@ class _CelebrationOverlayState extends State<CelebrationOverlay>
 
   Color _getRandomColor() {
     final colors = [
-      AppColors.goHardGreen,
-      AppColors.goHardBlue,
-      AppColors.goHardCyan,
-      AppColors.goHardOrange,
-      AppColors.goHardAmber,
-      Colors.pink,
-      Colors.purple,
+      AppColors.accentGreen,
+      AppColors.accentSky,
+      AppColors.accentAmber,
+      AppColors.accentCoral,
+      AppColors.tierGold,
+      AppColors.silver,
+      AppColors.accentGreenMuted,
     ];
     return colors[_random.nextInt(colors.length)];
   }
@@ -226,22 +227,19 @@ class WorkoutCompleteCelebration extends StatelessWidget {
                     delay: const Duration(milliseconds: 200),
                     child: SuccessCheckAnimation(
                       size: 100,
-                      color: AppColors.goHardGreen,
+                      color: AppColors.accentGreen,
                     ),
                   ),
 
                   const SizedBox(height: 40),
 
-                  // Title
+                  // Title with premium typography
                   FadeSlideAnimation(
                     delay: const Duration(milliseconds: 400),
                     child: Text(
                       'Workout Complete!',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
+                      style: AppTypography.displayMedium.copyWith(
                         color: context.textPrimary,
-                        letterSpacing: -1,
                       ),
                     ),
                   ),
@@ -334,19 +332,15 @@ class WorkoutCompleteCelebration extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
+            color: AppColors.charcoal,
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(icon, size: 24, color: AppColors.goHardBlack),
+          child: Icon(icon, size: 24, color: AppColors.accentGreen),
         ),
         const SizedBox(height: 12),
         Text(
           value,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: context.textPrimary,
-          ),
+          style: AppTypography.statSmall.copyWith(color: context.textPrimary),
         ),
         const SizedBox(height: 4),
         Text(
@@ -366,11 +360,11 @@ class WorkoutCompleteCelebration extends StatelessWidget {
       width: double.infinity,
       child: Container(
         decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
+          color: AppColors.accentGreen,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: AppColors.goHardGreen.withValues(alpha: 0.4),
+              color: AppColors.accentGreen.withValues(alpha: 0.3),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -381,15 +375,13 @@ class WorkoutCompleteCelebration extends StatelessWidget {
           child: InkWell(
             onTap: onContinue,
             borderRadius: BorderRadius.circular(16),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
               child: Center(
                 child: Text(
                   'Continue',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.goHardBlack,
+                  style: AppTypography.titleLarge.copyWith(
+                    color: AppColors.charcoal,
                   ),
                 ),
               ),
@@ -422,7 +414,7 @@ class StreakCelebration extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withValues(alpha: 0.7),
+      color: Colors.black.withValues(alpha: 0.8),
       child: Center(
         child: FadeSlideAnimation(
           child: Container(
@@ -432,12 +424,12 @@ class StreakCelebration extends StatelessWidget {
               color: context.surface,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
-                color: AppColors.goHardGreen.withValues(alpha: 0.3),
+                color: AppColors.accentAmber.withValues(alpha: 0.3),
                 width: 2,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.goHardGreen.withValues(alpha: 0.2),
+                  color: AppColors.accentAmber.withValues(alpha: 0.15),
                   blurRadius: 30,
                   spreadRadius: 5,
                 ),
@@ -448,33 +440,25 @@ class StreakCelebration extends StatelessWidget {
               children: [
                 // Fire emoji with glow
                 GlowAnimation(
-                  glowColor: AppColors.goHardOrange,
+                  glowColor: AppColors.accentCoral,
                   child: const Text('🔥', style: TextStyle(fontSize: 64)),
                 ),
                 const SizedBox(height: 24),
 
-                // Streak number
+                // Streak number with premium typography
                 ShaderMask(
                   shaderCallback:
-                      (bounds) =>
-                          AppColors.primaryGradient.createShader(bounds),
+                      (bounds) => AppColors.streakGradient.createShader(bounds),
                   child: Text(
                     '$streakDays',
-                    style: const TextStyle(
-                      fontSize: 72,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      height: 1,
-                    ),
+                    style: AppTypography.statHero.copyWith(color: Colors.white),
                   ),
                 ),
                 const SizedBox(height: 8),
 
                 Text(
                   'Day Streak!',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
+                  style: AppTypography.displaySmall.copyWith(
                     color: context.textPrimary,
                   ),
                 ),
@@ -482,7 +466,9 @@ class StreakCelebration extends StatelessWidget {
 
                 Text(
                   'Keep up the great work!',
-                  style: TextStyle(fontSize: 16, color: context.textSecondary),
+                  style: AppTypography.bodyLarge.copyWith(
+                    color: context.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 32),
 
@@ -495,15 +481,13 @@ class StreakCelebration extends StatelessWidget {
                       vertical: 14,
                     ),
                     decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
+                      color: AppColors.accentGreen,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Awesome!',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.goHardBlack,
+                      style: AppTypography.titleMedium.copyWith(
+                        color: AppColors.charcoal,
                       ),
                     ),
                   ),

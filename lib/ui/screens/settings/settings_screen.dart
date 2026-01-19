@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/services/health_service.dart';
 import '../../../providers/settings_provider.dart';
 import '../../../providers/profile_provider.dart';
 import '../../../core/enums/profile_enums.dart';
@@ -24,6 +27,14 @@ class SettingsScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Health Integration Section (iOS/Android only)
+              if (Platform.isIOS || Platform.isAndroid) ...[
+                _buildSectionHeader(context, 'Health Integration'),
+                const SizedBox(height: 8),
+                _buildHealthCard(context),
+                const SizedBox(height: 24),
+              ],
+
               // Notifications Section
               _buildSectionHeader(context, 'Notifications'),
               const SizedBox(height: 8),
@@ -199,6 +210,149 @@ class SettingsScreen extends StatelessWidget {
             Icon(Icons.arrow_drop_down, color: Theme.of(context).primaryColor),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHealthCard(BuildContext context) {
+    final healthService = HealthService.instance;
+
+    return ListenableBuilder(
+      listenable: healthService,
+      builder: (context, _) {
+        final platformName = Platform.isIOS ? 'Apple Health' : 'Google Fit';
+        final platformIcon =
+            Platform.isIOS ? Icons.favorite : Icons.monitor_heart;
+
+        return Card(
+          elevation: 2,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Health integration toggle
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: Icon(platformIcon, color: AppColors.accentGreen),
+                  title: Text(
+                    platformName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  subtitle: Text(
+                    healthService.isEnabled
+                        ? 'Connected - syncing workouts automatically'
+                        : 'Sync workouts with $platformName',
+                  ),
+                  value: healthService.isEnabled,
+                  activeColor: AppColors.accentGreen,
+                  onChanged: (value) async {
+                    if (value) {
+                      final success = await healthService.enable();
+                      if (!success && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Could not connect to $platformName. Please check permissions in Settings.',
+                            ),
+                            action: SnackBarAction(
+                              label: 'OK',
+                              onPressed: () {},
+                            ),
+                          ),
+                        );
+                      }
+                    } else {
+                      await healthService.disable();
+                    }
+                  },
+                ),
+
+                // Health summary when connected
+                if (healthService.isEnabled && healthService.isAuthorized) ...[
+                  const Divider(height: 32),
+                  FutureBuilder<HealthSummary>(
+                    future: healthService.getHealthSummary(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        );
+                      }
+
+                      final summary = snapshot.data!;
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: _buildHealthStat(
+                              context,
+                              icon: Icons.directions_walk,
+                              value: '${summary.stepsToday}',
+                              label: 'Steps Today',
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildHealthStat(
+                              context,
+                              icon: Icons.local_fire_department,
+                              value: '${summary.activeCaloriesToday}',
+                              label: 'Active Cal',
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+
+                // Info text
+                const SizedBox(height: 16),
+                Text(
+                  'When enabled, completed workouts will automatically sync to $platformName.',
+                  style: TextStyle(fontSize: 12, color: context.textTertiary),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHealthStat(
+    BuildContext context, {
+    required IconData icon,
+    required String value,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.border),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: AppColors.accentGreen, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: context.textTertiary),
+          ),
+        ],
       ),
     );
   }

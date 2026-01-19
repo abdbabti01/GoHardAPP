@@ -4,8 +4,10 @@ import 'core/theme/app_theme.dart';
 import 'routes/app_router.dart';
 import 'providers/auth_provider.dart';
 import 'providers/profile_provider.dart';
+import 'providers/onboarding_provider.dart';
 import 'ui/screens/main_screen.dart';
 import 'ui/screens/auth/login_screen.dart';
+import 'ui/screens/onboarding/onboarding_screen.dart';
 
 /// Root application widget
 /// Configures navigation, theming, and auth guard
@@ -14,8 +16,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<AuthProvider, ProfileProvider>(
-      builder: (context, authProvider, profileProvider, child) {
+    return Consumer3<AuthProvider, ProfileProvider, OnboardingProvider>(
+      builder: (
+        context,
+        authProvider,
+        profileProvider,
+        onboardingProvider,
+        child,
+      ) {
         return MaterialApp(
           title: 'GoHard - Workout Tracker',
           debugShowCheckedModeBanner: false,
@@ -26,7 +34,7 @@ class MyApp extends StatelessWidget {
           themeMode: profileProvider.themeMode,
 
           // Use home with conditional rendering instead of initialRoute
-          home: _buildHome(authProvider),
+          home: _buildHome(authProvider, onboardingProvider),
 
           // Route generator for named navigation
           onGenerateRoute: AppRouter.generateRoute,
@@ -38,11 +46,23 @@ class MyApp extends StatelessWidget {
     );
   }
 
-  /// Build the appropriate home screen based on auth state
-  Widget _buildHome(AuthProvider authProvider) {
-    // Show splash screen while checking authentication
-    if (authProvider.isInitializing) {
+  /// Build the appropriate home screen based on auth and onboarding state
+  Widget _buildHome(
+    AuthProvider authProvider,
+    OnboardingProvider onboardingProvider,
+  ) {
+    // Show splash screen while checking authentication or onboarding
+    if (authProvider.isInitializing || onboardingProvider.isLoading) {
       return const _SplashScreen();
+    }
+
+    // Show onboarding if not completed
+    if (!onboardingProvider.hasCompletedOnboarding) {
+      return OnboardingScreen(
+        onComplete: () {
+          // Trigger rebuild by notifying listeners (already done in provider)
+        },
+      );
     }
 
     // Navigate to main or login based on authentication status

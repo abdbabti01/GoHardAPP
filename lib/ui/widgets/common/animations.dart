@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/services/haptic_service.dart';
 
 /// Fade and slide animation wrapper for smooth entry animations
 class FadeSlideAnimation extends StatefulWidget {
@@ -577,5 +578,457 @@ class _CheckmarkPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _CheckmarkPainter oldDelegate) {
     return oldDelegate.progress != progress;
+  }
+}
+
+// ============ PREMIUM MICRO-INTERACTIONS ============
+
+/// Premium tap animation with scale 0.97 + haptic feedback on press
+/// Wraps any widget to add premium tap feel
+class PremiumTapAnimation extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final double scaleDown;
+  final Duration duration;
+  final bool enableHaptics;
+
+  const PremiumTapAnimation({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.onLongPress,
+    this.scaleDown = 0.97,
+    this.duration = const Duration(milliseconds: 80),
+    this.enableHaptics = true,
+  });
+
+  @override
+  State<PremiumTapAnimation> createState() => _PremiumTapAnimationState();
+}
+
+class _PremiumTapAnimationState extends State<PremiumTapAnimation>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _scaleAnimation = Tween<double>(begin: 1.0, end: widget.scaleDown).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails details) {
+    _controller.forward();
+    if (widget.enableHaptics) {
+      HapticService.lightImpact();
+    }
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    _controller.reverse();
+    widget.onTap?.call();
+  }
+
+  void _onTapCancel() {
+    _controller.reverse();
+  }
+
+  void _onLongPress() {
+    if (widget.enableHaptics) {
+      HapticService.longPress();
+    }
+    widget.onLongPress?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      onLongPress: widget.onLongPress != null ? _onLongPress : null,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: widget.child,
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Scroll reveal animation - fades in when scrolled into view
+class ScrollRevealAnimation extends StatefulWidget {
+  final Widget child;
+  final Duration duration;
+  final Duration delay;
+  final Offset beginOffset;
+  final Curve curve;
+
+  const ScrollRevealAnimation({
+    super.key,
+    required this.child,
+    this.duration = const Duration(milliseconds: 400),
+    this.delay = Duration.zero,
+    this.beginOffset = const Offset(0, 0.15),
+    this.curve = Curves.easeOutCubic,
+  });
+
+  @override
+  State<ScrollRevealAnimation> createState() => _ScrollRevealAnimationState();
+}
+
+class _ScrollRevealAnimationState extends State<ScrollRevealAnimation>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  bool _hasAnimated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: widget.curve));
+    _slideAnimation = Tween<Offset>(
+      begin: widget.beginOffset,
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: widget.curve));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onVisibilityChanged(bool isVisible) {
+    if (isVisible && !_hasAnimated) {
+      _hasAnimated = true;
+      Future.delayed(widget.delay, () {
+        if (mounted) _controller.forward();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Use a LayoutBuilder to detect when widget is in view
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Trigger animation when widget is built (simplified visibility detection)
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _onVisibilityChanged(true);
+        });
+
+        return FadeTransition(
+          opacity: _fadeAnimation,
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: widget.child,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Spring counter - numbers with overshoot spring animation
+class SpringCounter extends StatefulWidget {
+  final int value;
+  final TextStyle? style;
+  final String? suffix;
+  final String? prefix;
+  final Duration duration;
+  final double overshoot;
+
+  const SpringCounter({
+    super.key,
+    required this.value,
+    this.style,
+    this.suffix,
+    this.prefix,
+    this.duration = const Duration(milliseconds: 600),
+    this.overshoot = 1.3,
+  });
+
+  @override
+  State<SpringCounter> createState() => _SpringCounterState();
+}
+
+class _SpringCounterState extends State<SpringCounter>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<int> _countAnimation;
+  int _previousValue = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _previousValue = widget.value;
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: 1.0,
+          end: widget.overshoot,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 40,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: widget.overshoot,
+          end: 0.9,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(
+          begin: 0.9,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 30,
+      ),
+    ]).animate(_controller);
+
+    _countAnimation = IntTween(
+      begin: 0,
+      end: widget.value,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+
+    _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(SpringCounter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _previousValue = oldWidget.value;
+      _countAnimation = IntTween(
+        begin: _previousValue,
+        end: widget.value,
+      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scaleAnimation.value,
+          child: Text(
+            '${widget.prefix ?? ''}${_countAnimation.value}${widget.suffix ?? ''}',
+            style: widget.style,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Bouncy button - button with bounce effect on tap
+class BouncyButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final double bounceFactor;
+  final Duration duration;
+
+  const BouncyButton({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.bounceFactor = 0.95,
+    this.duration = const Duration(milliseconds: 150),
+  });
+
+  @override
+  State<BouncyButton> createState() => _BouncyButtonState();
+}
+
+class _BouncyButtonState extends State<BouncyButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _animation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: widget.bounceFactor),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: widget.bounceFactor, end: 1.0),
+        weight: 50,
+      ),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    HapticService.buttonTap();
+    _controller.forward(from: 0).then((_) {
+      widget.onTap?.call();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _handleTap,
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) {
+          return Transform.scale(scale: _animation.value, child: widget.child);
+        },
+      ),
+    );
+  }
+}
+
+/// Slide fade transition - combines slide and fade for route transitions
+class SlideFadeTransition extends StatelessWidget {
+  final Animation<double> animation;
+  final Widget child;
+  final Offset beginOffset;
+
+  const SlideFadeTransition({
+    super.key,
+    required this.animation,
+    required this.child,
+    this.beginOffset = const Offset(0.0, 0.05),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: beginOffset, end: Offset.zero).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Shake animation - for error states
+class ShakeAnimation extends StatefulWidget {
+  final Widget child;
+  final bool shake;
+  final double shakeOffset;
+  final Duration duration;
+  final VoidCallback? onComplete;
+
+  const ShakeAnimation({
+    super.key,
+    required this.child,
+    this.shake = false,
+    this.shakeOffset = 10.0,
+    this.duration = const Duration(milliseconds: 400),
+    this.onComplete,
+  });
+
+  @override
+  State<ShakeAnimation> createState() => _ShakeAnimationState();
+}
+
+class _ShakeAnimationState extends State<ShakeAnimation>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _animation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0, end: -1), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -1, end: 1), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 1, end: -1), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -1, end: 1), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 1, end: 0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        widget.onComplete?.call();
+      }
+    });
+
+    if (widget.shake) {
+      _triggerShake();
+    }
+  }
+
+  @override
+  void didUpdateWidget(ShakeAnimation oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.shake && !oldWidget.shake) {
+      _triggerShake();
+    }
+  }
+
+  void _triggerShake() {
+    HapticService.error();
+    _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(_animation.value * widget.shakeOffset, 0),
+          child: widget.child,
+        );
+      },
+    );
   }
 }

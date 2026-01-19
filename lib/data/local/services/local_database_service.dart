@@ -9,6 +9,7 @@ import '../models/local_chat_conversation.dart';
 import '../models/local_chat_message.dart';
 import '../../models/shared_workout.dart';
 import '../../models/workout_template.dart';
+import '../../models/achievement.dart';
 
 /// Service for managing the local Isar database
 class LocalDatabaseService {
@@ -45,6 +46,7 @@ class LocalDatabaseService {
         LocalChatMessageSchema,
         SharedWorkoutSchema,
         WorkoutTemplateSchema,
+        AchievementSchema,
       ],
       directory: dir.path,
       name: 'go_hard_local_db',

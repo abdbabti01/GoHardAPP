@@ -5,12 +5,62 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._(); // Private constructor to prevent instantiation
 
-  // ============ GOHARD PREMIUM BRAND COLORS ============
+  // ============ PREMIUM NEUTRAL PALETTE (90% of UI) ============
 
-  // Primary Brand - Electric Green
-  static const Color goHardGreen = Color(0xFF00E676); // Vibrant electric green
-  static const Color goHardGreenLight = Color(0xFF69F0AE); // Light variant
-  static const Color goHardGreenDark = Color(0xFF00C853); // Dark variant
+  // Primary Surfaces
+  static const Color charcoal = Color(0xFF1A1A1A); // Primary dark surfaces
+  static const Color slate = Color(0xFF2D3436); // Secondary surfaces
+  static const Color stone = Color(0xFF636E72); // Muted text
+  static const Color silver = Color(0xFFB2BEC3); // Light text
+
+  // Extended Neutrals
+  static const Color obsidian = Color(0xFF0D0D0D); // Deepest black
+  static const Color graphite = Color(0xFF242424); // Elevated dark surface
+  static const Color ash = Color(0xFF3D4449); // Tertiary surface
+  static const Color pewter = Color(0xFF8B959B); // Secondary text dark
+  static const Color cloud = Color(0xFFDFE6E9); // Light mode surface
+  static const Color snow = Color(0xFFF7F9FA); // Light mode background
+
+  // ============ PREMIUM ACCENT - MUTED SAGE GREEN (10% of UI) ============
+
+  // Use sparingly: buttons, progress, selected states, success indicators
+  static const Color accentGreen = Color(
+    0xFF4ADE80,
+  ); // Primary accent (softer than #00E676)
+  static const Color accentGreenMuted = Color(
+    0xFF86EFAC,
+  ); // Light accent variant
+  static const Color accentGreenDark = Color(0xFF22C55E); // Dark accent variant
+  static const Color accentGreenSubtle = Color(
+    0xFF166534,
+  ); // Very dark for backgrounds
+
+  // ============ STATUS ACCENT COLORS ============
+
+  static const Color accentAmber = Color(
+    0xFFF59E0B,
+  ); // Streaks, warnings, highlights
+  static const Color accentCoral = Color(0xFFF97316); // Active workouts, energy
+  static const Color accentRose = Color(
+    0xFFF43F5E,
+  ); // Errors, destructive actions
+  static const Color accentSky = Color(
+    0xFF0EA5E9,
+  ); // Info, links, secondary accent
+
+  // ============ ACHIEVEMENT TIER COLORS ============
+
+  static const Color tierBronze = Color(0xFFCD7F32);
+  static const Color tierSilver = Color(0xFFC0C0C0);
+  static const Color tierGold = Color(0xFFFFD700);
+  static const Color tierPlatinum = Color(0xFFE5E4E2);
+
+  // ============ LEGACY GOHARD BRAND COLORS (for compatibility) ============
+
+  // Primary Brand - Electric Green (now used sparingly)
+  static const Color goHardGreen = accentGreen; // Mapped to new accent
+  static const Color goHardGreenLight = accentGreenMuted;
+  static const Color goHardGreenDark = accentGreenDark;
 
   // Secondary Brand - Electric Blue
   static const Color goHardBlue = Color(0xFF2979FF); // Electric blue
@@ -19,28 +69,28 @@ class AppColors {
   static const Color goHardCyan = Color(0xFF00E5FF); // Cyan for gradients
 
   // Accent Colors
-  static const Color goHardOrange = Color(0xFFFF6D00); // Warning/active states
-  static const Color goHardAmber = Color(0xFFFFAB00); // Highlights
+  static const Color goHardOrange = accentCoral; // Mapped to new accent
+  static const Color goHardAmber = accentAmber; // Mapped to new accent
 
-  // Neutral Palette
+  // Neutral Palette (legacy mappings)
   static const Color goHardBlack = Color(0xFF000000);
-  static const Color goHardDarkGray = Color(0xFF1A1A1A);
+  static const Color goHardDarkGray = charcoal;
   static const Color goHardWhite = Color(0xFFFFFFFF);
-  static const Color goHardSilver = Color(0xFFB0B0B0);
-  static const Color goHardLightGray = Color(0xFFE5E5E5);
+  static const Color goHardSilver = silver;
+  static const Color goHardLightGray = cloud;
 
   // ============ PREMIUM DARK MODE SURFACES ============
 
-  static const Color darkBackground = Color(0xFF0A0A0A); // Deep black
-  static const Color darkSurface = Color(0xFF141414); // Card background
-  static const Color darkSurfaceElevated = Color(0xFF1E1E1E); // Elevated cards
-  static const Color darkSurfaceHighlight = Color(0xFF282828); // Hover/selected
+  static const Color darkBackground = obsidian; // Deep black background
+  static const Color darkSurface = charcoal; // Card/container background
+  static const Color darkSurfaceElevated = graphite; // Elevated cards, modals
+  static const Color darkSurfaceHighlight = ash; // Hover/selected states
 
   // ============ PREMIUM LIGHT MODE SURFACES ============
 
-  static const Color lightBackground = Color(0xFFF8F9FA); // Soft white
+  static const Color lightBackground = snow; // Soft white background
   static const Color lightSurface = Color(0xFFFFFFFF); // Card background
-  static const Color lightSurfaceElevated = Color(0xFFF0F2F5); // Elevated
+  static const Color lightSurfaceElevated = cloud; // Elevated surfaces
 
   // ============ GLASSMORPHISM ============
 
@@ -141,50 +191,89 @@ class AppColors {
 
   // ============ PREMIUM GRADIENT DEFINITIONS ============
 
-  // Primary gradient - Electric Green to Cyan
+  // Primary gradient - Subtle green accent (use sparingly)
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [goHardGreen, goHardCyan],
+    colors: [accentGreenDark, accentGreen],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // Secondary gradient - Electric Blue
+  // Secondary gradient - Neutral slate (for most UI)
   static const LinearGradient secondaryGradient = LinearGradient(
-    colors: [goHardBlue, goHardCyan],
+    colors: [slate, ash],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   // Success gradient - Green shades
   static const LinearGradient successGradient = LinearGradient(
-    colors: [goHardGreen, goHardGreenLight],
+    colors: [accentGreenDark, accentGreen],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // Active/In-progress gradient - Orange/Amber
+  // Active/In-progress gradient - Coral/Amber energy
   static const LinearGradient activeGradient = LinearGradient(
-    colors: [goHardOrange, goHardAmber],
+    colors: [accentCoral, accentAmber],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Streak gradient - Amber warmth
+  static const LinearGradient streakGradient = LinearGradient(
+    colors: [accentAmber, Color(0xFFFBBF24)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   // Card gradient for dark mode (subtle)
   static const LinearGradient cardGradientDark = LinearGradient(
-    colors: [darkSurface, darkSurfaceElevated],
+    colors: [charcoal, graphite],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
-  // Shimmer/glow effect
+  // Premium surface gradient (very subtle)
+  static const LinearGradient surfaceGradient = LinearGradient(
+    colors: [charcoal, Color(0xFF1F1F1F)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Shimmer/glow effect (muted green)
   static const LinearGradient glowGradient = LinearGradient(
     colors: [
-      Color(0x0000E676), // transparent green
-      Color(0x3300E676), // 20% green
-      Color(0x0000E676), // transparent green
+      Color(0x004ADE80), // transparent green
+      Color(0x334ADE80), // 20% green
+      Color(0x004ADE80), // transparent green
     ],
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
+  );
+
+  // Achievement tier gradients
+  static const LinearGradient bronzeGradient = LinearGradient(
+    colors: [Color(0xFFCD7F32), Color(0xFFB87333)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient silverGradient = LinearGradient(
+    colors: [Color(0xFFE8E8E8), Color(0xFFC0C0C0)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient goldGradient = LinearGradient(
+    colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient platinumGradient = LinearGradient(
+    colors: [Color(0xFFE5E4E2), Color(0xFFD1D0CE)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
   );
 
   // Legacy gradients (for compatibility)

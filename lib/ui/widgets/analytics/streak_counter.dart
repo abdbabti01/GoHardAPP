@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/theme/typography.dart';
 import '../../../data/models/session.dart';
 import '../common/animations.dart';
 
@@ -27,7 +28,7 @@ class StreakCounter extends StatelessWidget {
         border: Border.all(
           color:
               isOnFire
-                  ? AppColors.goHardOrange.withValues(alpha: 0.3)
+                  ? AppColors.accentAmber.withValues(alpha: 0.3)
                   : context.border,
           width: isOnFire ? 1.5 : 0.5,
         ),
@@ -35,7 +36,7 @@ class StreakCounter extends StatelessWidget {
             isOnFire
                 ? [
                   BoxShadow(
-                    color: AppColors.goHardOrange.withValues(alpha: 0.1),
+                    color: AppColors.accentAmber.withValues(alpha: 0.1),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -54,11 +55,11 @@ class StreakCounter extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    gradient: AppColors.activeGradient,
+                    gradient: AppColors.streakGradient,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.goHardOrange.withValues(alpha: 0.3),
+                        color: AppColors.accentAmber.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -107,7 +108,7 @@ class StreakCounter extends StatelessWidget {
                     icon: Icons.whatshot_rounded,
                     color:
                         currentStreak > 0
-                            ? AppColors.goHardOrange
+                            ? AppColors.accentCoral
                             : context.textTertiary,
                     isMain: true,
                   ),
@@ -119,7 +120,7 @@ class StreakCounter extends StatelessWidget {
                     value: longestStreak,
                     label: 'Longest\nStreak',
                     icon: Icons.emoji_events_rounded,
-                    color: AppColors.goHardAmber,
+                    color: AppColors.accentAmber,
                     isMain: false,
                   ),
                 ),
@@ -165,12 +166,10 @@ class StreakCounter extends StatelessWidget {
           child: Icon(icon, size: 26, color: color),
         ),
         const SizedBox(height: 12),
-        // Animated counter
+        // Animated counter with premium typography
         AnimatedCounter(
           value: value,
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.w800,
+          style: AppTypography.statMedium.copyWith(
             color: value > 0 ? color : context.textTertiary,
           ),
         ),
@@ -204,12 +203,12 @@ class StreakCounter extends StatelessWidget {
           colors:
               isGoalMet
                   ? [
-                    AppColors.goHardGreen.withValues(alpha: 0.12),
-                    AppColors.goHardCyan.withValues(alpha: 0.08),
+                    AppColors.accentGreen.withValues(alpha: 0.10),
+                    AppColors.accentGreenMuted.withValues(alpha: 0.05),
                   ]
                   : [
-                    AppColors.goHardBlue.withValues(alpha: 0.08),
-                    AppColors.goHardCyan.withValues(alpha: 0.05),
+                    AppColors.accentSky.withValues(alpha: 0.08),
+                    AppColors.accentSky.withValues(alpha: 0.03),
                   ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -218,8 +217,8 @@ class StreakCounter extends StatelessWidget {
         border: Border.all(
           color:
               isGoalMet
-                  ? AppColors.goHardGreen.withValues(alpha: 0.3)
-                  : AppColors.goHardBlue.withValues(alpha: 0.2),
+                  ? AppColors.accentGreen.withValues(alpha: 0.3)
+                  : AppColors.accentSky.withValues(alpha: 0.2),
         ),
       ),
       child: Column(
@@ -234,9 +233,7 @@ class StreakCounter extends StatelessWidget {
                     Icons.flag_rounded,
                     size: 18,
                     color:
-                        isGoalMet
-                            ? AppColors.goHardGreen
-                            : AppColors.goHardBlue,
+                        isGoalMet ? AppColors.accentGreen : AppColors.accentSky,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -246,8 +243,8 @@ class StreakCounter extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                       color:
                           isGoalMet
-                              ? AppColors.goHardGreen
-                              : AppColors.goHardBlue,
+                              ? AppColors.accentGreen
+                              : AppColors.accentSky,
                     ),
                   ),
                 ],
@@ -260,19 +257,15 @@ class StreakCounter extends StatelessWidget {
                 decoration: BoxDecoration(
                   color:
                       isGoalMet
-                          ? AppColors.goHardGreen.withValues(alpha: 0.15)
-                          : AppColors.goHardBlue.withValues(alpha: 0.1),
+                          ? AppColors.accentGreen.withValues(alpha: 0.15)
+                          : AppColors.accentSky.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '$thisWeekCount / $weeklyGoal',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
+                  style: AppTypography.statTiny.copyWith(
                     color:
-                        isGoalMet
-                            ? AppColors.goHardGreen
-                            : AppColors.goHardBlue,
+                        isGoalMet ? AppColors.accentGreen : AppColors.accentSky,
                   ),
                 ),
               ),
@@ -302,13 +295,20 @@ class StreakCounter extends StatelessWidget {
                         gradient:
                             isGoalMet
                                 ? AppColors.successGradient
-                                : AppColors.secondaryGradient,
+                                : LinearGradient(
+                                  colors: [
+                                    AppColors.accentSky,
+                                    AppColors.accentSky.withValues(alpha: 0.7),
+                                  ],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
                         borderRadius: BorderRadius.circular(4),
                         boxShadow: [
                           BoxShadow(
                             color: (isGoalMet
-                                    ? AppColors.goHardGreen
-                                    : AppColors.goHardBlue)
+                                    ? AppColors.accentGreen
+                                    : AppColors.accentSky)
                                 .withValues(alpha: 0.4),
                             blurRadius: 4,
                           ),
@@ -343,7 +343,7 @@ class StreakCounter extends StatelessWidget {
                   'Goal achieved! Keep crushing it!',
                   style: TextStyle(
                     fontSize: 13,
-                    color: AppColors.goHardGreen,
+                    color: AppColors.accentGreen,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -354,7 +354,7 @@ class StreakCounter extends StatelessWidget {
               '${weeklyGoal - thisWeekCount} more workout${weeklyGoal - thisWeekCount != 1 ? 's' : ''} to reach your goal',
               style: TextStyle(
                 fontSize: 13,
-                color: AppColors.goHardBlue,
+                color: AppColors.accentSky,
                 fontWeight: FontWeight.w500,
               ),
             )

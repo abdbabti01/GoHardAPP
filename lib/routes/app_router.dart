@@ -23,6 +23,8 @@ import '../ui/screens/templates/templates_screen.dart';
 import '../ui/screens/programs/programs_screen.dart';
 import '../ui/screens/programs/program_detail_screen.dart';
 import '../ui/screens/programs/program_workout_screen.dart';
+import '../ui/screens/onboarding/onboarding_screen.dart';
+import '../ui/screens/achievements/achievements_screen.dart';
 
 /// Central router for the application
 /// Handles route generation and navigation logic
@@ -278,6 +280,21 @@ class AppRouter {
                 workoutId: args['workoutId'] as int,
                 programId: args['programId'] as int,
               ),
+          settings: settings,
+        );
+
+      // Onboarding route
+      case RouteNames.onboarding:
+        final onComplete = settings.arguments as VoidCallback?;
+        return MaterialPageRoute(
+          builder: (_) => OnboardingScreen(onComplete: onComplete ?? () {}),
+          settings: settings,
+        );
+
+      // Achievements route
+      case RouteNames.achievements:
+        return MaterialPageRoute(
+          builder: (_) => const AchievementsScreen(),
           settings: settings,
         );
 

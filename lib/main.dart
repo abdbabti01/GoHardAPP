@@ -40,6 +40,10 @@ import 'providers/body_metrics_provider.dart';
 import 'providers/programs_provider.dart';
 import 'providers/music_player_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/onboarding_provider.dart';
+import 'providers/achievements_provider.dart';
+import 'data/repositories/achievement_repository.dart';
+import 'core/services/health_service.dart';
 
 void main() async {
   // Ensure Flutter bindings are initialized for async operations
@@ -66,6 +70,10 @@ void main() async {
   // Initialize notification service
   final notificationService = NotificationService();
   await notificationService.initialize();
+
+  // Initialize health service (Apple Health / Google Fit)
+  final healthService = HealthService.instance;
+  await healthService.initialize();
 
   // Initialize secure storage
   const secureStorage = FlutterSecureStorage();
@@ -444,6 +452,37 @@ void main() async {
           update:
               (_, storage, notificationService, previous) =>
                   previous ?? SettingsProvider(storage, notificationService),
+        ),
+
+        // Onboarding provider (no dependencies)
+        ChangeNotifierProvider<OnboardingProvider>(
+          create: (_) => OnboardingProvider()..initialize(),
+        ),
+
+        // Achievement repository
+        ProxyProvider2<
+          LocalDatabaseService,
+          AuthService,
+          AchievementRepository
+        >(
+          update:
+              (_, localDb, authService, __) => AchievementRepository(
+                localDb: localDb,
+                authService: authService,
+              ),
+        ),
+
+        // Achievements provider
+        ChangeNotifierProxyProvider<
+          AchievementRepository,
+          AchievementsProvider
+        >(
+          create:
+              (context) =>
+                  AchievementsProvider(context.read<AchievementRepository>()),
+          update:
+              (_, achievementRepo, previous) =>
+                  previous ?? AchievementsProvider(achievementRepo),
         ),
       ],
       child: const SyncServiceInitializer(child: MyApp()),

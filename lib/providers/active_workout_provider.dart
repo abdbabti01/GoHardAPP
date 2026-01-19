@@ -4,6 +4,7 @@ import '../data/models/session.dart';
 import '../data/models/exercise.dart';
 import '../data/repositories/session_repository.dart';
 import '../core/services/connectivity_service.dart';
+import '../core/services/health_service.dart';
 
 /// Provider for active workout session with timer
 /// Replaces ActiveWorkoutViewModel from MAUI app
@@ -322,11 +323,25 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
       final durationMinutes = _elapsedTime.inMinutes;
       debugPrint('🏁 Finishing workout - Duration: $durationMinutes minutes');
 
+      // Store start time before updating session (for health sync)
+      final workoutStartTime = _currentSession!.startedAt;
+      final workoutEndTime = DateTime.now();
+      final workoutType = _currentSession!.type ?? 'strength';
+
       _currentSession = await _sessionRepository.updateSessionStatus(
         _currentSession!.id,
         'completed',
         duration: durationMinutes,
       );
+
+      // Sync to Apple Health / Google Fit if enabled
+      _syncWorkoutToHealth(
+        startTime: workoutStartTime,
+        endTime: workoutEndTime,
+        durationMinutes: durationMinutes,
+        workoutType: workoutType,
+      );
+
       notifyListeners();
       return true;
     } catch (e) {
@@ -335,6 +350,45 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('Finish workout error: $e');
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Sync completed workout to Apple Health / Google Fit
+  Future<void> _syncWorkoutToHealth({
+    required DateTime? startTime,
+    required DateTime endTime,
+    required int durationMinutes,
+    required String workoutType,
+  }) async {
+    if (startTime == null) return;
+
+    try {
+      final healthService = HealthService.instance;
+
+      if (!healthService.isEnabled || !healthService.isAuthorized) {
+        debugPrint('🏥 Health sync skipped - not enabled or authorized');
+        return;
+      }
+
+      // Estimate calories burned (rough estimate: 5-8 cal/min for strength training)
+      final estimatedCalories = (durationMinutes * 6.5).toInt();
+
+      final success = await healthService.writeWorkout(
+        startTime: startTime,
+        endTime: endTime,
+        totalCalories: estimatedCalories,
+        workoutType: workoutType,
+      );
+
+      if (success) {
+        debugPrint(
+          '🏥 ✅ Workout synced to Health: $durationMinutes min, ~$estimatedCalories cal',
+        );
+      } else {
+        debugPrint('🏥 ⚠️ Failed to sync workout to Health');
+      }
+    } catch (e) {
+      debugPrint('🏥 ❌ Error syncing to Health: $e');
     }
   }
 

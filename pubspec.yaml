@@ -85,6 +85,9 @@ dependencies:
   timezone: ^0.9.4
   flutter_native_timezone: ^2.0.0
 
+  # Health / Fitness Data Integration (Apple Health / Google Fit)
+  health: ^10.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -118,6 +121,25 @@ flutter:
   assets:
     - assets/logo.png
     - assets/music/
+
+  # Premium typography fonts
+  # Download from Google Fonts:
+  # - Inter: https://fonts.google.com/specimen/Inter
+  # - Space Grotesk: https://fonts.google.com/specimen/Space+Grotesk
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk-Bold.ttf
+          weight: 700
 
 # App launcher icons configuration
 flutter_launcher_icons:

@@ -49,6 +49,12 @@ class RouteNames {
   static const String programDetail = '/program-detail';
   static const String programWorkout = '/program-workout';
 
+  // Onboarding routes
+  static const String onboarding = '/onboarding';
+
+  // Achievement routes
+  static const String achievements = '/achievements';
+
   // Initial route (shown when app starts)
   static const String initial = login;
 }

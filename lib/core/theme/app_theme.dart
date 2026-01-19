@@ -7,25 +7,26 @@ class AppTheme {
   AppTheme._(); // Private constructor to prevent instantiation
 
   /// Light theme configuration - Clean, modern, premium
+  /// Neutrals dominate (90%), green accent used sparingly (10%)
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
 
-      // Color Scheme - Premium Green + Blue
+      // Color Scheme - Premium Neutrals with Green Accent
       colorScheme: ColorScheme.light(
-        primary: AppColors.goHardGreen,
-        secondary: AppColors.goHardBlue,
-        tertiary: AppColors.goHardCyan,
-        error: AppColors.errorRed,
+        primary: AppColors.charcoal, // Neutral primary for most UI
+        secondary: AppColors.slate, // Secondary surfaces
+        tertiary: AppColors.accentGreen, // Green accent (sparingly)
+        error: AppColors.accentRose, // Error states
         surface: AppColors.lightSurface,
         surfaceContainerHighest: AppColors.lightSurfaceElevated,
-        onPrimary: AppColors.goHardBlack,
+        onPrimary: AppColors.goHardWhite,
         onSecondary: AppColors.goHardWhite,
-        onTertiary: AppColors.goHardBlack,
+        onTertiary: AppColors.charcoal,
         onError: AppColors.goHardWhite,
-        onSurface: AppColors.goHardBlack,
-        onSurfaceVariant: AppColors.goHardDarkGray,
+        onSurface: AppColors.charcoal,
+        onSurfaceVariant: AppColors.stone,
       ),
 
       // Scaffold - Soft white background
@@ -57,21 +58,21 @@ class AppTheme {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       ),
 
-      // Bottom Navigation Bar
+      // Bottom Navigation Bar - Neutral with green accent for selected
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.lightSurface,
-        selectedItemColor: AppColors.goHardGreen,
-        unselectedItemColor: AppColors.iosGray6,
+        selectedItemColor: AppColors.charcoal, // Neutral selected
+        unselectedItemColor: AppColors.stone, // Muted unselected
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
       ),
 
-      // Floating Action Button - Gradient green
+      // Floating Action Button - Primary action (green accent)
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: AppColors.goHardGreen,
-        foregroundColor: AppColors.goHardBlack,
-        elevation: 8,
+        backgroundColor: AppColors.accentGreen, // Green for primary action
+        foregroundColor: AppColors.charcoal,
+        elevation: 4,
         shape: const CircleBorder(),
         extendedTextStyle: const TextStyle(
           fontWeight: FontWeight.w700,
@@ -89,11 +90,11 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.goHardGreen, width: 2),
+          borderSide: const BorderSide(color: AppColors.charcoal, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.errorRed, width: 2),
+          borderSide: const BorderSide(color: AppColors.accentRose, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
@@ -101,11 +102,11 @@ class AppTheme {
         ),
       ),
 
-      // Elevated Button - Green with bold text
+      // Elevated Button - Primary action (green accent for CTAs)
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.goHardGreen,
-          foregroundColor: AppColors.goHardBlack,
+          backgroundColor: AppColors.accentGreen, // Green for primary CTAs
+          foregroundColor: AppColors.charcoal,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
           shape: RoundedRectangleBorder(
@@ -119,10 +120,10 @@ class AppTheme {
         ),
       ),
 
-      // Text Button
+      // Text Button - Neutral with subtle green for links
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.goHardGreen,
+          foregroundColor: AppColors.charcoal, // Neutral text buttons
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
@@ -173,12 +174,12 @@ class AppTheme {
         space: 1,
       ),
 
-      // Chip - Modern rounded
+      // Chip - Modern rounded with green for selected
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.lightSurfaceElevated,
-        selectedColor: AppColors.goHardGreen,
+        selectedColor: AppColors.accentGreen, // Green accent for selected
         labelStyle: const TextStyle(
-          color: AppColors.goHardBlack,
+          color: AppColors.charcoal,
           fontWeight: FontWeight.w500,
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -194,40 +195,41 @@ class AppTheme {
 
       // SnackBar
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.goHardBlack,
+        backgroundColor: AppColors.charcoal,
         contentTextStyle: const TextStyle(color: Colors.white),
-        actionTextColor: AppColors.goHardGreen,
+        actionTextColor: AppColors.accentGreen, // Green for actions
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,
       ),
 
-      // Progress Indicator
+      // Progress Indicator - Green accent
       progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.goHardGreen,
+        color: AppColors.accentGreen, // Green for progress
       ),
     );
   }
 
   /// Dark theme configuration - Premium dark UI
+  /// Neutrals dominate (90%), green accent used sparingly (10%)
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
 
-      // Color Scheme - Premium Electric Green + Blue
+      // Color Scheme - Premium Neutrals with Green Accent
       colorScheme: const ColorScheme.dark(
-        primary: AppColors.goHardGreen,
-        secondary: AppColors.goHardBlue,
-        tertiary: AppColors.goHardCyan,
-        error: AppColors.errorRed,
+        primary: AppColors.silver, // Light neutral for dark mode
+        secondary: AppColors.pewter, // Secondary text/elements
+        tertiary: AppColors.accentGreen, // Green accent (sparingly)
+        error: AppColors.accentRose,
         surface: AppColors.darkSurface,
         surfaceContainerHighest: AppColors.darkSurfaceElevated,
-        onPrimary: AppColors.goHardBlack,
-        onSecondary: Colors.white,
-        onTertiary: AppColors.goHardBlack,
+        onPrimary: AppColors.charcoal,
+        onSecondary: AppColors.charcoal,
+        onTertiary: AppColors.charcoal,
         onError: Colors.white,
         onSurface: Colors.white,
-        onSurfaceVariant: Color(0xFFB0B0B0),
+        onSurfaceVariant: AppColors.silver,
       ),
 
       // Scaffold - Deep black background
@@ -259,21 +261,21 @@ class AppTheme {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       ),
 
-      // Bottom Navigation Bar
+      // Bottom Navigation Bar - Neutral with subtle selection
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.darkSurface,
-        selectedItemColor: AppColors.goHardGreen,
-        unselectedItemColor: Color(0xFF6B6B6B),
+        selectedItemColor: Colors.white, // White for selected
+        unselectedItemColor: AppColors.stone, // Muted for unselected
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
       ),
 
-      // Floating Action Button - Electric green with glow
+      // Floating Action Button - Primary action (green accent)
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: AppColors.goHardGreen,
-        foregroundColor: AppColors.goHardBlack,
-        elevation: 12,
+        backgroundColor: AppColors.accentGreen, // Green for primary action
+        foregroundColor: AppColors.charcoal,
+        elevation: 8,
         shape: const CircleBorder(),
         extendedTextStyle: const TextStyle(
           fontWeight: FontWeight.w700,
@@ -281,7 +283,7 @@ class AppTheme {
         ),
       ),
 
-      // Input Decoration - Dark with green focus
+      // Input Decoration - Dark with subtle focus
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.darkSurfaceElevated,
@@ -291,24 +293,24 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.goHardGreen, width: 2),
+          borderSide: const BorderSide(color: AppColors.silver, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.errorRed, width: 2),
+          borderSide: const BorderSide(color: AppColors.accentRose, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 16,
         ),
-        hintStyle: const TextStyle(color: Color(0xFF6B6B6B)),
+        hintStyle: const TextStyle(color: AppColors.stone),
       ),
 
-      // Elevated Button - Electric green
+      // Elevated Button - Primary action (green accent for CTAs)
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.goHardGreen,
-          foregroundColor: AppColors.goHardBlack,
+          backgroundColor: AppColors.accentGreen, // Green for primary CTAs
+          foregroundColor: AppColors.charcoal,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
           shape: RoundedRectangleBorder(
@@ -322,11 +324,11 @@ class AppTheme {
         ),
       ),
 
-      // Outlined Button - Green outline
+      // Outlined Button - Neutral outline
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.goHardGreen,
-          side: const BorderSide(color: AppColors.goHardGreen, width: 2),
+          foregroundColor: Colors.white,
+          side: const BorderSide(color: AppColors.ash, width: 2),
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -335,10 +337,10 @@ class AppTheme {
         ),
       ),
 
-      // Text Button
+      // Text Button - Neutral
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.goHardGreen,
+          foregroundColor: Colors.white, // Neutral text buttons
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
@@ -389,10 +391,10 @@ class AppTheme {
         space: 1,
       ),
 
-      // Chip - Dark with green selection
+      // Chip - Dark with green accent for selected
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.darkSurfaceElevated,
-        selectedColor: AppColors.goHardGreen,
+        selectedColor: AppColors.accentGreen, // Green accent for selected
         labelStyle: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w500,
@@ -402,11 +404,11 @@ class AppTheme {
         side: BorderSide.none,
       ),
 
-      // Dialog - Dark with subtle glow
+      // Dialog - Dark with subtle shadow
       dialogTheme: DialogTheme(
         backgroundColor: AppColors.darkSurface,
         elevation: 24,
-        shadowColor: AppColors.goHardGreen.withValues(alpha: 0.1),
+        shadowColor: Colors.black.withValues(alpha: 0.3),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
 
@@ -414,14 +416,14 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.darkSurfaceElevated,
         contentTextStyle: const TextStyle(color: Colors.white),
-        actionTextColor: AppColors.goHardGreen,
+        actionTextColor: AppColors.accentGreen, // Green for actions
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,
       ),
 
-      // Progress Indicator - Electric green
+      // Progress Indicator - Green accent
       progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.goHardGreen,
+        color: AppColors.accentGreen, // Green for progress
       ),
     );
   }

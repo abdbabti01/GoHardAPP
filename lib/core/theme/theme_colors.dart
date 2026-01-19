@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 
 /// Extension on BuildContext for easy theme-aware color access
-/// Premium fitness app color system
+/// Premium fitness app color system - Neutrals dominate (90%), green accent (10%)
 extension ThemeColors on BuildContext {
   /// Quick access to current theme's color scheme
   ColorScheme get colorScheme => Theme.of(this).colorScheme;
@@ -45,8 +45,7 @@ extension ThemeColors on BuildContext {
   Color get textSecondary => colorScheme.onSurfaceVariant;
 
   /// Tertiary/hint text color (placeholders, disabled)
-  Color get textTertiary =>
-      isDarkMode ? const Color(0xFF6B6B6B) : AppColors.iosGray5;
+  Color get textTertiary => isDarkMode ? AppColors.stone : AppColors.pewter;
 
   /// Text on primary color buttons/surfaces
   Color get textOnPrimary => colorScheme.onPrimary;
@@ -54,51 +53,60 @@ extension ThemeColors on BuildContext {
   // ============ BORDER/DIVIDER COLORS ============
 
   /// Border color for cards, containers
-  Color get border => isDarkMode ? const Color(0xFF2A2A2A) : AppColors.iosGray3;
+  Color get border => isDarkMode ? AppColors.ash : AppColors.cloud;
 
   /// Subtle border for inputs, dividers
   Color get borderSubtle =>
-      isDarkMode ? const Color(0xFF1E1E1E) : AppColors.iosGray2;
+      isDarkMode ? AppColors.graphite : AppColors.iosGray2;
 
   /// Divider color
   Color get divider => Theme.of(this).dividerTheme.color ?? border;
 
   // ============ INTERACTIVE COLORS ============
 
-  /// Primary action color - Electric Green
+  /// Primary action color - Neutral (use accent for CTAs)
   Color get primary => colorScheme.primary;
 
-  /// Secondary action color - Electric Blue
+  /// Secondary action color
   Color get secondary => colorScheme.secondary;
 
-  /// Accent/highlight color - Always Electric Green
-  Color get accent => AppColors.goHardGreen;
+  /// Accent/highlight color - Muted Sage Green (use sparingly 10%)
+  Color get accent => AppColors.accentGreen;
+
+  /// Accent muted variant
+  Color get accentMuted => AppColors.accentGreenMuted;
+
+  /// Accent dark variant
+  Color get accentDark => AppColors.accentGreenDark;
 
   /// Blue accent for variety
-  Color get accentBlue => AppColors.goHardBlue;
+  Color get accentBlue => AppColors.accentSky;
 
-  /// Cyan accent for gradients
-  Color get accentCyan => AppColors.goHardCyan;
+  /// Amber accent for streaks/highlights
+  Color get accentAmber => AppColors.accentAmber;
 
-  /// Selected/active state color
-  Color get selected => AppColors.goHardGreen;
+  /// Coral accent for active states
+  Color get accentCoral => AppColors.accentCoral;
+
+  /// Selected/active state color - Green accent
+  Color get selected => AppColors.accentGreen;
 
   /// Unselected/inactive state color
   Color get unselected => textTertiary;
 
   // ============ STATUS COLORS ============
 
-  /// Success color (green)
-  Color get success => AppColors.successGreen;
+  /// Success color (green accent)
+  Color get success => AppColors.accentGreen;
 
-  /// Warning color (orange)
-  Color get warning => AppColors.warningOrange;
+  /// Warning color (amber)
+  Color get warning => AppColors.accentAmber;
 
-  /// Error color (red)
-  Color get error => colorScheme.error;
+  /// Error color (rose)
+  Color get error => AppColors.accentRose;
 
-  /// Info color (blue)
-  Color get info => AppColors.infoBlue;
+  /// Info color (sky blue)
+  Color get info => AppColors.accentSky;
 
   // ============ NAVIGATION BAR COLORS ============
 
@@ -106,18 +114,17 @@ extension ThemeColors on BuildContext {
   Color get navBarBackground =>
       isDarkMode ? AppColors.darkSurface : AppColors.lightSurface;
 
-  /// Navigation bar selected item color - Electric Green
-  Color get navBarSelected => AppColors.goHardGreen;
+  /// Navigation bar selected item color - Neutral
+  Color get navBarSelected => isDarkMode ? Colors.white : AppColors.charcoal;
 
   /// Navigation bar unselected item color
-  Color get navBarUnselected =>
-      isDarkMode ? const Color(0xFF6B6B6B) : AppColors.iosGray6;
+  Color get navBarUnselected => AppColors.stone;
 
-  /// FAB/action button background in nav bar - Electric Green
-  Color get navBarFabBackground => AppColors.goHardGreen;
+  /// FAB/action button background - Green accent
+  Color get navBarFabBackground => AppColors.accentGreen;
 
   /// FAB foreground color
-  Color get navBarFabForeground => AppColors.goHardBlack;
+  Color get navBarFabForeground => AppColors.charcoal;
 
   // ============ CHIP/TAG COLORS ============
 
@@ -127,19 +134,20 @@ extension ThemeColors on BuildContext {
           ? AppColors.darkSurfaceElevated
           : AppColors.lightSurfaceElevated;
 
-  /// Chip background (selected) - Electric Green
-  Color get chipSelected => AppColors.goHardGreen;
+  /// Chip background (selected) - Green accent
+  Color get chipSelected => AppColors.accentGreen;
 
   /// Chip text color
   Color get chipText => textPrimary;
 
   // ============ MESSAGE BUBBLE COLORS ============
 
-  /// User message bubble background - Electric Green
-  Color get userMessageBubble => AppColors.goHardGreen;
+  /// User message bubble background - Neutral slate
+  Color get userMessageBubble =>
+      isDarkMode ? AppColors.slate : AppColors.charcoal;
 
   /// User message text color
-  Color get userMessageText => AppColors.goHardBlack;
+  Color get userMessageText => Colors.white;
 
   /// AI/other message bubble background
   Color get aiMessageBubble =>
@@ -163,17 +171,34 @@ extension ThemeColors on BuildContext {
 
   // ============ GRADIENT COLORS ============
 
-  /// Primary gradient (Green to Cyan)
+  /// Primary gradient (Green accent - use sparingly)
   LinearGradient get primaryGradient => AppColors.primaryGradient;
 
-  /// Secondary gradient (Blue to Cyan)
+  /// Secondary gradient (Neutral slate)
   LinearGradient get secondaryGradient => AppColors.secondaryGradient;
 
   /// Success gradient
   LinearGradient get successGradient => AppColors.successGradient;
 
-  /// Active/In-progress gradient
+  /// Active/In-progress gradient (Coral/Amber)
   LinearGradient get activeGradient => AppColors.activeGradient;
+
+  /// Streak gradient (Amber warmth)
+  LinearGradient get streakGradient => AppColors.streakGradient;
+
+  // ============ ACHIEVEMENT TIER COLORS ============
+
+  /// Bronze tier color
+  Color get tierBronze => AppColors.tierBronze;
+
+  /// Silver tier color
+  Color get tierSilver => AppColors.tierSilver;
+
+  /// Gold tier color
+  Color get tierGold => AppColors.tierGold;
+
+  /// Platinum tier color
+  Color get tierPlatinum => AppColors.tierPlatinum;
 }
 
 /// Helper class for getting theme colors without context
@@ -188,9 +213,11 @@ class ThemeColorHelper {
 
   Color get surface => colorScheme.surface;
   Color get surfaceElevated => colorScheme.surfaceContainerHighest;
-  Color get border => isDarkMode ? const Color(0xFF2A2A2A) : AppColors.iosGray3;
+  Color get border => isDarkMode ? AppColors.ash : AppColors.cloud;
   Color get textPrimary => colorScheme.onSurface;
   Color get textSecondary => colorScheme.onSurfaceVariant;
-  Color get accent => AppColors.goHardGreen;
-  Color get accentBlue => AppColors.goHardBlue;
+  Color get accent => AppColors.accentGreen;
+  Color get accentAmber => AppColors.accentAmber;
+  Color get accentCoral => AppColors.accentCoral;
+  Color get accentBlue => AppColors.accentSky;
 }
