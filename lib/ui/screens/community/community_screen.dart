@@ -4,6 +4,7 @@ import '../../../core/theme/theme_colors.dart';
 import '../../../providers/shared_workout_provider.dart';
 import '../../../data/models/shared_workout.dart';
 import '../../widgets/common/offline_banner.dart';
+import '../../widgets/common/loading_indicator.dart';
 
 /// Community screen for browsing and sharing workouts
 class CommunityScreen extends StatefulWidget {
@@ -70,7 +71,7 @@ class _CommunityScreenState extends State<CommunityScreen>
           Expanded(
             child:
                 provider.isLoading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: PremiumLoader())
                     : provider.errorMessage != null
                     ? _buildErrorView(context, provider)
                     : TabBarView(

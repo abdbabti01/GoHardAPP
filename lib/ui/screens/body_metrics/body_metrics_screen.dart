@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/colors.dart';
 import '../../../providers/body_metrics_provider.dart';
 import '../../../data/models/body_metric.dart';
+import '../../widgets/common/loading_indicator.dart';
 
 class BodyMetricsScreen extends StatefulWidget {
   const BodyMetricsScreen({super.key});
@@ -39,7 +41,7 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
       ),
       body:
           provider.isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: PremiumLoader())
               : provider.errorMessage != null
               ? Center(
                 child: Column(
@@ -708,7 +710,10 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
                   ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.goHardGreen,
+                    ),
                   )
                   : const Text('Save'),
         ),

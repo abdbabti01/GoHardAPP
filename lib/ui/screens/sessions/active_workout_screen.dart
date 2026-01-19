@@ -76,6 +76,9 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       final success = await provider.finishWorkout();
 
       if (success && mounted) {
+        // Trigger celebration haptic feedback
+        HapticService.workoutComplete();
+
         // Show celebration
         await Navigator.of(context).push(
           PageRouteBuilder(

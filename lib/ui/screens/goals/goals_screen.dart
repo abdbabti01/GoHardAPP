@@ -16,6 +16,8 @@ import '../../../routes/route_names.dart';
 import '../analytics/analytics_screen.dart';
 import '../../widgets/goals/premium_goal_card.dart';
 import '../../widgets/common/empty_state.dart';
+import '../../widgets/common/loading_indicator.dart';
+import '../../widgets/common/premium_bottom_sheet.dart';
 
 class GoalsScreen extends StatefulWidget {
   const GoalsScreen({super.key});
@@ -75,7 +77,7 @@ class _GoalsScreenState extends State<GoalsScreen>
           Consumer<GoalsProvider>(
             builder: (context, provider, child) {
               if (provider.isLoading) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: PremiumLoader());
               }
 
               if (provider.errorMessage != null) {
@@ -265,11 +267,7 @@ class _GoalsScreenState extends State<GoalsScreen>
     final provider = context.read<GoalsProvider>();
 
     // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
+    PremiumLoadingDialog.show(context, message: 'Creating goal...');
 
     try {
       final impact = await provider.getDeletionImpact(goal.id);
@@ -1182,7 +1180,10 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                   ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.goHardGreen,
+                    ),
                   )
                   : const Text('Create'),
         ),
@@ -1364,7 +1365,10 @@ class _AddProgressDialogState extends State<AddProgressDialog> {
                   ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.goHardGreen,
+                    ),
                   )
                   : const Text('Add'),
         ),

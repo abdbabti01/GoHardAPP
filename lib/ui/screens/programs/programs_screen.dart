@@ -13,6 +13,8 @@ import '../../../routes/route_names.dart';
 import '../../widgets/programs/program_calendar_widget.dart';
 import '../../widgets/programs/premium_program_card.dart';
 import '../../widgets/common/empty_state.dart';
+import '../../widgets/common/loading_indicator.dart';
+import '../../widgets/common/premium_bottom_sheet.dart';
 
 /// Programs screen that shows program detail directly with selector
 class ProgramsScreen extends StatefulWidget {
@@ -103,7 +105,7 @@ class _ProgramsScreenState extends State<ProgramsScreen>
     return Consumer<ProgramsProvider>(
       builder: (context, provider, child) {
         if (provider.isLoading && provider.programs.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: PremiumLoader());
         }
 
         if (provider.errorMessage != null && provider.programs.isEmpty) {
@@ -846,21 +848,7 @@ class _ProgramsScreenState extends State<ProgramsScreen>
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (ctx) => const AlertDialog(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Checking deletion impact...'),
-              ],
-            ),
-          ),
-    );
+    PremiumLoadingDialog.show(context, message: 'Checking deletion impact...');
 
     try {
       final impact = await provider.getDeletionImpact(program.id);

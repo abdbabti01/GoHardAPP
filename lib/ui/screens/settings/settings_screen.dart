@@ -8,6 +8,7 @@ import '../../../providers/settings_provider.dart';
 import '../../../providers/profile_provider.dart';
 import '../../../core/enums/profile_enums.dart';
 import '../../../data/models/profile_update_request.dart';
+import '../../widgets/common/loading_indicator.dart';
 
 /// Settings screen for managing app preferences
 /// Currently focuses on notification settings
@@ -21,7 +22,7 @@ class SettingsScreen extends StatelessWidget {
       body: Consumer2<SettingsProvider, ProfileProvider>(
         builder: (context, settings, profile, _) {
           if (settings.isLoading || profile.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: PremiumLoader());
           }
 
           return ListView(
@@ -281,7 +282,10 @@ class SettingsScreen extends StatelessWidget {
                         return const Center(
                           child: Padding(
                             padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.goHardGreen,
+                            ),
                           ),
                         );
                       }

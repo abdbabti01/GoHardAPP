@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/goals_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/common/offline_banner.dart';
+import '../../widgets/common/premium_bottom_sheet.dart';
+import '../../widgets/common/loading_indicator.dart';
 
 /// Chat conversation screen showing messages and input
 class ChatConversationScreen extends StatefulWidget {
@@ -110,11 +113,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     if (programDetails == null || !mounted) return;
 
     // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
+    PremiumLoadingDialog.show(context, message: 'Creating program...');
 
     // Create program
     final createResult = await chatProvider.createProgramFromPlan(
@@ -157,7 +156,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
             content: Text(
               'Created program "$programTitle" with $workoutCount workouts!',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.goHardGreen,
             duration: const Duration(seconds: 3),
           ),
         );
@@ -168,7 +167,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
           content: Text(
             chatProvider.errorMessage ?? 'Failed to create program',
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.errorRed,
         ),
       );
     }
@@ -424,7 +423,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                     builder: (context, provider, child) {
                       if (provider.isLoading &&
                           provider.currentConversation == null) {
-                        return const Center(child: CircularProgressIndicator());
+                        return const Center(child: PremiumLoader());
                       }
 
                       if (provider.errorMessage != null &&
@@ -435,7 +434,9 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                             children: [
                               Text(
                                 provider.errorMessage!,
-                                style: const TextStyle(color: Colors.red),
+                                style: const TextStyle(
+                                  color: AppColors.errorRed,
+                                ),
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 16),
@@ -607,10 +608,13 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [
-                            const SizedBox(
+                            SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.goHardGreen,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Text(

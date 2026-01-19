@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
+import 'loading_indicator.dart';
 
 /// Premium bottom sheet with glassmorphism effect
 class PremiumBottomSheet extends StatelessWidget {
@@ -439,6 +440,318 @@ class ConfirmationBottomSheet extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Premium dialog replacement for AlertDialog
+class PremiumDialog extends StatelessWidget {
+  final String title;
+  final String? message;
+  final Widget? content;
+  final List<PremiumDialogAction> actions;
+  final IconData? icon;
+  final Color? iconColor;
+
+  const PremiumDialog({
+    super.key,
+    required this.title,
+    this.message,
+    this.content,
+    this.actions = const [],
+    this.icon,
+    this.iconColor,
+  });
+
+  /// Show a premium styled dialog
+  static Future<T?> show<T>({
+    required BuildContext context,
+    required String title,
+    String? message,
+    Widget? content,
+    List<PremiumDialogAction> actions = const [],
+    IconData? icon,
+    Color? iconColor,
+    bool barrierDismissible = true,
+  }) {
+    return showDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      barrierColor: Colors.black.withValues(alpha: 0.6),
+      builder:
+          (context) => PremiumDialog(
+            title: title,
+            message: message,
+            content: content,
+            actions: actions,
+            icon: icon,
+            iconColor: iconColor,
+          ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveIconColor = iconColor ?? AppColors.goHardGreen;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 340),
+        decoration: BoxDecoration(
+          color: context.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: context.isDarkMode ? AppColors.glassBorder : context.border,
+            width: 0.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon
+              if (icon != null) ...[
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: effectiveIconColor.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 32, color: effectiveIconColor),
+                ),
+                const SizedBox(height: 20),
+              ],
+
+              // Title
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                  letterSpacing: -0.3,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              // Message
+              if (message != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  message!,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: context.textSecondary,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+
+              // Custom content
+              if (content != null) ...[const SizedBox(height: 16), content!],
+
+              // Actions
+              if (actions.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                if (actions.length == 2)
+                  Row(
+                    children: [
+                      Expanded(child: _buildActionButton(context, actions[0])),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildActionButton(context, actions[1])),
+                    ],
+                  )
+                else
+                  Column(
+                    children:
+                        actions
+                            .map(
+                              (action) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: _buildActionButton(context, action),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(BuildContext context, PremiumDialogAction action) {
+    if (action.isPrimary) {
+      return Container(
+        decoration: BoxDecoration(
+          gradient:
+              action.isDestructive
+                  ? LinearGradient(
+                    colors: [
+                      AppColors.errorRed,
+                      AppColors.errorRed.withValues(alpha: 0.8),
+                    ],
+                  )
+                  : AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: (action.isDestructive
+                      ? AppColors.errorRed
+                      : AppColors.goHardGreen)
+                  .withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: action.onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Center(
+                child: Text(
+                  action.label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color:
+                        action.isDestructive
+                            ? Colors.white
+                            : AppColors.goHardBlack,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.surfaceElevated,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.border),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: action.onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Center(
+              child: Text(
+                action.label,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color:
+                      action.isDestructive
+                          ? AppColors.errorRed
+                          : context.textPrimary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Action button for PremiumDialog
+class PremiumDialogAction {
+  final String label;
+  final VoidCallback onTap;
+  final bool isPrimary;
+  final bool isDestructive;
+
+  const PremiumDialogAction({
+    required this.label,
+    required this.onTap,
+    this.isPrimary = false,
+    this.isDestructive = false,
+  });
+}
+
+/// Premium loading dialog
+class PremiumLoadingDialog extends StatelessWidget {
+  final String? message;
+
+  const PremiumLoadingDialog({super.key, this.message});
+
+  /// Show loading dialog
+  static Future<void> show(BuildContext context, {String? message}) {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (context) => PremiumLoadingDialog(message: message),
+    );
+  }
+
+  /// Hide loading dialog
+  static void hide(BuildContext context) {
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: context.surface,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 20,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const PremiumLoader(size: 56),
+            if (message != null) ...[
+              const SizedBox(height: 20),
+              Text(
+                message!,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: context.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
         ),
       ),
     );

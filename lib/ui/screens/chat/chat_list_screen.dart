@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/common/offline_banner.dart';
+import '../../widgets/common/loading_indicator.dart';
 
 /// Chat list screen displaying all AI conversations
 class ChatListScreen extends StatefulWidget {
@@ -69,8 +70,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       context: context,
                       barrierDismissible: false,
                       builder:
-                          (context) =>
-                              const Center(child: CircularProgressIndicator()),
+                          (context) => const Center(child: PremiumLoader()),
                     );
 
                     final conversation = await provider.analyzeProgress();
@@ -147,7 +147,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
+        builder: (context) => const Center(child: PremiumLoader()),
       );
 
       final success = await provider.deleteAllConversations();
@@ -197,7 +197,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             child: Consumer<ChatProvider>(
               builder: (context, provider, child) {
                 if (provider.isLoading && provider.conversations.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: PremiumLoader());
                 }
 
                 if (provider.errorMessage != null) {

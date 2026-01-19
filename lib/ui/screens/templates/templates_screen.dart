@@ -4,6 +4,7 @@ import '../../../core/theme/theme_colors.dart';
 import '../../../providers/workout_template_provider.dart';
 import '../../../data/models/workout_template.dart';
 import '../../widgets/common/offline_banner.dart';
+import '../../widgets/common/loading_indicator.dart';
 import 'template_form_dialog.dart';
 
 /// Screen for managing workout templates
@@ -65,7 +66,7 @@ class _TemplatesScreenState extends State<TemplatesScreen>
           Expanded(
             child:
                 provider.isLoading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: PremiumLoader())
                     : provider.errorMessage != null
                     ? _buildErrorView(context, provider)
                     : TabBarView(
