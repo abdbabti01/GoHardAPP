@@ -627,14 +627,23 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     final isRest = workout?.isRestDay ?? false;
     final isMissed = workout != null && widget.program.isWorkoutMissed(workout);
     final canDrag = hasWorkout && !isCompleted && !isRest;
+    final isDark = theme.brightness == Brightness.dark;
 
-    // Determine cell styling
+    // Determine cell styling with explicit fallbacks
     Color backgroundColor;
     Color borderColor;
     Color dayLabelColor;
     Color dateColor;
     Widget? statusIndicator;
     double borderWidth = 1;
+
+    // Fallback colors in case theme extensions fail
+    final defaultSurface = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final defaultBorder =
+        isDark ? const Color(0xFF3D4449) : const Color(0xFFE5E5EA);
+    final defaultTextPrimary = isDark ? Colors.white : Colors.black;
+    final defaultTextTertiary =
+        isDark ? const Color(0xFF636E72) : const Color(0xFF8B959B);
 
     if (isDragTarget) {
       backgroundColor = theme.primaryColor.withValues(alpha: 0.15);
@@ -651,13 +660,13 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
       backgroundColor = theme.primaryColor.withValues(alpha: 0.1);
       borderColor = theme.primaryColor;
       dayLabelColor = theme.primaryColor;
-      dateColor = context.textPrimary;
+      dateColor = defaultTextPrimary;
       borderWidth = 2;
     } else {
-      backgroundColor = context.surface;
-      borderColor = context.borderSubtle;
-      dayLabelColor = context.textTertiary;
-      dateColor = context.textPrimary;
+      backgroundColor = defaultSurface;
+      borderColor = defaultBorder;
+      dayLabelColor = defaultTextTertiary;
+      dateColor = defaultTextPrimary;
     }
 
     // Status indicator
@@ -700,17 +709,19 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
         child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
       );
     } else if (isRest) {
+      final surfaceHighlight =
+          isDark ? const Color(0xFF3D4449) : const Color(0xFFDFE6E9);
       statusIndicator = Container(
         width: 24,
         height: 24,
         decoration: BoxDecoration(
-          color: context.surfaceHighlight,
+          color: surfaceHighlight,
           shape: BoxShape.circle,
         ),
         child: Icon(
           Icons.self_improvement_rounded,
           size: 14,
-          color: context.textTertiary,
+          color: defaultTextTertiary,
         ),
       );
     } else if (hasWorkout) {
