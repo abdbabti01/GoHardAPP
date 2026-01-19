@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/theme/typography.dart';
+import '../../../core/constants/colors.dart';
 import '../../../providers/goals_provider.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
@@ -10,9 +12,10 @@ import '../../../data/models/goal.dart';
 import '../../../data/models/goal_progress.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/goal_reminder_preferences.dart';
-import '../../../core/services/tab_navigation_service.dart';
 import '../../../routes/route_names.dart';
 import '../analytics/analytics_screen.dart';
+import '../../widgets/goals/premium_goal_card.dart';
+import '../../widgets/common/empty_state.dart';
 
 class GoalsScreen extends StatefulWidget {
   const GoalsScreen({super.key});
@@ -99,7 +102,13 @@ class _GoalsScreenState extends State<GoalsScreen>
                           provider.activeGoals.length,
                         ),
                         ...provider.activeGoals.map(
-                          (goal) => _buildEnhancedGoalCard(context, goal),
+                          (goal) => PremiumGoalCard(
+                            goal: goal,
+                            streak: _calculateStreak(goal),
+                            onAddProgress: () => _showAddProgressDialog(goal),
+                            onMenuAction:
+                                (action) => _handleGoalAction(goal, action),
+                          ),
                         ),
                       ],
 
@@ -111,7 +120,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                           provider.completedGoals.length,
                         ),
                         ...provider.completedGoals.map(
-                          (goal) => _buildCompletedGoalCard(goal),
+                          (goal) => CompletedGoalCard(goal: goal),
                         ),
                       ],
 
@@ -130,594 +139,31 @@ class _GoalsScreenState extends State<GoalsScreen>
 
   Widget _buildSectionHeader(BuildContext context, String title, int count) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
       child: Row(
         children: [
           Text(
             title,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: context.textPrimary,
-            ),
+            style: AppTypography.headline.copyWith(color: context.textPrimary),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: context.surfaceElevated,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.accentGreen.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               count.toString(),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: context.textSecondary,
+              style: AppTypography.labelLarge.copyWith(
+                color: AppColors.accentGreen,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
         ],
       ),
     );
-  }
-
-  bool _isWeightGoal(Goal goal) {
-    final type = goal.goalType.toLowerCase();
-    return type.contains('weight') || type.contains('muscle');
-  }
-
-  double _calculateCurrentWeight(Goal goal) {
-    if (goal.isDecreaseGoal) {
-      // Weight loss: subtract progress from starting weight
-      return goal.currentValue - goal.totalProgress;
-    } else {
-      // Muscle gain: add progress to starting weight
-      return goal.currentValue + goal.totalProgress;
-    }
-  }
-
-  Widget _buildEnhancedGoalCard(BuildContext context, Goal goal) {
-    final progress = (goal.progressPercentage / 100).clamp(0.0, 1.0);
-    final isCompleted = goal.progressPercentage >= 100;
-    final goalColor = _getGoalColor(goal.goalType); // Keep original color
-    final goalIcon = _getGoalIcon(goal.goalType);
-    final streak = _calculateStreak(goal);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: context.surface,
-        borderRadius: BorderRadius.circular(20),
-        // Add subtle green left border accent when completed
-        border:
-            isCompleted
-                ? Border(left: BorderSide(color: context.success, width: 4))
-                : Border.all(color: context.border, width: 0.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header with Icon and Menu
-            Row(
-              children: [
-                // Goal Icon with circular progress
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 70,
-                      height: 70,
-                      child: CircularProgressIndicator(
-                        value: progress,
-                        strokeWidth: 6,
-                        backgroundColor: goalColor.withValues(alpha: 0.15),
-                        valueColor: AlwaysStoppedAnimation(goalColor),
-                      ),
-                    ),
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: goalColor.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(goalIcon, color: goalColor, size: 26),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                // Goal Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _formatGoalType(goal.goalType),
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: context.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        goal.getProgressDescription(),
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: context.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Menu
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert, color: context.textSecondary),
-                  itemBuilder:
-                      (context) => [
-                        const PopupMenuItem(
-                          value: 'create_program',
-                          child: Row(
-                            children: [
-                              Icon(Icons.auto_awesome, size: 20),
-                              SizedBox(width: 12),
-                              Text('Create Program'),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'reminder',
-                          child: Row(
-                            children: [
-                              Icon(Icons.notifications_outlined, size: 20),
-                              SizedBox(width: 12),
-                              Text('Set Reminder'),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'complete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.check_circle_outline, size: 20),
-                              SizedBox(width: 12),
-                              Text('Mark Complete'),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.delete_outline,
-                                size: 20,
-                                color: Colors.red,
-                              ),
-                              SizedBox(width: 12),
-                              Text(
-                                'Delete',
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                  onSelected: (value) => _handleGoalAction(goal, value),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            // Weight/Value summary (for weight loss AND muscle gain goals)
-            if (_isWeightGoal(goal)) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: goalColor.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: goalColor.withValues(alpha: 0.2),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildWeightStat(
-                      'Starting',
-                      '${goal.startValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
-                      Colors.grey.shade600,
-                    ),
-                    Container(
-                      height: 30,
-                      width: 1,
-                      color: Colors.grey.shade300,
-                    ),
-                    _buildWeightStat(
-                      'Current',
-                      '${_calculateCurrentWeight(goal).toStringAsFixed(1)} ${goal.unit ?? ''}',
-                      goalColor,
-                    ),
-                    Container(
-                      height: 30,
-                      width: 1,
-                      color: Colors.grey.shade300,
-                    ),
-                    _buildWeightStat(
-                      'Target',
-                      '${goal.targetValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
-                      Colors.grey.shade600,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Progress percentage and streak
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${goal.progressPercentage.toStringAsFixed(0)}% Complete',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: goalColor,
-                  ),
-                ),
-                if (streak > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange.shade200),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('🔥', style: TextStyle(fontSize: 12)),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$streak day${streak > 1 ? 's' : ''}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            // Add Progress Button OR Completion Badge
-            if (isCompleted) ...[
-              // Goal Completed Badge (subtle design)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: Colors.green.shade600,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Goal Completed 🎉',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              // Add Progress Button (only if not completed)
-              SizedBox(
-                width: double.infinity,
-                child: _buildQuickActionButton(
-                  'Add Progress',
-                  goalColor,
-                  () => _showAddProgressDialog(goal),
-                ),
-              ),
-            ],
-
-            // AI Suggestion card (only show if not completed)
-            if (!isCompleted && goal.getProgressSuggestion() != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      goalColor.withValues(alpha: 0.1),
-                      goalColor.withValues(alpha: 0.05),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: goalColor.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.lightbulb_outline, size: 20, color: goalColor),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        goal.getProgressSuggestion()!,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade800,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            // Target date if set
-            if (goal.targetDate != null) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(
-                    Icons.calendar_today,
-                    size: 14,
-                    color: Colors.grey.shade600,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Target: ${DateFormat('MMM d, y').format(goal.targetDate!)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                  const Spacer(),
-                  Text(
-                    _getDaysRemaining(goal.targetDate!),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _getDaysRemainingColor(goal.targetDate!),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-
-            // View Programs badge
-            const SizedBox(height: 12),
-            InkWell(
-              onTap: () {
-                // Switch to Programs tab (Workouts tab index 0, sub-tab index 1)
-                context.read<TabNavigationService>().switchTab(
-                  0, // Workouts tab
-                  subTabIndex: 1, // Programs sub-tab
-                );
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.blue.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.calendar_view_week,
-                      size: 16,
-                      color: Colors.blue,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'View Programs',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.blue,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.arrow_forward_ios,
-                      size: 10,
-                      color: Colors.blue,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWeightStat(String label, String value, Color color) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickActionButton(
-    String label,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCompletedGoalCard(Goal goal) {
-    final goalColor = Colors.green;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.green.shade200),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: goalColor.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.check_circle, color: goalColor, size: 26),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _formatGoalType(goal.goalType),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    'Completed ${DateFormat('MMM d').format(goal.completedAt!)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Color _getGoalColor(String goalType) {
-    switch (goalType.toLowerCase()) {
-      case 'weight':
-        return Colors.blue;
-      case 'workoutfrequency':
-        return Colors.purple;
-      case 'volume':
-        return Colors.orange;
-      case 'bodyfat':
-        return Colors.teal;
-      case 'exercise':
-        return Colors.red;
-      default:
-        return Colors.indigo;
-    }
-  }
-
-  IconData _getGoalIcon(String goalType) {
-    switch (goalType.toLowerCase()) {
-      case 'weight':
-        return Icons.monitor_weight;
-      case 'workoutfrequency':
-        return Icons.fitness_center;
-      case 'volume':
-        return Icons.trending_up;
-      case 'bodyfat':
-        return Icons.spa;
-      case 'exercise':
-        return Icons.sports_gymnastics;
-      default:
-        return Icons.flag;
-    }
-  }
-
-  String _formatGoalType(String goalType) {
-    return goalType
-        .replaceAllMapped(RegExp(r'([A-Z])'), (match) => ' ${match.group(0)}')
-        .trim();
   }
 
   int _calculateStreak(Goal goal) {
@@ -747,30 +193,6 @@ class _GoalsScreenState extends State<GoalsScreen>
     }
 
     return streak;
-  }
-
-  String _getDaysRemaining(DateTime targetDate) {
-    final now = DateTime.now();
-    final difference =
-        targetDate.difference(DateTime(now.year, now.month, now.day)).inDays;
-
-    if (difference < 0) {
-      return '${difference.abs()} days overdue';
-    } else if (difference == 0) {
-      return 'Due today!';
-    } else if (difference == 1) {
-      return '1 day left';
-    } else {
-      return '$difference days left';
-    }
-  }
-
-  Color _getDaysRemainingColor(DateTime targetDate) {
-    final difference = targetDate.difference(DateTime.now()).inDays;
-
-    if (difference < 0) return Colors.red;
-    if (difference <= 7) return Colors.orange;
-    return Colors.grey.shade600;
   }
 
   void _handleGoalAction(Goal goal, String action) async {
@@ -963,36 +385,16 @@ class _GoalsScreenState extends State<GoalsScreen>
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.flag_outlined, size: 80, color: context.textTertiary),
-            const SizedBox(height: 24),
-            Text(
-              'No Goals Yet',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: context.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Set your first goal and start tracking your progress',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: context.textSecondary),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _showCreateGoalDialog(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Create Goal'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-              ),
+        child: EmptyState(
+          icon: Icons.flag_outlined,
+          title: 'No Goals Yet',
+          message:
+              'Set your first goal and start tracking your fitness journey',
+          suggestions: [
+            QuickSuggestion(
+              label: 'Create Goal',
+              icon: Icons.add_rounded,
+              onTap: () => _showCreateGoalDialog(context),
             ),
           ],
         ),
