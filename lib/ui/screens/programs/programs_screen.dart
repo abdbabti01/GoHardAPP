@@ -722,6 +722,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             );
           }
         },
+        onWorkoutMoved: () {
+          // Refresh program data after workout is moved
+          context.read<ProgramsProvider>().loadPrograms();
+        },
       ),
     );
   }

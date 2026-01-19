@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
+import '../../../providers/programs_provider.dart';
 
-/// Premium horizontal week calendar widget
+/// Premium horizontal week calendar widget with drag-and-drop rescheduling
 /// Shows a clean, minimal 7-day view with smooth week navigation
 class PremiumWeekCalendarWidget extends StatefulWidget {
   final Program program;
   final int selectedWeek;
   final Function(int) onWeekChanged;
   final Function(ProgramWorkout)? onWorkoutTap;
+  final VoidCallback? onWorkoutMoved;
 
   const PremiumWeekCalendarWidget({
     super.key,
@@ -20,6 +23,7 @@ class PremiumWeekCalendarWidget extends StatefulWidget {
     required this.selectedWeek,
     required this.onWeekChanged,
     this.onWorkoutTap,
+    this.onWorkoutMoved,
   });
 
   @override
@@ -27,14 +31,32 @@ class PremiumWeekCalendarWidget extends StatefulWidget {
       _PremiumWeekCalendarWidgetState();
 }
 
-class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
+class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
+    with SingleTickerProviderStateMixin {
   late PageController _pageController;
+  late AnimationController _dragAnimationController;
+  late Animation<double> _dragPulseAnimation;
+
   int? _selectedDayIndex;
+  bool _isDragging = false;
+  int? _dragTargetDay;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: widget.selectedWeek - 1);
+
+    // Pulse animation for drag targets
+    _dragAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _dragPulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
+      CurvedAnimation(
+        parent: _dragAnimationController,
+        curve: Curves.easeInOut,
+      ),
+    );
   }
 
   @override
@@ -52,6 +74,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
   @override
   void dispose() {
     _pageController.dispose();
+    _dragAnimationController.dispose();
     super.dispose();
   }
 
@@ -89,6 +112,60 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
     return date.isBefore(today);
   }
 
+  Future<void> _moveWorkout(ProgramWorkout workout, int newDay) async {
+    if (!mounted) return;
+
+    final provider = context.read<ProgramsProvider>();
+    HapticFeedback.mediumImpact();
+
+    // Update workout with new day
+    final updatedWorkout = workout.copyWith(
+      dayNumber: newDay,
+      orderIndex: newDay * 10,
+    );
+
+    final success = await provider.updateWorkout(workout.id, updatedWorkout);
+
+    if (mounted && success) {
+      widget.onWorkoutMoved?.call();
+      HapticFeedback.lightImpact();
+
+      final dayNames = [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+      ];
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Moved to ${dayNames[newDay - 1]}',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.accentGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -99,11 +176,21 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
         _buildWeekHeader(context, theme),
         const SizedBox(height: 16),
 
+        // Drag Mode Indicator
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          child:
+              _isDragging
+                  ? _buildDragModeIndicator(context, theme)
+                  : const SizedBox.shrink(),
+        ),
+
         // Week Calendar (swipeable)
         SizedBox(
           height: 140,
           child: PageView.builder(
             controller: _pageController,
+            physics: _isDragging ? const NeverScrollableScrollPhysics() : null,
             onPageChanged: (page) {
               HapticFeedback.selectionClick();
               widget.onWeekChanged(page + 1);
@@ -116,11 +203,43 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
         ),
 
         // Selected day details
-        if (_selectedDayIndex != null) ...[
+        if (_selectedDayIndex != null && !_isDragging) ...[
           const SizedBox(height: 16),
           _buildSelectedDayDetails(context, theme),
         ],
       ],
+    );
+  }
+
+  Widget _buildDragModeIndicator(BuildContext context, ThemeData theme) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.primaryColor.withValues(alpha: 0.15),
+            AppColors.accentSky.withValues(alpha: 0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.primaryColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.swap_horiz_rounded, color: theme.primaryColor, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            'Drop on a day to reschedule',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: theme.primaryColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -137,7 +256,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
           _buildNavButton(
             context,
             Icons.chevron_left_rounded,
-            widget.selectedWeek > 1,
+            widget.selectedWeek > 1 && !_isDragging,
             () => widget.onWeekChanged(widget.selectedWeek - 1),
           ),
 
@@ -171,7 +290,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
           _buildNavButton(
             context,
             Icons.chevron_right_rounded,
-            widget.selectedWeek < widget.program.totalWeeks,
+            widget.selectedWeek < widget.program.totalWeeks && !_isDragging,
             () => widget.onWeekChanged(widget.selectedWeek + 1),
           ),
         ],
@@ -226,12 +345,108 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: List.generate(7, (index) {
-          final date = _getDateForDay(weekNumber, index + 1);
+          final dayNumber = index + 1;
+          final date = _getDateForDay(weekNumber, dayNumber);
           final workout = workouts[index];
           final isToday = _isToday(date);
           final isPast = _isPast(date);
           final isSelected =
               _selectedDayIndex == index && widget.selectedWeek == weekNumber;
+          final isDragTarget = _dragTargetDay == dayNumber;
+
+          // Determine if this cell can be dragged
+          final canDrag =
+              workout != null &&
+              !workout.isCompleted &&
+              !workout.isRestDay &&
+              widget.selectedWeek == weekNumber;
+
+          // Build the day cell
+          Widget dayCell = _buildDayCell(
+            context,
+            theme,
+            dayLabels[index],
+            date.day,
+            dayNumber,
+            workout,
+            isToday,
+            isPast,
+            isSelected,
+            isDragTarget,
+          );
+
+          // Wrap with DragTarget
+          dayCell = DragTarget<ProgramWorkout>(
+            onWillAcceptWithDetails: (details) {
+              // Can't drop on the same day
+              if (details.data.dayNumber == dayNumber &&
+                  details.data.weekNumber == weekNumber) {
+                return false;
+              }
+              HapticFeedback.selectionClick();
+              setState(() => _dragTargetDay = dayNumber);
+              return true;
+            },
+            onAcceptWithDetails: (details) async {
+              setState(() {
+                _isDragging = false;
+                _dragTargetDay = null;
+              });
+              _dragAnimationController.stop();
+              await _moveWorkout(details.data, dayNumber);
+            },
+            onLeave: (_) {
+              setState(() => _dragTargetDay = null);
+            },
+            builder: (context, candidateData, rejectedData) {
+              return dayCell;
+            },
+          );
+
+          // Wrap draggable cells with LongPressDraggable
+          if (canDrag) {
+            return Expanded(
+              child: LongPressDraggable<ProgramWorkout>(
+                data: workout,
+                delay: const Duration(milliseconds: 200),
+                hapticFeedbackOnStart: true,
+                onDragStarted: () {
+                  HapticFeedback.mediumImpact();
+                  setState(() {
+                    _isDragging = true;
+                    _selectedDayIndex = null;
+                  });
+                  _dragAnimationController.repeat(reverse: true);
+                },
+                onDragEnd: (_) {
+                  setState(() {
+                    _isDragging = false;
+                    _dragTargetDay = null;
+                  });
+                  _dragAnimationController.stop();
+                },
+                onDraggableCanceled: (_, __) {
+                  setState(() {
+                    _isDragging = false;
+                    _dragTargetDay = null;
+                  });
+                  _dragAnimationController.stop();
+                },
+                feedback: _buildDragFeedback(context, theme, workout),
+                childWhenDragging: _buildDraggingPlaceholder(context, theme),
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _selectedDayIndex =
+                          _selectedDayIndex == index ? null : index;
+                    });
+                  },
+                  child: dayCell,
+                ),
+              ),
+            );
+          }
 
           return Expanded(
             child: GestureDetector(
@@ -244,20 +459,154 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
                   widget.onWorkoutTap!(workout);
                 }
               },
-              child: _buildDayCell(
-                context,
-                theme,
-                dayLabels[index],
-                date.day,
-                workout,
-                isToday,
-                isPast,
-                isSelected,
-              ),
+              child: dayCell,
             ),
           );
         }),
       ),
+    );
+  }
+
+  /// Premium drag feedback widget
+  Widget _buildDragFeedback(
+    BuildContext context,
+    ThemeData theme,
+    ProgramWorkout workout,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 180,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: theme.primaryColor, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: theme.primaryColor.withValues(alpha: 0.3),
+              blurRadius: 24,
+              spreadRadius: 4,
+              offset: const Offset(0, 8),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle indicator
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.primaryColor.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Workout icon
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    theme.primaryColor.withValues(alpha: 0.2),
+                    theme.primaryColor.withValues(alpha: 0.1),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: theme.primaryColor.withValues(alpha: 0.3),
+                  width: 2,
+                ),
+              ),
+              child: Icon(
+                Icons.fitness_center_rounded,
+                color: theme.primaryColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Workout name
+            Text(
+              _cleanWorkoutName(workout.workoutName),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: context.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+
+            // Reschedule label
+            Text(
+              'Reschedule',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: theme.primaryColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Placeholder shown while dragging
+  Widget _buildDraggingPlaceholder(BuildContext context, ThemeData theme) {
+    return AnimatedBuilder(
+      animation: _dragPulseAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _dragPulseAnimation.value,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: theme.primaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: theme.primaryColor,
+                width: 2,
+                strokeAlign: BorderSide.strokeAlignInside,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.open_with_rounded,
+                  color: theme.primaryColor,
+                  size: 24,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Moving',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: theme.primaryColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -266,15 +615,18 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
     ThemeData theme,
     String dayLabel,
     int dayNumber,
+    int actualDay,
     ProgramWorkout? workout,
     bool isToday,
     bool isPast,
     bool isSelected,
+    bool isDragTarget,
   ) {
     final hasWorkout = workout != null && !workout.isRestDay;
     final isCompleted = workout?.isCompleted ?? false;
     final isRest = workout?.isRestDay ?? false;
     final isMissed = workout != null && widget.program.isWorkoutMissed(workout);
+    final canDrag = hasWorkout && !isCompleted && !isRest;
 
     // Determine cell styling
     Color backgroundColor;
@@ -282,8 +634,15 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
     Color dayLabelColor;
     Color dateColor;
     Widget? statusIndicator;
+    double borderWidth = 1;
 
-    if (isToday) {
+    if (isDragTarget) {
+      backgroundColor = theme.primaryColor.withValues(alpha: 0.15);
+      borderColor = theme.primaryColor;
+      dayLabelColor = theme.primaryColor;
+      dateColor = theme.primaryColor;
+      borderWidth = 2;
+    } else if (isToday) {
       backgroundColor = theme.primaryColor;
       borderColor = theme.primaryColor;
       dayLabelColor = Colors.white.withValues(alpha: 0.8);
@@ -293,6 +652,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
       borderColor = theme.primaryColor;
       dayLabelColor = theme.primaryColor;
       dateColor = context.textPrimary;
+      borderWidth = 2;
     } else {
       backgroundColor = context.surface;
       borderColor = context.borderSubtle;
@@ -301,7 +661,18 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
     }
 
     // Status indicator
-    if (isCompleted) {
+    if (isDragTarget) {
+      statusIndicator = Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: theme.primaryColor.withValues(alpha: 0.2),
+          shape: BoxShape.circle,
+          border: Border.all(color: theme.primaryColor, width: 2),
+        ),
+        child: Icon(Icons.add_rounded, size: 14, color: theme.primaryColor),
+      );
+    } else if (isCompleted) {
       statusIndicator = Container(
         width: 24,
         height: 24,
@@ -322,7 +693,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
       statusIndicator = Container(
         width: 24,
         height: 24,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: AppColors.accentCoral,
           shape: BoxShape.circle,
         ),
@@ -343,6 +714,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
         ),
       );
     } else if (hasWorkout) {
+      // Show drag indicator for draggable workouts
       statusIndicator = Container(
         width: 24,
         height: 24,
@@ -361,7 +733,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
           ),
         ),
         child: Icon(
-          Icons.fitness_center_rounded,
+          canDrag ? Icons.drag_indicator_rounded : Icons.fitness_center_rounded,
           size: 12,
           color: isToday ? Colors.white : theme.primaryColor,
         ),
@@ -375,9 +747,17 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: isSelected ? 2 : 1),
+        border: Border.all(color: borderColor, width: borderWidth),
         boxShadow:
-            isToday
+            isDragTarget
+                ? [
+                  BoxShadow(
+                    color: theme.primaryColor.withValues(alpha: 0.2),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                  ),
+                ]
+                : isToday
                 ? [
                   BoxShadow(
                     color: theme.primaryColor.withValues(alpha: 0.3),
@@ -514,6 +894,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
   ) {
     final isCompleted = workout.isCompleted;
     final isMissed = widget.program.isWorkoutMissed(workout);
+    final canDrag = !isCompleted && !workout.isRestDay;
 
     Color accentColor;
     IconData statusIcon;
@@ -626,56 +1007,65 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
               ],
             ),
 
-            // Workout details
-            if (workout.exerciseCount > 0 ||
-                workout.estimatedDuration != null) ...[
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (workout.exerciseCount > 0) ...[
-                    Icon(
-                      Icons.format_list_numbered_rounded,
-                      size: 16,
-                      color: context.textTertiary,
+            // Workout details & drag hint
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                if (workout.exerciseCount > 0) ...[
+                  Icon(
+                    Icons.format_list_numbered_rounded,
+                    size: 16,
+                    color: context.textTertiary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${workout.exerciseCount} exercises',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: context.textSecondary,
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${workout.exerciseCount} exercises',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: context.textSecondary,
-                      ),
+                  ),
+                ],
+                if (workout.exerciseCount > 0 &&
+                    workout.estimatedDuration != null)
+                  const SizedBox(width: 16),
+                if (workout.estimatedDuration != null) ...[
+                  Icon(
+                    Icons.timer_outlined,
+                    size: 16,
+                    color: context.textTertiary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${workout.estimatedDuration} min',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: context.textSecondary,
                     ),
-                  ],
-                  if (workout.exerciseCount > 0 &&
-                      workout.estimatedDuration != null)
-                    const SizedBox(width: 16),
-                  if (workout.estimatedDuration != null) ...[
-                    Icon(
-                      Icons.timer_outlined,
-                      size: 16,
-                      color: context.textTertiary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${workout.estimatedDuration} min',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: context.textSecondary,
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
+                  ),
+                ],
+                const Spacer(),
+                if (canDrag) ...[
+                  Icon(
+                    Icons.drag_indicator_rounded,
+                    size: 16,
+                    color: context.textTertiary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Hold to move',
+                    style: TextStyle(fontSize: 11, color: context.textTertiary),
+                  ),
+                ] else
                   Icon(
                     Icons.arrow_forward_ios_rounded,
                     size: 14,
                     color: context.textTertiary,
                   ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),
