@@ -3,6 +3,12 @@ import '../constants/colors.dart';
 
 /// Premium typography system for GoHardAPP
 /// Uses SpaceGrotesk for impactful stats and Inter for body text
+///
+/// PREMIUM DESIGN PRINCIPLES:
+/// - Strong hierarchy with dramatic size contrast
+/// - Headlines: 20-28px bold for impact
+/// - Body: 13-15px for readability without competing
+/// - Stats: Large, bold numbers that draw the eye
 class AppTypography {
   AppTypography._();
 
@@ -17,48 +23,48 @@ class AppTypography {
   // ============ STAT TYPOGRAPHY (SpaceGrotesk) ============
   // Use for big numbers, counters, timers, achievements
 
-  /// Huge stat display - 64px (for hero numbers)
+  /// Huge stat display - 72px (for hero numbers) - INCREASED from 64
   static const TextStyle statHero = TextStyle(
     fontFamily: fontFamilyStats,
-    fontSize: 64,
-    fontWeight: FontWeight.w700,
+    fontSize: 72,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -3.0,
+    height: 1.0,
+  );
+
+  /// Large stat display - 56px (for primary stats) - INCREASED from 48
+  static const TextStyle statLarge = TextStyle(
+    fontFamily: fontFamilyStats,
+    fontSize: 56,
+    fontWeight: FontWeight.w800,
     letterSpacing: -2.0,
     height: 1.0,
   );
 
-  /// Large stat display - 48px (for primary stats)
-  static const TextStyle statLarge = TextStyle(
+  /// Medium stat display - 40px (for secondary stats) - INCREASED from 32
+  static const TextStyle statMedium = TextStyle(
     fontFamily: fontFamilyStats,
-    fontSize: 48,
+    fontSize: 40,
     fontWeight: FontWeight.w700,
     letterSpacing: -1.5,
     height: 1.1,
   );
 
-  /// Medium stat display - 32px (for secondary stats)
-  static const TextStyle statMedium = TextStyle(
-    fontFamily: fontFamilyStats,
-    fontSize: 32,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -1.0,
-    height: 1.2,
-  );
-
-  /// Small stat display - 24px (for tertiary stats)
+  /// Small stat display - 28px (for tertiary stats) - INCREASED from 24
   static const TextStyle statSmall = TextStyle(
     fontFamily: fontFamilyStats,
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.5,
+    letterSpacing: -0.8,
     height: 1.2,
   );
 
-  /// Tiny stat display - 18px (for inline stats)
+  /// Tiny stat display - 20px (for inline stats) - INCREASED from 18
   static const TextStyle statTiny = TextStyle(
     fontFamily: fontFamilyStats,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
     height: 1.3,
   );
 
@@ -95,72 +101,64 @@ class AppTypography {
   );
 
   // ============ BODY TYPOGRAPHY (Inter) ============
+  // PREMIUM: Strong contrast between headlines and body text
 
-  /// Display large - 40px
+  /// Display large - 36px (hero titles)
   static const TextStyle displayLarge = TextStyle(
     fontFamily: fontFamilyBody,
-    fontSize: 40,
+    fontSize: 36,
     fontWeight: FontWeight.w800,
-    letterSpacing: -1.0,
-    height: 1.2,
+    letterSpacing: -1.2,
+    height: 1.1,
   );
 
-  /// Display medium - 32px
+  /// Display medium - 28px (section titles)
   static const TextStyle displayMedium = TextStyle(
     fontFamily: fontFamilyBody,
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: FontWeight.w800,
-    letterSpacing: -0.5,
+    letterSpacing: -0.8,
     height: 1.2,
   );
 
-  /// Display small - 24px
+  /// Display small - 22px (card titles)
   static const TextStyle displaySmall = TextStyle(
     fontFamily: fontFamilyBody,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.3,
-    height: 1.3,
+    letterSpacing: -0.5,
+    height: 1.25,
   );
 
-  /// Headline - 20px
+  /// Headline - 20px (list item titles)
   static const TextStyle headline = TextStyle(
     fontFamily: fontFamilyBody,
     fontSize: 20,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.2,
+    letterSpacing: -0.4,
     height: 1.3,
   );
 
-  /// Title large - 18px
+  /// Title large - 17px (card subtitles, prominent text)
   static const TextStyle titleLarge = TextStyle(
     fontFamily: fontFamilyBody,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: FontWeight.w700,
-    letterSpacing: 0,
-    height: 1.4,
+    letterSpacing: -0.2,
+    height: 1.35,
   );
 
-  /// Title medium - 16px
+  /// Title medium - 15px (secondary titles)
   static const TextStyle titleMedium = TextStyle(
     fontFamily: fontFamilyBody,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: FontWeight.w600,
-    letterSpacing: 0,
+    letterSpacing: -0.1,
     height: 1.4,
   );
 
-  /// Body large - 17px
+  /// Body large - 15px (primary body text)
   static const TextStyle bodyLarge = TextStyle(
-    fontFamily: fontFamilyBody,
-    fontSize: 17,
-    fontWeight: FontWeight.w400,
-    letterSpacing: 0,
-    height: 1.5,
-  );
-
-  /// Body medium - 15px
-  static const TextStyle bodyMedium = TextStyle(
     fontFamily: fontFamilyBody,
     fontSize: 15,
     fontWeight: FontWeight.w400,
@@ -168,39 +166,78 @@ class AppTypography {
     height: 1.5,
   );
 
-  /// Body small - 13px
+  /// Body medium - 14px (standard body text) - DECREASED from 15
+  static const TextStyle bodyMedium = TextStyle(
+    fontFamily: fontFamilyBody,
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    height: 1.5,
+  );
+
+  /// Body small - 12px (secondary body text) - DECREASED from 13
   static const TextStyle bodySmall = TextStyle(
     fontFamily: fontFamilyBody,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: FontWeight.w400,
     letterSpacing: 0.1,
     height: 1.5,
   );
 
-  /// Label large - 14px semibold
+  /// Label large - 13px semibold (button text, emphasis)
   static const TextStyle labelLarge = TextStyle(
     fontFamily: fontFamilyBody,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: FontWeight.w600,
-    letterSpacing: 0.1,
-    height: 1.4,
-  );
-
-  /// Label medium - 12px medium
-  static const TextStyle labelMedium = TextStyle(
-    fontFamily: fontFamilyBody,
-    fontSize: 12,
-    fontWeight: FontWeight.w500,
     letterSpacing: 0.2,
     height: 1.4,
   );
 
-  /// Label small - 11px
-  static const TextStyle labelSmall = TextStyle(
+  /// Label medium - 11px medium (badges, chips)
+  static const TextStyle labelMedium = TextStyle(
     fontFamily: fontFamilyBody,
     fontSize: 11,
     fontWeight: FontWeight.w500,
     letterSpacing: 0.3,
+    height: 1.4,
+  );
+
+  /// Label small - 10px (captions, metadata)
+  static const TextStyle labelSmall = TextStyle(
+    fontFamily: fontFamilyBody,
+    fontSize: 10,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.4,
+    height: 1.4,
+  );
+
+  // ============ PREMIUM CARD TYPOGRAPHY ============
+  // Specifically designed for card layouts with strong hierarchy
+
+  /// Card title - bold, attention-grabbing
+  static const TextStyle cardTitle = TextStyle(
+    fontFamily: fontFamilyBody,
+    fontSize: 18,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.3,
+    height: 1.3,
+  );
+
+  /// Card subtitle - secondary info
+  static const TextStyle cardSubtitle = TextStyle(
+    fontFamily: fontFamilyBody,
+    fontSize: 13,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0,
+    height: 1.4,
+  );
+
+  /// Card meta - tertiary info (dates, counts)
+  static const TextStyle cardMeta = TextStyle(
+    fontFamily: fontFamilyBody,
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.1,
     height: 1.4,
   );
 

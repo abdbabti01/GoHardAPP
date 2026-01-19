@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../providers/active_workout_provider.dart';
 import '../../../providers/music_player_provider.dart';
@@ -596,92 +597,97 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     final isDraft = provider.currentSession?.status == 'draft';
     final isRunning = provider.isTimerRunning;
 
+    // PREMIUM: Cleaner timer card without noisy patterns
+    // Focus on the number, minimal status indicators
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
         gradient:
-            isRunning ? AppColors.activeGradient : AppColors.secondaryGradient,
+            isRunning
+                ? const LinearGradient(
+                  colors: [Color(0xFFFF6B35), Color(0xFFFF8C42)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+                : LinearGradient(
+                  colors: [AppColors.charcoal, AppColors.slate],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
         boxShadow: [
           BoxShadow(
-            color: (isRunning ? AppColors.goHardOrange : AppColors.goHardBlue)
-                .withValues(alpha: 0.4),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: (isRunning ? AppColors.accentCoral : AppColors.charcoal)
+                .withValues(alpha: 0.35),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          // Background pattern
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: CustomPaint(painter: _TimerPatternPainter()),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 32),
+        child: Column(
+          children: [
+            // CLEAN: Just the timer, massive and centered
+            Text(
+              _formatElapsedTime(provider.elapsedTime),
+              style: const TextStyle(
+                fontFamily: 'SpaceGrotesk',
+                fontSize: 64,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: -3,
+                height: 1.0,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
             ),
-          ),
-          // Content
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-            child: Column(
-              children: [
-                // Timer icon with pulse
-                _buildTimerIcon(isRunning),
-                const SizedBox(height: 16),
-                // Timer display
-                Text(
-                  _formatElapsedTime(provider.elapsedTime),
-                  style: const TextStyle(
-                    fontSize: 56,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -2,
-                    fontFeatures: [FontFeature.tabularFigures()],
+            const SizedBox(height: 8),
+            // Status indicated by subtle text, not labels
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Row(
+                key: ValueKey(isRunning),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color:
+                          isRunning
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                      boxShadow:
+                          isRunning
+                              ? [
+                                BoxShadow(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  blurRadius: 6,
+                                ),
+                              ]
+                              : null,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isRunning ? 'WORKOUT IN PROGRESS' : 'PAUSED',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white.withValues(alpha: 0.8),
-                    letterSpacing: 1.5,
+                  const SizedBox(width: 8),
+                  Text(
+                    isRunning ? 'Active' : 'Paused',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.9),
+                      letterSpacing: 0.5,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                // Control button
-                _buildControlButton(provider, isDraft, isRunning),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimerIcon(bool isRunning) {
-    return Container(
-      width: 64,
-      height: 64,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
-          width: 2,
+            const SizedBox(height: 28),
+            // Control button
+            _buildControlButton(provider, isDraft, isRunning),
+          ],
         ),
       ),
-      child:
-          isRunning
-              ? PulseAnimation(
-                child: Icon(Icons.timer_rounded, size: 32, color: Colors.white),
-              )
-              : const Icon(
-                Icons.timer_off_rounded,
-                size: 32,
-                color: Colors.white,
-              ),
     );
   }
 
@@ -709,17 +715,21 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             ? provider.pauseTimer
             : provider.resumeTimer;
 
+    // PREMIUM: Cleaner control button
     return ScaleTapAnimation(
-      onTap: onPressed,
+      onTap: () {
+        HapticService.buttonTap();
+        onPressed();
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 10,
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 12,
               offset: const Offset(0, 4),
             ),
           ],
@@ -727,19 +737,15 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              buttonIcon,
-              size: 24,
-              color: isRunning ? AppColors.goHardOrange : AppColors.goHardBlue,
-            ),
+            Icon(buttonIcon, size: 22, color: AppColors.charcoal),
             const SizedBox(width: 10),
             Text(
               buttonLabel,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color:
-                    isRunning ? AppColors.goHardOrange : AppColors.goHardBlue,
+                color: AppColors.charcoal,
+                letterSpacing: -0.3,
               ),
             ),
           ],
@@ -929,35 +935,4 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$hours:$minutes:$seconds';
   }
-}
-
-/// Custom painter for timer card background pattern
-class _TimerPatternPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.05)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1;
-
-    // Draw concentric circles
-    final center = Offset(size.width * 0.8, size.height * 0.2);
-    for (int i = 1; i <= 4; i++) {
-      canvas.drawCircle(center, i * 40.0, paint);
-    }
-
-    // Draw diagonal lines
-    for (int i = 0; i < 5; i++) {
-      final startX = -50.0 + i * 80;
-      canvas.drawLine(
-        Offset(startX, size.height + 50),
-        Offset(startX + 150, -50),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

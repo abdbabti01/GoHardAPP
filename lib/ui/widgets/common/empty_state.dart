@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/theme/typography.dart';
 import 'animations.dart';
 
 /// Premium empty state widget with animations
@@ -11,6 +12,7 @@ class EmptyState extends StatelessWidget {
   final Widget? action;
   final Color? iconColor;
   final bool animate;
+  final List<QuickSuggestion>? suggestions;
 
   const EmptyState({
     super.key,
@@ -20,27 +22,25 @@ class EmptyState extends StatelessWidget {
     this.action,
     this.iconColor,
     this.animate = true,
+    this.suggestions,
   });
 
   @override
   Widget build(BuildContext context) {
     final content = Center(
       child: Padding(
-        padding: const EdgeInsets.all(40),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Animated icon container
+            // Animated icon container with pulse
             _buildIconContainer(context),
-            const SizedBox(height: 24),
-            // Title
+            const SizedBox(height: 28),
+            // Title - larger, bolder
             Text(
               title,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
+              style: AppTypography.displaySmall.copyWith(
                 color: context.textPrimary,
-                letterSpacing: -0.5,
               ),
               textAlign: TextAlign.center,
             ),
@@ -49,12 +49,16 @@ class EmptyState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
+              style: AppTypography.bodyMedium.copyWith(
                 color: context.textSecondary,
-                height: 1.5,
+                height: 1.6,
               ),
             ),
+            // Contextual suggestions
+            if (suggestions != null && suggestions!.isNotEmpty) ...[
+              const SizedBox(height: 28),
+              _buildSuggestions(context),
+            ],
             if (action != null) ...[const SizedBox(height: 32), action!],
           ],
         ),
@@ -74,23 +78,111 @@ class EmptyState extends StatelessWidget {
     final color = iconColor ?? context.accent;
 
     return Container(
-      width: 100,
-      height: 100,
+      width: 110,
+      height: 110,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: RadialGradient(
           colors: [
-            color.withValues(alpha: 0.15),
-            color.withValues(alpha: 0.05),
+            color.withValues(alpha: 0.12),
+            color.withValues(alpha: 0.04),
+            Colors.transparent,
           ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          stops: const [0.0, 0.7, 1.0],
         ),
         shape: BoxShape.circle,
-        border: Border.all(color: color.withValues(alpha: 0.2), width: 2),
       ),
-      child: Icon(icon, size: 44, color: color),
+      child: Center(
+        child: Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: context.surfaceElevated,
+            shape: BoxShape.circle,
+            border: Border.all(color: color.withValues(alpha: 0.25), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Icon(icon, size: 36, color: color),
+        ),
+      ),
     );
   }
+
+  Widget _buildSuggestions(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
+          child: Text(
+            'Quick Start',
+            style: AppTypography.labelLarge.copyWith(
+              color: context.textSecondary,
+            ),
+          ),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children:
+              suggestions!.map((suggestion) {
+                return _SuggestionChip(suggestion: suggestion);
+              }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _SuggestionChip extends StatelessWidget {
+  final QuickSuggestion suggestion;
+
+  const _SuggestionChip({required this.suggestion});
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTapAnimation(
+      onTap: suggestion.onTap,
+      scaleDown: 0.95,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: context.surfaceElevated,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (suggestion.icon != null) ...[
+              Icon(suggestion.icon, size: 16, color: context.accent),
+              const SizedBox(width: 8),
+            ],
+            Text(
+              suggestion.label,
+              style: AppTypography.labelLarge.copyWith(
+                color: context.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Quick suggestion for empty states
+class QuickSuggestion {
+  final String label;
+  final IconData? icon;
+  final VoidCallback onTap;
+
+  const QuickSuggestion({required this.label, this.icon, required this.onTap});
 }
 
 /// Premium empty state with illustration placeholder

@@ -190,12 +190,15 @@ class _ConfettiPainter extends CustomPainter {
   }
 }
 
-/// Workout completion celebration screen
-class WorkoutCompleteCelebration extends StatelessWidget {
+/// Workout completion celebration screen - PREMIUM VERSION
+/// Enhanced with better animations, haptics, and visual polish
+class WorkoutCompleteCelebration extends StatefulWidget {
   final String? workoutName;
   final int duration; // in minutes
   final int exerciseCount;
   final int setCount;
+  final int? totalVolume; // Optional total volume lifted
+  final bool? isPersonalBest; // Did they achieve any PRs?
   final VoidCallback onContinue;
 
   const WorkoutCompleteCelebration({
@@ -204,71 +207,185 @@ class WorkoutCompleteCelebration extends StatelessWidget {
     required this.duration,
     required this.exerciseCount,
     required this.setCount,
+    this.totalVolume,
+    this.isPersonalBest,
     required this.onContinue,
   });
+
+  @override
+  State<WorkoutCompleteCelebration> createState() =>
+      _WorkoutCompleteCelebrationState();
+}
+
+class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
+    with TickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Background
+        // Gradient background
         Container(
-          color: context.scaffoldBackground,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                context.scaffoldBackground,
+                AppColors.accentGreen.withValues(alpha: 0.05),
+                context.scaffoldBackground,
+              ],
+            ),
+          ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(28),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Spacer(),
+                  const Spacer(flex: 2),
 
-                  // Success animation
+                  // Success animation with pulse
                   FadeSlideAnimation(
                     delay: const Duration(milliseconds: 200),
-                    child: SuccessCheckAnimation(
-                      size: 100,
-                      color: AppColors.accentGreen,
+                    child: AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: _pulseAnimation.value,
+                          child: Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              gradient: AppColors.successGradient,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.accentGreen.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                  blurRadius: 30,
+                                  spreadRadius: 5,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.check_rounded,
+                              size: 56,
+                              color: Colors.white,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 36),
 
-                  // Title with premium typography
+                  // Title with gradient shimmer
                   FadeSlideAnimation(
                     delay: const Duration(milliseconds: 400),
-                    child: Text(
-                      'Workout Complete!',
-                      style: AppTypography.displayMedium.copyWith(
-                        color: context.textPrimary,
-                      ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'WORKOUT',
+                          style: AppTypography.labelLarge.copyWith(
+                            color: AppColors.accentGreen,
+                            letterSpacing: 4,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Complete!',
+                          style: AppTypography.displayLarge.copyWith(
+                            color: context.textPrimary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
 
                   // Workout name
-                  if (workoutName != null)
+                  if (widget.workoutName != null)
                     FadeSlideAnimation(
                       delay: const Duration(milliseconds: 500),
                       child: Text(
-                        workoutName!,
-                        style: TextStyle(
-                          fontSize: 18,
+                        widget.workoutName!,
+                        style: AppTypography.titleMedium.copyWith(
                           color: context.textSecondary,
-                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
 
-                  const SizedBox(height: 48),
+                  // PR badge if achieved
+                  if (widget.isPersonalBest == true) ...[
+                    const SizedBox(height: 20),
+                    FadeSlideAnimation(
+                      delay: const Duration(milliseconds: 550),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [AppColors.tierGold, AppColors.accentAmber],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.emoji_events_rounded,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'New Personal Record!',
+                              style: AppTypography.labelLarge.copyWith(
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
 
-                  // Stats
+                  const SizedBox(height: 40),
+
+                  // Stats grid
                   FadeSlideAnimation(
                     delay: const Duration(milliseconds: 600),
-                    child: _buildStats(context),
+                    child: _buildStatsGrid(context),
                   ),
 
-                  const Spacer(),
+                  const Spacer(flex: 3),
 
                   // Continue button
                   FadeSlideAnimation(
@@ -276,7 +393,7 @@ class WorkoutCompleteCelebration extends StatelessWidget {
                     child: _buildContinueButton(context),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -284,106 +401,142 @@ class WorkoutCompleteCelebration extends StatelessWidget {
         ),
 
         // Confetti
-        const CelebrationOverlay(),
+        const CelebrationOverlay(particleCount: 80),
       ],
     );
   }
 
-  Widget _buildStats(BuildContext context) {
+  Widget _buildStatsGrid(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: context.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.border, width: 0.5),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: context.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: Column(
         children: [
-          _buildStat(
-            context,
-            _formatDuration(duration),
-            'Duration',
-            Icons.timer_rounded,
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatItem(
+                  context,
+                  _formatDuration(widget.duration),
+                  'Duration',
+                  Icons.timer_rounded,
+                  AppColors.accentCoral,
+                ),
+              ),
+              Container(width: 1, height: 70, color: context.border),
+              Expanded(
+                child: _buildStatItem(
+                  context,
+                  '${widget.exerciseCount}',
+                  'Exercises',
+                  Icons.fitness_center_rounded,
+                  AppColors.accentSky,
+                ),
+              ),
+            ],
           ),
-          _buildDivider(context),
-          _buildStat(
-            context,
-            '$exerciseCount',
-            'Exercises',
-            Icons.fitness_center_rounded,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Divider(color: context.border, height: 1),
           ),
-          _buildDivider(context),
-          _buildStat(context, '$setCount', 'Sets', Icons.repeat_rounded),
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatItem(
+                  context,
+                  '${widget.setCount}',
+                  'Sets',
+                  Icons.repeat_rounded,
+                  AppColors.accentGreen,
+                ),
+              ),
+              Container(width: 1, height: 70, color: context.border),
+              Expanded(
+                child: _buildStatItem(
+                  context,
+                  widget.totalVolume != null
+                      ? '${(widget.totalVolume! / 1000).toStringAsFixed(1)}k'
+                      : '-',
+                  'Volume (kg)',
+                  Icons.show_chart_rounded,
+                  AppColors.accentAmber,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildStat(
+  Widget _buildStatItem(
     BuildContext context,
     String value,
     String label,
     IconData icon,
+    Color accentColor,
   ) {
     return Column(
       children: [
         Container(
-          width: 48,
-          height: 48,
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
-            color: AppColors.charcoal,
+            color: accentColor.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(icon, size: 24, color: AppColors.accentGreen),
+          child: Icon(icon, size: 22, color: accentColor),
         ),
         const SizedBox(height: 12),
         Text(
           value,
           style: AppTypography.statSmall.copyWith(color: context.textPrimary),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Text(
           label,
-          style: TextStyle(fontSize: 13, color: context.textSecondary),
+          style: AppTypography.labelMedium.copyWith(
+            color: context.textSecondary,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildDivider(BuildContext context) {
-    return Container(width: 1, height: 60, color: context.border);
-  }
-
   Widget _buildContinueButton(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.accentGreen,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.accentGreen.withValues(alpha: 0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onContinue,
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              child: Center(
-                child: Text(
-                  'Continue',
-                  style: AppTypography.titleLarge.copyWith(
-                    color: AppColors.charcoal,
-                  ),
-                ),
+      child: ScaleTapAnimation(
+        onTap: widget.onContinue,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accentGreen.withValues(alpha: 0.35),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              'Continue',
+              style: AppTypography.titleLarge.copyWith(
+                color: AppColors.charcoal,
               ),
             ),
           ),

@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/theme/typography.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../data/models/session.dart';
+import '../common/animations.dart';
 import 'quick_actions_sheet.dart';
 
 /// Premium card widget for displaying a workout session
+/// PREMIUM DESIGN: Increased padding, subtle shadows, strong typography hierarchy
 class SessionCard extends StatelessWidget {
   final Session session;
   final VoidCallback? onTap;
@@ -31,8 +35,8 @@ class SessionCard extends StatelessWidget {
     // Status-based colors
     final statusColor =
         isCompleted
-            ? AppColors.goHardGreen
-            : (isInProgress ? AppColors.goHardOrange : AppColors.goHardBlue);
+            ? AppColors.accentGreen
+            : (isInProgress ? AppColors.accentCoral : AppColors.accentSky);
 
     final statusGradient =
         isCompleted
@@ -46,156 +50,189 @@ class SessionCard extends StatelessWidget {
       direction: DismissDirection.endToStart,
       background: _buildDismissBackground(),
       confirmDismiss: (direction) async {
+        HapticService.swipeAction();
         return await _showDeleteConfirmation(context);
       },
       onDismissed: (direction) {
+        HapticService.deleteAction();
         onDelete?.call();
       },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        decoration: BoxDecoration(
-          color: context.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color:
-                isInProgress
-                    ? statusColor.withValues(alpha: 0.3)
-                    : context.border,
-            width: isInProgress ? 1.5 : 0.5,
+      child: PremiumTapAnimation(
+        onTap: () {
+          HapticService.cardTap();
+          onTap?.call();
+        },
+        onLongPress: () => _showQuickActions(context),
+        enableHaptics: false, // Already handling haptics above
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color:
+                  isInProgress
+                      ? statusColor.withValues(alpha: 0.4)
+                      : context.border.withValues(alpha: 0.8),
+              width: isInProgress ? 1.5 : 1,
+            ),
+            boxShadow: [
+              // Subtle shadow for all cards - premium depth
+              BoxShadow(
+                color:
+                    context.isDarkMode
+                        ? Colors.black.withValues(alpha: 0.3)
+                        : Colors.black.withValues(alpha: 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+              // Extra glow for active workouts
+              if (isInProgress)
+                BoxShadow(
+                  color: statusColor.withValues(alpha: 0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+            ],
           ),
-          boxShadow:
-              isInProgress
-                  ? [
-                    BoxShadow(
-                      color: statusColor.withValues(alpha: 0.15),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                  : null,
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            onLongPress: () => _showQuickActions(context),
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Premium gradient icon container
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      gradient:
-                          isCompleted || isInProgress ? statusGradient : null,
-                      color:
-                          isPlanned
-                              ? statusColor.withValues(alpha: 0.15)
-                              : null,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow:
-                          isCompleted || isInProgress
-                              ? [
-                                BoxShadow(
-                                  color: statusColor.withValues(alpha: 0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                              : null,
-                    ),
-                    child: Icon(
-                      isCompleted
-                          ? Icons.check_rounded
-                          : (isInProgress
-                              ? Icons.play_arrow_rounded
-                              : Icons.event_rounded),
-                      color:
-                          isCompleted || isInProgress
-                              ? Colors.white
-                              : statusColor,
-                      size: 26,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-
-                  // Workout info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Workout name - bolder
-                        Text(
-                          session.name ?? _getDefaultName(),
-                          style: TextStyle(
-                            color: context.textPrimary,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.3,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
-                        // Meta info row
-                        Row(
-                          children: [
-                            // Date
-                            Text(
-                              _formatDate(session.date),
-                              style: TextStyle(
-                                color: context.textSecondary,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+          child: Padding(
+            padding: const EdgeInsets.all(18), // INCREASED from 16
+            child: Row(
+              children: [
+                // Premium gradient icon container
+                Container(
+                  width: 56, // INCREASED from 52
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient:
+                        isCompleted || isInProgress ? statusGradient : null,
+                    color:
+                        isPlanned ? statusColor.withValues(alpha: 0.12) : null,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow:
+                        isCompleted || isInProgress
+                            ? [
+                              BoxShadow(
+                                color: statusColor.withValues(alpha: 0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
                               ),
+                            ]
+                            : null,
+                  ),
+                  child: Icon(
+                    isCompleted
+                        ? Icons.check_rounded
+                        : (isInProgress
+                            ? Icons.play_arrow_rounded
+                            : Icons.event_rounded),
+                    color:
+                        isCompleted || isInProgress
+                            ? Colors.white
+                            : statusColor,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16), // INCREASED from 14
+                // Workout info - IMPROVED TYPOGRAPHY
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Workout name - using card title style
+                      Text(
+                        session.name ?? _getDefaultName(),
+                        style: AppTypography.cardTitle.copyWith(
+                          color: context.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      // Meta info row - smaller text for hierarchy
+                      Row(
+                        children: [
+                          // Date
+                          Text(
+                            _formatDate(session.date),
+                            style: AppTypography.cardMeta.copyWith(
+                              color: context.textSecondary,
                             ),
+                          ),
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 8),
+                            width: 3,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: context.textTertiary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          // Exercise count with icon
+                          Icon(
+                            Icons.fitness_center_rounded,
+                            size: 12,
+                            color: context.textTertiary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${session.exercises.length} exercises',
+                            style: AppTypography.cardMeta.copyWith(
+                              color: context.textSecondary,
+                            ),
+                          ),
+                          // Duration if completed
+                          if (isCompleted && session.duration != null) ...[
                             Container(
                               margin: const EdgeInsets.symmetric(horizontal: 8),
-                              width: 4,
-                              height: 4,
+                              width: 3,
+                              height: 3,
                               decoration: BoxDecoration(
                                 color: context.textTertiary,
                                 shape: BoxShape.circle,
                               ),
                             ),
-                            // Exercise count with icon
                             Icon(
-                              Icons.fitness_center_rounded,
-                              size: 14,
-                              color: context.textSecondary,
+                              Icons.timer_outlined,
+                              size: 12,
+                              color: context.textTertiary,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${session.exercises.length}',
-                              style: TextStyle(
+                              _formatDuration(session.duration!),
+                              style: AppTypography.cardMeta.copyWith(
                                 color: context.textSecondary,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ),
+                ),
 
-                  // Status badge
-                  _buildStatusBadge(
-                    context,
-                    isCompleted,
-                    isInProgress,
-                    statusColor,
-                  ),
-                ],
-              ),
+                const SizedBox(width: 12),
+
+                // Status badge
+                _buildStatusBadge(
+                  context,
+                  isCompleted,
+                  isInProgress,
+                  statusColor,
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  String _formatDuration(int minutes) {
+    if (minutes < 60) return '${minutes}m';
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    return mins > 0 ? '${hours}h ${mins}m' : '${hours}h';
   }
 
   Widget _buildStatusBadge(
