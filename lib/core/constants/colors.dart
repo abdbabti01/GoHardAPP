@@ -51,8 +51,12 @@ class AppColors {
   // ============ THEME ACCENT - BLUE PALETTE (Sky Blue) ============
 
   static const Color accentBlue = Color(0xFF0EA5E9); // Primary sky blue accent
-  static const Color accentBlueMuted = Color(0xFF7DD3FC); // Light sky blue variant
-  static const Color accentBlueDark = Color(0xFF0284C7); // Dark sky blue variant
+  static const Color accentBlueMuted = Color(
+    0xFF7DD3FC,
+  ); // Light sky blue variant
+  static const Color accentBlueDark = Color(
+    0xFF0284C7,
+  ); // Dark sky blue variant
   static const Color accentBlueSubtle = Color(
     0xFF0369A1,
   ); // Very dark for backgrounds
