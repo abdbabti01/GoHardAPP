@@ -433,7 +433,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
     return Container(
       height: screenHeight * 0.85,
       decoration: BoxDecoration(
-        color: context.background,
+        color: context.scaffoldBackground,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
