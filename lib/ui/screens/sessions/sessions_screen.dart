@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
@@ -6,6 +7,7 @@ import '../../../core/services/haptic_service.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/exercises_provider.dart';
 import '../../../providers/active_workout_provider.dart';
+import '../../../providers/programs_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../../core/services/sync_service.dart';
 import '../../../core/services/tab_navigation_service.dart';
@@ -471,6 +473,366 @@ class _SessionsScreenState extends State<SessionsScreen>
     );
   }
 
+  /// Build program workouts section - shows this week's scheduled program workouts
+  Widget _buildProgramWorkoutsSection(BuildContext context) {
+    return Consumer<ProgramsProvider>(
+      builder: (context, programsProvider, child) {
+        // Get active program
+        final activeProgram =
+            programsProvider.programs.where((p) => p.isActive).firstOrNull;
+        if (activeProgram == null) return const SizedBox.shrink();
+
+        final now = DateTime.now();
+        final currentWeekday = now.weekday;
+
+        // Get this week's workouts from the program
+        final weekWorkouts =
+            activeProgram.workouts
+                ?.where(
+                  (w) =>
+                      w.weekNumber == activeProgram.currentWeek &&
+                      !w.isRestDay &&
+                      !w.isCompleted,
+                )
+                .toList() ??
+            [];
+
+        if (weekWorkouts.isEmpty) return const SizedBox.shrink();
+
+        // Sort by day number
+        weekWorkouts.sort((a, b) => a.dayNumber.compareTo(b.dayNumber));
+
+        // Separate into today and upcoming
+        final todayWorkouts =
+            weekWorkouts.where((w) => w.dayNumber == currentWeekday).toList();
+        final upcomingWorkouts =
+            weekWorkouts.where((w) => w.dayNumber > currentWeekday).toList();
+
+        if (todayWorkouts.isEmpty && upcomingWorkouts.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final theme = Theme.of(context);
+        final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Section header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          theme.primaryColor.withValues(alpha: 0.2),
+                          theme.primaryColor.withValues(alpha: 0.1),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.fitness_center_rounded,
+                      size: 18,
+                      color: theme.primaryColor,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'From Program',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: context.textPrimary,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      activeProgram.name,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: theme.primaryColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Today's program workouts
+            ...todayWorkouts.map(
+              (workout) => _buildProgramWorkoutCard(
+                context,
+                workout,
+                activeProgram,
+                dayNames,
+                isToday: true,
+              ),
+            ),
+
+            // Upcoming program workouts
+            ...upcomingWorkouts.map(
+              (workout) => _buildProgramWorkoutCard(
+                context,
+                workout,
+                activeProgram,
+                dayNames,
+                isToday: false,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Build individual program workout card
+  Widget _buildProgramWorkoutCard(
+    BuildContext context,
+    dynamic workout,
+    dynamic program,
+    List<String> dayNames, {
+    required bool isToday,
+  }) {
+    final theme = Theme.of(context);
+    final isMissed = program.isWorkoutMissed(workout);
+
+    // Clean workout name (remove day prefix if present)
+    String workoutName = workout.workoutName;
+    final colonIndex = workoutName.indexOf(':');
+    if (colonIndex != -1 && colonIndex < 15) {
+      workoutName = workoutName.substring(colonIndex + 1).trim();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.pushNamed(
+              context,
+              RouteNames.programWorkout,
+              arguments: {'workoutId': workout.id, 'programId': program.id},
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color:
+                    isToday
+                        ? theme.primaryColor.withValues(alpha: 0.4)
+                        : isMissed
+                        ? AppColors.accentCoral.withValues(alpha: 0.3)
+                        : context.border,
+                width: isToday ? 1.5 : 1,
+              ),
+              boxShadow:
+                  isToday
+                      ? [
+                        BoxShadow(
+                          color: theme.primaryColor.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                      : null,
+            ),
+            child: Row(
+              children: [
+                // Day badge
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color:
+                        isToday
+                            ? theme.primaryColor
+                            : isMissed
+                            ? AppColors.accentCoral.withValues(alpha: 0.1)
+                            : context.surfaceHighlight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        dayNames[workout.dayNumber - 1],
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color:
+                              isToday
+                                  ? Colors.white
+                                  : isMissed
+                                  ? AppColors.accentCoral
+                                  : context.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+
+                // Workout info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              workoutName,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: context.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isToday)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.primaryColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'TODAY',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          if (isMissed && !isToday)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.accentCoral.withValues(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'MISSED',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.accentCoral,
+                                ),
+                              ),
+                            ),
+                          if (!isToday && !isMissed)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: context.surfaceHighlight,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'PLANNED',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.textTertiary,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          if (workout.exerciseCount > 0) ...[
+                            Icon(
+                              Icons.format_list_numbered_rounded,
+                              size: 14,
+                              color: context.textTertiary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${workout.exerciseCount} exercises',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.textSecondary,
+                              ),
+                            ),
+                          ],
+                          if (workout.estimatedDuration != null) ...[
+                            if (workout.exerciseCount > 0)
+                              const SizedBox(width: 12),
+                            Icon(
+                              Icons.timer_outlined,
+                              size: 14,
+                              color: context.textTertiary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${workout.estimatedDuration} min',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: context.textTertiary,
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -881,6 +1243,9 @@ class _SessionsScreenState extends State<SessionsScreen>
                               thisWeekSessions: allThisWeekSessions,
                               thisMonthSessions: allThisMonthSessions,
                             ),
+
+                          // Program Workouts Section
+                          _buildProgramWorkoutsSection(context),
 
                           // Today Section
                           if (todaySessions.isNotEmpty) ...[
