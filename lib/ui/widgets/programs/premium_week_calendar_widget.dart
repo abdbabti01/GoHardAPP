@@ -64,13 +64,14 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _FullscreenCalendarModal(
-        program: widget.program,
-        selectedWeek: widget.selectedWeek,
-        onWeekChanged: widget.onWeekChanged,
-        onWorkoutTap: widget.onWorkoutTap,
-        onWorkoutMoved: widget.onWorkoutMoved,
-      ),
+      builder:
+          (context) => _FullscreenCalendarModal(
+            program: widget.program,
+            selectedWeek: widget.selectedWeek,
+            onWeekChanged: widget.onWeekChanged,
+            onWorkoutTap: widget.onWorkoutTap,
+            onWorkoutMoved: widget.onWorkoutMoved,
+          ),
     );
   }
 
@@ -126,7 +127,10 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: theme.primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
@@ -163,7 +167,8 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
                 final dayWorkouts = groupedWorkouts[index];
                 final isToday = _isToday(date);
                 final hasWorkouts = dayWorkouts.isNotEmpty;
-                final allCompleted = hasWorkouts && dayWorkouts.every((w) => w.isCompleted);
+                final allCompleted =
+                    hasWorkouts && dayWorkouts.every((w) => w.isCompleted);
 
                 return Expanded(
                   child: _buildCompactDayCell(
@@ -244,13 +249,20 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
           const SizedBox(height: 4),
           // Status indicator
           if (allCompleted)
-            Icon(Icons.check_circle, size: 14, color: isToday ? Colors.white : AppColors.accentGreen)
+            Icon(
+              Icons.check_circle,
+              size: 14,
+              color: isToday ? Colors.white : AppColors.accentGreen,
+            )
           else if (hasWorkouts)
             Container(
               width: 18,
               height: 18,
               decoration: BoxDecoration(
-                color: isToday ? Colors.white.withValues(alpha: 0.2) : theme.primaryColor.withValues(alpha: 0.1),
+                color:
+                    isToday
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : theme.primaryColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -268,7 +280,10 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget> {
             Icon(
               Icons.remove,
               size: 14,
-              color: isToday ? Colors.white.withValues(alpha: 0.5) : context.textTertiary,
+              color:
+                  isToday
+                      ? Colors.white.withValues(alpha: 0.5)
+                      : context.textTertiary,
             ),
         ],
       ),
@@ -293,7 +308,8 @@ class _FullscreenCalendarModal extends StatefulWidget {
   });
 
   @override
-  State<_FullscreenCalendarModal> createState() => _FullscreenCalendarModalState();
+  State<_FullscreenCalendarModal> createState() =>
+      _FullscreenCalendarModalState();
 }
 
 class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
@@ -347,9 +363,12 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
     HapticFeedback.mediumImpact();
 
     final dayWorkouts = _getWeekWorkoutsGrouped(_currentWeek)[newDay - 1];
-    final maxOrder = dayWorkouts.isEmpty
-        ? 0
-        : dayWorkouts.map((w) => w.orderIndex).reduce((a, b) => a > b ? a : b);
+    final maxOrder =
+        dayWorkouts.isEmpty
+            ? 0
+            : dayWorkouts
+                .map((w) => w.orderIndex)
+                .reduce((a, b) => a > b ? a : b);
 
     final updatedWorkout = workout.copyWith(
       dayNumber: newDay,
@@ -362,7 +381,15 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
       widget.onWorkoutMoved?.call();
       HapticFeedback.lightImpact();
 
-      final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      final dayNames = [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+      ];
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -380,7 +407,9 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
           ),
           backgroundColor: AppColors.accentGreen,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           margin: const EdgeInsets.all(16),
           duration: const Duration(seconds: 2),
         ),
@@ -455,7 +484,11 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
                       color: context.surfaceHighlight,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.close, size: 20, color: context.textPrimary),
+                    child: Icon(
+                      Icons.close,
+                      size: 20,
+                      color: context.textPrimary,
+                    ),
                   ),
                 ),
               ],
@@ -468,37 +501,47 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
           // Drag indicator when dragging
           AnimatedSize(
             duration: const Duration(milliseconds: 200),
-            child: _isDragging
-                ? Container(
-                    margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          theme.primaryColor.withValues(alpha: 0.15),
-                          AppColors.accentSky.withValues(alpha: 0.1),
+            child:
+                _isDragging
+                    ? Container(
+                      margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            theme.primaryColor.withValues(alpha: 0.15),
+                            AppColors.accentSky.withValues(alpha: 0.1),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: theme.primaryColor.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.swap_horiz_rounded,
+                            color: theme.primaryColor,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Drop on a day to reschedule',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: theme.primaryColor,
+                            ),
+                          ),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: theme.primaryColor.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.swap_horiz_rounded, color: theme.primaryColor, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Drop on a day to reschedule',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: theme.primaryColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : const SizedBox.shrink(),
+                    )
+                    : const SizedBox.shrink(),
           ),
 
           const SizedBox(height: 16),
@@ -507,7 +550,8 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
           Expanded(
             child: PageView.builder(
               controller: _pageController,
-              physics: _isDragging ? const NeverScrollableScrollPhysics() : null,
+              physics:
+                  _isDragging ? const NeverScrollableScrollPhysics() : null,
               onPageChanged: (page) {
                 HapticFeedback.selectionClick();
                 setState(() => _currentWeek = page + 1);
@@ -557,10 +601,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
                 const SizedBox(height: 2),
                 Text(
                   '${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: context.textSecondary,
-                  ),
+                  style: TextStyle(fontSize: 13, color: context.textSecondary),
                 ),
               ],
             ),
@@ -582,20 +623,27 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
 
   Widget _buildNavButton(IconData icon, bool enabled, VoidCallback onTap) {
     return GestureDetector(
-      onTap: enabled
-          ? () {
-              HapticFeedback.lightImpact();
-              onTap();
-            }
-          : null,
+      onTap:
+          enabled
+              ? () {
+                HapticFeedback.lightImpact();
+                onTap();
+              }
+              : null,
       child: Container(
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: enabled ? context.surface : context.surface.withValues(alpha: 0.5),
+          color:
+              enabled
+                  ? context.surface
+                  : context.surface.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: enabled ? context.border : context.border.withValues(alpha: 0.3),
+            color:
+                enabled
+                    ? context.border
+                    : context.border.withValues(alpha: 0.3),
           ),
         ),
         child: Icon(
@@ -668,16 +716,18 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDragTarget
-            ? theme.primaryColor.withValues(alpha: 0.1)
-            : isToday
+        color:
+            isDragTarget
+                ? theme.primaryColor.withValues(alpha: 0.1)
+                : isToday
                 ? theme.primaryColor.withValues(alpha: 0.05)
                 : context.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDragTarget
-              ? theme.primaryColor
-              : isToday
+          color:
+              isDragTarget
+                  ? theme.primaryColor
+                  : isToday
                   ? theme.primaryColor.withValues(alpha: 0.5)
                   : context.border,
           width: isDragTarget ? 2 : 1,
@@ -690,9 +740,13 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: isToday ? theme.primaryColor : context.surfaceHighlight,
+                  color:
+                      isToday ? theme.primaryColor : context.surfaceHighlight,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -718,7 +772,10 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
                 Icon(Icons.check_circle, size: 18, color: AppColors.accentGreen)
               else if (hasWorkouts)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: theme.primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
@@ -735,10 +792,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
               else
                 Text(
                   'Rest',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: context.textTertiary,
-                  ),
+                  style: TextStyle(fontSize: 12, color: context.textTertiary),
                 ),
             ],
           ),
@@ -818,8 +872,8 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
               isCompleted
                   ? Icons.check_circle_rounded
                   : isMissed
-                      ? Icons.warning_rounded
-                      : Icons.fitness_center_rounded,
+                  ? Icons.warning_rounded
+                  : Icons.fitness_center_rounded,
               size: 18,
               color: accentColor,
             ),
@@ -838,7 +892,11 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
               ),
             ),
             if (canDrag)
-              Icon(Icons.drag_indicator_rounded, size: 18, color: context.textTertiary),
+              Icon(
+                Icons.drag_indicator_rounded,
+                size: 18,
+                color: context.textTertiary,
+              ),
           ],
         ),
       ),
@@ -885,7 +943,11 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.fitness_center_rounded, size: 20, color: theme.primaryColor),
+                Icon(
+                  Icons.fitness_center_rounded,
+                  size: 20,
+                  color: theme.primaryColor,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
