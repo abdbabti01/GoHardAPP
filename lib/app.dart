@@ -5,6 +5,7 @@ import 'routes/app_router.dart';
 import 'providers/auth_provider.dart';
 import 'providers/profile_provider.dart';
 import 'providers/onboarding_provider.dart';
+import 'providers/settings_provider.dart';
 import 'ui/screens/main_screen.dart';
 import 'ui/screens/auth/login_screen.dart';
 import 'ui/screens/onboarding/onboarding_screen.dart';
@@ -16,21 +17,96 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer3<AuthProvider, ProfileProvider, OnboardingProvider>(
+    return Consumer4<
+      AuthProvider,
+      ProfileProvider,
+      OnboardingProvider,
+      SettingsProvider
+    >(
       builder: (
         context,
         authProvider,
         profileProvider,
         onboardingProvider,
+        settingsProvider,
         child,
       ) {
+        // Get current accent color for theme customization
+        final accentColor = settingsProvider.accentColor;
+
         return MaterialApp(
           title: 'GoHard - Workout Tracker',
           debugShowCheckedModeBanner: false,
 
-          // Theme configuration - uses user preference
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
+          // Theme configuration - uses user preference and accent color
+          theme: AppTheme.lightTheme.copyWith(
+            colorScheme: AppTheme.lightTheme.colorScheme.copyWith(
+              tertiary: accentColor.primary,
+            ),
+            floatingActionButtonTheme: FloatingActionButtonThemeData(
+              backgroundColor: accentColor.primary,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              shape: const CircleBorder(),
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentColor.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 28,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+            progressIndicatorTheme: ProgressIndicatorThemeData(
+              color: accentColor.primary,
+            ),
+            chipTheme: AppTheme.lightTheme.chipTheme.copyWith(
+              selectedColor: accentColor.primary,
+            ),
+            snackBarTheme: AppTheme.lightTheme.snackBarTheme.copyWith(
+              actionTextColor: accentColor.primary,
+            ),
+          ),
+          darkTheme: AppTheme.darkTheme.copyWith(
+            colorScheme: AppTheme.darkTheme.colorScheme.copyWith(
+              tertiary: accentColor.primary,
+            ),
+            floatingActionButtonTheme: FloatingActionButtonThemeData(
+              backgroundColor: accentColor.primary,
+              foregroundColor: Colors.white,
+              elevation: 8,
+              shape: const CircleBorder(),
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentColor.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 28,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+            progressIndicatorTheme: ProgressIndicatorThemeData(
+              color: accentColor.primary,
+            ),
+            chipTheme: AppTheme.darkTheme.chipTheme.copyWith(
+              selectedColor: accentColor.primary,
+            ),
+            snackBarTheme: AppTheme.darkTheme.snackBarTheme.copyWith(
+              actionTextColor: accentColor.primary,
+            ),
+          ),
           themeMode: profileProvider.themeMode,
 
           // Use home with conditional rendering instead of initialRoute

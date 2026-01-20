@@ -46,6 +46,12 @@ class SettingsScreen extends StatelessWidget {
               _buildSectionHeader(context, 'Preferences'),
               const SizedBox(height: 8),
               _buildPreferencesCard(context, profile),
+              const SizedBox(height: 24),
+
+              // Appearance Section
+              _buildSectionHeader(context, 'Appearance'),
+              const SizedBox(height: 8),
+              _buildAccentColorCard(context, settings),
             ],
           );
         },
@@ -495,6 +501,127 @@ class SettingsScreen extends StatelessWidget {
                     isSelected
                         ? Theme.of(context).primaryColor
                         : context.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccentColorCard(
+    BuildContext context,
+    SettingsProvider settings,
+  ) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.color_lens, color: context.accent),
+                const SizedBox(width: 12),
+                const Text(
+                  'Accent Color',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Choose your preferred accent color throughout the app',
+              style: TextStyle(fontSize: 14, color: context.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children:
+                  AccentColorTheme.values.map((colorTheme) {
+                    final isSelected = settings.accentColor == colorTheme;
+                    return Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          right:
+                              colorTheme != AccentColorTheme.values.last
+                                  ? 12
+                                  : 0,
+                        ),
+                        child: _buildAccentColorOption(
+                          context,
+                          settings,
+                          colorTheme,
+                          isSelected,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccentColorOption(
+    BuildContext context,
+    SettingsProvider settings,
+    AccentColorTheme colorTheme,
+    bool isSelected,
+  ) {
+    return GestureDetector(
+      onTap: () async {
+        await settings.setAccentColor(colorTheme);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: isSelected ? colorTheme.primary.withValues(alpha: 0.15) : null,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? colorTheme.primary : context.border,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: isSelected ? 36 : 28,
+              height: isSelected ? 36 : 28,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [colorTheme.dark, colorTheme.primary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+                boxShadow:
+                    isSelected
+                        ? [
+                          BoxShadow(
+                            color: colorTheme.primary.withValues(alpha: 0.4),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                          ),
+                        ]
+                        : null,
+              ),
+              child:
+                  isSelected
+                      ? const Icon(Icons.check, color: Colors.white, size: 20)
+                      : null,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              colorTheme.name,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? colorTheme.primary : context.textSecondary,
               ),
             ),
           ],

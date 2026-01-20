@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/services/notification_service.dart';
+import '../core/constants/colors.dart';
 
-/// Provider for app settings including notification preferences
+/// Provider for app settings including notification preferences and accent color
 class SettingsProvider extends ChangeNotifier {
   final FlutterSecureStorage _storage;
   final NotificationService _notificationService;
@@ -12,6 +13,9 @@ class SettingsProvider extends ChangeNotifier {
   bool _eveningReminderEnabled = true;
   TimeOfDay _morningReminderTime = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _eveningReminderTime = const TimeOfDay(hour: 19, minute: 0);
+
+  // Accent color theme
+  AccentColorTheme _accentColor = AccentColorTheme.green;
 
   bool _isLoading = false;
 
@@ -32,6 +36,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get eveningReminderEnabled => _eveningReminderEnabled;
   TimeOfDay get morningReminderTime => _morningReminderTime;
   TimeOfDay get eveningReminderTime => _eveningReminderTime;
+  AccentColorTheme get accentColor => _accentColor;
   bool get isLoading => _isLoading;
 
   /// Load settings from storage
@@ -75,6 +80,10 @@ class SettingsProvider extends ChangeNotifier {
           minute: int.parse(eveningMinuteStr),
         );
       }
+
+      // Load accent color
+      final accentColorStr = await _storage.read(key: 'accent_color');
+      _accentColor = AccentColorTheme.fromString(accentColorStr);
 
       debugPrint('Settings loaded successfully');
 
@@ -193,6 +202,13 @@ class SettingsProvider extends ChangeNotifier {
   /// Show test notification
   Future<void> sendTestNotification() async {
     await _notificationService.showTestNotification();
+  }
+
+  /// Set accent color theme
+  Future<void> setAccentColor(AccentColorTheme color) async {
+    _accentColor = color;
+    await _storage.write(key: 'accent_color', value: color.name);
+    notifyListeners();
   }
 }
 

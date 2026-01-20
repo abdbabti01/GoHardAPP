@@ -48,6 +48,28 @@ class AppColors {
     0xFF0EA5E9,
   ); // Info, links, secondary accent
 
+  // ============ THEME ACCENT - BLUE PALETTE ============
+
+  static const Color accentBlue = Color(0xFF3B82F6); // Primary blue accent
+  static const Color accentBlueMuted = Color(0xFF93C5FD); // Light blue variant
+  static const Color accentBlueDark = Color(0xFF2563EB); // Dark blue variant
+  static const Color accentBlueSubtle = Color(
+    0xFF1E40AF,
+  ); // Very dark for backgrounds
+
+  // ============ THEME ACCENT - YELLOW PALETTE ============
+
+  static const Color accentYellow = Color(0xFFFBBF24); // Primary yellow accent
+  static const Color accentYellowMuted = Color(
+    0xFFFDE68A,
+  ); // Light yellow variant
+  static const Color accentYellowDark = Color(
+    0xFFF59E0B,
+  ); // Dark yellow variant
+  static const Color accentYellowSubtle = Color(
+    0xFFB45309,
+  ); // Very dark for backgrounds
+
   // ============ ACHIEVEMENT TIER COLORS ============
 
   static const Color tierBronze = Color(0xFFCD7F32);
@@ -212,6 +234,20 @@ class AppColors {
     end: Alignment.bottomRight,
   );
 
+  // Blue primary gradient
+  static const LinearGradient blueGradient = LinearGradient(
+    colors: [accentBlueDark, accentBlue],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Yellow primary gradient
+  static const LinearGradient yellowGradient = LinearGradient(
+    colors: [accentYellowDark, accentYellow],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   // Active/In-progress gradient - Coral/Amber energy
   static const LinearGradient activeGradient = LinearGradient(
     colors: [accentCoral, accentAmber],
@@ -288,4 +324,58 @@ class AppColors {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+}
+
+/// Accent color theme options for the app
+enum AccentColorTheme {
+  green(
+    name: 'Green',
+    primary: AppColors.accentGreen,
+    muted: AppColors.accentGreenMuted,
+    dark: AppColors.accentGreenDark,
+    subtle: AppColors.accentGreenSubtle,
+  ),
+  blue(
+    name: 'Blue',
+    primary: AppColors.accentBlue,
+    muted: AppColors.accentBlueMuted,
+    dark: AppColors.accentBlueDark,
+    subtle: AppColors.accentBlueSubtle,
+  ),
+  yellow(
+    name: 'Yellow',
+    primary: AppColors.accentYellow,
+    muted: AppColors.accentYellowMuted,
+    dark: AppColors.accentYellowDark,
+    subtle: AppColors.accentYellowSubtle,
+  );
+
+  const AccentColorTheme({
+    required this.name,
+    required this.primary,
+    required this.muted,
+    required this.dark,
+    required this.subtle,
+  });
+
+  final String name;
+  final Color primary;
+  final Color muted;
+  final Color dark;
+  final Color subtle;
+
+  /// Get the gradient for this accent color
+  LinearGradient get gradient => LinearGradient(
+    colors: [dark, primary],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  /// Parse from string (for storage)
+  static AccentColorTheme fromString(String? value) {
+    return AccentColorTheme.values.firstWhere(
+      (e) => e.name.toLowerCase() == value?.toLowerCase(),
+      orElse: () => AccentColorTheme.green,
+    );
+  }
 }

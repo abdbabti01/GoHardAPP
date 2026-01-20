@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../constants/colors.dart';
+import '../../providers/settings_provider.dart';
 
 /// Extension on BuildContext for easy theme-aware color access
-/// Premium fitness app color system - Neutrals dominate (90%), green accent (10%)
+/// Premium fitness app color system - Neutrals dominate (90%), accent color (10%)
 extension ThemeColors on BuildContext {
+  /// Get the current accent color theme from SettingsProvider
+  AccentColorTheme get _accentTheme {
+    try {
+      return Provider.of<SettingsProvider>(this, listen: false).accentColor;
+    } catch (_) {
+      return AccentColorTheme.green; // Fallback if provider not available
+    }
+  }
+
   /// Quick access to current theme's color scheme
   ColorScheme get colorScheme => Theme.of(this).colorScheme;
 
@@ -70,14 +81,17 @@ extension ThemeColors on BuildContext {
   /// Secondary action color
   Color get secondary => colorScheme.secondary;
 
-  /// Accent/highlight color - Muted Sage Green (use sparingly 10%)
-  Color get accent => AppColors.accentGreen;
+  /// Accent/highlight color - Dynamic based on user preference (use sparingly 10%)
+  Color get accent => _accentTheme.primary;
 
   /// Accent muted variant
-  Color get accentMuted => AppColors.accentGreenMuted;
+  Color get accentMuted => _accentTheme.muted;
 
   /// Accent dark variant
-  Color get accentDark => AppColors.accentGreenDark;
+  Color get accentDark => _accentTheme.dark;
+
+  /// Accent subtle variant (for backgrounds)
+  Color get accentSubtle => _accentTheme.subtle;
 
   /// Blue accent for variety
   Color get accentBlue => AppColors.accentSky;
@@ -88,16 +102,16 @@ extension ThemeColors on BuildContext {
   /// Coral accent for active states
   Color get accentCoral => AppColors.accentCoral;
 
-  /// Selected/active state color - Green accent
-  Color get selected => AppColors.accentGreen;
+  /// Selected/active state color - Dynamic accent
+  Color get selected => _accentTheme.primary;
 
   /// Unselected/inactive state color
   Color get unselected => textTertiary;
 
   // ============ STATUS COLORS ============
 
-  /// Success color (green accent)
-  Color get success => AppColors.accentGreen;
+  /// Success color (dynamic accent)
+  Color get success => _accentTheme.primary;
 
   /// Warning color (amber)
   Color get warning => AppColors.accentAmber;
@@ -120,8 +134,8 @@ extension ThemeColors on BuildContext {
   /// Navigation bar unselected item color
   Color get navBarUnselected => AppColors.stone;
 
-  /// FAB/action button background - Green accent
-  Color get navBarFabBackground => AppColors.accentGreen;
+  /// FAB/action button background - Dynamic accent
+  Color get navBarFabBackground => _accentTheme.primary;
 
   /// FAB foreground color
   Color get navBarFabForeground => AppColors.charcoal;
@@ -134,8 +148,8 @@ extension ThemeColors on BuildContext {
           ? AppColors.darkSurfaceElevated
           : AppColors.lightSurfaceElevated;
 
-  /// Chip background (selected) - Green accent
-  Color get chipSelected => AppColors.accentGreen;
+  /// Chip background (selected) - Dynamic accent
+  Color get chipSelected => _accentTheme.primary;
 
   /// Chip text color
   Color get chipText => textPrimary;
@@ -171,14 +185,14 @@ extension ThemeColors on BuildContext {
 
   // ============ GRADIENT COLORS ============
 
-  /// Primary gradient (Green accent - use sparingly)
-  LinearGradient get primaryGradient => AppColors.primaryGradient;
+  /// Primary gradient (Dynamic accent - use sparingly)
+  LinearGradient get primaryGradient => _accentTheme.gradient;
 
   /// Secondary gradient (Neutral slate)
   LinearGradient get secondaryGradient => AppColors.secondaryGradient;
 
-  /// Success gradient
-  LinearGradient get successGradient => AppColors.successGradient;
+  /// Success gradient (Dynamic accent)
+  LinearGradient get successGradient => _accentTheme.gradient;
 
   /// Active/In-progress gradient (Coral/Amber)
   LinearGradient get activeGradient => AppColors.activeGradient;
@@ -211,12 +225,22 @@ class ThemeColorHelper {
   bool get isDarkMode => Theme.of(context).brightness == Brightness.dark;
   ColorScheme get colorScheme => Theme.of(context).colorScheme;
 
+  AccentColorTheme get _accentTheme {
+    try {
+      return Provider.of<SettingsProvider>(context, listen: false).accentColor;
+    } catch (_) {
+      return AccentColorTheme.green;
+    }
+  }
+
   Color get surface => colorScheme.surface;
   Color get surfaceElevated => colorScheme.surfaceContainerHighest;
   Color get border => isDarkMode ? AppColors.ash : AppColors.cloud;
   Color get textPrimary => colorScheme.onSurface;
   Color get textSecondary => colorScheme.onSurfaceVariant;
-  Color get accent => AppColors.accentGreen;
+  Color get accent => _accentTheme.primary;
+  Color get accentMuted => _accentTheme.muted;
+  Color get accentDark => _accentTheme.dark;
   Color get accentAmber => AppColors.accentAmber;
   Color get accentCoral => AppColors.accentCoral;
   Color get accentBlue => AppColors.accentSky;
