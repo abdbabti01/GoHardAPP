@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../core/constants/colors.dart';
 import '../../../data/models/program.dart';
-import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/goals_provider.dart';
@@ -759,14 +758,6 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       default:
         return AppColors.accentSky;
     }
-  }
-
-  String _cleanWorkoutName(String name) {
-    final colonIndex = name.indexOf(':');
-    if (colonIndex != -1 && colonIndex < 15) {
-      return name.substring(colonIndex + 1).trim();
-    }
-    return name;
   }
 
   void _handleMenuAction(String value, Program program) async {

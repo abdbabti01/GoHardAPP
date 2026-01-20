@@ -562,7 +562,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      activeProgram.name,
+                      activeProgram.title,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
