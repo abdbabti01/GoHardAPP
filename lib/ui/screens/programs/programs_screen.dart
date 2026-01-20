@@ -722,9 +722,14 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             );
           }
         },
-        onWorkoutMoved: () {
+        onWorkoutMoved: () async {
           // Refresh program data after workout is moved
-          context.read<ProgramsProvider>().loadPrograms();
+          final provider = context.read<ProgramsProvider>();
+          await provider.loadPrograms();
+          // Ensure UI updates with the latest data
+          if (mounted) {
+            setState(() {});
+          }
         },
       ),
     );

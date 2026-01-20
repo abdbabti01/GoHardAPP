@@ -9,7 +9,7 @@ import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 
 /// Premium horizontal week calendar widget with drag-and-drop rescheduling
-/// Shows a clean, minimal 7-day view with smooth week navigation
+/// Supports multiple workouts per day and shows rest days properly
 class PremiumWeekCalendarWidget extends StatefulWidget {
   final Program program;
   final int selectedWeek;
@@ -35,7 +35,6 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     with SingleTickerProviderStateMixin {
   late PageController _pageController;
   late AnimationController _dragAnimationController;
-  late Animation<double> _dragPulseAnimation;
 
   int? _selectedDayIndex;
   bool _isDragging = false;
@@ -46,16 +45,10 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     super.initState();
     _pageController = PageController(initialPage: widget.selectedWeek - 1);
 
-    // Pulse animation for drag targets
+    // Animation controller for drag visual feedback
     _dragAnimationController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
-    );
-    _dragPulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
-      CurvedAnimation(
-        parent: _dragAnimationController,
-        curve: Curves.easeInOut,
-      ),
     );
   }
 
@@ -78,18 +71,16 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     super.dispose();
   }
 
-  List<ProgramWorkout?> _getWeekWorkouts(int weekNumber) {
-    if (widget.program.workouts == null) return List.filled(7, null);
+  /// Get ALL workouts for each day of the week (supports multiple per day)
+  List<List<ProgramWorkout>> _getWeekWorkoutsGrouped(int weekNumber) {
+    if (widget.program.workouts == null) return List.generate(7, (_) => []);
 
     return List.generate(7, (dayIndex) {
       final day = dayIndex + 1;
-      try {
-        return widget.program.workouts!.firstWhere(
-          (w) => w.weekNumber == weekNumber && w.dayNumber == day,
-        );
-      } catch (_) {
-        return null;
-      }
+      return widget.program.workouts!
+          .where((w) => w.weekNumber == weekNumber && w.dayNumber == day)
+          .toList()
+        ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     });
   }
 
@@ -118,10 +109,20 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     final provider = context.read<ProgramsProvider>();
     HapticFeedback.mediumImpact();
 
+    // Calculate new order index (place at end of day)
+    final dayWorkouts =
+        _getWeekWorkoutsGrouped(widget.selectedWeek)[newDay - 1];
+    final maxOrder =
+        dayWorkouts.isEmpty
+            ? 0
+            : dayWorkouts
+                .map((w) => w.orderIndex)
+                .reduce((a, b) => a > b ? a : b);
+
     // Update workout with new day
     final updatedWorkout = workout.copyWith(
       dayNumber: newDay,
-      orderIndex: newDay * 10,
+      orderIndex: maxOrder + 10,
     );
 
     final success = await provider.updateWorkout(workout.id, updatedWorkout);
@@ -148,7 +149,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Moved to ${dayNames[newDay - 1]}',
+                  'Moved "${_cleanWorkoutName(workout.workoutName)}" to ${dayNames[newDay - 1]}',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
@@ -202,10 +203,10 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
           ),
         ),
 
-        // Selected day details
+        // Selected day workouts panel
         if (_selectedDayIndex != null && !_isDragging) ...[
           const SizedBox(height: 16),
-          _buildSelectedDayDetails(context, theme),
+          _buildSelectedDayWorkouts(context, theme),
         ],
       ],
     );
@@ -338,7 +339,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
   }
 
   Widget _buildWeekView(BuildContext context, int weekNumber, ThemeData theme) {
-    final workouts = _getWeekWorkouts(weekNumber);
+    final groupedWorkouts = _getWeekWorkoutsGrouped(weekNumber);
     final dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
     return Padding(
@@ -347,19 +348,12 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
         children: List.generate(7, (index) {
           final dayNumber = index + 1;
           final date = _getDateForDay(weekNumber, dayNumber);
-          final workout = workouts[index];
+          final dayWorkouts = groupedWorkouts[index];
           final isToday = _isToday(date);
           final isPast = _isPast(date);
           final isSelected =
               _selectedDayIndex == index && widget.selectedWeek == weekNumber;
           final isDragTarget = _dragTargetDay == dayNumber;
-
-          // Determine if this cell can be dragged
-          final canDrag =
-              workout != null &&
-              !workout.isCompleted &&
-              !workout.isRestDay &&
-              widget.selectedWeek == weekNumber;
 
           // Build the day cell
           Widget dayCell = _buildDayCell(
@@ -368,21 +362,17 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
             dayLabels[index],
             date.day,
             dayNumber,
-            workout,
+            dayWorkouts,
             isToday,
             isPast,
             isSelected,
             isDragTarget,
           );
 
-          // Wrap with DragTarget
+          // Wrap with DragTarget to accept dropped workouts
           dayCell = DragTarget<ProgramWorkout>(
             onWillAcceptWithDetails: (details) {
-              // Can't drop on the same day
-              if (details.data.dayNumber == dayNumber &&
-                  details.data.weekNumber == weekNumber) {
-                return false;
-              }
+              // Can drop on any day
               HapticFeedback.selectionClick();
               setState(() => _dragTargetDay = dayNumber);
               return true;
@@ -403,51 +393,6 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
             },
           );
 
-          // Wrap draggable cells with LongPressDraggable
-          if (canDrag) {
-            return Expanded(
-              child: LongPressDraggable<ProgramWorkout>(
-                data: workout,
-                delay: const Duration(milliseconds: 200),
-                hapticFeedbackOnStart: true,
-                onDragStarted: () {
-                  HapticFeedback.mediumImpact();
-                  setState(() {
-                    _isDragging = true;
-                    _selectedDayIndex = null;
-                  });
-                  _dragAnimationController.repeat(reverse: true);
-                },
-                onDragEnd: (_) {
-                  setState(() {
-                    _isDragging = false;
-                    _dragTargetDay = null;
-                  });
-                  _dragAnimationController.stop();
-                },
-                onDraggableCanceled: (_, __) {
-                  setState(() {
-                    _isDragging = false;
-                    _dragTargetDay = null;
-                  });
-                  _dragAnimationController.stop();
-                },
-                feedback: _buildDragFeedback(context, theme, workout),
-                childWhenDragging: _buildDraggingPlaceholder(context, theme),
-                child: GestureDetector(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    setState(() {
-                      _selectedDayIndex =
-                          _selectedDayIndex == index ? null : index;
-                    });
-                  },
-                  child: dayCell,
-                ),
-              ),
-            );
-          }
-
           return Expanded(
             child: GestureDetector(
               onTap: () {
@@ -455,9 +400,6 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                 setState(() {
                   _selectedDayIndex = _selectedDayIndex == index ? null : index;
                 });
-                if (workout != null && widget.onWorkoutTap != null) {
-                  widget.onWorkoutTap!(workout);
-                }
               },
               child: dayCell,
             ),
@@ -465,6 +407,532 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
         }),
       ),
     );
+  }
+
+  Widget _buildDayCell(
+    BuildContext context,
+    ThemeData theme,
+    String dayLabel,
+    int dateNumber,
+    int actualDay,
+    List<ProgramWorkout> dayWorkouts,
+    bool isToday,
+    bool isPast,
+    bool isSelected,
+    bool isDragTarget,
+  ) {
+    final hasWorkouts = dayWorkouts.isNotEmpty;
+    final isRestDay = !hasWorkouts;
+    final allCompleted = hasWorkouts && dayWorkouts.every((w) => w.isCompleted);
+    final hasMissed =
+        hasWorkouts &&
+        dayWorkouts.any(
+          (w) => !w.isCompleted && widget.program.isWorkoutMissed(w),
+        );
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Determine cell styling
+    Color backgroundColor;
+    Color borderColor;
+    Color dayLabelColor;
+    Color dateColor;
+    double borderWidth = 1;
+
+    final defaultSurface = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final defaultBorder =
+        isDark ? const Color(0xFF3D4449) : const Color(0xFFE5E5EA);
+    final defaultTextPrimary = isDark ? Colors.white : Colors.black;
+    final defaultTextTertiary =
+        isDark ? const Color(0xFF636E72) : const Color(0xFF8B959B);
+
+    if (isDragTarget) {
+      backgroundColor = theme.primaryColor.withValues(alpha: 0.15);
+      borderColor = theme.primaryColor;
+      dayLabelColor = theme.primaryColor;
+      dateColor = theme.primaryColor;
+      borderWidth = 2;
+    } else if (isToday) {
+      backgroundColor = theme.primaryColor;
+      borderColor = theme.primaryColor;
+      dayLabelColor = Colors.white.withValues(alpha: 0.8);
+      dateColor = Colors.white;
+    } else if (isSelected) {
+      backgroundColor = theme.primaryColor.withValues(alpha: 0.1);
+      borderColor = theme.primaryColor;
+      dayLabelColor = theme.primaryColor;
+      dateColor = defaultTextPrimary;
+      borderWidth = 2;
+    } else {
+      backgroundColor = defaultSurface;
+      borderColor = defaultBorder;
+      dayLabelColor = defaultTextTertiary;
+      dateColor = defaultTextPrimary;
+    }
+
+    // Build status indicator
+    Widget statusIndicator;
+    if (isDragTarget) {
+      statusIndicator = Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: theme.primaryColor.withValues(alpha: 0.2),
+          shape: BoxShape.circle,
+          border: Border.all(color: theme.primaryColor, width: 2),
+        ),
+        child: Icon(Icons.add_rounded, size: 14, color: theme.primaryColor),
+      );
+    } else if (allCompleted && hasWorkouts) {
+      statusIndicator = Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          gradient: AppColors.successGradient,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.accentGreen.withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Icon(Icons.check_rounded, size: 14, color: Colors.white),
+      );
+    } else if (hasMissed) {
+      statusIndicator = Container(
+        width: 24,
+        height: 24,
+        decoration: const BoxDecoration(
+          color: AppColors.accentCoral,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Text(
+            '${dayWorkouts.where((w) => !w.isCompleted).length}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+    } else if (isRestDay) {
+      final surfaceHighlight =
+          isDark ? const Color(0xFF3D4449) : const Color(0xFFDFE6E9);
+      statusIndicator = Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: surfaceHighlight,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Icons.self_improvement_rounded,
+          size: 14,
+          color: defaultTextTertiary,
+        ),
+      );
+    } else if (hasWorkouts) {
+      // Show workout count badge
+      statusIndicator = Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color:
+              isToday
+                  ? Colors.white.withValues(alpha: 0.2)
+                  : theme.primaryColor.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color:
+                isToday
+                    ? Colors.white.withValues(alpha: 0.5)
+                    : theme.primaryColor.withValues(alpha: 0.3),
+            width: 2,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            '${dayWorkouts.length}',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: isToday ? Colors.white : theme.primaryColor,
+            ),
+          ),
+        ),
+      );
+    } else {
+      statusIndicator = const SizedBox(height: 24);
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.symmetric(horizontal: 3),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: borderWidth),
+        boxShadow:
+            isDragTarget
+                ? [
+                  BoxShadow(
+                    color: theme.primaryColor.withValues(alpha: 0.2),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                  ),
+                ]
+                : isToday
+                ? [
+                  BoxShadow(
+                    color: theme.primaryColor.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+                : null,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Day label (M, T, W...)
+          Text(
+            dayLabel,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: dayLabelColor,
+            ),
+          ),
+          const SizedBox(height: 4),
+
+          // Date number
+          Text(
+            '$dateNumber',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: dateColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Status indicator
+          statusIndicator,
+        ],
+      ),
+    );
+  }
+
+  /// Build the selected day workouts panel
+  Widget _buildSelectedDayWorkouts(BuildContext context, ThemeData theme) {
+    if (_selectedDayIndex == null) return const SizedBox.shrink();
+
+    final groupedWorkouts = _getWeekWorkoutsGrouped(widget.selectedWeek);
+    final dayWorkouts = groupedWorkouts[_selectedDayIndex!];
+    final date = _getDateForDay(widget.selectedWeek, _selectedDayIndex! + 1);
+    final dayNames = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    final dayName = dayNames[_selectedDayIndex!];
+
+    if (dayWorkouts.isEmpty) {
+      return _buildRestDayCard(context, dayName, date);
+    }
+
+    return _buildDayWorkoutsPanel(context, theme, dayWorkouts, dayName, date);
+  }
+
+  Widget _buildRestDayCard(
+    BuildContext context,
+    String dayName,
+    DateTime date,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: context.surfaceHighlight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.self_improvement_rounded,
+              color: context.textTertiary,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Rest Day',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$dayName, ${DateFormat('MMM d').format(date)}',
+                  style: TextStyle(fontSize: 13, color: context.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          // Hint that workouts can be dropped here
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: context.surfaceHighlight,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.add_rounded, size: 14, color: context.textTertiary),
+                const SizedBox(width: 4),
+                Text(
+                  'Drop workout',
+                  style: TextStyle(fontSize: 11, color: context.textTertiary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayWorkoutsPanel(
+    BuildContext context,
+    ThemeData theme,
+    List<ProgramWorkout> workouts,
+    String dayName,
+    DateTime date,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        dayName,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: context.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        '${DateFormat('MMM d').format(date)} - ${workouts.length} workout${workouts.length != 1 ? 's' : ''}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: context.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  'Hold to drag',
+                  style: TextStyle(fontSize: 11, color: context.textTertiary),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          // Workout list
+          ...workouts.map(
+            (workout) => _buildWorkoutItem(context, theme, workout),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkoutItem(
+    BuildContext context,
+    ThemeData theme,
+    ProgramWorkout workout,
+  ) {
+    final isCompleted = workout.isCompleted;
+    final isMissed = widget.program.isWorkoutMissed(workout);
+    final canDrag = !isCompleted && !workout.isRestDay;
+
+    Color accentColor;
+    IconData statusIcon;
+
+    if (isCompleted) {
+      accentColor = AppColors.accentGreen;
+      statusIcon = Icons.check_circle_rounded;
+    } else if (isMissed) {
+      accentColor = AppColors.accentCoral;
+      statusIcon = Icons.warning_rounded;
+    } else {
+      accentColor = theme.primaryColor;
+      statusIcon = Icons.play_circle_rounded;
+    }
+
+    Widget itemContent = GestureDetector(
+      onTap: () {
+        if (!workout.isRestDay && widget.onWorkoutTap != null) {
+          widget.onWorkoutTap!(workout);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            // Status icon
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(statusIcon, color: accentColor, size: 18),
+            ),
+            const SizedBox(width: 12),
+            // Workout info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _cleanWorkoutName(workout.workoutName),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimary,
+                      decoration:
+                          isCompleted ? TextDecoration.lineThrough : null,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      if (workout.exerciseCount > 0) ...[
+                        Text(
+                          '${workout.exerciseCount} exercises',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
+                      if (workout.exerciseCount > 0 &&
+                          workout.estimatedDuration != null)
+                        Text(
+                          ' - ',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      if (workout.estimatedDuration != null)
+                        Text(
+                          '${workout.estimatedDuration} min',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Drag handle or arrow
+            if (canDrag)
+              Icon(
+                Icons.drag_indicator_rounded,
+                color: context.textTertiary,
+                size: 20,
+              )
+            else
+              Icon(
+                Icons.chevron_right_rounded,
+                color: context.textTertiary,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+
+    // Wrap with LongPressDraggable if draggable
+    if (canDrag) {
+      return LongPressDraggable<ProgramWorkout>(
+        data: workout,
+        delay: const Duration(milliseconds: 200),
+        hapticFeedbackOnStart: true,
+        onDragStarted: () {
+          HapticFeedback.mediumImpact();
+          setState(() {
+            _isDragging = true;
+          });
+          _dragAnimationController.repeat(reverse: true);
+        },
+        onDragEnd: (_) {
+          setState(() {
+            _isDragging = false;
+            _dragTargetDay = null;
+          });
+          _dragAnimationController.stop();
+        },
+        onDraggableCanceled: (_, __) {
+          setState(() {
+            _isDragging = false;
+            _dragTargetDay = null;
+          });
+          _dragAnimationController.stop();
+        },
+        feedback: _buildDragFeedback(context, theme, workout),
+        childWhenDragging: _buildDraggingPlaceholder(context),
+        child: itemContent,
+      );
+    }
+
+    return itemContent;
   }
 
   /// Premium drag feedback widget
@@ -567,518 +1035,34 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
   }
 
   /// Placeholder shown while dragging
-  Widget _buildDraggingPlaceholder(BuildContext context, ThemeData theme) {
-    return AnimatedBuilder(
-      animation: _dragPulseAnimation,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: _dragPulseAnimation.value,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: theme.primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: theme.primaryColor,
-                width: 2,
-                strokeAlign: BorderSide.strokeAlignInside,
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.open_with_rounded,
-                  color: theme.primaryColor,
-                  size: 24,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Moving',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: theme.primaryColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDayCell(
-    BuildContext context,
-    ThemeData theme,
-    String dayLabel,
-    int dayNumber,
-    int actualDay,
-    ProgramWorkout? workout,
-    bool isToday,
-    bool isPast,
-    bool isSelected,
-    bool isDragTarget,
-  ) {
-    final hasWorkout = workout != null && !workout.isRestDay;
-    final isCompleted = workout?.isCompleted ?? false;
-    final isRest = workout?.isRestDay ?? false;
-    final isMissed = workout != null && widget.program.isWorkoutMissed(workout);
-    final canDrag = hasWorkout && !isCompleted && !isRest;
-    final isDark = theme.brightness == Brightness.dark;
-
-    // Determine cell styling with explicit fallbacks
-    Color backgroundColor;
-    Color borderColor;
-    Color dayLabelColor;
-    Color dateColor;
-    Widget? statusIndicator;
-    double borderWidth = 1;
-
-    // Fallback colors in case theme extensions fail
-    final defaultSurface = isDark ? const Color(0xFF1A1A1A) : Colors.white;
-    final defaultBorder =
-        isDark ? const Color(0xFF3D4449) : const Color(0xFFE5E5EA);
-    final defaultTextPrimary = isDark ? Colors.white : Colors.black;
-    final defaultTextTertiary =
-        isDark ? const Color(0xFF636E72) : const Color(0xFF8B959B);
-
-    if (isDragTarget) {
-      backgroundColor = theme.primaryColor.withValues(alpha: 0.15);
-      borderColor = theme.primaryColor;
-      dayLabelColor = theme.primaryColor;
-      dateColor = theme.primaryColor;
-      borderWidth = 2;
-    } else if (isToday) {
-      backgroundColor = theme.primaryColor;
-      borderColor = theme.primaryColor;
-      dayLabelColor = Colors.white.withValues(alpha: 0.8);
-      dateColor = Colors.white;
-    } else if (isSelected) {
-      backgroundColor = theme.primaryColor.withValues(alpha: 0.1);
-      borderColor = theme.primaryColor;
-      dayLabelColor = theme.primaryColor;
-      dateColor = defaultTextPrimary;
-      borderWidth = 2;
-    } else {
-      backgroundColor = defaultSurface;
-      borderColor = defaultBorder;
-      dayLabelColor = defaultTextTertiary;
-      dateColor = defaultTextPrimary;
-    }
-
-    // Status indicator
-    if (isDragTarget) {
-      statusIndicator = Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(
-          color: theme.primaryColor.withValues(alpha: 0.2),
-          shape: BoxShape.circle,
-          border: Border.all(color: theme.primaryColor, width: 2),
-        ),
-        child: Icon(Icons.add_rounded, size: 14, color: theme.primaryColor),
-      );
-    } else if (isCompleted) {
-      statusIndicator = Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(
-          gradient: AppColors.successGradient,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.accentGreen.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: const Icon(Icons.check_rounded, size: 14, color: Colors.white),
-      );
-    } else if (isMissed) {
-      statusIndicator = Container(
-        width: 24,
-        height: 24,
-        decoration: const BoxDecoration(
-          color: AppColors.accentCoral,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
-      );
-    } else if (isRest) {
-      final surfaceHighlight =
-          isDark ? const Color(0xFF3D4449) : const Color(0xFFDFE6E9);
-      statusIndicator = Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(
-          color: surfaceHighlight,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          Icons.self_improvement_rounded,
-          size: 14,
-          color: defaultTextTertiary,
-        ),
-      );
-    } else if (hasWorkout) {
-      // Show drag indicator for draggable workouts
-      statusIndicator = Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(
-          color:
-              isToday
-                  ? Colors.white.withValues(alpha: 0.2)
-                  : theme.primaryColor.withValues(alpha: 0.1),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color:
-                isToday
-                    ? Colors.white.withValues(alpha: 0.5)
-                    : theme.primaryColor.withValues(alpha: 0.3),
-            width: 2,
-          ),
-        ),
-        child: Icon(
-          canDrag ? Icons.drag_indicator_rounded : Icons.fitness_center_rounded,
-          size: 12,
-          color: isToday ? Colors.white : theme.primaryColor,
-        ),
-      );
-    }
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.symmetric(horizontal: 3),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: borderWidth),
-        boxShadow:
-            isDragTarget
-                ? [
-                  BoxShadow(
-                    color: theme.primaryColor.withValues(alpha: 0.2),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                  ),
-                ]
-                : isToday
-                ? [
-                  BoxShadow(
-                    color: theme.primaryColor.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-                : null,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Day label (M, T, W...)
-          Text(
-            dayLabel,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: dayLabelColor,
-            ),
-          ),
-          const SizedBox(height: 4),
-
-          // Date number
-          Text(
-            '$dayNumber',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: dateColor,
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Status indicator
-          if (statusIndicator != null)
-            statusIndicator
-          else
-            const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSelectedDayDetails(BuildContext context, ThemeData theme) {
-    if (_selectedDayIndex == null) return const SizedBox.shrink();
-
-    final workouts = _getWeekWorkouts(widget.selectedWeek);
-    final workout = workouts[_selectedDayIndex!];
-    final date = _getDateForDay(widget.selectedWeek, _selectedDayIndex! + 1);
-    final dayNames = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
-
-    if (workout == null) {
-      return _buildRestDayCard(context, dayNames[_selectedDayIndex!], date);
-    }
-
-    return _buildWorkoutDetailCard(
-      context,
-      theme,
-      workout,
-      dayNames[_selectedDayIndex!],
-      date,
-    );
-  }
-
-  Widget _buildRestDayCard(
-    BuildContext context,
-    String dayName,
-    DateTime date,
-  ) {
+  Widget _buildDraggingPlaceholder(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: context.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.border),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: context.surfaceHighlight,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.self_improvement_rounded,
-              color: context.textTertiary,
-              size: 24,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: context.border,
+                style: BorderStyle.solid,
+              ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Rest Day',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: context.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '$dayName, ${DateFormat('MMM d').format(date)}',
-                  style: TextStyle(fontSize: 13, color: context.textSecondary),
-                ),
-              ],
+            child: Container(
+              height: 32,
+              decoration: BoxDecoration(
+                color: context.surfaceHighlight,
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildWorkoutDetailCard(
-    BuildContext context,
-    ThemeData theme,
-    ProgramWorkout workout,
-    String dayName,
-    DateTime date,
-  ) {
-    final isCompleted = workout.isCompleted;
-    final isMissed = widget.program.isWorkoutMissed(workout);
-    final canDrag = !isCompleted && !workout.isRestDay;
-
-    Color accentColor;
-    IconData statusIcon;
-    String statusText;
-
-    if (isCompleted) {
-      accentColor = AppColors.accentGreen;
-      statusIcon = Icons.check_circle_rounded;
-      statusText = 'Completed';
-    } else if (isMissed) {
-      accentColor = AppColors.accentCoral;
-      statusIcon = Icons.warning_rounded;
-      statusText = 'Missed';
-    } else {
-      accentColor = theme.primaryColor;
-      statusIcon = Icons.play_circle_rounded;
-      statusText = 'Scheduled';
-    }
-
-    return GestureDetector(
-      onTap: () {
-        if (widget.onWorkoutTap != null) {
-          widget.onWorkoutTap!(workout);
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: accentColor.withValues(alpha: 0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: accentColor.withValues(alpha: 0.1),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.fitness_center_rounded,
-                    color: accentColor,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _cleanWorkoutName(workout.workoutName),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: context.textPrimary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '$dayName, ${DateFormat('MMM d').format(date)}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: context.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(statusIcon, size: 14, color: accentColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        statusText,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: accentColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            // Workout details & drag hint
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                if (workout.exerciseCount > 0) ...[
-                  Icon(
-                    Icons.format_list_numbered_rounded,
-                    size: 16,
-                    color: context.textTertiary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${workout.exerciseCount} exercises',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: context.textSecondary,
-                    ),
-                  ),
-                ],
-                if (workout.exerciseCount > 0 &&
-                    workout.estimatedDuration != null)
-                  const SizedBox(width: 16),
-                if (workout.estimatedDuration != null) ...[
-                  Icon(
-                    Icons.timer_outlined,
-                    size: 16,
-                    color: context.textTertiary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${workout.estimatedDuration} min',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: context.textSecondary,
-                    ),
-                  ),
-                ],
-                const Spacer(),
-                if (canDrag) ...[
-                  Icon(
-                    Icons.drag_indicator_rounded,
-                    size: 16,
-                    color: context.textTertiary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Hold to move',
-                    style: TextStyle(fontSize: 11, color: context.textTertiary),
-                  ),
-                ] else
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 14,
-                    color: context.textTertiary,
-                  ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

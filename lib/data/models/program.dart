@@ -168,8 +168,26 @@ class Program {
   }
 
   /// Check if a workout is missed (in the past but not completed)
+  /// Uses actual calendar dates for accurate detection
   bool isWorkoutMissed(ProgramWorkout workout) {
-    return isWorkoutPast(workout) && !workout.isCompleted && !workout.isRestDay;
+    if (workout.isCompleted || workout.isRestDay) return false;
+
+    // Calculate the actual date of this workout
+    final workoutDate = startDate.add(
+      Duration(days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1)),
+    );
+
+    // Normalize to start of day for comparison
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final workoutDay = DateTime(
+      workoutDate.year,
+      workoutDate.month,
+      workoutDate.day,
+    );
+
+    // Workout is missed if its date is before today
+    return workoutDay.isBefore(today);
   }
 
   /// Get next workout (first incomplete workout at or after current position)
