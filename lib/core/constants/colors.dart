@@ -48,27 +48,23 @@ class AppColors {
     0xFF0EA5E9,
   ); // Info, links, secondary accent
 
-  // ============ THEME ACCENT - BLUE PALETTE ============
+  // ============ THEME ACCENT - BLUE PALETTE (Sky Blue) ============
 
-  static const Color accentBlue = Color(0xFF3B82F6); // Primary blue accent
-  static const Color accentBlueMuted = Color(0xFF93C5FD); // Light blue variant
-  static const Color accentBlueDark = Color(0xFF2563EB); // Dark blue variant
+  static const Color accentBlue = Color(0xFF0EA5E9); // Primary sky blue accent
+  static const Color accentBlueMuted = Color(0xFF7DD3FC); // Light sky blue variant
+  static const Color accentBlueDark = Color(0xFF0284C7); // Dark sky blue variant
   static const Color accentBlueSubtle = Color(
-    0xFF1E40AF,
+    0xFF0369A1,
   ); // Very dark for backgrounds
 
-  // ============ THEME ACCENT - YELLOW PALETTE ============
+  // ============ THEME ACCENT - YELLOW PALETTE (Light/Warm) ============
 
-  static const Color accentYellow = Color(0xFFFBBF24); // Primary yellow accent
-  static const Color accentYellowMuted = Color(
-    0xFFFDE68A,
-  ); // Light yellow variant
-  static const Color accentYellowDark = Color(
-    0xFFF59E0B,
-  ); // Dark yellow variant
+  static const Color accentYellow = Color(0xFFFCD34D); // Primary light yellow
+  static const Color accentYellowMuted = Color(0xFFFEF08A); // Very light yellow
+  static const Color accentYellowDark = Color(0xFFFBBF24); // Amber yellow
   static const Color accentYellowSubtle = Color(
-    0xFFB45309,
-  ); // Very dark for backgrounds
+    0xFFD97706,
+  ); // Dark amber for backgrounds
 
   // ============ ACHIEVEMENT TIER COLORS ============
 

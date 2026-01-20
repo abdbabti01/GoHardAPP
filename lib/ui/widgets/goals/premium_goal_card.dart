@@ -542,23 +542,9 @@ class PremiumGoalCard extends StatelessWidget {
   }
 
   Color _getGoalColor(BuildContext context, String goalType) {
-    switch (goalType.toLowerCase()) {
-      case 'weight':
-      case 'weight_loss':
-        return AppColors.accentSky;
-      case 'muscle_gain':
-        return AppColors.accentCoral;
-      case 'workout_frequency':
-        return context.accent;
-      case 'volume':
-        return AppColors.accentAmber;
-      case 'body_fat':
-        return AppColors.accentRose;
-      case 'exercise':
-        return const Color(0xFF8B5CF6); // Purple
-      default:
-        return AppColors.accentSky;
-    }
+    // Use dynamic accent color for all goal types
+    // This ensures goals match the user's chosen theme color
+    return context.accent;
   }
 
   IconData _getGoalIcon(String goalType) {
