@@ -345,6 +345,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: List.generate(7, (index) {
           final dayNumber = index + 1;
           final date = _getDateForDay(weekNumber, dayNumber);
@@ -568,61 +569,62 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
       statusIndicator = const SizedBox(height: 24);
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.symmetric(horizontal: 3),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: borderWidth),
-        boxShadow:
-            isDragTarget
-                ? [
-                  BoxShadow(
-                    color: theme.primaryColor.withValues(alpha: 0.2),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                  ),
-                ]
-                : isToday
-                ? [
-                  BoxShadow(
-                    color: theme.primaryColor.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-                : null,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Day label (M, T, W...)
-          Text(
-            dayLabel,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: dayLabelColor,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: borderWidth),
+          boxShadow:
+              isDragTarget
+                  ? [
+                    BoxShadow(
+                      color: theme.primaryColor.withValues(alpha: 0.2),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                  : isToday
+                  ? [
+                    BoxShadow(
+                      color: theme.primaryColor.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                  : null,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Day label (M, T, W...)
+            Text(
+              dayLabel,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: dayLabelColor,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
+            const SizedBox(height: 4),
 
-          // Date number
-          Text(
-            '$dateNumber',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: dateColor,
+            // Date number
+            Text(
+              '$dateNumber',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: dateColor,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-          // Status indicator
-          statusIndicator,
-        ],
+            // Status indicator
+            statusIndicator,
+          ],
+        ),
       ),
     );
   }
