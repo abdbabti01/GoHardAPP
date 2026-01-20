@@ -50,9 +50,10 @@ class _CurvedNavigationBarState extends State<CurvedNavigationBar>
       duration: const Duration(milliseconds: 150),
       vsync: this,
     );
-    _fabScaleAnimation = Tween<double>(begin: 1.0, end: 0.9).animate(
-      CurvedAnimation(parent: _fabController, curve: Curves.easeInOut),
-    );
+    _fabScaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.9,
+    ).animate(CurvedAnimation(parent: _fabController, curve: Curves.easeInOut));
 
     // Indicator slide animation
     _indicatorController = AnimationController(
@@ -62,10 +63,9 @@ class _CurvedNavigationBarState extends State<CurvedNavigationBar>
     _indicatorAnimation = Tween<double>(
       begin: widget.currentIndex.toDouble(),
       end: widget.currentIndex.toDouble(),
-    ).animate(CurvedAnimation(
-      parent: _indicatorController,
-      curve: Curves.easeOutCubic,
-    ));
+    ).animate(
+      CurvedAnimation(parent: _indicatorController, curve: Curves.easeOutCubic),
+    );
   }
 
   @override
@@ -80,10 +80,9 @@ class _CurvedNavigationBarState extends State<CurvedNavigationBar>
     _indicatorAnimation = Tween<double>(
       begin: from.toDouble(),
       end: to.toDouble(),
-    ).animate(CurvedAnimation(
-      parent: _indicatorController,
-      curve: Curves.easeOutCubic,
-    ));
+    ).animate(
+      CurvedAnimation(parent: _indicatorController, curve: Curves.easeOutCubic),
+    );
     _indicatorController.forward(from: 0);
   }
 
@@ -181,23 +180,25 @@ class _CurvedNavigationBarState extends State<CurvedNavigationBar>
                 Expanded(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: widget.items
-                        .take(widget.items.length ~/ 2)
-                        .toList()
-                        .asMap()
-                        .entries
-                        .map((entry) {
-                      final index = entry.key;
-                      final item = entry.value;
-                      return _NavItem(
-                        item: item,
-                        index: index,
-                        isSelected: widget.currentIndex == index,
-                        activeColor: activeColor,
-                        inactiveColor: inactiveColor,
-                        onTap: () => _onItemTap(index),
-                      );
-                    }).toList(),
+                    children:
+                        widget.items
+                            .take(widget.items.length ~/ 2)
+                            .toList()
+                            .asMap()
+                            .entries
+                            .map((entry) {
+                              final index = entry.key;
+                              final item = entry.value;
+                              return _NavItem(
+                                item: item,
+                                index: index,
+                                isSelected: widget.currentIndex == index,
+                                activeColor: activeColor,
+                                inactiveColor: inactiveColor,
+                                onTap: () => _onItemTap(index),
+                              );
+                            })
+                            .toList(),
                   ),
                 ),
                 // Center space for FAB
@@ -206,23 +207,26 @@ class _CurvedNavigationBarState extends State<CurvedNavigationBar>
                 Expanded(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: widget.items
-                        .skip(widget.items.length ~/ 2)
-                        .toList()
-                        .asMap()
-                        .entries
-                        .map((entry) {
-                      final index = entry.key + widget.items.length ~/ 2;
-                      final item = entry.value;
-                      return _NavItem(
-                        item: item,
-                        index: index,
-                        isSelected: widget.currentIndex == index,
-                        activeColor: activeColor,
-                        inactiveColor: inactiveColor,
-                        onTap: () => _onItemTap(index),
-                      );
-                    }).toList(),
+                    children:
+                        widget.items
+                            .skip(widget.items.length ~/ 2)
+                            .toList()
+                            .asMap()
+                            .entries
+                            .map((entry) {
+                              final index =
+                                  entry.key + widget.items.length ~/ 2;
+                              final item = entry.value;
+                              return _NavItem(
+                                item: item,
+                                index: index,
+                                isSelected: widget.currentIndex == index,
+                                activeColor: activeColor,
+                                inactiveColor: inactiveColor,
+                                onTap: () => _onItemTap(index),
+                              );
+                            })
+                            .toList(),
                   ),
                 ),
               ],
@@ -273,7 +277,8 @@ class _CurvedNavigationBarState extends State<CurvedNavigationBar>
                         ),
                         child: Icon(
                           Icons.add_rounded,
-                          color: context.isDarkMode ? Colors.white : Colors.black,
+                          color:
+                              context.isDarkMode ? Colors.white : Colors.black,
                           size: 32,
                         ),
                       ),
@@ -304,7 +309,8 @@ class _CurvedNavigationBarState extends State<CurvedNavigationBar>
     } else {
       // Right side items (2, 3)
       final rightPosition = position - 2;
-      indicatorLeft = leftSideWidth + 84 + itemWidth * rightPosition + itemWidth / 2 - 20;
+      indicatorLeft =
+          leftSideWidth + 84 + itemWidth * rightPosition + itemWidth / 2 - 20;
     }
 
     return Stack(
@@ -357,7 +363,8 @@ class _NavItem extends StatefulWidget {
   State<_NavItem> createState() => _NavItemState();
 }
 
-class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin {
+class _NavItemState extends State<_NavItem>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _iconSizeAnimation;
@@ -370,13 +377,15 @@ class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin 
       vsync: this,
     );
 
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.92,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
-    _iconSizeAnimation = Tween<double>(begin: 24.0, end: 22.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _iconSizeAnimation = Tween<double>(
+      begin: 24.0,
+      end: 22.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -424,25 +433,24 @@ class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin 
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: widget.isSelected
-                          ? widget.activeColor.withValues(alpha: 0.12)
-                          : Colors.transparent,
+                      color:
+                          widget.isSelected
+                              ? widget.activeColor.withValues(alpha: 0.12)
+                              : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 200),
                       transitionBuilder: (child, animation) {
-                        return ScaleTransition(
-                          scale: animation,
-                          child: child,
-                        );
+                        return ScaleTransition(scale: animation, child: child);
                       },
                       child: Icon(
                         widget.item.icon,
                         key: ValueKey(widget.isSelected),
-                        color: widget.isSelected
-                            ? widget.activeColor
-                            : widget.inactiveColor,
+                        color:
+                            widget.isSelected
+                                ? widget.activeColor
+                                : widget.inactiveColor,
                         size: _iconSizeAnimation.value,
                       ),
                     ),
@@ -453,9 +461,10 @@ class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin 
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOutCubic,
                     style: TextStyle(
-                      color: widget.isSelected
-                          ? widget.activeColor
-                          : widget.inactiveColor,
+                      color:
+                          widget.isSelected
+                              ? widget.activeColor
+                              : widget.inactiveColor,
                       fontSize: widget.isSelected ? 11 : 10,
                       fontWeight:
                           widget.isSelected ? FontWeight.w700 : FontWeight.w500,
@@ -500,9 +509,10 @@ class _NotchedNavBarPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = backgroundColor
-      ..style = PaintingStyle.fill;
+    final paint =
+        Paint()
+          ..color = backgroundColor
+          ..style = PaintingStyle.fill;
 
     final path = Path();
     final centerX = size.width / 2;
@@ -520,9 +530,12 @@ class _NotchedNavBarPainter extends CustomPainter {
 
     // Smoother notch curve (going down into the bar)
     path.cubicTo(
-      centerX - notchWidth / 2 + 20, 0,
-      centerX - notchRadius - 8, notchRadius - 2,
-      centerX - notchRadius, notchRadius + 2,
+      centerX - notchWidth / 2 + 20,
+      0,
+      centerX - notchRadius - 8,
+      notchRadius - 2,
+      centerX - notchRadius,
+      notchRadius + 2,
     );
 
     // Bottom of notch arc - smoother
@@ -534,9 +547,12 @@ class _NotchedNavBarPainter extends CustomPainter {
 
     // Notch curve (coming back up) - smoother
     path.cubicTo(
-      centerX + notchRadius + 8, notchRadius - 2,
-      centerX + notchWidth / 2 - 20, 0,
-      centerX + notchWidth / 2, 0,
+      centerX + notchRadius + 8,
+      notchRadius - 2,
+      centerX + notchWidth / 2 - 20,
+      0,
+      centerX + notchWidth / 2,
+      0,
     );
 
     // Top edge from notch to right
@@ -563,19 +579,23 @@ class _NotchedNavBarPainter extends CustomPainter {
     canvas.drawPath(path, paint);
 
     // Draw top border with smoother line
-    final borderPaint = Paint()
-      ..color = borderColor.withValues(alpha: 0.5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5
-      ..strokeCap = StrokeCap.round;
+    final borderPaint =
+        Paint()
+          ..color = borderColor.withValues(alpha: 0.5)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.5
+          ..strokeCap = StrokeCap.round;
 
     final borderPath = Path();
     borderPath.moveTo(cornerRadius, 0);
     borderPath.lineTo(centerX - notchWidth / 2, 0);
     borderPath.cubicTo(
-      centerX - notchWidth / 2 + 20, 0,
-      centerX - notchRadius - 8, notchRadius - 2,
-      centerX - notchRadius, notchRadius + 2,
+      centerX - notchWidth / 2 + 20,
+      0,
+      centerX - notchRadius - 8,
+      notchRadius - 2,
+      centerX - notchRadius,
+      notchRadius + 2,
     );
     borderPath.arcToPoint(
       Offset(centerX + notchRadius, notchRadius + 2),
@@ -583,9 +603,12 @@ class _NotchedNavBarPainter extends CustomPainter {
       clockwise: false,
     );
     borderPath.cubicTo(
-      centerX + notchRadius + 8, notchRadius - 2,
-      centerX + notchWidth / 2 - 20, 0,
-      centerX + notchWidth / 2, 0,
+      centerX + notchRadius + 8,
+      notchRadius - 2,
+      centerX + notchWidth / 2 - 20,
+      0,
+      centerX + notchWidth / 2,
+      0,
     );
     borderPath.lineTo(size.width - cornerRadius, 0);
 
