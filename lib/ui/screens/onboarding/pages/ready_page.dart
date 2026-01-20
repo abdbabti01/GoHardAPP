@@ -36,7 +36,7 @@ class ReadyPage extends StatelessWidget {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.accentGreen.withValues(alpha: 0.3),
+                        color: context.accent.withValues(alpha: 0.3),
                         blurRadius: 20,
                         spreadRadius: 5,
                       ),
@@ -194,14 +194,14 @@ class ReadyPage extends StatelessWidget {
           width: 24,
           height: 24,
           decoration: BoxDecoration(
-            color: AppColors.accentGreen.withValues(alpha: 0.1),
+            color: context.accent.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Center(
             child: Text(
               number,
               style: AppTypography.labelSmall.copyWith(
-                color: AppColors.accentGreen,
+                color: context.accent,
                 fontWeight: FontWeight.w700,
               ),
             ),

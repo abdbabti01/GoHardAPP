@@ -258,8 +258,8 @@ class EmptyStateIllustrated extends StatelessWidget {
           decoration: BoxDecoration(
             gradient: RadialGradient(
               colors: [
-                AppColors.goHardGreen.withValues(alpha: 0.1),
-                AppColors.goHardGreen.withValues(alpha: 0.02),
+                context.accent.withValues(alpha: 0.1),
+                context.accent.withValues(alpha: 0.02),
               ],
             ),
             shape: BoxShape.circle,
@@ -290,7 +290,7 @@ class EmptyStateIllustrated extends StatelessWidget {
             width: 12,
             height: 12,
             decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
+              gradient: context.primaryGradient,
               shape: BoxShape.circle,
             ),
           ),
@@ -329,11 +329,11 @@ class EmptyStateAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
+        gradient: context.primaryGradient,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: AppColors.goHardGreen.withValues(alpha: 0.3),
+            color: context.accent.withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),

@@ -380,13 +380,11 @@ class ConfirmationBottomSheet extends StatelessWidget {
                       AppColors.errorRed.withValues(alpha: 0.8),
                     ],
                   )
-                  : AppColors.primaryGradient,
+                  : context.primaryGradient,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: (isDestructive
-                      ? AppColors.errorRed
-                      : AppColors.goHardGreen)
+              color: (isDestructive ? AppColors.errorRed : context.accent)
                   .withValues(alpha: 0.3),
               blurRadius: 10,
               offset: const Offset(0, 4),
@@ -494,7 +492,7 @@ class PremiumDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveIconColor = iconColor ?? AppColors.goHardGreen;
+    final effectiveIconColor = iconColor ?? context.accent;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -610,13 +608,13 @@ class PremiumDialog extends StatelessWidget {
                       AppColors.errorRed.withValues(alpha: 0.8),
                     ],
                   )
-                  : AppColors.primaryGradient,
+                  : context.primaryGradient,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
               color: (action.isDestructive
                       ? AppColors.errorRed
-                      : AppColors.goHardGreen)
+                      : context.accent)
                   .withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 3),

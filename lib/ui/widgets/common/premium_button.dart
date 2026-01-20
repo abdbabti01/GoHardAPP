@@ -316,11 +316,11 @@ class _PremiumButtonState extends State<PremiumButton>
     switch (widget.variant) {
       case PremiumButtonVariant.primary:
         return BoxDecoration(
-          gradient: AppColors.primaryGradient,
+          gradient: context.primaryGradient,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: AppColors.accentGreen.withValues(alpha: 0.35),
+              color: context.accent.withValues(alpha: 0.35),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -439,11 +439,11 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
     switch (widget.variant) {
       case PremiumButtonVariant.primary:
         return BoxDecoration(
-          gradient: AppColors.primaryGradient,
+          gradient: context.primaryGradient,
           borderRadius: BorderRadius.circular(widget.size * 0.28),
           boxShadow: [
             BoxShadow(
-              color: AppColors.accentGreen.withValues(alpha: 0.3),
+              color: context.accent.withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),

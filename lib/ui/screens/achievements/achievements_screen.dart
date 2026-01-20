@@ -122,7 +122,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
                       value: provider.totalUnlocked / provider.totalAvailable,
                       strokeWidth: 8,
                       backgroundColor: context.surfaceElevated,
-                      color: AppColors.accentGreen,
+                      color: context.accent,
                     ),
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,

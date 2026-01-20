@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../core/theme/typography.dart';
-import '../../../core/constants/colors.dart';
 import '../../../providers/goals_provider.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
@@ -152,13 +151,13 @@ class _GoalsScreenState extends State<GoalsScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.accentGreen.withValues(alpha: 0.12),
+              color: context.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               count.toString(),
               style: AppTypography.labelLarge.copyWith(
-                color: AppColors.accentGreen,
+                color: context.accent,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -1177,12 +1176,12 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
           onPressed: _isCreating ? null : _createGoal,
           child:
               _isCreating
-                  ? const SizedBox(
+                  ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.goHardGreen,
+                      color: context.accent,
                     ),
                   )
                   : const Text('Create'),
@@ -1362,12 +1361,12 @@ class _AddProgressDialogState extends State<AddProgressDialog> {
           onPressed: _isAdding ? null : _addProgress,
           child:
               _isAdding
-                  ? const SizedBox(
+                  ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.goHardGreen,
+                      color: context.accent,
                     ),
                   )
                   : const Text('Add'),

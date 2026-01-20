@@ -20,7 +20,7 @@ class ExerciseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categoryColor = _getCategoryColor();
+    final categoryColor = _getCategoryColor(context);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -189,7 +189,7 @@ class ExerciseCard extends StatelessWidget {
             exercise.difficulty!,
             style: TextStyle(
               fontSize: 12,
-              color: _getDifficultyColor(exercise.difficulty!),
+              color: _getDifficultyColor(context, exercise.difficulty!),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -200,7 +200,7 @@ class ExerciseCard extends StatelessWidget {
 
   Widget _buildDifficultyIndicator(BuildContext context) {
     final difficulty = exercise.difficulty?.toLowerCase() ?? 'intermediate';
-    final color = _getDifficultyColor(difficulty);
+    final color = _getDifficultyColor(context, difficulty);
     final bars =
         difficulty == 'beginner'
             ? 1
@@ -223,8 +223,8 @@ class ExerciseCard extends StatelessWidget {
     );
   }
 
-  Color _getCategoryColor() {
-    if (exercise.category == null) return AppColors.goHardGreen;
+  Color _getCategoryColor(BuildContext context) {
+    if (exercise.category == null) return context.accent;
 
     switch (exercise.category!.toLowerCase()) {
       case 'strength':
@@ -237,7 +237,7 @@ class ExerciseCard extends StatelessWidget {
       case 'core':
         return AppColors.coreOrange;
       default:
-        return AppColors.goHardGreen;
+        return context.accent;
     }
   }
 
@@ -260,16 +260,16 @@ class ExerciseCard extends StatelessWidget {
     }
   }
 
-  Color _getDifficultyColor(String difficulty) {
+  Color _getDifficultyColor(BuildContext context, String difficulty) {
     switch (difficulty.toLowerCase()) {
       case 'beginner':
-        return AppColors.goHardGreen;
+        return context.accent;
       case 'intermediate':
         return AppColors.goHardOrange;
       case 'advanced':
         return AppColors.errorRed;
       default:
-        return AppColors.goHardGreen;
+        return context.accent;
     }
   }
 }
@@ -293,7 +293,7 @@ class ExerciseCardCompact extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categoryColor = _getCategoryColor();
+    final categoryColor = _getCategoryColor(context);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -302,9 +302,7 @@ class ExerciseCardCompact extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color:
-              isActive
-                  ? AppColors.goHardGreen.withValues(alpha: 0.3)
-                  : context.border,
+              isActive ? context.accent.withValues(alpha: 0.3) : context.border,
           width: isActive ? 1.5 : 0.5,
         ),
       ),
@@ -367,8 +365,8 @@ class ExerciseCardCompact extends StatelessWidget {
     );
   }
 
-  Color _getCategoryColor() {
-    if (exercise.category == null) return AppColors.goHardGreen;
+  Color _getCategoryColor(BuildContext context) {
+    if (exercise.category == null) return context.accent;
 
     switch (exercise.category!.toLowerCase()) {
       case 'strength':
@@ -378,7 +376,7 @@ class ExerciseCardCompact extends StatelessWidget {
       case 'flexibility':
         return AppColors.flexibilityGreen;
       default:
-        return AppColors.goHardGreen;
+        return context.accent;
     }
   }
 }

@@ -75,13 +75,13 @@ class _CelebrationOverlayState extends State<CelebrationOverlay>
 
   Color _getRandomColor() {
     final colors = [
-      AppColors.accentGreen,
+      context.accent,
       AppColors.accentSky,
       AppColors.accentAmber,
       AppColors.accentCoral,
       AppColors.tierGold,
       AppColors.silver,
-      AppColors.accentGreenMuted,
+      context.accentMuted,
     ];
     return colors[_random.nextInt(colors.length)];
   }
@@ -253,7 +253,7 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
               end: Alignment.bottomCenter,
               colors: [
                 context.scaffoldBackground,
-                AppColors.accentGreen.withValues(alpha: 0.05),
+                context.accent.withValues(alpha: 0.05),
                 context.scaffoldBackground,
               ],
             ),
@@ -282,9 +282,7 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.accentGreen.withValues(
-                                    alpha: 0.4,
-                                  ),
+                                  color: context.accent.withValues(alpha: 0.4),
                                   blurRadius: 30,
                                   spreadRadius: 5,
                                 ),
@@ -311,7 +309,7 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
                         Text(
                           'WORKOUT',
                           style: AppTypography.labelLarge.copyWith(
-                            color: AppColors.accentGreen,
+                            color: context.accent,
                             letterSpacing: 4,
                           ),
                         ),
@@ -458,7 +456,7 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
                   '${widget.setCount}',
                   'Sets',
                   Icons.repeat_rounded,
-                  AppColors.accentGreen,
+                  context.accent,
                 ),
               ),
               Container(width: 1, height: 70, color: context.border),
@@ -522,11 +520,11 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 18),
           decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
+            gradient: context.primaryGradient,
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: AppColors.accentGreen.withValues(alpha: 0.35),
+                color: context.accent.withValues(alpha: 0.35),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -634,7 +632,7 @@ class StreakCelebration extends StatelessWidget {
                       vertical: 14,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.accentGreen,
+                      color: context.accent,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Text(

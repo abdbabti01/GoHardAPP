@@ -113,7 +113,7 @@ class _PremiumLoaderState extends State<_PremiumLoader>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.goHardGreen.withValues(alpha: 0.3),
+                        color: context.accent.withValues(alpha: 0.3),
                         blurRadius: 20,
                         spreadRadius: 2,
                       ),
@@ -125,7 +125,7 @@ class _PremiumLoaderState extends State<_PremiumLoader>
                   angle: _rotationAnimation.value * 2 * 3.14159,
                   child: CustomPaint(
                     size: Size(widget.size, widget.size),
-                    painter: _GradientRingPainter(),
+                    painter: _GradientRingPainter(accentColor: context.accent),
                   ),
                 ),
                 // Center icon
@@ -139,7 +139,7 @@ class _PremiumLoaderState extends State<_PremiumLoader>
                   child: Icon(
                     Icons.fitness_center_rounded,
                     size: widget.size * 0.25,
-                    color: AppColors.goHardGreen,
+                    color: context.accent,
                   ),
                 ),
               ],
@@ -152,15 +152,19 @@ class _PremiumLoaderState extends State<_PremiumLoader>
 }
 
 class _GradientRingPainter extends CustomPainter {
+  final Color accentColor;
+
+  _GradientRingPainter({required this.accentColor});
+
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
     final gradient = SweepGradient(
       colors: [
-        AppColors.goHardGreen,
+        accentColor,
         AppColors.goHardCyan,
         AppColors.goHardBlue,
-        AppColors.goHardGreen.withValues(alpha: 0),
+        accentColor.withValues(alpha: 0),
       ],
       stops: const [0.0, 0.3, 0.6, 1.0],
     );

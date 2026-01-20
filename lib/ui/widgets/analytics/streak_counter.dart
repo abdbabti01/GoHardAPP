@@ -203,8 +203,8 @@ class StreakCounter extends StatelessWidget {
           colors:
               isGoalMet
                   ? [
-                    AppColors.accentGreen.withValues(alpha: 0.10),
-                    AppColors.accentGreenMuted.withValues(alpha: 0.05),
+                    context.accent.withValues(alpha: 0.10),
+                    context.accentMuted.withValues(alpha: 0.05),
                   ]
                   : [
                     AppColors.accentSky.withValues(alpha: 0.08),
@@ -217,7 +217,7 @@ class StreakCounter extends StatelessWidget {
         border: Border.all(
           color:
               isGoalMet
-                  ? AppColors.accentGreen.withValues(alpha: 0.3)
+                  ? context.accent.withValues(alpha: 0.3)
                   : AppColors.accentSky.withValues(alpha: 0.2),
         ),
       ),
@@ -232,8 +232,7 @@ class StreakCounter extends StatelessWidget {
                   Icon(
                     Icons.flag_rounded,
                     size: 18,
-                    color:
-                        isGoalMet ? AppColors.accentGreen : AppColors.accentSky,
+                    color: isGoalMet ? context.accent : AppColors.accentSky,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -241,10 +240,7 @@ class StreakCounter extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color:
-                          isGoalMet
-                              ? AppColors.accentGreen
-                              : AppColors.accentSky,
+                      color: isGoalMet ? context.accent : AppColors.accentSky,
                     ),
                   ),
                 ],
@@ -257,15 +253,14 @@ class StreakCounter extends StatelessWidget {
                 decoration: BoxDecoration(
                   color:
                       isGoalMet
-                          ? AppColors.accentGreen.withValues(alpha: 0.15)
+                          ? context.accent.withValues(alpha: 0.15)
                           : AppColors.accentSky.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '$thisWeekCount / $weeklyGoal',
                   style: AppTypography.statTiny.copyWith(
-                    color:
-                        isGoalMet ? AppColors.accentGreen : AppColors.accentSky,
+                    color: isGoalMet ? context.accent : AppColors.accentSky,
                   ),
                 ),
               ),
@@ -307,7 +302,7 @@ class StreakCounter extends StatelessWidget {
                         boxShadow: [
                           BoxShadow(
                             color: (isGoalMet
-                                    ? AppColors.accentGreen
+                                    ? context.accent
                                     : AppColors.accentSky)
                                 .withValues(alpha: 0.4),
                             blurRadius: 4,
@@ -343,7 +338,7 @@ class StreakCounter extends StatelessWidget {
                   'Goal achieved! Keep crushing it!',
                   style: TextStyle(
                     fontSize: 13,
-                    color: AppColors.accentGreen,
+                    color: context.accent,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

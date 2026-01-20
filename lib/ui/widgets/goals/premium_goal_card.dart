@@ -28,7 +28,7 @@ class PremiumGoalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = (goal.progressPercentage / 100).clamp(0.0, 1.0);
     final isCompleted = goal.progressPercentage >= 100;
-    final goalColor = _getGoalColor(goal.goalType);
+    final goalColor = _getGoalColor(context, goal.goalType);
 
     return PremiumTapAnimation(
       onTap: () {
@@ -43,7 +43,7 @@ class PremiumGoalCard extends StatelessWidget {
           border: Border.all(
             color:
                 isCompleted
-                    ? AppColors.accentGreen.withValues(alpha: 0.4)
+                    ? context.accent.withValues(alpha: 0.4)
                     : context.border,
             width: isCompleted ? 1.5 : 1,
           ),
@@ -58,7 +58,7 @@ class PremiumGoalCard extends StatelessWidget {
             ),
             if (isCompleted)
               BoxShadow(
-                color: AppColors.accentGreen.withValues(alpha: 0.15),
+                color: context.accent.withValues(alpha: 0.15),
                 blurRadius: 20,
                 offset: const Offset(0, 6),
               ),
@@ -367,23 +367,21 @@ class PremiumGoalCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppColors.accentGreen.withValues(alpha: 0.1),
-            AppColors.accentGreen.withValues(alpha: 0.05),
+            context.accent.withValues(alpha: 0.1),
+            context.accent.withValues(alpha: 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.accentGreen.withValues(alpha: 0.3)),
+        border: Border.all(color: context.accent.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.check_circle, color: AppColors.accentGreen, size: 22),
+          Icon(Icons.check_circle, color: context.accent, size: 22),
           const SizedBox(width: 10),
           Text(
             'Goal Completed!',
-            style: AppTypography.titleMedium.copyWith(
-              color: AppColors.accentGreen,
-            ),
+            style: AppTypography.titleMedium.copyWith(color: context.accent),
           ),
         ],
       ),
@@ -543,7 +541,7 @@ class PremiumGoalCard extends StatelessWidget {
         .join(' ');
   }
 
-  Color _getGoalColor(String goalType) {
+  Color _getGoalColor(BuildContext context, String goalType) {
     switch (goalType.toLowerCase()) {
       case 'weight':
       case 'weight_loss':
@@ -551,7 +549,7 @@ class PremiumGoalCard extends StatelessWidget {
       case 'muscle_gain':
         return AppColors.accentCoral;
       case 'workout_frequency':
-        return AppColors.accentGreen;
+        return context.accent;
       case 'volume':
         return AppColors.accentAmber;
       case 'body_fat':
@@ -609,14 +607,10 @@ class CompletedGoalCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppColors.accentGreen.withValues(alpha: 0.12),
+                color: context.accent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(
-                Icons.check_circle,
-                color: AppColors.accentGreen,
-                size: 24,
-              ),
+              child: Icon(Icons.check_circle, color: context.accent, size: 24),
             ),
             const SizedBox(width: 14),
             Expanded(

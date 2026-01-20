@@ -160,7 +160,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor:
                                   provider.canProceed
-                                      ? AppColors.accentGreen
+                                      ? context.accent
                                       : context.surfaceElevated,
                               foregroundColor:
                                   provider.canProceed
@@ -206,9 +206,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       decoration: BoxDecoration(
         color:
             isActive
-                ? AppColors.accentGreen
+                ? context.accent
                 : isPast
-                ? AppColors.accentGreen.withValues(alpha: 0.5)
+                ? context.accent.withValues(alpha: 0.5)
                 : context.border,
         borderRadius: BorderRadius.circular(4),
       ),

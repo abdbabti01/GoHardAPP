@@ -196,11 +196,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       return Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
+          gradient: context.primaryGradient,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: AppColors.goHardGreen.withValues(alpha: 0.3),
+              color: context.accent.withValues(alpha: 0.3),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -351,7 +351,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
+                    gradient: context.primaryGradient,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Material(
@@ -425,10 +425,10 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                 height: 56,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(28),
-                  gradient: AppColors.primaryGradient,
+                  gradient: context.primaryGradient,
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.goHardGreen.withValues(alpha: 0.4),
+                      color: context.accent.withValues(alpha: 0.4),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
@@ -527,11 +527,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: context.primaryGradient,
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.goHardGreen.withValues(alpha: 0.3),
+                    color: context.accent.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -791,7 +791,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
               border: Border.all(
                 color:
                     hasLoggedSets
-                        ? AppColors.goHardGreen.withValues(alpha: 0.3)
+                        ? context.accent.withValues(alpha: 0.3)
                         : context.border,
                 width: hasLoggedSets ? 1.5 : 0.5,
               ),
@@ -799,7 +799,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                   hasLoggedSets
                       ? [
                         BoxShadow(
-                          color: AppColors.goHardGreen.withValues(alpha: 0.1),
+                          color: context.accent.withValues(alpha: 0.1),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -822,7 +822,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                         decoration: BoxDecoration(
                           color:
                               hasLoggedSets
-                                  ? AppColors.goHardGreen
+                                  ? context.accent
                                   : AppColors.goHardBlue,
                           borderRadius: BorderRadius.circular(2),
                         ),
@@ -876,7 +876,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                                       vertical: 3,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: AppColors.goHardGreen.withValues(
+                                      color: context.accent.withValues(
                                         alpha: 0.15,
                                       ),
                                       borderRadius: BorderRadius.circular(6),
@@ -884,18 +884,18 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(
+                                        Icon(
                                           Icons.check_circle_rounded,
                                           size: 12,
-                                          color: AppColors.goHardGreen,
+                                          color: context.accent,
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
                                           '$setsCount set${setsCount == 1 ? '' : 's'}',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
-                                            color: AppColors.goHardGreen,
+                                            color: context.accent,
                                           ),
                                         ),
                                       ],

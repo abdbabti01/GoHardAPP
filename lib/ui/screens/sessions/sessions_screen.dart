@@ -334,7 +334,7 @@ class _SessionsScreenState extends State<SessionsScreen>
             width: 4,
             height: 20,
             decoration: BoxDecoration(
-              color: AppColors.goHardGreen.withValues(alpha: 0.5),
+              color: context.accent.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -435,10 +435,10 @@ class _SessionsScreenState extends State<SessionsScreen>
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: AppColors.goHardGreen.withValues(alpha: 0.12),
+              color: context.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, size: 18, color: AppColors.goHardGreen),
+            child: Icon(icon, size: 18, color: context.accent),
           ),
           const SizedBox(width: 12),
           Text(
@@ -455,7 +455,7 @@ class _SessionsScreenState extends State<SessionsScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: context.primaryGradient,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
@@ -980,7 +980,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                                     vertical: 14,
                                   ),
                                   decoration: BoxDecoration(
-                                    gradient: AppColors.primaryGradient,
+                                    gradient: context.primaryGradient,
                                     borderRadius: BorderRadius.circular(14),
                                   ),
                                   child: Row(
@@ -1021,11 +1021,11 @@ class _SessionsScreenState extends State<SessionsScreen>
                                 width: 100,
                                 height: 100,
                                 decoration: BoxDecoration(
-                                  gradient: AppColors.primaryGradient,
+                                  gradient: context.primaryGradient,
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.goHardGreen.withValues(
+                                      color: context.accent.withValues(
                                         alpha: 0.3,
                                       ),
                                       blurRadius: 20,
@@ -1070,12 +1070,10 @@ class _SessionsScreenState extends State<SessionsScreen>
                                   vertical: 10,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.goHardGreen.withValues(
-                                    alpha: 0.1,
-                                  ),
+                                  color: context.accent.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: AppColors.goHardGreen.withValues(
+                                    color: context.accent.withValues(
                                       alpha: 0.2,
                                     ),
                                   ),
@@ -1086,13 +1084,13 @@ class _SessionsScreenState extends State<SessionsScreen>
                                     Icon(
                                       Icons.arrow_downward_rounded,
                                       size: 16,
-                                      color: AppColors.goHardGreen,
+                                      color: context.accent,
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
                                       'Tap + to begin',
                                       style: TextStyle(
-                                        color: AppColors.goHardGreen,
+                                        color: context.accent,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -1230,7 +1228,7 @@ class _SessionsScreenState extends State<SessionsScreen>
                         HapticService.refresh();
                         await _handleRefresh();
                       },
-                      color: AppColors.goHardGreen,
+                      color: context.accent,
                       backgroundColor: context.surface,
                       child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),

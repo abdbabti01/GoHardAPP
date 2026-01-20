@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../../core/constants/colors.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../providers/body_metrics_provider.dart';
 import '../../../data/models/body_metric.dart';
 import '../../widgets/common/loading_indicator.dart';
@@ -707,12 +707,12 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
           onPressed: _isAdding ? null : _addMetric,
           child:
               _isAdding
-                  ? const SizedBox(
+                  ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.goHardGreen,
+                      color: context.accent,
                     ),
                   )
                   : const Text('Save'),

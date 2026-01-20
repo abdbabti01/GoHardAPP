@@ -238,7 +238,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                                 isSelected:
                                     provider.selectedDifficulty == 'Beginner',
                                 label: 'Beginner',
-                                color: AppColors.goHardGreen,
+                                color: context.accent,
                                 onTap:
                                     () =>
                                         provider.filterByDifficulty('Beginner'),
@@ -461,7 +461,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
   Color _getDifficultyColor(String difficulty) {
     switch (difficulty) {
       case 'Beginner':
-        return AppColors.goHardGreen;
+        return context.accent;
       case 'Intermediate':
         return AppColors.goHardOrange;
       case 'Advanced':
@@ -558,7 +558,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                           vertical: 14,
                         ),
                         decoration: BoxDecoration(
-                          gradient: AppColors.primaryGradient,
+                          gradient: context.primaryGradient,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Row(
@@ -767,7 +767,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                     HapticService.refresh();
                     await _handleRefresh();
                   },
-                  color: AppColors.goHardGreen,
+                  color: context.accent,
                   backgroundColor: context.surface,
                   child: _buildDifficultyOrganizedList(provider),
                 ),

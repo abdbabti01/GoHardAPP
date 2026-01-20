@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../core/constants/colors.dart';
 import '../../../../core/services/haptic_service.dart';
 import '../../../../core/services/onboarding_storage.dart';
 import '../../../../core/theme/theme_colors.dart';
@@ -106,11 +105,11 @@ class _ExperienceCard extends StatelessWidget {
         decoration: BoxDecoration(
           color:
               isSelected
-                  ? AppColors.accentGreen.withValues(alpha: 0.1)
+                  ? context.accent.withValues(alpha: 0.1)
                   : context.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppColors.accentGreen : context.border,
+            color: isSelected ? context.accent : context.border,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -123,7 +122,7 @@ class _ExperienceCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color:
                     isSelected
-                        ? AppColors.accentGreen.withValues(alpha: 0.2)
+                        ? context.accent.withValues(alpha: 0.2)
                         : context.surfaceElevated,
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -145,10 +144,7 @@ class _ExperienceCard extends StatelessWidget {
                   Text(
                     ExperienceLevel.getDisplayName(level),
                     style: AppTypography.titleLarge.copyWith(
-                      color:
-                          isSelected
-                              ? AppColors.accentGreen
-                              : context.textPrimary,
+                      color: isSelected ? context.accent : context.textPrimary,
                       fontWeight:
                           isSelected ? FontWeight.w700 : FontWeight.w600,
                     ),
@@ -170,10 +166,10 @@ class _ExperienceCard extends StatelessWidget {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.accentGreen : Colors.transparent,
+                color: isSelected ? context.accent : Colors.transparent,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? AppColors.accentGreen : context.border,
+                  color: isSelected ? context.accent : context.border,
                   width: 2,
                 ),
               ),

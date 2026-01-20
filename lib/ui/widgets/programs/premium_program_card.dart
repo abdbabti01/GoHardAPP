@@ -25,7 +25,7 @@ class PremiumProgramHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = program.progressPercentage / 100;
     final isCompleted = program.isCompleted;
-    final phaseColor = _getPhaseColor(program.phaseName);
+    final phaseColor = _getPhaseColor(context, program.phaseName);
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -39,7 +39,7 @@ class PremiumProgramHeader extends StatelessWidget {
         border: Border.all(
           color:
               isCompleted
-                  ? AppColors.accentGreen.withValues(alpha: 0.4)
+                  ? context.accent.withValues(alpha: 0.4)
                   : context.border,
           width: isCompleted ? 1.5 : 1,
         ),
@@ -143,8 +143,8 @@ class PremiumProgramHeader extends StatelessWidget {
           progress: progress,
           size: 100,
           strokeWidth: 8,
-          progressColor: isCompleted ? AppColors.accentGreen : phaseColor,
-          backgroundColor: (isCompleted ? AppColors.accentGreen : phaseColor)
+          progressColor: isCompleted ? context.accent : phaseColor,
+          backgroundColor: (isCompleted ? context.accent : phaseColor)
               .withValues(alpha: 0.12),
         ),
         Column(
@@ -298,7 +298,7 @@ class PremiumProgramHeader extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: AppColors.accentGreen.withValues(alpha: 0.3),
+            color: context.accent.withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -318,14 +318,14 @@ class PremiumProgramHeader extends StatelessWidget {
     );
   }
 
-  Color _getPhaseColor(String phase) {
+  Color _getPhaseColor(BuildContext context, String phase) {
     switch (phase.toLowerCase()) {
       case 'foundation':
         return AppColors.accentSky;
       case 'progressive overload':
         return AppColors.accentCoral;
       case 'peak performance':
-        return AppColors.accentGreen;
+        return context.accent;
       default:
         return AppColors.accentSky;
     }
@@ -350,7 +350,12 @@ class PremiumWorkoutCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCompleted = workout.isCompleted;
-    final statusColor = _getStatusColor(isCompleted, isToday, isMissed);
+    final statusColor = _getStatusColor(
+      context,
+      isCompleted,
+      isToday,
+      isMissed,
+    );
 
     return PremiumTapAnimation(
       onTap: () {
@@ -550,14 +555,10 @@ class PremiumWorkoutCard extends StatelessWidget {
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: AppColors.accentGreen.withValues(alpha: 0.12),
+          color: context.accent.withValues(alpha: 0.12),
           shape: BoxShape.circle,
         ),
-        child: const Icon(
-          Icons.check_rounded,
-          color: AppColors.accentGreen,
-          size: 20,
-        ),
+        child: Icon(Icons.check_rounded, color: context.accent, size: 20),
       );
     }
 
@@ -588,8 +589,13 @@ class PremiumWorkoutCard extends StatelessWidget {
     return workout.exerciseCount;
   }
 
-  Color _getStatusColor(bool isCompleted, bool isToday, bool isMissed) {
-    if (isCompleted) return AppColors.accentGreen;
+  Color _getStatusColor(
+    BuildContext context,
+    bool isCompleted,
+    bool isToday,
+    bool isMissed,
+  ) {
+    if (isCompleted) return context.accent;
     if (isMissed) return AppColors.accentRose;
     if (isToday) return AppColors.accentCoral;
     return AppColors.accentSky;
@@ -618,13 +624,13 @@ class ProgramSelectorCard extends StatelessWidget {
         decoration: BoxDecoration(
           color:
               isSelected
-                  ? AppColors.accentGreen.withValues(alpha: 0.1)
+                  ? context.accent.withValues(alpha: 0.1)
                   : context.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color:
                 isSelected
-                    ? AppColors.accentGreen.withValues(alpha: 0.4)
+                    ? context.accent.withValues(alpha: 0.4)
                     : context.border,
             width: isSelected ? 1.5 : 1,
           ),
@@ -641,12 +647,10 @@ class ProgramSelectorCard extends StatelessWidget {
                   CircularProgressIndicator(
                     value: program.progressPercentage / 100,
                     strokeWidth: 4,
-                    backgroundColor: AppColors.accentGreen.withValues(
-                      alpha: 0.12,
-                    ),
+                    backgroundColor: context.accent.withValues(alpha: 0.12),
                     valueColor: AlwaysStoppedAnimation(
                       program.isCompleted
-                          ? AppColors.accentGreen
+                          ? context.accent
                           : AppColors.accentSky,
                     ),
                   ),
@@ -684,7 +688,7 @@ class ProgramSelectorCard extends StatelessWidget {
               ),
             ),
             if (isSelected)
-              Icon(Icons.check_circle, color: AppColors.accentGreen, size: 22),
+              Icon(Icons.check_circle, color: context.accent, size: 22),
           ],
         ),
       ),

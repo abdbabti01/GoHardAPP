@@ -293,9 +293,7 @@ class _StreakDisplayState extends State<StreakDisplay>
                       strokeWidth: 4,
                       backgroundColor: Colors.transparent,
                       valueColor: AlwaysStoppedAnimation(
-                        isComplete
-                            ? AppColors.accentGreen
-                            : AppColors.accentSky,
+                        isComplete ? context.accent : AppColors.accentSky,
                       ),
                       strokeCap: StrokeCap.round,
                     ),

@@ -35,7 +35,7 @@ class SessionCard extends StatelessWidget {
     // Status-based colors
     final statusColor =
         isCompleted
-            ? AppColors.accentGreen
+            ? context.accent
             : (isInProgress ? AppColors.accentCoral : AppColors.accentSky);
 
     final statusGradient =

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../core/constants/colors.dart';
 import '../../../../core/services/haptic_service.dart';
 import '../../../../core/services/onboarding_storage.dart';
 import '../../../../core/theme/theme_colors.dart';
@@ -88,7 +87,7 @@ class GoalsPage extends StatelessWidget {
                     style: AppTypography.bodyMedium.copyWith(
                       color:
                           provider.selectedGoals.isNotEmpty
-                              ? AppColors.accentGreen
+                              ? context.accent
                               : context.textTertiary,
                       fontWeight: FontWeight.w500,
                     ),
@@ -126,11 +125,11 @@ class _GoalCard extends StatelessWidget {
         decoration: BoxDecoration(
           color:
               isSelected
-                  ? AppColors.accentGreen.withValues(alpha: 0.1)
+                  ? context.accent.withValues(alpha: 0.1)
                   : context.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppColors.accentGreen : context.border,
+            color: isSelected ? context.accent : context.border,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -151,8 +150,7 @@ class _GoalCard extends StatelessWidget {
               Text(
                 FitnessGoals.getDisplayName(goal),
                 style: AppTypography.titleMedium.copyWith(
-                  color:
-                      isSelected ? AppColors.accentGreen : context.textPrimary,
+                  color: isSelected ? context.accent : context.textPrimary,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
@@ -165,7 +163,7 @@ class _GoalCard extends StatelessWidget {
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: AppColors.accentGreen,
+                    color: context.accent,
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(

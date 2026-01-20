@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../../core/constants/colors.dart';
 import '../../../../core/theme/theme_colors.dart';
 import '../../../../core/theme/typography.dart';
 import '../../../widgets/common/animations.dart';
@@ -28,7 +27,7 @@ class WelcomePage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.accentGreen.withValues(alpha: 0.2),
+                    color: context.accent.withValues(alpha: 0.2),
                     blurRadius: 30,
                     spreadRadius: 5,
                   ),
@@ -43,7 +42,7 @@ class WelcomePage extends StatelessWidget {
                       (context, error, stackTrace) => Icon(
                         Icons.fitness_center_rounded,
                         size: 60,
-                        color: AppColors.accentGreen,
+                        color: context.accent,
                       ),
                 ),
               ),
@@ -143,10 +142,10 @@ class WelcomePage extends StatelessWidget {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: AppColors.accentGreen.withValues(alpha: 0.1),
+            color: context.accent.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(icon, size: 20, color: AppColors.accentGreen),
+          child: Icon(icon, size: 20, color: context.accent),
         ),
         const SizedBox(width: 12),
         SizedBox(

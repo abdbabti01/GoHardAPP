@@ -39,6 +39,7 @@ class ProgressRing extends StatefulWidget {
     required int total,
     double size = 120,
     Widget? centerContent,
+    Gradient? progressGradient,
   }) {
     final progress = total > 0 ? completed / total : 0.0;
     return ProgressRing(
@@ -46,7 +47,7 @@ class ProgressRing extends StatefulWidget {
       progress: progress.clamp(0.0, 1.0),
       size: size,
       strokeWidth: 10,
-      progressGradient: AppColors.primaryGradient,
+      progressGradient: progressGradient,
       centerContent: centerContent,
     );
   }
@@ -79,7 +80,7 @@ class ProgressRing extends StatefulWidget {
       progress: progress.clamp(0.0, 1.0),
       size: 40,
       strokeWidth: 4,
-      progressColor: color ?? AppColors.accentGreen,
+      progressColor: color,
       showPercentage: false,
     );
   }
@@ -162,8 +163,8 @@ class _ProgressRingState extends State<ProgressRing>
                 painter: _RingPainter(
                   progress: animatedProgress,
                   strokeWidth: widget.strokeWidth,
-                  color: widget.progressColor,
-                  gradient: widget.progressGradient,
+                  color: widget.progressColor ?? context.accent,
+                  gradient: widget.progressGradient ?? context.primaryGradient,
                 ),
               ),
               // Center content
@@ -187,13 +188,13 @@ class _ProgressRingState extends State<ProgressRing>
 class _RingPainter extends CustomPainter {
   final double progress;
   final double strokeWidth;
-  final Color? color;
+  final Color color;
   final Gradient? gradient;
 
   _RingPainter({
     required this.progress,
     required this.strokeWidth,
-    this.color,
+    required this.color,
     this.gradient,
   });
 
@@ -212,7 +213,7 @@ class _RingPainter extends CustomPainter {
     if (gradient != null) {
       paint.shader = gradient!.createShader(rect);
     } else {
-      paint.color = color ?? AppColors.accentGreen;
+      paint.color = color;
     }
 
     // Start from top (-90 degrees = -pi/2)
@@ -269,9 +270,7 @@ class MultiProgressRing extends StatelessWidget {
       strokeWidth: strokeWidth,
       progressColor: ring.color,
       progressGradient: ring.gradient,
-      backgroundColor: (ring.color ?? AppColors.accentGreen).withValues(
-        alpha: 0.15,
-      ),
+      backgroundColor: (ring.color ?? context.accent).withValues(alpha: 0.15),
     );
   }
 }
@@ -314,7 +313,7 @@ class WeeklyGoalRing extends StatelessWidget {
       size: size,
       strokeWidth: 8,
       progressGradient:
-          isComplete ? AppColors.successGradient : AppColors.primaryGradient,
+          isComplete ? AppColors.successGradient : context.primaryGradient,
       centerContent: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

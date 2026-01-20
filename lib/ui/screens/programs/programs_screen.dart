@@ -266,9 +266,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                         strokeWidth: 6,
                         backgroundColor: phaseColor.withValues(alpha: 0.15),
                         valueColor: AlwaysStoppedAnimation(
-                          program.isCompleted
-                              ? AppColors.accentGreen
-                              : phaseColor,
+                          program.isCompleted ? context.accent : phaseColor,
                         ),
                         strokeCap: StrokeCap.round,
                       ),
@@ -350,7 +348,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.accentGreen.withValues(alpha: 0.3),
+                    color: context.accent.withValues(alpha: 0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -754,7 +752,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       case 'progressive overload':
         return AppColors.accentCoral;
       case 'peak performance':
-        return AppColors.accentGreen;
+        return context.accent;
       default:
         return AppColors.accentSky;
     }

@@ -71,7 +71,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
+                    gradient: context.primaryGradient,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
@@ -123,7 +123,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
     return RefreshIndicator(
       onRefresh: () => provider.refresh(),
-      color: AppColors.goHardGreen,
+      color: context.accent,
       backgroundColor: context.surface,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),

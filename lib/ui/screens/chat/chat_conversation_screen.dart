@@ -167,7 +167,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
             content: Text(
               'Created program "$programTitle" with $workoutCount workouts!',
             ),
-            backgroundColor: AppColors.goHardGreen,
+            backgroundColor: context.accent,
             duration: const Duration(seconds: 3),
           ),
         );
@@ -624,7 +624,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: AppColors.goHardGreen,
+                                color: context.accent,
                               ),
                             ),
                             const SizedBox(width: 12),

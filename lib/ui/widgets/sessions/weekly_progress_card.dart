@@ -58,16 +58,14 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color:
-              isOnFire
-                  ? AppColors.goHardGreen.withValues(alpha: 0.3)
-                  : context.border,
+              isOnFire ? context.accent.withValues(alpha: 0.3) : context.border,
           width: isOnFire ? 1.5 : 0.5,
         ),
         boxShadow:
             isOnFire
                 ? [
                   BoxShadow(
-                    color: AppColors.goHardGreen.withValues(alpha: 0.15),
+                    color: context.accent.withValues(alpha: 0.15),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -87,11 +85,11 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
+                    gradient: context.primaryGradient,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.goHardGreen.withValues(alpha: 0.3),
+                        color: context.accent.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -222,7 +220,7 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          gradient: isSelected ? AppColors.primaryGradient : null,
+          gradient: isSelected ? context.primaryGradient : null,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
@@ -392,19 +390,19 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppColors.goHardGreen.withValues(alpha: 0.15),
+            context.accent.withValues(alpha: 0.15),
             AppColors.goHardCyan.withValues(alpha: 0.1),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.goHardGreen.withValues(alpha: 0.3)),
+        border: Border.all(color: context.accent.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
+              gradient: context.primaryGradient,
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -419,7 +417,7 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
               'Crushing it! Keep the momentum going!',
               style: TextStyle(
                 fontSize: 13,
-                color: AppColors.goHardGreen,
+                color: context.accent,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -437,7 +435,7 @@ class _WeeklyProgressCardState extends State<WeeklyProgressCard> {
   }
 
   Color _getProgressColor(int percentage) {
-    if (percentage >= 80) return AppColors.goHardGreen;
+    if (percentage >= 80) return context.accent;
     if (percentage >= 50) return AppColors.goHardOrange;
     return AppColors.goHardBlue;
   }

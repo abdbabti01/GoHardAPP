@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
 
 /// Premium bottom navigation bar with notched FAB
-/// Features electric green FAB with glow effect
+/// Features dynamic accent color FAB with glow effect
 class CurvedNavigationBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -36,7 +35,7 @@ class CurvedNavigationBar extends StatelessWidget {
     final bgColor = backgroundColor ?? context.navBarBackground;
     final activeColor = selectedColor ?? context.navBarSelected;
     final inactiveColor = unselectedColor ?? context.navBarUnselected;
-    final fabBgColor = fabColor ?? AppColors.goHardGreen;
+    final fabBgColor = fabColor ?? context.accent;
     final borderColor = context.border;
 
     const double notchRadius = 38;
@@ -142,7 +141,11 @@ class CurvedNavigationBar extends StatelessWidget {
                   width: fabSize,
                   height: fabSize,
                   decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
+                    gradient: LinearGradient(
+                      colors: [context.accentDark, context.accent],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       // Glow effect
@@ -160,9 +163,9 @@ class CurvedNavigationBar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.add_rounded,
-                    color: AppColors.goHardBlack,
+                    color: context.isDarkMode ? Colors.white : Colors.black,
                     size: 32,
                   ),
                 ),

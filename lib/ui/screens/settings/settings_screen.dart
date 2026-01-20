@@ -241,7 +241,7 @@ class SettingsScreen extends StatelessWidget {
                 // Health integration toggle
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  secondary: Icon(platformIcon, color: AppColors.accentGreen),
+                  secondary: Icon(platformIcon, color: context.accent),
                   title: Text(
                     platformName,
                     style: const TextStyle(
@@ -255,7 +255,7 @@ class SettingsScreen extends StatelessWidget {
                         : 'Sync workouts with $platformName',
                   ),
                   value: healthService.isEnabled,
-                  activeColor: AppColors.accentGreen,
+                  activeColor: context.accent,
                   onChanged: (value) async {
                     if (value) {
                       final success = await healthService.enable();
@@ -285,12 +285,12 @@ class SettingsScreen extends StatelessWidget {
                     future: healthService.getHealthSummary(),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
-                        return const Center(
+                        return Center(
                           child: Padding(
-                            padding: EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(16),
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: AppColors.goHardGreen,
+                              color: context.accent,
                             ),
                           ),
                         );
@@ -351,7 +351,7 @@ class SettingsScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(icon, color: AppColors.accentGreen, size: 24),
+          Icon(icon, color: context.accent, size: 24),
           const SizedBox(height: 8),
           Text(
             value,

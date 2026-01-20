@@ -126,7 +126,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           vertical: 14,
                         ),
                         decoration: BoxDecoration(
-                          gradient: AppColors.primaryGradient,
+                          gradient: context.primaryGradient,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Text(
@@ -147,7 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           return RefreshIndicator(
             onRefresh: _handleRefresh,
-            color: AppColors.goHardGreen,
+            color: context.accent,
             backgroundColor: context.surface,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -235,12 +235,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: AppColors.goHardGreen.withValues(alpha: 0.2),
+            color: context.accent.withValues(alpha: 0.2),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.goHardGreen.withValues(alpha: 0.08),
+              color: context.accent.withValues(alpha: 0.08),
               blurRadius: 20,
               offset: const Offset(0, 4),
             ),
@@ -252,7 +252,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Container(
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: context.primaryGradient,
                 shape: BoxShape.circle,
               ),
               child: CircleAvatar(
@@ -314,7 +314,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.goHardGreen.withValues(alpha: 0.15),
+                      color: context.accent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -323,7 +323,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Icon(
                           Icons.edit_rounded,
                           size: 12,
-                          color: AppColors.goHardGreen,
+                          color: context.accent,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -331,7 +331,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.goHardGreen,
+                            color: context.accent,
                           ),
                         ),
                       ],
@@ -459,7 +459,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         icon: Icons.monitor_weight_rounded,
         label: 'Body Metrics',
         subtitle: 'Log measurements',
-        color: AppColors.goHardGreen,
+        color: context.accent,
         onTap:
             () => Navigator.push(
               context,

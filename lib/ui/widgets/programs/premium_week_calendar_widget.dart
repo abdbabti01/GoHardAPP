@@ -320,7 +320,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
             Icon(
               Icons.check_circle,
               size: 14,
-              color: isToday ? Colors.white : AppColors.accentGreen,
+              color: isToday ? Colors.white : context.accent,
             )
           else if (hasWorkouts)
             Container(
@@ -521,7 +521,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                 ),
               ],
             ),
-            backgroundColor: AppColors.accentGreen,
+            backgroundColor: context.accent,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
@@ -1053,13 +1053,13 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                   Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: AppColors.accentGreen.withValues(alpha: 0.15),
+                      color: context.accent.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.check_circle,
                       size: 18,
-                      color: AppColors.accentGreen,
+                      color: context.accent,
                     ),
                   )
                 else if (hasWorkouts)
@@ -1162,7 +1162,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     Color accentColor;
     IconData iconData;
     if (isCompleted) {
-      accentColor = AppColors.accentGreen;
+      accentColor = context.accent;
       iconData = Icons.check_circle_rounded;
     } else if (isMissed) {
       accentColor = AppColors.accentCoral;
