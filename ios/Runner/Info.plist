@@ -52,5 +52,16 @@
 	<string>GoHard needs photo library access to select profile photos</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>GoHard needs permission to save photos to your library</string>
+	<!-- Location permissions for GPS tracking -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>GoHard needs your location to track your running route and calculate distance</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>GoHard needs your location to track your running route even when the app is in the background</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>GoHard needs your location to track your running route even when the app is in the background</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 </dict>
 </plist>

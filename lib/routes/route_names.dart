@@ -55,6 +55,11 @@ class RouteNames {
   // Achievement routes
   static const String achievements = '/achievements';
 
+  // Running routes
+  static const String activeRun = '/active-run';
+  static const String runHistory = '/run-history';
+  static const String runDetail = '/run-detail';
+
   // Initial route (shown when app starts)
   static const String initial = login;
 }

@@ -25,6 +25,9 @@ import '../ui/screens/programs/program_detail_screen.dart';
 import '../ui/screens/programs/program_workout_screen.dart';
 import '../ui/screens/onboarding/onboarding_screen.dart';
 import '../ui/screens/achievements/achievements_screen.dart';
+import '../ui/screens/running/active_run_screen.dart';
+import '../ui/screens/running/run_history_screen.dart';
+import '../ui/screens/running/run_detail_screen.dart';
 
 /// Central router for the application
 /// Handles route generation and navigation logic
@@ -295,6 +298,37 @@ class AppRouter {
       case RouteNames.achievements:
         return MaterialPageRoute(
           builder: (_) => const AchievementsScreen(),
+          settings: settings,
+        );
+
+      // Running routes
+      case RouteNames.activeRun:
+        final runId = settings.arguments as int?;
+        if (runId == null) {
+          return MaterialPageRoute(
+            builder: (_) => const _NotFoundScreen(routeName: 'active-run'),
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => ActiveRunScreen(runId: runId),
+          settings: settings,
+        );
+
+      case RouteNames.runHistory:
+        return MaterialPageRoute(
+          builder: (_) => const RunHistoryScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.runDetail:
+        final runId = settings.arguments as int?;
+        if (runId == null) {
+          return MaterialPageRoute(
+            builder: (_) => const _NotFoundScreen(routeName: 'run-detail'),
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => RunDetailScreen(runId: runId),
           settings: settings,
         );
 

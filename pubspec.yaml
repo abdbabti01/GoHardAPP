@@ -88,6 +88,15 @@ dependencies:
   # Health / Fitness Data Integration (Apple Health / Google Fit)
   health: ^10.2.0
 
+  # GPS/Location tracking for running
+  geolocator: ^11.0.0
+
+  # Google Maps for route display
+  google_maps_flutter: ^2.5.0
+
+  # Route line drawing on maps
+  flutter_polyline_points: ^2.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

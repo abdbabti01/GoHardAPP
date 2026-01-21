@@ -17,6 +17,7 @@ import 'data/repositories/workout_template_repository.dart';
 import 'data/repositories/goals_repository.dart';
 import 'data/repositories/body_metrics_repository.dart';
 import 'data/repositories/programs_repository.dart';
+import 'data/repositories/running_repository.dart';
 import 'data/local/services/local_database_service.dart';
 import 'core/services/connectivity_service.dart';
 import 'core/services/sync_service.dart';
@@ -42,6 +43,7 @@ import 'providers/music_player_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/onboarding_provider.dart';
 import 'providers/achievements_provider.dart';
+import 'providers/running_provider.dart';
 import 'data/repositories/achievement_repository.dart';
 import 'core/services/health_service.dart';
 
@@ -224,6 +226,16 @@ void main() async {
                     localDb,
                     authService,
                   ),
+        ),
+        ProxyProvider3<
+          LocalDatabaseService,
+          ConnectivityService,
+          AuthService,
+          RunningRepository
+        >(
+          update:
+              (_, localDb, connectivity, authService, __) =>
+                  RunningRepository(localDb, connectivity, authService),
         ),
 
         // Sync Service
@@ -432,6 +444,20 @@ void main() async {
           update:
               (_, programsRepo, connectivity, previous) =>
                   previous ?? ProgramsProvider(programsRepo, connectivity),
+        ),
+        ChangeNotifierProxyProvider2<
+          RunningRepository,
+          ConnectivityService,
+          RunningProvider
+        >(
+          create:
+              (context) => RunningProvider(
+                context.read<RunningRepository>(),
+                context.read<ConnectivityService>(),
+              ),
+          update:
+              (_, runningRepo, connectivity, previous) =>
+                  previous ?? RunningProvider(runningRepo, connectivity),
         ),
         ChangeNotifierProvider<MusicPlayerProvider>(
           create: (_) => MusicPlayerProvider(),

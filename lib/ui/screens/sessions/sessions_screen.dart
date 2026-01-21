@@ -14,6 +14,7 @@ import '../../../core/services/tab_navigation_service.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../widgets/sessions/session_card.dart';
 import '../../widgets/sessions/weekly_progress_card.dart';
+import '../../widgets/running/running_widget.dart';
 import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/active_workout_banner.dart';
 import '../../widgets/common/loading_indicator.dart';
@@ -1241,6 +1242,10 @@ class _SessionsScreenState extends State<SessionsScreen>
                               thisWeekSessions: allThisWeekSessions,
                               thisMonthSessions: allThisMonthSessions,
                             ),
+
+                          // Running Widget
+                          const SizedBox(height: 12),
+                          const RunningWidget(),
 
                           // Program Workouts Section
                           _buildProgramWorkoutsSection(context),

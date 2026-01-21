@@ -7,6 +7,7 @@ import '../models/local_exercise_set.dart';
 import '../models/local_exercise_template.dart';
 import '../models/local_chat_conversation.dart';
 import '../models/local_chat_message.dart';
+import '../models/local_run_session.dart';
 import '../../models/shared_workout.dart';
 import '../../models/workout_template.dart';
 import '../../models/achievement.dart';
@@ -44,6 +45,7 @@ class LocalDatabaseService {
         LocalExerciseTemplateSchema,
         LocalChatConversationSchema,
         LocalChatMessageSchema,
+        LocalRunSessionSchema,
         SharedWorkoutSchema,
         WorkoutTemplateSchema,
         AchievementSchema,
