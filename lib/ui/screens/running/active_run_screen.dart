@@ -16,13 +16,33 @@ class ActiveRunScreen extends StatefulWidget {
   State<ActiveRunScreen> createState() => _ActiveRunScreenState();
 }
 
-class _ActiveRunScreenState extends State<ActiveRunScreen> {
+class _ActiveRunScreenState extends State<ActiveRunScreen>
+    with SingleTickerProviderStateMixin {
   GoogleMapController? _mapController;
   final Set<Polyline> _polylines = {};
+
+  // Countdown state
+  bool _isCountingDown = false;
+  int _countdownValue = 3;
+  late AnimationController _countdownAnimationController;
+  late Animation<double> _countdownScale;
 
   @override
   void initState() {
     super.initState();
+
+    // Setup countdown animation
+    _countdownAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _countdownScale = Tween<double>(begin: 0.5, end: 1.2).animate(
+      CurvedAnimation(
+        parent: _countdownAnimationController,
+        curve: Curves.elasticOut,
+      ),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RunningProvider>().loadRun(widget.runId);
     });
@@ -30,8 +50,45 @@ class _ActiveRunScreenState extends State<ActiveRunScreen> {
 
   @override
   void dispose() {
+    _countdownAnimationController.dispose();
     _mapController?.dispose();
     super.dispose();
+  }
+
+  /// Start the countdown sequence
+  Future<void> _startCountdown() async {
+    // Get provider before async operations
+    final provider = context.read<RunningProvider>();
+
+    setState(() {
+      _isCountingDown = true;
+      _countdownValue = 3;
+    });
+
+    // Countdown 3, 2, 1
+    for (int i = 3; i >= 1; i--) {
+      if (!mounted) return;
+      setState(() => _countdownValue = i);
+      _countdownAnimationController.forward(from: 0);
+      HapticFeedback.mediumImpact();
+      await Future.delayed(const Duration(seconds: 1));
+    }
+
+    if (!mounted) return;
+
+    // Show "GO!"
+    setState(() => _countdownValue = 0);
+    _countdownAnimationController.forward(from: 0);
+    HapticFeedback.heavyImpact();
+
+    // Start the run
+    await provider.startCurrentRun();
+
+    // Hide countdown after brief delay
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
+      setState(() => _isCountingDown = false);
+    }
   }
 
   void _updatePolylines(List<LatLng> points) {
@@ -118,8 +175,14 @@ class _ActiveRunScreenState extends State<ActiveRunScreen> {
         if (didPop) return;
         final provider = context.read<RunningProvider>();
         if (provider.hasActiveRun) {
+          // Active run - ask to finish
           await _handleFinish();
+        } else if (provider.hasDraftRun) {
+          // Draft run - discard and leave
+          await provider.discardRun();
+          if (context.mounted) Navigator.of(context).pop();
         } else {
+          // No run - just leave
           if (context.mounted) Navigator.of(context).pop();
         }
       },
@@ -142,8 +205,9 @@ class _ActiveRunScreenState extends State<ActiveRunScreen> {
                 // Map
                 _buildMap(context, routePoints),
 
-                // Timer overlay at top
-                _buildTimerOverlay(context, provider),
+                // Timer overlay at top (only show when running)
+                if (provider.hasActiveRun)
+                  _buildTimerOverlay(context, provider),
 
                 // Stats and controls at bottom
                 _buildBottomPanel(context, provider),
@@ -154,6 +218,9 @@ class _ActiveRunScreenState extends State<ActiveRunScreen> {
                   left: 16,
                   child: _buildBackButton(context),
                 ),
+
+                // Countdown overlay
+                if (_isCountingDown) _buildCountdownOverlay(context),
               ],
             );
           },
@@ -264,73 +331,111 @@ class _ActiveRunScreenState extends State<ActiveRunScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Stats row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildStatColumn(
-                      context,
-                      provider.currentDistance.toStringAsFixed(2),
-                      'km',
-                      'Distance',
+                // Stats row or ready message
+                if (provider.hasDraftRun)
+                  // Draft mode: Show ready message
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.directions_run_rounded,
+                          size: 48,
+                          color: context.accent,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Ready to Run',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: context.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Press Start to begin your run',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
-                    Container(width: 1, height: 40, color: context.border),
-                    _buildStatColumn(
-                      context,
-                      provider.formattedPace,
-                      '/km',
-                      'Pace',
-                    ),
-                    Container(width: 1, height: 40, color: context.border),
-                    _buildStatColumn(
-                      context,
-                      ((provider.currentDistance * 60).round()).toString(),
-                      'cal',
-                      'Calories',
-                    ),
-                  ],
-                ),
+                  )
+                else
+                  // Running mode: Show stats
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildStatColumn(
+                        context,
+                        provider.currentDistance.toStringAsFixed(2),
+                        'km',
+                        'Distance',
+                      ),
+                      Container(width: 1, height: 40, color: context.border),
+                      _buildStatColumn(
+                        context,
+                        provider.formattedPace,
+                        '/km',
+                        'Pace',
+                      ),
+                      Container(width: 1, height: 40, color: context.border),
+                      _buildStatColumn(
+                        context,
+                        ((provider.currentDistance * 60).round()).toString(),
+                        'cal',
+                        'Calories',
+                      ),
+                    ],
+                  ),
 
                 const SizedBox(height: 24),
 
-                // Control buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    // Pause/Resume button
-                    _buildControlButton(
-                      context,
-                      icon:
-                          provider.isTimerRunning
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                      label: provider.isTimerRunning ? 'Pause' : 'Resume',
-                      onTap: () {
-                        HapticFeedback.mediumImpact();
-                        if (provider.isTimerRunning) {
-                          provider.pauseRun();
-                        } else {
-                          provider.resumeRun();
-                        }
-                      },
-                      isPrimary: true,
-                      color: context.accent,
-                    ),
+                // Control buttons - different for draft vs running
+                if (provider.hasDraftRun)
+                  // Draft mode: Show big Start button
+                  _buildStartRunButton(context)
+                else
+                  // Running mode: Show Pause/Resume and Finish
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      // Pause/Resume button
+                      _buildControlButton(
+                        context,
+                        icon:
+                            provider.isTimerRunning
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                        label: provider.isTimerRunning ? 'Pause' : 'Resume',
+                        onTap: () {
+                          HapticFeedback.mediumImpact();
+                          if (provider.isTimerRunning) {
+                            provider.pauseRun();
+                          } else {
+                            provider.resumeRun();
+                          }
+                        },
+                        isPrimary: true,
+                        color: context.accent,
+                      ),
 
-                    // Stop button
-                    _buildControlButton(
-                      context,
-                      icon: Icons.stop_rounded,
-                      label: 'Finish',
-                      onTap: () {
-                        HapticFeedback.heavyImpact();
-                        _handleFinish();
-                      },
-                      isPrimary: false,
-                      color: context.accentCoral,
-                    ),
-                  ],
-                ),
+                      // Stop button
+                      _buildControlButton(
+                        context,
+                        icon: Icons.stop_rounded,
+                        label: 'Finish',
+                        onTap: () {
+                          HapticFeedback.heavyImpact();
+                          _handleFinish();
+                        },
+                        isPrimary: false,
+                        color: context.accentCoral,
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -385,6 +490,55 @@ class _ActiveRunScreenState extends State<ActiveRunScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Build the big "Start Run" button for draft mode
+  Widget _buildStartRunButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.heavyImpact();
+        _startCountdown();
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [context.accent, context.accentMuted],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: context.accent.withValues(alpha: 0.4),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.play_arrow_rounded,
+              size: 32,
+              color: AppColors.goHardBlack,
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Start Run',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.goHardBlack,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -456,6 +610,51 @@ class _ActiveRunScreenState extends State<ActiveRunScreen> {
           ],
         ),
         child: Icon(Icons.arrow_back_rounded, color: context.textPrimary),
+      ),
+    );
+  }
+
+  /// Build the countdown overlay
+  Widget _buildCountdownOverlay(BuildContext context) {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.85),
+      child: Center(
+        child: AnimatedBuilder(
+          animation: _countdownAnimationController,
+          builder: (context, child) {
+            return Transform.scale(scale: _countdownScale.value, child: child);
+          },
+          child: Container(
+            width: 180,
+            height: 180,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [context.accent, context.accentMuted],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: context.accent.withValues(alpha: 0.5),
+                  blurRadius: 40,
+                  spreadRadius: 10,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                _countdownValue > 0 ? '$_countdownValue' : 'GO!',
+                style: TextStyle(
+                  fontSize: _countdownValue > 0 ? 80 : 48,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.goHardBlack,
+                  letterSpacing: -2,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

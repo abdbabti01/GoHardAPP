@@ -137,8 +137,8 @@ class _RunningWidgetState extends State<RunningWidget> {
                           return;
                         }
 
-                        // Otherwise start new run
-                        final runId = await provider.startNewRun();
+                        // Create draft run and navigate (don't start yet)
+                        final runId = await provider.createDraftRun();
                         if (runId != null && context.mounted) {
                           Navigator.pushNamed(
                             context,

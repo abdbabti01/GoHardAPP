@@ -55,6 +55,7 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool get isGpsActive => _isGpsActive;
   bool get hasActiveRun =>
       _currentRun != null && _currentRun!.status == 'in_progress';
+  bool get hasDraftRun => _currentRun != null && _currentRun!.status == 'draft';
 
   /// Current pace in min/km
   double? get currentPace {
@@ -166,7 +167,59 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Create and start a new run
+  /// Create a draft run without starting (for navigation to active screen)
+  Future<int?> createDraftRun() async {
+    try {
+      // Check location permissions first
+      final hasPermission = await _checkLocationPermission();
+      if (!hasPermission) {
+        _errorMessage = 'Location permission required for running';
+        notifyListeners();
+        return null;
+      }
+
+      // Create new run session (draft status)
+      _currentRun = await _runningRepository.createRunSession();
+      _elapsedTime = Duration.zero;
+      _routePoints = [];
+      _currentDistance = 0;
+      _lastPosition = null;
+
+      debugPrint('🏃 Draft run created: ${_currentRun!.id}');
+      notifyListeners();
+      return _currentRun!.id;
+    } catch (e) {
+      _errorMessage = 'Failed to create run: $e';
+      debugPrint('Create draft run error: $e');
+      notifyListeners();
+      return null;
+    }
+  }
+
+  /// Start the current run (called after countdown)
+  Future<bool> startCurrentRun() async {
+    if (_currentRun == null) return false;
+
+    try {
+      // Start the run
+      _currentRun = await _runningRepository.startRun(_currentRun!.id);
+      _elapsedTime = Duration.zero;
+
+      _startTimer();
+      await _startGpsTracking();
+
+      debugPrint('🏃 Run started: ${_currentRun!.id}');
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Failed to start run: $e';
+      debugPrint('Start run error: $e');
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Create and start a new run (legacy method, still used for quick start)
   Future<int?> startNewRun() async {
     try {
       // Check location permissions first
