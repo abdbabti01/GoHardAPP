@@ -4,15 +4,15 @@ class ApiConfig {
   ApiConfig._(); // Private constructor to prevent instantiation
 
   /// Base URL for the GoHardAPI backend
-  /// Production: https://gohardapi-production.up.railway.app/api
+  /// Production: https://gohardapi-production.up.railway.app/api/v1
   static String get baseUrl {
     // Production URL - hosted on Railway
-    return 'https://gohardapi-production.up.railway.app/api/';
+    return 'https://gohardapi-production.up.railway.app/api/v1/';
 
     // For local development, uncomment the appropriate line below:
-    // iOS/macOS: return 'http://localhost:5121/api/';
-    // Android Emulator: return 'http://10.0.2.2:5121/api/';
-    // Physical device on WiFi: return 'http://YOUR_IP:5121/api/';
+    // iOS/macOS: return 'http://localhost:5121/api/v1/';
+    // Android Emulator: return 'http://10.0.2.2:5121/api/v1/';
+    // Physical device on WiFi: return 'http://YOUR_IP:5121/api/v1/';
   }
 
   /// Server URL without /api suffix (for static files like profile photos)
