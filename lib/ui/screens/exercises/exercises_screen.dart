@@ -19,12 +19,8 @@ class ExercisesScreen extends StatefulWidget {
 }
 
 class _ExercisesScreenState extends State<ExercisesScreen> {
-  // Track expanded state for difficulty sections
-  final Map<String, bool> _expandedSections = {
-    'Beginner': true,
-    'Intermediate': true,
-    'Advanced': true,
-  };
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -33,6 +29,13 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ExercisesProvider>().loadExercises();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
   }
 
   Future<void> _handleRefresh() async {
@@ -197,10 +200,48 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                               _buildFilterChip(
                                 context,
                                 isSelected:
-                                    provider.selectedMuscleGroup == 'Core',
-                                label: 'Core',
+                                    provider.selectedMuscleGroup == 'Abs',
+                                label: 'Abs',
                                 onTap:
-                                    () => provider.filterByMuscleGroup('Core'),
+                                    () => provider.filterByMuscleGroup('Abs'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == 'Glutes',
+                                label: 'Glutes',
+                                onTap:
+                                    () =>
+                                        provider.filterByMuscleGroup('Glutes'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == 'Traps',
+                                label: 'Traps',
+                                onTap:
+                                    () => provider.filterByMuscleGroup('Traps'),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup == 'Forearms',
+                                label: 'Forearms',
+                                onTap:
+                                    () => provider.filterByMuscleGroup(
+                                      'Forearms',
+                                    ),
+                              ),
+                              _buildFilterChip(
+                                context,
+                                isSelected:
+                                    provider.selectedMuscleGroup ==
+                                    'Lower Back',
+                                label: 'Lower Back',
+                                onTap:
+                                    () => provider.filterByMuscleGroup(
+                                      'Lower Back',
+                                    ),
                               ),
                               _buildFilterChip(
                                 context,
@@ -346,129 +387,57 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     );
   }
 
-  /// Build exercise list organized by difficulty with collapsible sections
-  Widget _buildDifficultyOrganizedList(ExercisesProvider provider) {
-    final groupedExercises = provider.exercisesByDifficulty;
-    final difficulties = ['Beginner', 'Intermediate', 'Advanced'];
-
+  /// Build flat exercise list sorted alphabetically
+  Widget _buildExerciseList(ExercisesProvider provider) {
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(top: 8, bottom: 16),
-      itemCount: difficulties.length,
+      itemCount: provider.filteredExercises.length,
       itemBuilder: (context, index) {
-        final difficulty = difficulties[index];
-        final exercises = groupedExercises[difficulty] ?? [];
-        final isExpanded = _expandedSections[difficulty] ?? true;
-
-        if (exercises.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Difficulty section header
-            InkWell(
-              onTap: () {
-                setState(() {
-                  _expandedSections[difficulty] = !isExpanded;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: _getDifficultyColor(difficulty).withValues(alpha: 0.1),
-                  border: Border(
-                    bottom: BorderSide(
-                      color: _getDifficultyColor(
-                        difficulty,
-                      ).withValues(alpha: 0.2),
-                      width: 1,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getDifficultyColor(difficulty),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        difficulty.toUpperCase(),
-                        style: TextStyle(
-                          color: context.textOnPrimary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${exercises.length} exercise${exercises.length == 1 ? '' : 's'}',
-                      style: TextStyle(
-                        color: context.textSecondary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Spacer(),
-                    AnimatedRotation(
-                      turns: isExpanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        Icons.keyboard_arrow_down,
-                        color: _getDifficultyColor(difficulty),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Collapsible exercise list
-            AnimatedSize(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              child:
-                  isExpanded
-                      ? Column(
-                        children:
-                            exercises.map((exercise) {
-                              return ExerciseCard(
-                                exercise: exercise,
-                                onTap: () => _handleExerciseTap(exercise.id),
-                              );
-                            }).toList(),
-                      )
-                      : const SizedBox.shrink(),
-            ),
-          ],
+        final exercise = provider.filteredExercises[index];
+        return ExerciseCard(
+          exercise: exercise,
+          onTap: () => _handleExerciseTap(exercise.id),
         );
       },
     );
   }
 
-  /// Get color for difficulty level - Premium colors
-  Color _getDifficultyColor(String difficulty) {
-    switch (difficulty) {
-      case 'Beginner':
-        return context.accent;
-      case 'Intermediate':
-        return AppColors.goHardOrange;
-      case 'Advanced':
-        return AppColors.errorRed;
-      default:
-        return AppColors.slate;
-    }
+  /// Build search bar widget
+  Widget _buildSearchBar(ExercisesProvider provider) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        onChanged: (value) => provider.searchExercises(value),
+        decoration: InputDecoration(
+          hintText: 'Search exercises...',
+          prefixIcon: Icon(Icons.search, color: context.textSecondary),
+          suffixIcon:
+              _searchController.text.isNotEmpty
+                  ? IconButton(
+                    icon: Icon(Icons.clear, color: context.textSecondary),
+                    onPressed: () {
+                      _searchController.clear();
+                      provider.searchExercises('');
+                      _searchFocusNode.unfocus();
+                    },
+                  )
+                  : null,
+          filled: true,
+          fillColor: context.surfaceHighlight,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -689,6 +658,9 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
           // Exercises list with pull-to-refresh
           return Column(
             children: [
+              // Search bar
+              _buildSearchBar(provider),
+
               // Active filter indicator
               if (provider.selectedCategory != null ||
                   provider.selectedMuscleGroup != null ||
@@ -722,7 +694,10 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                           ),
                           const Spacer(),
                           InkWell(
-                            onTap: () => provider.clearFilters(),
+                            onTap: () {
+                              provider.clearFilters();
+                              _searchController.clear();
+                            },
                             child: Icon(
                               Icons.close,
                               size: 20,
@@ -760,7 +735,27 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                   ),
                 ),
 
-              // Exercise list organized by difficulty
+              // Results count
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      '${provider.filteredExercises.length} exercises',
+                      style: TextStyle(
+                        color: context.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Flat exercise list
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async {
@@ -769,7 +764,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                   },
                   color: context.accent,
                   backgroundColor: context.surface,
-                  child: _buildDifficultyOrganizedList(provider),
+                  child: _buildExerciseList(provider),
                 ),
               ),
             ],

@@ -18,6 +18,7 @@ class ExercisesProvider extends ChangeNotifier {
   String? _selectedCategory;
   String? _selectedMuscleGroup;
   String? _selectedDifficulty;
+  String _searchQuery = '';
 
   StreamSubscription<bool>? _connectivitySubscription;
 
@@ -44,6 +45,13 @@ class ExercisesProvider extends ChangeNotifier {
   String? get selectedCategory => _selectedCategory;
   String? get selectedMuscleGroup => _selectedMuscleGroup;
   String? get selectedDifficulty => _selectedDifficulty;
+  String get searchQuery => _searchQuery;
+
+  /// Search exercises by name
+  void searchExercises(String query) {
+    _searchQuery = query;
+    _applyFilters();
+  }
 
   /// Get exercises grouped by difficulty level
   Map<String, List<ExerciseTemplate>> get exercisesByDifficulty {
@@ -113,6 +121,21 @@ class ExercisesProvider extends ChangeNotifier {
   void _applyFilters() {
     _filteredExercises =
         _exercises.where((exercise) {
+          // Search filter
+          bool matchesSearch =
+              _searchQuery.isEmpty ||
+              (exercise.name.toLowerCase().contains(
+                _searchQuery.toLowerCase(),
+              )) ||
+              (exercise.muscleGroup?.toLowerCase().contains(
+                    _searchQuery.toLowerCase(),
+                  ) ??
+                  false) ||
+              (exercise.equipment?.toLowerCase().contains(
+                    _searchQuery.toLowerCase(),
+                  ) ??
+                  false);
+
           bool matchesCategory =
               _selectedCategory == null ||
               _selectedCategory == 'All' ||
@@ -129,8 +152,14 @@ class ExercisesProvider extends ChangeNotifier {
               exercise.difficulty?.toLowerCase() ==
                   _selectedDifficulty?.toLowerCase();
 
-          return matchesCategory && matchesMuscleGroup && matchesDifficulty;
+          return matchesSearch &&
+              matchesCategory &&
+              matchesMuscleGroup &&
+              matchesDifficulty;
         }).toList();
+
+    // Sort alphabetically by name
+    _filteredExercises.sort((a, b) => a.name.compareTo(b.name));
 
     notifyListeners();
   }
@@ -146,8 +175,16 @@ class ExercisesProvider extends ChangeNotifier {
     _selectedCategory = null;
     _selectedMuscleGroup = null;
     _selectedDifficulty = null;
+    _searchQuery = '';
     _applyFilters();
   }
+
+  /// Check if any filters are active
+  bool get hasActiveFilters =>
+      _selectedCategory != null ||
+      _selectedMuscleGroup != null ||
+      _selectedDifficulty != null ||
+      _searchQuery.isNotEmpty;
 
   /// Clear error message
   void clearError() {
