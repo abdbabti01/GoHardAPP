@@ -29,6 +29,81 @@ class SessionRepository {
     this._authService,
   );
 
+  // ========== Helper Methods (Refactored - Issue #18) ==========
+
+  /// Find a local session by ID (tries server ID first, then local ID)
+  Future<LocalSession?> _findLocalSession(Isar db, int id) async {
+    return await db.localSessions.filter().serverIdEqualTo(id).findFirst() ??
+        await db.localSessions.get(id);
+  }
+
+  /// Find a local session by ID or throw if not found
+  Future<LocalSession> _findLocalSessionOrThrow(Isar db, int id) async {
+    final session = await _findLocalSession(db, id);
+    if (session == null) {
+      throw Exception('Session not found: $id');
+    }
+    return session;
+  }
+
+  /// Load exercises for a session from local database
+  Future<List<Exercise>> _loadExercisesForSession(
+    Isar db,
+    int sessionLocalId,
+  ) async {
+    final localExercises =
+        await db.localExercises
+            .filter()
+            .sessionLocalIdEqualTo(sessionLocalId)
+            .findAll();
+
+    return localExercises
+        .map((localEx) => ModelMapper.localToExercise(localEx))
+        .toList();
+  }
+
+  /// Convert a LocalSession to Session with exercises loaded
+  Future<Session> _localSessionToSessionWithExercises(
+    Isar db,
+    LocalSession localSession,
+  ) async {
+    final exercises = await _loadExercisesForSession(db, localSession.localId);
+    return ModelMapper.localToSession(localSession, exercises: exercises);
+  }
+
+  /// Execute a background sync operation with standard logging
+  void _backgroundSync(
+    Future<void> Function() syncOperation,
+    String successMessage,
+  ) {
+    syncOperation()
+        .then((_) {
+          debugPrint('✅ Background sync: $successMessage');
+        })
+        .catchError((e) {
+          debugPrint('⚠️ Background sync failed, will retry later: $e');
+        });
+  }
+
+  /// Mark a local session as needing sync (pending_update if server ID exists)
+  Future<void> _markSessionForSync(
+    Isar db,
+    LocalSession localSession, {
+    String? newStatus,
+  }) async {
+    await db.writeTxn(() async {
+      if (newStatus != null) {
+        localSession.status = newStatus;
+      }
+      localSession.lastModifiedLocal = DateTime.now();
+      localSession.isSynced = false;
+      if (localSession.serverId != null) {
+        localSession.syncStatus = 'pending_update';
+      }
+      await db.localSessions.put(localSession);
+    });
+  }
+
   /// Get all sessions for the current user
   /// Offline-first: returns local cache immediately, syncs with server in background
   /// Set [waitForSync] to true to wait for server sync before returning (useful after login)
@@ -79,23 +154,10 @@ class SessionRepository {
             .statusEqualTo('in_progress')
             .findAll();
 
+    // Convert to Session models with exercises (using helper)
     final sessions = <Session>[];
     for (final localSession in localSessions) {
-      // Load exercises for this session
-      final localExercises =
-          await db.localExercises
-              .filter()
-              .sessionLocalIdEqualTo(localSession.localId)
-              .findAll();
-
-      final exercises =
-          localExercises
-              .map((localEx) => ModelMapper.localToExercise(localEx))
-              .toList();
-
-      sessions.add(
-        ModelMapper.localToSession(localSession, exercises: exercises),
-      );
+      sessions.add(await _localSessionToSessionWithExercises(db, localSession));
     }
 
     return sessions;
@@ -267,6 +329,7 @@ class SessionRepository {
     final localSessions =
         await db.localSessions.filter().userIdEqualTo(userId).findAll();
 
+    // Convert to Session models, skipping deleted/archived (using helper)
     final sessions = <Session>[];
     for (final localSession in localSessions) {
       // Skip sessions marked for deletion or archived
@@ -275,21 +338,7 @@ class SessionRepository {
         continue;
       }
 
-      // Load exercises for this session
-      final localExercises =
-          await db.localExercises
-              .filter()
-              .sessionLocalIdEqualTo(localSession.localId)
-              .findAll();
-
-      final exercises =
-          localExercises
-              .map((localEx) => ModelMapper.localToExercise(localEx))
-              .toList();
-
-      sessions.add(
-        ModelMapper.localToSession(localSession, exercises: exercises),
-      );
+      sessions.add(await _localSessionToSessionWithExercises(db, localSession));
     }
 
     return sessions;
@@ -381,28 +430,11 @@ class SessionRepository {
 
   /// Get session from local database by ID (server ID or local ID) with exercises
   Future<Session> _getLocalSession(Isar db, int id) async {
-    // Try by server ID first
-    var localSession =
-        await db.localSessions.filter().serverIdEqualTo(id).findFirst();
+    // Find local session using helper
+    final localSession = await _findLocalSessionOrThrow(db, id);
 
-    // If not found, try by local ID
-    localSession ??= await db.localSessions.get(id);
-
-    if (localSession == null) {
-      throw Exception('Session not found: $id');
-    }
-
-    // Load exercises for this session
-    final localExercises =
-        await db.localExercises
-            .filter()
-            .sessionLocalIdEqualTo(localSession.localId)
-            .findAll();
-
-    final exercises =
-        localExercises
-            .map((localEx) => ModelMapper.localToExercise(localEx))
-            .toList();
+    // Load exercises using helper
+    final exercises = await _loadExercisesForSession(db, localSession.localId);
 
     debugPrint(
       '  📦 Loaded session ${localSession.serverId ?? localSession.localId} from cache with ${exercises.length} exercises',
@@ -446,22 +478,10 @@ class SessionRepository {
   }
 
   /// Helper method to convert LocalSession to Session with exercises
+  /// Note: Uses _localSessionToSessionWithExercises helper for consistency
   Future<Session> _getSessionWithExercises(LocalSession localSession) async {
     final db = _localDb.database;
-
-    // Load exercises for this session
-    final localExercises =
-        await db.localExercises
-            .filter()
-            .sessionLocalIdEqualTo(localSession.localId)
-            .findAll();
-
-    final exercises =
-        localExercises
-            .map((localEx) => ModelMapper.localToExercise(localEx))
-            .toList();
-
-    return ModelMapper.localToSession(localSession, exercises: exercises);
+    return await _localSessionToSessionWithExercises(db, localSession);
   }
 
   /// Create a session from a program workout
@@ -834,14 +854,8 @@ class SessionRepository {
   }) async {
     final Isar db = _localDb.database;
 
-    // Find local session (id could be localId or serverId)
-    var localSession = await db.localSessions.get(id);
-    localSession ??=
-        await db.localSessions.filter().serverIdEqualTo(id).findFirst();
-
-    if (localSession == null) {
-      throw Exception('Session not found: $id');
-    }
+    // Find local session using helper
+    final localSession = await _findLocalSessionOrThrow(db, id);
 
     // ALWAYS update locally first for instant response
     await _updateLocalSessionStatus(
@@ -851,32 +865,22 @@ class SessionRepository {
       duration: duration,
     );
 
-    // Then sync to server in background if online (don't block)
+    // Then sync to server in background if online (using helper)
     if (_connectivity.isOnline && localSession.serverId != null) {
-      _syncSessionStatusToServer(db, localSession.serverId!, localSession)
-          .then((_) {
-            debugPrint('✅ Background sync: Updated session status on server');
-          })
-          .catchError((e) {
-            debugPrint('⚠️ Background sync failed, will retry later: $e');
-          });
+      _backgroundSync(
+        () => _syncSessionStatusToServer(
+          db,
+          localSession.serverId!,
+          localSession,
+        ),
+        'Updated session status on server',
+      );
     } else {
       debugPrint('📴 Offline - session status will sync later');
     }
 
-    // Load exercises to include in returned session
-    final localExercises =
-        await db.localExercises
-            .filter()
-            .sessionLocalIdEqualTo(localSession.localId)
-            .findAll();
-
-    final exercises =
-        localExercises
-            .map((localEx) => ModelMapper.localToExercise(localEx))
-            .toList();
-
-    return ModelMapper.localToSession(localSession, exercises: exercises);
+    // Return session with exercises using helper
+    return await _localSessionToSessionWithExercises(db, localSession);
   }
 
   /// Background sync: Update session status on server
@@ -1052,39 +1056,33 @@ class SessionRepository {
   /// [pausedAt] timestamp from provider (to avoid time drift)
   Future<void> pauseSession(int id, DateTime pausedAt) async {
     final Isar db = _localDb.database;
-    var localSession = await db.localSessions.get(id);
-    localSession ??=
-        await db.localSessions.filter().serverIdEqualTo(id).findFirst();
 
-    if (localSession == null) {
-      throw Exception('Session not found: $id');
-    }
+    // Find local session using helper
+    final localSession = await _findLocalSessionOrThrow(db, id);
 
     // ALWAYS update locally first for instant response
     await db.writeTxn(() async {
-      localSession!.pausedAt = pausedAt; // Use provided timestamp (already UTC)
+      localSession.pausedAt = pausedAt; // Use provided timestamp (already UTC)
       localSession.lastModifiedLocal = DateTime.now();
       localSession.isSynced = false;
-      // Only mark as pending_update if session already exists on server
       if (localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';
       }
       await db.localSessions.put(localSession);
-      debugPrint('⏸️ Session paused locally (pausedAt UTC: $pausedAt)');
     });
 
-    debugPrint('⏸️ Session paused locally');
+    debugPrint('⏸️ Session paused locally (pausedAt UTC: $pausedAt)');
 
-    // Then sync to server in background if online (don't block)
-    // Use status endpoint with timestamps to avoid redundant calculation
+    // Then sync to server in background if online (using helper)
     if (_connectivity.isOnline && localSession.serverId != null) {
-      _syncSessionStatusToServer(db, localSession.serverId!, localSession)
-          .then((_) {
-            debugPrint('✅ Background sync: Pause synced to server');
-          })
-          .catchError((e) {
-            debugPrint('⚠️ Background sync failed, will retry later: $e');
-          });
+      _backgroundSync(
+        () => _syncSessionStatusToServer(
+          db,
+          localSession.serverId!,
+          localSession,
+        ),
+        'Pause synced to server',
+      );
     }
   }
 
@@ -1093,22 +1091,17 @@ class SessionRepository {
   /// [newStartedAt] adjusted timestamp from provider (to avoid time drift)
   Future<void> resumeSession(int id, DateTime newStartedAt) async {
     final Isar db = _localDb.database;
-    var localSession = await db.localSessions.get(id);
-    localSession ??=
-        await db.localSessions.filter().serverIdEqualTo(id).findFirst();
 
-    if (localSession == null) {
-      throw Exception('Session not found: $id');
-    }
+    // Find local session using helper
+    final localSession = await _findLocalSessionOrThrow(db, id);
 
     // ALWAYS update locally first for instant response
     await db.writeTxn(() async {
       // Use the adjusted startedAt provided by provider (already calculated)
-      localSession!.startedAt = newStartedAt;
+      localSession.startedAt = newStartedAt;
       localSession.pausedAt = null;
       localSession.lastModifiedLocal = DateTime.now();
       localSession.isSynced = false;
-      // Only mark as pending_update if session already exists on server
       if (localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';
       }
@@ -1118,41 +1111,29 @@ class SessionRepository {
 
     debugPrint('▶️ Session resumed locally');
 
-    // Then sync to server in background if online (don't block)
-    // Use status endpoint with timestamps to avoid redundant calculation
+    // Then sync to server in background if online (using helper)
     if (_connectivity.isOnline && localSession.serverId != null) {
-      _syncSessionStatusToServer(db, localSession.serverId!, localSession)
-          .then((_) {
-            debugPrint('✅ Background sync: Resume synced to server');
-          })
-          .catchError((e) {
-            debugPrint('⚠️ Background sync failed, will retry later: $e');
-          });
+      _backgroundSync(
+        () => _syncSessionStatusToServer(
+          db,
+          localSession.serverId!,
+          localSession,
+        ),
+        'Resume synced to server',
+      );
     }
   }
 
-  /// Delete session
-  /// Marks as pending_delete offline, deletes from server when online
   /// Archive a session (change status to 'archived')
   /// Archived sessions are hidden from main list but still count for programs
   Future<bool> archiveSession(int id) async {
     final Isar db = _localDb.database;
-    var localSession = await db.localSessions.get(id);
-    localSession ??=
-        await db.localSessions.filter().serverIdEqualTo(id).findFirst();
 
-    if (localSession == null) {
-      throw Exception('Session not found: $id');
-    }
+    // Find local session using helper
+    final localSession = await _findLocalSessionOrThrow(db, id);
 
-    // Change status to archived
-    await db.writeTxn(() async {
-      localSession!.status = 'archived';
-      localSession.lastModifiedLocal = DateTime.now();
-      localSession.isSynced = false;
-      localSession.syncStatus = 'pending_update';
-      await db.localSessions.put(localSession);
-    });
+    // Change status to archived (using helper for standard sync marking)
+    await _markSessionForSync(db, localSession, newStatus: 'archived');
 
     debugPrint(
       '📦 Archived session: ${localSession.serverId ?? localSession.localId}',
@@ -1160,15 +1141,13 @@ class SessionRepository {
     return true;
   }
 
+  /// Delete session
+  /// Marks as pending_delete offline, deletes from server when online
   Future<bool> deleteSession(int id) async {
     final Isar db = _localDb.database;
-    var localSession = await db.localSessions.get(id);
-    localSession ??=
-        await db.localSessions.filter().serverIdEqualTo(id).findFirst();
 
-    if (localSession == null) {
-      throw Exception('Session not found: $id');
-    }
+    // Find local session using helper
+    final localSession = await _findLocalSessionOrThrow(db, id);
 
     // Prevent deletion of completed program workouts
     if (localSession.status == 'completed' &&
@@ -1257,21 +1236,14 @@ class SessionRepository {
   Future<Session> updateSessionName(int id, String name) async {
     final Isar db = _localDb.database;
 
-    // Find local session (id could be localId or serverId)
-    var localSession = await db.localSessions.get(id);
-    localSession ??=
-        await db.localSessions.filter().serverIdEqualTo(id).findFirst();
-
-    if (localSession == null) {
-      throw Exception('Session not found: $id');
-    }
+    // Find local session using helper
+    final localSession = await _findLocalSessionOrThrow(db, id);
 
     // ALWAYS update locally first for instant response
     await db.writeTxn(() async {
-      localSession!.name = name;
+      localSession.name = name;
       localSession.lastModifiedLocal = DateTime.now();
       localSession.isSynced = false;
-      // Only mark as pending_update if session already exists on server
       if (localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';
       }
@@ -1280,32 +1252,18 @@ class SessionRepository {
 
     debugPrint('✏️ Session name updated locally to: $name');
 
-    // Then sync to server in background if online (don't block)
+    // Then sync to server in background if online (using helper)
     if (_connectivity.isOnline && localSession.serverId != null) {
-      _syncSessionNameToServer(db, localSession.serverId!, name)
-          .then((_) {
-            debugPrint('✅ Background sync: Updated session name on server');
-          })
-          .catchError((e) {
-            debugPrint('⚠️ Background sync failed, will retry later: $e');
-          });
+      _backgroundSync(
+        () => _syncSessionNameToServer(db, localSession.serverId!, name),
+        'Updated session name on server',
+      );
     } else {
       debugPrint('📴 Offline - session name will sync later');
     }
 
-    // Load exercises to include in returned session
-    final localExercises =
-        await db.localExercises
-            .filter()
-            .sessionLocalIdEqualTo(localSession.localId)
-            .findAll();
-
-    final exercises =
-        localExercises
-            .map((localEx) => ModelMapper.localToExercise(localEx))
-            .toList();
-
-    return ModelMapper.localToSession(localSession, exercises: exercises);
+    // Return session with exercises using helper
+    return await _localSessionToSessionWithExercises(db, localSession);
   }
 
   /// Update workout date (used when starting future planned workout early)
@@ -1313,23 +1271,16 @@ class SessionRepository {
   Future<void> updateWorkoutDate(int id, DateTime newDate) async {
     final Isar db = _localDb.database;
 
-    // Find local session (id could be localId or serverId)
-    var localSession = await db.localSessions.get(id);
-    localSession ??=
-        await db.localSessions.filter().serverIdEqualTo(id).findFirst();
-
-    if (localSession == null) {
-      throw Exception('Session not found: $id');
-    }
+    // Find local session using helper
+    final localSession = await _findLocalSessionOrThrow(db, id);
 
     // ALWAYS update locally first for instant response
     await db.writeTxn(() async {
       // Convert to date-only (no time component)
       final dateOnly = DateTime(newDate.year, newDate.month, newDate.day);
-      localSession!.date = dateOnly;
+      localSession.date = dateOnly;
       localSession.lastModifiedLocal = DateTime.now();
       localSession.isSynced = false;
-      // Only mark as pending_update if session already exists on server
       if (localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';
       }
@@ -1338,15 +1289,12 @@ class SessionRepository {
 
     debugPrint('📅 Workout date updated locally to: $newDate');
 
-    // Then sync to server in background if online (don't block)
+    // Then sync to server in background if online (using helper)
     if (_connectivity.isOnline && localSession.serverId != null) {
-      _syncSessionDateToServer(db, localSession.serverId!, newDate)
-          .then((_) {
-            debugPrint('✅ Background sync: Updated workout date on server');
-          })
-          .catchError((e) {
-            debugPrint('⚠️ Background sync failed, will retry later: $e');
-          });
+      _backgroundSync(
+        () => _syncSessionDateToServer(db, localSession.serverId!, newDate),
+        'Updated workout date on server',
+      );
     } else {
       debugPrint('📴 Offline - workout date will sync later');
     }
@@ -1511,7 +1459,7 @@ class SessionRepository {
         .userIdEqualTo(userId)
         .watch(fireImmediately: true)
         .asyncMap((localSessions) async {
-          // Convert local sessions to domain models with exercises
+          // Convert local sessions to domain models with exercises (using helper)
           final sessions = <Session>[];
           for (final localSession in localSessions) {
             // Skip deleted or archived sessions
@@ -1519,17 +1467,8 @@ class SessionRepository {
                 localSession.status == 'archived') {
               continue;
             }
-            final exercises =
-                await db.localExercises
-                    .filter()
-                    .sessionLocalIdEqualTo(localSession.localId)
-                    .findAll();
-
-            final exerciseList =
-                exercises.map((e) => ModelMapper.localToExercise(e)).toList();
-
             sessions.add(
-              ModelMapper.localToSession(localSession, exercises: exerciseList),
+              await _localSessionToSessionWithExercises(db, localSession),
             );
           }
 
@@ -1547,14 +1486,8 @@ class SessionRepository {
   ) async {
     final Isar db = _localDb.database;
 
-    // Find the local session
-    var localSession =
-        await db.localSessions.filter().serverIdEqualTo(sessionId).findFirst();
-    localSession ??= await db.localSessions.get(sessionId);
-
-    if (localSession == null) {
-      throw Exception('Session not found: $sessionId');
-    }
+    // Find local session using helper
+    final localSession = await _findLocalSessionOrThrow(db, sessionId);
 
     if (_connectivity.isOnline && localSession.serverId != null) {
       try {
@@ -1569,7 +1502,7 @@ class SessionRepository {
         await db.writeTxn(() async {
           final localExercise = ModelMapper.exerciseToLocal(
             apiExercise,
-            sessionLocalId: localSession!.localId,
+            sessionLocalId: localSession.localId,
             isSynced: true,
           );
           await db.localExercises.put(localExercise);
@@ -1613,7 +1546,7 @@ class SessionRepository {
 
       final localExercise = ModelMapper.exerciseToLocal(
         tempExercise,
-        sessionLocalId: localSession!.localId,
+        sessionLocalId: localSession.localId,
         isSynced: false,
       );
       localId = await db.localExercises.put(localExercise);

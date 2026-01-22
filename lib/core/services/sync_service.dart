@@ -7,6 +7,9 @@ import '../../data/local/services/local_database_service.dart';
 import '../../data/local/models/local_session.dart';
 import '../../data/local/models/local_exercise.dart';
 import '../../data/local/models/local_exercise_set.dart';
+import '../../data/local/models/local_program.dart';
+import '../../data/local/models/local_goal.dart';
+import '../../data/local/models/local_program_workout.dart';
 import '../../core/constants/api_config.dart';
 import 'connectivity_service.dart';
 
@@ -126,10 +129,13 @@ class SyncService {
     try {
       final db = _localDb.database;
 
-      // Sync in order: Sessions → Exercises → Sets
+      // Sync in order: Sessions → Exercises → Sets → Programs → Goals → ProgramWorkouts
       await _syncSessions(db);
       await _syncExercises(db);
       await _syncExerciseSets(db);
+      await _syncPrograms(db);
+      await _syncGoals(db);
+      await _syncProgramWorkouts(db);
 
       debugPrint('✅ Sync completed successfully');
     } catch (e) {
@@ -652,6 +658,418 @@ class SyncService {
     });
 
     debugPrint('    ✅ Deleted set');
+  }
+
+  // ========== Program Sync Methods ==========
+
+  /// Sync all pending programs
+  Future<void> _syncPrograms(Isar db) async {
+    final userId = await _authService.getUserId();
+    if (userId == null) {
+      debugPrint('  ⚠️ No authenticated user, skipping program sync');
+      return;
+    }
+
+    final pendingPrograms =
+        await db.localPrograms
+            .filter()
+            .isSyncedEqualTo(false)
+            .userIdEqualTo(userId)
+            .findAll();
+
+    if (pendingPrograms.isEmpty) {
+      return;
+    }
+
+    debugPrint('  Syncing ${pendingPrograms.length} programs...');
+
+    for (final program in pendingPrograms) {
+      try {
+        switch (program.syncStatus) {
+          case 'pending_create':
+            await _syncCreateProgram(db, program);
+            break;
+          case 'pending_update':
+            await _syncUpdateProgram(db, program);
+            break;
+          case 'pending_delete':
+            await _syncDeleteProgram(db, program);
+            break;
+        }
+      } catch (e) {
+        debugPrint('    ⚠️ Program sync failed: $e');
+        await _markProgramSyncError(db, program, e.toString());
+      }
+    }
+  }
+
+  Future<void> _syncCreateProgram(Isar db, LocalProgram program) async {
+    final response = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.programs,
+      data: {
+        'userId': program.userId,
+        'title': program.title,
+        'description': program.description,
+        'goalId': program.goalId,
+        'totalWeeks': program.totalWeeks,
+        'currentWeek': program.currentWeek,
+        'currentDay': program.currentDay,
+        'startDate': program.startDate.toIso8601String(),
+        'endDate': program.endDate?.toIso8601String(),
+        'isActive': program.isActive,
+        'isCompleted': program.isCompleted,
+        'programStructure': program.programStructure,
+      },
+    );
+
+    await db.writeTxn(() async {
+      program.serverId = response['id'] as int;
+      program.isSynced = true;
+      program.syncStatus = 'synced';
+      program.syncRetryCount = 0;
+      program.syncError = null;
+      program.lastSyncAttempt = DateTime.now();
+      await db.localPrograms.put(program);
+    });
+
+    debugPrint('    ✅ Created program ${program.serverId}');
+  }
+
+  Future<void> _syncUpdateProgram(Isar db, LocalProgram program) async {
+    if (program.serverId == null) {
+      await _syncCreateProgram(db, program);
+      return;
+    }
+
+    await _apiService.put<void>(
+      '${ApiConfig.programs}/${program.serverId}',
+      data: {
+        'id': program.serverId!,
+        'userId': program.userId,
+        'title': program.title,
+        'description': program.description,
+        'goalId': program.goalId,
+        'totalWeeks': program.totalWeeks,
+        'currentWeek': program.currentWeek,
+        'currentDay': program.currentDay,
+        'startDate': program.startDate.toIso8601String(),
+        'endDate': program.endDate?.toIso8601String(),
+        'isActive': program.isActive,
+        'isCompleted': program.isCompleted,
+        'programStructure': program.programStructure,
+      },
+    );
+
+    await db.writeTxn(() async {
+      program.isSynced = true;
+      program.syncStatus = 'synced';
+      program.syncRetryCount = 0;
+      program.syncError = null;
+      program.lastSyncAttempt = DateTime.now();
+      await db.localPrograms.put(program);
+    });
+
+    debugPrint('    ✅ Updated program ${program.serverId}');
+  }
+
+  Future<void> _syncDeleteProgram(Isar db, LocalProgram program) async {
+    if (program.serverId != null) {
+      await _apiService.delete('${ApiConfig.programs}/${program.serverId}');
+    }
+
+    await db.writeTxn(() async {
+      // Delete related program workouts
+      await db.localProgramWorkouts
+          .filter()
+          .programLocalIdEqualTo(program.localId)
+          .deleteAll();
+      // Delete the program
+      await db.localPrograms.delete(program.localId);
+    });
+
+    debugPrint('    ✅ Deleted program');
+  }
+
+  Future<void> _markProgramSyncError(
+    Isar db,
+    LocalProgram program,
+    String error,
+  ) async {
+    await db.writeTxn(() async {
+      program.syncRetryCount += 1;
+      program.syncError = error;
+      program.lastSyncAttempt = DateTime.now();
+      await db.localPrograms.put(program);
+    });
+  }
+
+  // ========== Goal Sync Methods ==========
+
+  /// Sync all pending goals
+  Future<void> _syncGoals(Isar db) async {
+    final userId = await _authService.getUserId();
+    if (userId == null) {
+      debugPrint('  ⚠️ No authenticated user, skipping goal sync');
+      return;
+    }
+
+    final pendingGoals =
+        await db.localGoals
+            .filter()
+            .isSyncedEqualTo(false)
+            .userIdEqualTo(userId)
+            .findAll();
+
+    if (pendingGoals.isEmpty) {
+      return;
+    }
+
+    debugPrint('  Syncing ${pendingGoals.length} goals...');
+
+    for (final goal in pendingGoals) {
+      try {
+        switch (goal.syncStatus) {
+          case 'pending_create':
+            await _syncCreateGoal(db, goal);
+            break;
+          case 'pending_update':
+            await _syncUpdateGoal(db, goal);
+            break;
+          case 'pending_delete':
+            await _syncDeleteGoal(db, goal);
+            break;
+        }
+      } catch (e) {
+        debugPrint('    ⚠️ Goal sync failed: $e');
+        await _markGoalSyncError(db, goal, e.toString());
+      }
+    }
+  }
+
+  Future<void> _syncCreateGoal(Isar db, LocalGoal goal) async {
+    final response = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.goals,
+      data: {
+        'userId': goal.userId,
+        'goalType': goal.goalType,
+        'targetValue': goal.targetValue,
+        'currentValue': goal.currentValue,
+        'unit': goal.unit,
+        'timeFrame': goal.timeFrame,
+        'startDate': goal.startDate.toIso8601String(),
+        'targetDate': goal.targetDate?.toIso8601String(),
+        'isActive': goal.isActive,
+        'isCompleted': goal.isCompleted,
+      },
+    );
+
+    await db.writeTxn(() async {
+      goal.serverId = response['id'] as int;
+      goal.isSynced = true;
+      goal.syncStatus = 'synced';
+      goal.syncRetryCount = 0;
+      goal.syncError = null;
+      goal.lastSyncAttempt = DateTime.now();
+      await db.localGoals.put(goal);
+    });
+
+    debugPrint('    ✅ Created goal ${goal.serverId}');
+  }
+
+  Future<void> _syncUpdateGoal(Isar db, LocalGoal goal) async {
+    if (goal.serverId == null) {
+      await _syncCreateGoal(db, goal);
+      return;
+    }
+
+    await _apiService.put<void>(
+      '${ApiConfig.goals}/${goal.serverId}',
+      data: {
+        'id': goal.serverId!,
+        'userId': goal.userId,
+        'goalType': goal.goalType,
+        'targetValue': goal.targetValue,
+        'currentValue': goal.currentValue,
+        'unit': goal.unit,
+        'timeFrame': goal.timeFrame,
+        'startDate': goal.startDate.toIso8601String(),
+        'targetDate': goal.targetDate?.toIso8601String(),
+        'isActive': goal.isActive,
+        'isCompleted': goal.isCompleted,
+      },
+    );
+
+    await db.writeTxn(() async {
+      goal.isSynced = true;
+      goal.syncStatus = 'synced';
+      goal.syncRetryCount = 0;
+      goal.syncError = null;
+      goal.lastSyncAttempt = DateTime.now();
+      await db.localGoals.put(goal);
+    });
+
+    debugPrint('    ✅ Updated goal ${goal.serverId}');
+  }
+
+  Future<void> _syncDeleteGoal(Isar db, LocalGoal goal) async {
+    if (goal.serverId != null) {
+      await _apiService.delete('${ApiConfig.goals}/${goal.serverId}');
+    }
+
+    await db.writeTxn(() async {
+      await db.localGoals.delete(goal.localId);
+    });
+
+    debugPrint('    ✅ Deleted goal');
+  }
+
+  Future<void> _markGoalSyncError(Isar db, LocalGoal goal, String error) async {
+    await db.writeTxn(() async {
+      goal.syncRetryCount += 1;
+      goal.syncError = error;
+      goal.lastSyncAttempt = DateTime.now();
+      await db.localGoals.put(goal);
+    });
+  }
+
+  // ========== Program Workout Sync Methods ==========
+
+  /// Sync all pending program workouts
+  Future<void> _syncProgramWorkouts(Isar db) async {
+    final pendingWorkouts =
+        await db.localProgramWorkouts.filter().isSyncedEqualTo(false).findAll();
+
+    if (pendingWorkouts.isEmpty) {
+      return;
+    }
+
+    debugPrint('  Syncing ${pendingWorkouts.length} program workouts...');
+
+    for (final workout in pendingWorkouts) {
+      // Skip if parent program doesn't have serverId yet
+      final parentProgram = await db.localPrograms.get(workout.programLocalId);
+      if (parentProgram == null || parentProgram.serverId == null) {
+        debugPrint('    ! Skipping workout - parent program not synced yet');
+        continue;
+      }
+
+      // Update workout's programServerId if not set
+      if (workout.programServerId != parentProgram.serverId) {
+        await db.writeTxn(() async {
+          workout.programServerId = parentProgram.serverId;
+          await db.localProgramWorkouts.put(workout);
+        });
+      }
+
+      try {
+        switch (workout.syncStatus) {
+          case 'pending_create':
+            await _syncCreateProgramWorkout(db, workout, parentProgram);
+            break;
+          case 'pending_update':
+            await _syncUpdateProgramWorkout(db, workout);
+            break;
+          case 'pending_delete':
+            await _syncDeleteProgramWorkout(db, workout);
+            break;
+        }
+      } catch (e) {
+        debugPrint('    ⚠️ Program workout sync failed: $e');
+      }
+    }
+  }
+
+  Future<void> _syncCreateProgramWorkout(
+    Isar db,
+    LocalProgramWorkout workout,
+    LocalProgram parentProgram,
+  ) async {
+    final response = await _apiService.post<Map<String, dynamic>>(
+      '${ApiConfig.programs}/${parentProgram.serverId}/workouts',
+      data: {
+        'programId': parentProgram.serverId,
+        'weekNumber': workout.weekNumber,
+        'dayNumber': workout.dayNumber,
+        'dayName': workout.dayName,
+        'workoutName': workout.workoutName,
+        'workoutType': workout.workoutType,
+        'description': workout.description,
+        'estimatedDuration': workout.estimatedDuration,
+        'exercisesJson': workout.exercisesJson,
+        'warmUp': workout.warmUp,
+        'coolDown': workout.coolDown,
+        'isCompleted': workout.isCompleted,
+        'orderIndex': workout.orderIndex,
+      },
+    );
+
+    await db.writeTxn(() async {
+      workout.serverId = response['id'] as int;
+      workout.programServerId = parentProgram.serverId;
+      workout.isSynced = true;
+      workout.syncStatus = 'synced';
+      await db.localProgramWorkouts.put(workout);
+    });
+
+    debugPrint('    ✅ Created program workout ${workout.serverId}');
+  }
+
+  Future<void> _syncUpdateProgramWorkout(
+    Isar db,
+    LocalProgramWorkout workout,
+  ) async {
+    if (workout.serverId == null) {
+      final parentProgram = await db.localPrograms.get(workout.programLocalId);
+      if (parentProgram != null && parentProgram.serverId != null) {
+        await _syncCreateProgramWorkout(db, workout, parentProgram);
+      }
+      return;
+    }
+
+    await _apiService.put<void>(
+      '${ApiConfig.programs}/workouts/${workout.serverId}',
+      data: {
+        'id': workout.serverId!,
+        'programId': workout.programServerId,
+        'weekNumber': workout.weekNumber,
+        'dayNumber': workout.dayNumber,
+        'dayName': workout.dayName,
+        'workoutName': workout.workoutName,
+        'workoutType': workout.workoutType,
+        'description': workout.description,
+        'estimatedDuration': workout.estimatedDuration,
+        'exercisesJson': workout.exercisesJson,
+        'warmUp': workout.warmUp,
+        'coolDown': workout.coolDown,
+        'isCompleted': workout.isCompleted,
+        'orderIndex': workout.orderIndex,
+      },
+    );
+
+    await db.writeTxn(() async {
+      workout.isSynced = true;
+      workout.syncStatus = 'synced';
+      await db.localProgramWorkouts.put(workout);
+    });
+
+    debugPrint('    ✅ Updated program workout ${workout.serverId}');
+  }
+
+  Future<void> _syncDeleteProgramWorkout(
+    Isar db,
+    LocalProgramWorkout workout,
+  ) async {
+    if (workout.serverId != null) {
+      await _apiService.delete(
+        '${ApiConfig.programs}/workouts/${workout.serverId}',
+      );
+    }
+
+    await db.writeTxn(() async {
+      await db.localProgramWorkouts.delete(workout.localId);
+    });
+
+    debugPrint('    ✅ Deleted program workout');
   }
 
   /// Get sync status summary

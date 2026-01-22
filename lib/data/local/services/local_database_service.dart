@@ -8,6 +8,9 @@ import '../models/local_exercise_template.dart';
 import '../models/local_chat_conversation.dart';
 import '../models/local_chat_message.dart';
 import '../models/local_run_session.dart';
+import '../models/local_program.dart';
+import '../models/local_goal.dart';
+import '../models/local_program_workout.dart';
 import '../../models/shared_workout.dart';
 import '../../models/workout_template.dart';
 import '../../models/achievement.dart';
@@ -46,6 +49,9 @@ class LocalDatabaseService {
         LocalChatConversationSchema,
         LocalChatMessageSchema,
         LocalRunSessionSchema,
+        LocalProgramSchema,
+        LocalGoalSchema,
+        LocalProgramWorkoutSchema,
         SharedWorkoutSchema,
         WorkoutTemplateSchema,
         AchievementSchema,
@@ -115,12 +121,27 @@ class LocalDatabaseService {
     final chatMessageCount =
         await _isar!.localChatMessages.filter().isSyncedEqualTo(false).count();
 
+    final programCount =
+        await _isar!.localPrograms.filter().isSyncedEqualTo(false).count();
+
+    final goalCount =
+        await _isar!.localGoals.filter().isSyncedEqualTo(false).count();
+
+    final programWorkoutCount =
+        await _isar!.localProgramWorkouts
+            .filter()
+            .isSyncedEqualTo(false)
+            .count();
+
     return sessionCount +
         exerciseCount +
         setCount +
         templateCount +
         chatConversationCount +
-        chatMessageCount;
+        chatMessageCount +
+        programCount +
+        goalCount +
+        programWorkoutCount;
   }
 
   /// Get last sync time across all collections
