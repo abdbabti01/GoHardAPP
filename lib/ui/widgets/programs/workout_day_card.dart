@@ -170,13 +170,12 @@ class WorkoutDayCard extends StatelessWidget {
                 ),
               )
             else if (!isRestDay && !isPastDay)
-              Icon(Icons.circle_outlined, color: context.textTertiary, size: 24)
-            else if (isRestDay)
               Icon(
-                Icons.self_improvement,
+                Icons.circle_outlined,
                 color: context.textTertiary,
-                size: 20,
+                size: 24,
               ),
+            // Rest days and past days show nothing - they're visually quiet
           ],
         ),
       ),

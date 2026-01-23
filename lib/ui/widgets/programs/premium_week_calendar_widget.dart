@@ -100,11 +100,17 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     );
   }
 
+  /// Get weekday label for a date (M, T, W, T, F, S, S)
+  String _getWeekdayLabel(DateTime date) {
+    const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    // DateTime.weekday: 1=Monday, 7=Sunday
+    return labels[date.weekday - 1];
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final groupedWorkouts = _getWeekWorkoutsGrouped(widget.selectedWeek);
-    final dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
     return AnimatedBuilder(
       animation: _pulseAnimation,
@@ -182,7 +188,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                       return Expanded(
                         child: _buildCompactDayCell(
                           theme,
-                          dayLabels[index],
+                          _getWeekdayLabel(date),
                           date.day,
                           hasWorkouts,
                           allCompleted,
@@ -452,6 +458,20 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     return date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;
+  }
+
+  /// Get full weekday name for a date
+  String _getWeekdayName(DateTime date) {
+    const names = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    return names[date.weekday - 1];
   }
 
   Future<void> _moveWorkout(
@@ -870,15 +890,6 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
 
   Widget _buildWeekContent(int weekNumber, ThemeData theme, Program program) {
     final groupedWorkouts = _getWeekWorkoutsGrouped(program, weekNumber);
-    final dayLabels = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
@@ -922,7 +933,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                   builder: (context, candidateData, rejectedData) {
                     return _buildDayRow(
                       theme,
-                      dayLabels[index],
+                      _getWeekdayName(date),
                       date,
                       dayWorkouts,
                       isToday,
