@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../data/models/session.dart';
+import '../../../core/theme/theme_colors.dart';
 
 /// Calendar heatmap widget showing workout activity
 /// Similar to GitHub contribution graph
@@ -123,7 +124,7 @@ class CalendarHeatmap extends StatelessWidget {
                   day,
                   style: TextStyle(
                     fontSize: 8,
-                    color: Colors.grey.shade600,
+                    color: context.textTertiary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -138,10 +139,13 @@ class CalendarHeatmap extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final isToday = date == today;
+    final isRestDay = count == 0;
 
     return Tooltip(
       message:
-          '${DateFormat('MMM d').format(date)}: $count workout${count != 1 ? 's' : ''}',
+          isRestDay
+              ? '${DateFormat('MMM d').format(date)}: Rest day'
+              : '${DateFormat('MMM d').format(date)}: $count workout${count != 1 ? 's' : ''}',
       child: Container(
         width: 12,
         height: 12,
@@ -151,9 +155,11 @@ class CalendarHeatmap extends StatelessWidget {
           borderRadius: BorderRadius.circular(2),
           border:
               isToday
+                  ? Border.all(color: context.accent, width: 1.5)
+                  : isRestDay
                   ? Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 1.5,
+                    color: context.textTertiary.withValues(alpha: 0.2),
+                    width: 0.5,
                   )
                   : null,
         ),
@@ -162,10 +168,12 @@ class CalendarHeatmap extends StatelessWidget {
   }
 
   Color _getColorForCount(int count, BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    if (count == 0) return Colors.grey.shade200;
-    if (count == 1) return primary.withValues(alpha: 0.3);
-    if (count == 2) return primary.withValues(alpha: 0.6);
+    final primary = context.accent;
+    // Rest days: very subtle, almost invisible (just a hint of border)
+    if (count == 0) return context.surface;
+    // Workout days: increasing intensity of accent color
+    if (count == 1) return primary.withValues(alpha: 0.4);
+    if (count == 2) return primary.withValues(alpha: 0.7);
     return primary; // 3+
   }
 
@@ -174,28 +182,43 @@ class CalendarHeatmap extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Text(
-          'Less',
-          style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+          'Rest',
+          style: TextStyle(fontSize: 10, color: context.textTertiary),
         ),
         const SizedBox(width: 4),
-        ...List.generate(4, (index) {
+        // Rest day cell
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: BorderRadius.circular(2),
+            border: Border.all(
+              color: context.textTertiary.withValues(alpha: 0.2),
+              width: 0.5,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          'Active',
+          style: TextStyle(fontSize: 10, color: context.textTertiary),
+        ),
+        const SizedBox(width: 4),
+        // Workout day cells (1, 2, 3+)
+        ...List.generate(3, (index) {
           return Padding(
             padding: const EdgeInsets.only(left: 2),
             child: Container(
               width: 10,
               height: 10,
               decoration: BoxDecoration(
-                color: _getColorForCount(index, context),
+                color: _getColorForCount(index + 1, context),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           );
         }),
-        const SizedBox(width: 4),
-        Text(
-          'More',
-          style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-        ),
       ],
     );
   }

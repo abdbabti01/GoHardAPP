@@ -442,20 +442,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildMenuSection(BuildContext context) {
     final menuItems = [
       _MenuItem(
-        icon: Icons.fitness_center_rounded,
-        label: 'Exercises',
-        subtitle: 'Browse exercise library',
-        color: AppColors.goHardBlue,
-        onTap: () => Navigator.pushNamed(context, RouteNames.exercises),
-      ),
-      _MenuItem(
-        icon: Icons.analytics_rounded,
-        label: 'Analytics',
-        subtitle: 'Track your progress',
-        color: AppColors.goHardCyan,
-        onTap: () => Navigator.pushNamed(context, RouteNames.analytics),
-      ),
-      _MenuItem(
         icon: Icons.monitor_weight_rounded,
         label: 'Body Metrics',
         subtitle: 'Log measurements',

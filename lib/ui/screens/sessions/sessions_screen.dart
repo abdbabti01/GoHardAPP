@@ -1011,95 +1011,108 @@ class _SessionsScreenState extends State<SessionsScreen>
                       );
                     }
 
-                    // Empty state - Premium styling
+                    // Empty state - Premium styling (still shows Running Widget)
                     if (provider.sessions.isEmpty) {
-                      return Center(
-                        child: FadeSlideAnimation(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 100,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  gradient: context.primaryGradient,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: context.accent.withValues(
-                                        alpha: 0.3,
-                                      ),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 8),
+                      return SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.only(bottom: 80),
+                        child: Column(
+                          children: [
+                            // Running Widget - always visible
+                            const SizedBox(height: 12),
+                            const RunningWidget(),
+                            const SizedBox(height: 32),
+                            // Empty workout state
+                            FadeSlideAnimation(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 100,
+                                    height: 100,
+                                    decoration: BoxDecoration(
+                                      gradient: context.primaryGradient,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: context.accent.withValues(
+                                            alpha: 0.3,
+                                          ),
+                                          blurRadius: 20,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.fitness_center_rounded,
-                                  size: 48,
-                                  color: AppColors.goHardBlack,
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                'No Workouts Yet',
-                                style: TextStyle(
-                                  color: context.textPrimary,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 48,
-                                ),
-                                child: Text(
-                                  'Start your first workout by tapping the + button below',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: context.textSecondary,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 32),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: context.accent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: context.accent.withValues(
-                                      alpha: 0.2,
+                                    child: const Icon(
+                                      Icons.fitness_center_rounded,
+                                      size: 48,
+                                      color: AppColors.goHardBlack,
                                     ),
                                   ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.arrow_downward_rounded,
-                                      size: 16,
-                                      color: context.accent,
+                                  const SizedBox(height: 24),
+                                  Text(
+                                    'No Workouts Yet',
+                                    style: TextStyle(
+                                      color: context.textPrimary,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.5,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Tap + to begin',
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 48,
+                                    ),
+                                    child: Text(
+                                      'Start your first workout by tapping the + button below',
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        color: context.accent,
-                                        fontWeight: FontWeight.w600,
+                                        color: context.textSecondary,
+                                        fontSize: 15,
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(height: 32),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: context.accent.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: context.accent.withValues(
+                                          alpha: 0.2,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.arrow_downward_rounded,
+                                          size: 16,
+                                          color: context.accent,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Tap + to begin',
+                                          style: TextStyle(
+                                            color: context.accent,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       );
                     }

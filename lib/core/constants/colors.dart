@@ -24,13 +24,16 @@ class AppColors {
   // ============ PREMIUM ACCENT - MUTED SAGE GREEN (10% of UI) ============
 
   // Use sparingly: buttons, progress, selected states, success indicators
+  // Toned down for softer appearance
   static const Color accentGreen = Color(
-    0xFF4ADE80,
-  ); // Primary accent (softer than #00E676)
+    0xFF6EE7A0,
+  ); // Softer sage green (was 0xFF4ADE80)
   static const Color accentGreenMuted = Color(
-    0xFF86EFAC,
-  ); // Light accent variant
-  static const Color accentGreenDark = Color(0xFF22C55E); // Dark accent variant
+    0xFFA7F3C9,
+  ); // Light accent variant (was 0xFF86EFAC)
+  static const Color accentGreenDark = Color(
+    0xFF4ADE80,
+  ); // Dark accent variant (was 0xFF22C55E)
   static const Color accentGreenSubtle = Color(
     0xFF166534,
   ); // Very dark for backgrounds
@@ -50,25 +53,44 @@ class AppColors {
 
   // ============ THEME ACCENT - BLUE PALETTE (Sky Blue) ============
 
-  static const Color accentBlue = Color(0xFF0EA5E9); // Primary sky blue accent
+  // Toned down for softer appearance
+  static const Color accentBlue = Color(
+    0xFF60A5FA,
+  ); // Softer sky blue (was 0xFF0EA5E9)
   static const Color accentBlueMuted = Color(
-    0xFF7DD3FC,
-  ); // Light sky blue variant
+    0xFF93C5FD,
+  ); // Light sky blue variant (was 0xFF7DD3FC)
   static const Color accentBlueDark = Color(
-    0xFF0284C7,
-  ); // Dark sky blue variant
+    0xFF3B82F6,
+  ); // Dark sky blue variant (was 0xFF0284C7)
   static const Color accentBlueSubtle = Color(
-    0xFF0369A1,
+    0xFF1D4ED8,
   ); // Very dark for backgrounds
 
   // ============ THEME ACCENT - YELLOW PALETTE (Light/Warm) ============
 
-  static const Color accentYellow = Color(0xFFFCD34D); // Primary light yellow
-  static const Color accentYellowMuted = Color(0xFFFEF08A); // Very light yellow
-  static const Color accentYellowDark = Color(0xFFFBBF24); // Amber yellow
+  // Toned down for softer appearance
+  static const Color accentYellow = Color(
+    0xFFFDE68A,
+  ); // Softer yellow (was 0xFFFCD34D)
+  static const Color accentYellowMuted = Color(
+    0xFFFEF3C7,
+  ); // Very light yellow (was 0xFFFEF08A)
+  static const Color accentYellowDark = Color(
+    0xFFFCD34D,
+  ); // Amber yellow (was 0xFFFBBF24)
   static const Color accentYellowSubtle = Color(
     0xFFD97706,
   ); // Dark amber for backgrounds
+
+  // ============ THEME ACCENT - PINK PALETTE (Rose) ============
+
+  static const Color accentPink = Color(0xFFF9A8D4); // Soft pink/rose
+  static const Color accentPinkMuted = Color(0xFFFBCFE8); // Light pink variant
+  static const Color accentPinkDark = Color(0xFFF472B6); // Vivid pink variant
+  static const Color accentPinkSubtle = Color(
+    0xFFBE185D,
+  ); // Dark pink for backgrounds
 
   // ============ ACHIEVEMENT TIER COLORS ============
 
@@ -248,6 +270,13 @@ class AppColors {
     end: Alignment.bottomRight,
   );
 
+  // Pink primary gradient
+  static const LinearGradient pinkGradient = LinearGradient(
+    colors: [accentPinkDark, accentPink],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   // Active/In-progress gradient - Coral/Amber energy
   static const LinearGradient activeGradient = LinearGradient(
     colors: [accentCoral, accentAmber],
@@ -348,6 +377,13 @@ enum AccentColorTheme {
     muted: AppColors.accentYellowMuted,
     dark: AppColors.accentYellowDark,
     subtle: AppColors.accentYellowSubtle,
+  ),
+  pink(
+    name: 'Pink',
+    primary: AppColors.accentPink,
+    muted: AppColors.accentPinkMuted,
+    dark: AppColors.accentPinkDark,
+    subtle: AppColors.accentPinkSubtle,
   );
 
   const AccentColorTheme({
