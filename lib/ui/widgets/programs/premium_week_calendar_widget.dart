@@ -211,6 +211,8 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
       duration: const Duration(milliseconds: 600),
       curve: Curves.elasticOut,
       builder: (context, value, child) {
+        // Use accent color for visibility in both light and dark mode
+        final accentColor = context.accent;
         return Transform.scale(
           scale: value,
           child: Container(
@@ -218,30 +220,24 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  theme.primaryColor.withValues(alpha: 0.15),
-                  theme.primaryColor.withValues(alpha: 0.08),
+                  accentColor.withValues(alpha: 0.2),
+                  accentColor.withValues(alpha: 0.1),
                 ],
               ),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: theme.primaryColor.withValues(alpha: 0.3),
-              ),
+              border: Border.all(color: accentColor.withValues(alpha: 0.4)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.edit_calendar_rounded,
-                  size: 16,
-                  color: theme.primaryColor,
-                ),
+                Icon(Icons.edit_calendar_rounded, size: 16, color: accentColor),
                 const SizedBox(width: 6),
                 Text(
                   'Edit',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: theme.primaryColor,
+                    color: accentColor,
                   ),
                 ),
               ],
@@ -338,7 +334,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                 color:
                     isToday
                         ? Colors.white.withValues(alpha: 0.2)
-                        : theme.primaryColor.withValues(alpha: 0.1),
+                        : context.accent.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -347,7 +343,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: isToday ? Colors.white : theme.primaryColor,
+                    color: isToday ? Colors.white : context.accent,
                   ),
                 ),
               ),
@@ -1091,7 +1087,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: theme.primaryColor.withValues(alpha: 0.1),
+                      color: context.accent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -1099,7 +1095,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: theme.primaryColor,
+                        color: context.accent,
                       ),
                     ),
                   )

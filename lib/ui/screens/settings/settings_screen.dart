@@ -463,6 +463,9 @@ class SettingsScreen extends StatelessWidget {
     IconData icon,
     bool isSelected,
   ) {
+    // Use accent color for selected state - visible in both light and dark mode
+    final selectedColor = context.accent;
+
     return InkWell(
       onTap: () async {
         final request = ProfileUpdateRequest(themePreference: theme);
@@ -474,11 +477,11 @@ class SettingsScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color:
               isSelected
-                  ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+                  ? selectedColor.withValues(alpha: 0.15)
                   : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? Theme.of(context).primaryColor : context.border,
+            color: isSelected ? selectedColor : context.border,
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -486,10 +489,7 @@ class SettingsScreen extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color:
-                  isSelected
-                      ? Theme.of(context).primaryColor
-                      : context.textSecondary,
+              color: isSelected ? selectedColor : context.textSecondary,
             ),
             const SizedBox(height: 4),
             Text(
@@ -497,10 +497,7 @@ class SettingsScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color:
-                    isSelected
-                        ? Theme.of(context).primaryColor
-                        : context.textSecondary,
+                color: isSelected ? selectedColor : context.textSecondary,
               ),
             ),
           ],
