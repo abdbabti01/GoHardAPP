@@ -39,6 +39,37 @@ class WorkoutDayCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isRestDay = workout.isRestDay;
 
+    // Rest days render as simple text - no card styling
+    if (isRestDay) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 80,
+              child: Text(
+                workout.dayNameFromNumber,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: context.textTertiary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Rest',
+              style: TextStyle(
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+                color: context.textTertiary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     // Determine status from session (if exists) OR workout.isCompleted
     // This ensures archived workouts still show as completed in the program
     final sessionStatus = session?.status;
@@ -54,7 +85,7 @@ class WorkoutDayCard extends StatelessWidget {
             sessionStatus == 'draft');
 
     // Determine colors based on session status
-    // Priority: completion status > current day > rest day > not started
+    // Priority: completion status > current day > not started
     Color backgroundColor;
     Color textColor;
     Color borderColor;
@@ -78,10 +109,6 @@ class WorkoutDayCard extends StatelessWidget {
       backgroundColor = theme.primaryColor.withValues(alpha: 0.1);
       textColor = theme.primaryColor;
       borderColor = theme.primaryColor;
-    } else if (isRestDay) {
-      backgroundColor = context.surfaceHighlight;
-      textColor = context.textTertiary;
-      borderColor = context.border;
     } else if (isNotStarted) {
       // Not started - subtle
       backgroundColor = context.surfaceHighlight;
@@ -94,7 +121,7 @@ class WorkoutDayCard extends StatelessWidget {
     }
 
     return InkWell(
-      onTap: isRestDay ? null : onTap,
+      onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -169,13 +196,12 @@ class WorkoutDayCard extends StatelessWidget {
                   ),
                 ),
               )
-            else if (!isRestDay && !isPastDay)
+            else if (!isPastDay)
               Icon(
                 Icons.circle_outlined,
                 color: context.textTertiary,
                 size: 24,
               ),
-            // Rest days and past days show nothing - they're visually quiet
           ],
         ),
       ),

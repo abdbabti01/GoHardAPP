@@ -72,11 +72,11 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     );
   }
 
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
+  /// Check if a day number (1=Monday, 7=Sunday) is today's actual weekday
+  bool _isTodayWeekday(int dayNumber) {
+    // dayNumber: 1=Monday, 2=Tuesday, ..., 7=Sunday
+    // DateTime.weekday: 1=Monday, 2=Tuesday, ..., 7=Sunday (ISO 8601)
+    return DateTime.now().weekday == dayNumber;
   }
 
   void _openFullscreenCalendar() {
@@ -171,7 +171,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                         dayNumber,
                       );
                       final dayWorkouts = groupedWorkouts[index];
-                      final isToday = _isToday(date);
+                      final isToday = _isTodayWeekday(dayNumber);
                       // Filter out rest days for workout count
                       final actualWorkouts =
                           dayWorkouts.where((w) => !w.isRestDay).toList();
@@ -448,7 +448,15 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     );
   }
 
-  bool _isToday(DateTime date) {
+  /// Check if a day number (1=Monday, 7=Sunday) is today's actual weekday
+  bool _isTodayWeekday(int dayNumber) {
+    // dayNumber: 1=Monday, 2=Tuesday, ..., 7=Sunday
+    // DateTime.weekday: 1=Monday, 2=Tuesday, ..., 7=Sunday (ISO 8601)
+    return DateTime.now().weekday == dayNumber;
+  }
+
+  /// Check if the given date is actually today (for showing "Today" badge)
+  bool _isActualToday(DateTime date) {
     final now = DateTime.now();
     return date.year == now.year &&
         date.month == now.month &&
@@ -890,7 +898,8 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
         final dayNumber = index + 1;
         final date = _getDateForDay(program, weekNumber, dayNumber);
         final dayWorkouts = groupedWorkouts[index];
-        final isToday = _isToday(date);
+        final isTodayWeekday = _isTodayWeekday(dayNumber);
+        final isActualToday = _isActualToday(date);
         final isDragTarget = _dragTargetDay == dayNumber;
 
         return TweenAnimationBuilder<double>(
@@ -927,7 +936,8 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                       dayLabels[index],
                       date,
                       dayWorkouts,
-                      isToday,
+                      isTodayWeekday,
+                      isActualToday,
                       isDragTarget,
                       program,
                     );
@@ -946,7 +956,8 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     String dayLabel,
     DateTime date,
     List<ProgramWorkout> workouts,
-    bool isToday,
+    bool isTodayWeekday,
+    bool isActualToday,
     bool isDragTarget,
     Program program,
   ) {
@@ -956,6 +967,9 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     final allCompleted =
         hasWorkouts && actualWorkouts.every((w) => w.isCompleted);
 
+    // Use weekday match for highlighting, actual date for "Today" badge
+    final shouldHighlight = isTodayWeekday;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOutCubic,
@@ -964,7 +978,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
         color:
             isDragTarget
                 ? theme.primaryColor.withValues(alpha: 0.12)
-                : isToday
+                : shouldHighlight
                 ? theme.primaryColor.withValues(alpha: 0.06)
                 : context.surface,
         borderRadius: BorderRadius.circular(18),
@@ -972,7 +986,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
           color:
               isDragTarget
                   ? theme.primaryColor
-                  : isToday
+                  : shouldHighlight
                   ? theme.primaryColor.withValues(alpha: 0.4)
                   : context.border,
           width: isDragTarget ? 2.5 : 1,
@@ -986,7 +1000,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                     offset: const Offset(0, 4),
                   ),
                 ]
-                : isToday
+                : shouldHighlight
                 ? [
                   BoxShadow(
                     color: theme.primaryColor.withValues(alpha: 0.1),
@@ -1011,7 +1025,9 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                   ),
                   decoration: BoxDecoration(
                     color:
-                        isToday ? theme.primaryColor : context.surfaceHighlight,
+                        shouldHighlight
+                            ? theme.primaryColor
+                            : context.surfaceHighlight,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -1019,7 +1035,10 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: isToday ? Colors.white : context.textSecondary,
+                      color:
+                          shouldHighlight
+                              ? Colors.white
+                              : context.textSecondary,
                     ),
                   ),
                 ),
@@ -1032,7 +1051,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                     color: context.textPrimary,
                   ),
                 ),
-                if (isToday) ...[
+                if (isTodayWeekday) ...[
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -1044,7 +1063,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      'Today',
+                      isActualToday ? 'Today' : dayLabel,
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
@@ -1099,10 +1118,10 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
               ],
             ),
 
-            // Workouts list
-            if (workouts.isNotEmpty) ...[
+            // Workouts list (rest days are NOT rendered as chips - they're shown as "Rest" in header)
+            if (actualWorkouts.isNotEmpty) ...[
               const SizedBox(height: 14),
-              ...workouts.asMap().entries.map((entry) {
+              ...actualWorkouts.asMap().entries.map((entry) {
                 return _buildWorkoutChip(
                   theme,
                   entry.value,
@@ -1194,7 +1213,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
           decoration: BoxDecoration(
             color: accentColor.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: accentColor.withValues(alpha: 0.25)),
+            border: Border.all(color: accentColor.withValues(alpha: 0.5)),
           ),
           child: Row(
             children: [
