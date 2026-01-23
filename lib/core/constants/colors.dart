@@ -24,11 +24,11 @@ class AppColors {
   // ============ PREMIUM ACCENT - GREEN (10% of UI) ============
 
   // Use sparingly: buttons, progress, selected states, success indicators
-  static const Color accentGreen = Color(0xFF5CE896); // Balanced green
+  static const Color accentGreen = Color(0xFF7AEBAB); // Soft muted green
   static const Color accentGreenMuted = Color(
-    0xFF93F5BB,
+    0xFFB0F5CC,
   ); // Light green variant
-  static const Color accentGreenDark = Color(0xFF34D474); // Dark green variant
+  static const Color accentGreenDark = Color(0xFF5BD98E); // Dark green variant
   static const Color accentGreenSubtle = Color(
     0xFF166534,
   ); // Very dark for backgrounds
@@ -48,29 +48,29 @@ class AppColors {
 
   // ============ THEME ACCENT - BLUE PALETTE (Sky Blue) ============
 
-  static const Color accentBlue = Color(0xFF5B9BF8); // Balanced blue
-  static const Color accentBlueMuted = Color(0xFF8AB8FC); // Light blue variant
-  static const Color accentBlueDark = Color(0xFF3B82F6); // Dark blue variant
+  static const Color accentBlue = Color(0xFF7CB3FC); // Soft muted blue
+  static const Color accentBlueMuted = Color(0xFFA8CBFD); // Light blue variant
+  static const Color accentBlueDark = Color(0xFF5A9AF8); // Dark blue variant
   static const Color accentBlueSubtle = Color(
     0xFF1D4ED8,
   ); // Very dark for backgrounds
 
   // ============ THEME ACCENT - YELLOW PALETTE (Light/Warm) ============
 
-  static const Color accentYellow = Color(0xFFFBCE4A); // Balanced yellow/amber
+  static const Color accentYellow = Color(0xFFFDE899); // Soft muted yellow
   static const Color accentYellowMuted = Color(
-    0xFFFDE07A,
+    0xFFFEF0B8,
   ); // Light yellow variant
-  static const Color accentYellowDark = Color(0xFFF5AB1B); // Dark amber variant
+  static const Color accentYellowDark = Color(0xFFFCD860); // Dark amber variant
   static const Color accentYellowSubtle = Color(
     0xFFD97706,
   ); // Dark amber for backgrounds
 
   // ============ THEME ACCENT - PINK PALETTE (Rose) ============
 
-  static const Color accentPink = Color(0xFFF687C0); // Balanced pink/rose
-  static const Color accentPinkMuted = Color(0xFFFAB4D6); // Light pink variant
-  static const Color accentPinkDark = Color(0xFFF25AA8); // Dark pink variant
+  static const Color accentPink = Color(0xFFFAB8D9); // Soft muted pink
+  static const Color accentPinkMuted = Color(0xFFFCD4E8); // Light pink variant
+  static const Color accentPinkDark = Color(0xFFF799C4); // Dark pink variant
   static const Color accentPinkSubtle = Color(
     0xFFBE185D,
   ); // Dark pink for backgrounds
