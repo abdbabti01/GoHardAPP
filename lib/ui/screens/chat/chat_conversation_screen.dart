@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:intl/intl.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../providers/chat_provider.dart';
@@ -193,7 +192,17 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     final descriptionController = TextEditingController(
       text: 'AI-generated workout program',
     );
-    DateTime startDate = DateTime.now();
+    // Programs always start on Monday - calculate next Monday (or today if Monday)
+    final now = DateTime.now();
+    final daysUntilMonday = (DateTime.monday - now.weekday + 7) % 7;
+    final startDate =
+        daysUntilMonday == 0
+            ? DateTime(now.year, now.month, now.day) // Today is Monday
+            : DateTime(
+              now.year,
+              now.month,
+              now.day,
+            ).add(Duration(days: daysUntilMonday));
     int totalWeeks = 8;
     int daysPerWeek = 4;
     int? selectedGoalId =
@@ -294,35 +303,6 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                           onChanged: (value) {
                             if (value != null) daysPerWeek = value;
                           },
-                        ),
-                        const SizedBox(height: 16),
-                        ListTile(
-                          title: const Text('Start Date'),
-                          subtitle: Text(
-                            DateFormat('MMM d, yyyy').format(startDate),
-                          ),
-                          trailing: const Icon(Icons.calendar_today),
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: startDate,
-                              firstDate: DateTime.now().subtract(
-                                const Duration(days: 30),
-                              ),
-                              lastDate: DateTime.now().add(
-                                const Duration(days: 365),
-                              ),
-                            );
-                            if (picked != null) {
-                              setState(() {
-                                startDate = picked;
-                              });
-                            }
-                          },
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            side: BorderSide(color: Colors.grey.shade300),
-                          ),
                         ),
                       ],
                     ),
