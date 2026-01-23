@@ -900,6 +900,8 @@ class SessionRepository {
           'completedAt': localSession.completedAt!.toIso8601String(),
         if (localSession.pausedAt != null)
           'pausedAt': localSession.pausedAt!.toIso8601String(),
+        // When pausedAt is null, tell server to clear it (for resume operation)
+        if (localSession.pausedAt == null) 'clearPausedAt': true,
         if (localSession.duration != null) 'duration': localSession.duration,
       };
 

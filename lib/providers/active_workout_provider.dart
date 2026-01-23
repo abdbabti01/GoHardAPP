@@ -5,6 +5,7 @@ import '../data/models/exercise.dart';
 import '../data/repositories/session_repository.dart';
 import '../core/services/connectivity_service.dart';
 import '../core/services/health_service.dart';
+import '../core/services/calories_service.dart';
 
 /// Provider for active workout session with timer
 /// Replaces ActiveWorkoutViewModel from MAUI app
@@ -20,6 +21,9 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _timer;
   Duration _elapsedTime = Duration.zero;
   bool _isTimerRunning = false;
+
+  // User weight for calories calculation (set from ProfileProvider)
+  double? _userWeightKg;
 
   // Connectivity subscription
   StreamSubscription<bool>? _connectivitySubscription;
@@ -86,6 +90,12 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
   Duration get elapsedTime => _elapsedTime;
   bool get isTimerRunning => _isTimerRunning;
   List<Exercise> get exercises => _currentSession?.exercises ?? [];
+
+  /// Set user weight for more accurate calorie estimation
+  /// Call this when profile is loaded
+  set userWeightKg(double? weight) {
+    _userWeightKg = weight;
+  }
 
   /// Load session by ID and calculate elapsed time
   Future<void> loadSession(int sessionId, {bool showLoading = true}) async {
@@ -370,8 +380,12 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
         return;
       }
 
-      // Estimate calories burned (rough estimate: 5-8 cal/min for strength training)
-      final estimatedCalories = (durationMinutes * 6.5).toInt();
+      // Estimate calories using MET-based calculation with user weight
+      final estimatedCalories = CaloriesService.estimateWorkoutCalories(
+        durationMinutes: durationMinutes,
+        userWeightKg: _userWeightKg,
+        workoutType: workoutType,
+      );
 
       final success = await healthService.writeWorkout(
         startTime: startTime,
@@ -382,7 +396,7 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       if (success) {
         debugPrint(
-          '🏥 ✅ Workout synced to Health: $durationMinutes min, ~$estimatedCalories cal',
+          '🏥 ✅ Workout synced to Health: $durationMinutes min, ~$estimatedCalories cal (weight: ${_userWeightKg ?? "default"}kg)',
         );
       } else {
         debugPrint('🏥 ⚠️ Failed to sync workout to Health');

@@ -8,6 +8,7 @@ class Exercise {
   final int id;
   final int sessionId;
   final String name;
+  final int sortOrder; // Display order within session (0-indexed)
   final int? duration;
   final int? restTime;
   final String? notes;
@@ -19,6 +20,7 @@ class Exercise {
     required this.id,
     required this.sessionId,
     required this.name,
+    this.sortOrder = 0,
     this.duration,
     this.restTime,
     this.notes,
@@ -35,6 +37,7 @@ class Exercise {
     int? id,
     int? sessionId,
     String? name,
+    int? sortOrder,
     int? duration,
     int? restTime,
     String? notes,
@@ -46,6 +49,7 @@ class Exercise {
       id: id ?? this.id,
       sessionId: sessionId ?? this.sessionId,
       name: name ?? this.name,
+      sortOrder: sortOrder ?? this.sortOrder,
       duration: duration ?? this.duration,
       restTime: restTime ?? this.restTime,
       notes: notes ?? this.notes,

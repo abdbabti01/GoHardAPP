@@ -22,6 +22,9 @@ class LocalExercise {
   /// Exercise name
   String name;
 
+  /// Display order within session (0-indexed, for drag-and-drop reordering)
+  int sortOrder;
+
   /// Duration in seconds
   int? duration;
 
@@ -65,6 +68,7 @@ class LocalExercise {
     required this.sessionLocalId,
     this.sessionServerId,
     required this.name,
+    this.sortOrder = 0,
     this.duration,
     this.restTime,
     this.notes,

@@ -7,6 +7,7 @@ import '../data/models/gps_point.dart';
 import '../data/repositories/running_repository.dart';
 import '../core/services/connectivity_service.dart';
 import '../core/services/health_service.dart';
+import '../core/services/calories_service.dart';
 
 /// Provider for active running session with timer and GPS tracking
 class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
@@ -31,6 +32,9 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   double _currentDistance = 0;
   Position? _lastPosition;
   bool _isGpsActive = false;
+
+  // User weight for calories calculation (set from ProfileProvider)
+  double? _userWeightKg;
 
   // Location settings
   static const LocationSettings _locationSettings = LocationSettings(
@@ -57,9 +61,16 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentRun != null && _currentRun!.status == 'in_progress';
   bool get hasDraftRun => _currentRun != null && _currentRun!.status == 'draft';
 
+  /// Set user weight for more accurate calorie estimation
+  /// Call this when profile is loaded
+  set userWeightKg(double? weight) {
+    _userWeightKg = weight;
+  }
+
   /// Current pace in min/km
+  /// Requires at least 10 meters of distance to avoid GPS noise causing absurd values
   double? get currentPace {
-    if (_currentDistance <= 0 || _elapsedTime.inSeconds <= 0) return null;
+    if (_currentDistance < 0.01 || _elapsedTime.inSeconds <= 0) return null;
     return (_elapsedTime.inSeconds / 60) / _currentDistance;
   }
 
@@ -325,11 +336,16 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       _stopGpsTracking();
 
       final duration = _elapsedTime.inSeconds;
+      final durationMinutes = (duration / 60).ceil();
       final distance = _currentDistance;
       final pace = distance > 0 ? (duration / 60) / distance : null;
 
-      // Estimate calories (rough: ~60 cal/km for running)
-      final calories = (distance * 60).round();
+      // Estimate calories using MET-based calculation with pace and user weight
+      final calories = CaloriesService.estimateRunningCalories(
+        distanceKm: distance,
+        durationMinutes: durationMinutes,
+        userWeightKg: _userWeightKg,
+      );
 
       // Store start time before updating (for health sync)
       final runStartTime = _currentRun!.startedAt;
