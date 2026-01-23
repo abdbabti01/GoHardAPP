@@ -178,9 +178,6 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                       final allCompleted =
                           hasWorkouts &&
                           actualWorkouts.every((w) => w.isCompleted);
-                      final isRestDay =
-                          dayWorkouts.isNotEmpty &&
-                          dayWorkouts.every((w) => w.isRestDay);
 
                       return Expanded(
                         child: _buildCompactDayCell(
@@ -191,7 +188,6 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                           allCompleted,
                           isToday,
                           actualWorkouts.length,
-                          isRestDay: isRestDay,
                         ),
                       );
                     }),
@@ -262,9 +258,8 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     bool hasWorkouts,
     bool allCompleted,
     bool isToday,
-    int workoutCount, {
-    bool isRestDay = false,
-  }) {
+    int workoutCount,
+  ) {
     Color backgroundColor;
     Color textColor;
     Color labelColor;
@@ -348,16 +343,8 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                 ),
               ),
             )
-          else if (isRestDay)
-            Icon(
-              Icons.self_improvement,
-              size: 14,
-              color:
-                  isToday
-                      ? Colors.white.withValues(alpha: 0.7)
-                      : context.textTertiary,
-            )
           else
+            // Rest days and no-workout days both show subtle dash
             Icon(
               Icons.remove,
               size: 14,
@@ -966,8 +953,6 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     final hasWorkouts = actualWorkouts.isNotEmpty;
     final allCompleted =
         hasWorkouts && actualWorkouts.every((w) => w.isCompleted);
-    final isRestDayOnly =
-        workouts.isNotEmpty && workouts.every((w) => w.isRestDay);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -1099,35 +1084,14 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                       ),
                     ),
                   )
-                else if (isRestDayOnly)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.self_improvement,
-                        size: 14,
-                        color: context.textTertiary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Rest day',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: context.textTertiary,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  )
                 else
+                  // Rest days and empty days both show subtle "Rest" text
                   Text(
-                    'No workouts',
+                    'Rest',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: context.textTertiary,
-                      fontStyle: FontStyle.italic,
                     ),
                   ),
               ],

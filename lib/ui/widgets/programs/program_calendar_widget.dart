@@ -143,7 +143,8 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
   }
 
   /// Build marker (dot indicator) for a date
-  Widget _buildMarker(
+  /// Returns null for rest days (they show no marker)
+  Widget? _buildMarker(
     BuildContext context,
     DateTime day,
     ProgramWorkout workout,
@@ -158,8 +159,8 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
     IconData? icon;
 
     if (workout.isRestDay) {
-      markerColor = context.textTertiary;
-      icon = Icons.self_improvement;
+      // Rest days don't show any marker - they look like empty days
+      return null;
     } else if (workout.isCompleted) {
       markerColor = Colors.green.shade600;
       icon = Icons.check_circle;
@@ -418,11 +419,6 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
                 Icons.check_circle,
                 'Completed',
                 Colors.green.shade600,
-              ),
-              _buildLegendItem(
-                Icons.self_improvement,
-                'Rest Day',
-                context.textTertiary,
               ),
               _buildLegendItem(
                 Icons.circle,
