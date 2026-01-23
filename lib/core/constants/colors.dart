@@ -21,14 +21,14 @@ class AppColors {
   static const Color cloud = Color(0xFFDFE6E9); // Light mode surface
   static const Color snow = Color(0xFFF7F9FA); // Light mode background
 
-  // ============ PREMIUM ACCENT - VIBRANT GREEN (10% of UI) ============
+  // ============ PREMIUM ACCENT - GREEN (10% of UI) ============
 
   // Use sparingly: buttons, progress, selected states, success indicators
-  static const Color accentGreen = Color(0xFF4ADE80); // Vibrant green
+  static const Color accentGreen = Color(0xFF5CE896); // Balanced green
   static const Color accentGreenMuted = Color(
-    0xFF86EFAC,
+    0xFF93F5BB,
   ); // Light green variant
-  static const Color accentGreenDark = Color(0xFF22C55E); // Dark green variant
+  static const Color accentGreenDark = Color(0xFF34D474); // Dark green variant
   static const Color accentGreenSubtle = Color(
     0xFF166534,
   ); // Very dark for backgrounds
@@ -48,29 +48,29 @@ class AppColors {
 
   // ============ THEME ACCENT - BLUE PALETTE (Sky Blue) ============
 
-  static const Color accentBlue = Color(0xFF3B82F6); // Vibrant blue
-  static const Color accentBlueMuted = Color(0xFF60A5FA); // Light blue variant
-  static const Color accentBlueDark = Color(0xFF2563EB); // Dark blue variant
+  static const Color accentBlue = Color(0xFF5B9BF8); // Balanced blue
+  static const Color accentBlueMuted = Color(0xFF8AB8FC); // Light blue variant
+  static const Color accentBlueDark = Color(0xFF3B82F6); // Dark blue variant
   static const Color accentBlueSubtle = Color(
     0xFF1D4ED8,
   ); // Very dark for backgrounds
 
   // ============ THEME ACCENT - YELLOW PALETTE (Light/Warm) ============
 
-  static const Color accentYellow = Color(0xFFFBBF24); // Vibrant yellow/amber
+  static const Color accentYellow = Color(0xFFFBCE4A); // Balanced yellow/amber
   static const Color accentYellowMuted = Color(
-    0xFFFCD34D,
+    0xFFFDE07A,
   ); // Light yellow variant
-  static const Color accentYellowDark = Color(0xFFF59E0B); // Dark amber variant
+  static const Color accentYellowDark = Color(0xFFF5AB1B); // Dark amber variant
   static const Color accentYellowSubtle = Color(
     0xFFD97706,
   ); // Dark amber for backgrounds
 
   // ============ THEME ACCENT - PINK PALETTE (Rose) ============
 
-  static const Color accentPink = Color(0xFFF472B6); // Vibrant pink/rose
-  static const Color accentPinkMuted = Color(0xFFF9A8D4); // Light pink variant
-  static const Color accentPinkDark = Color(0xFFEC4899); // Dark pink variant
+  static const Color accentPink = Color(0xFFF687C0); // Balanced pink/rose
+  static const Color accentPinkMuted = Color(0xFFFAB4D6); // Light pink variant
+  static const Color accentPinkDark = Color(0xFFF25AA8); // Dark pink variant
   static const Color accentPinkSubtle = Color(
     0xFFBE185D,
   ); // Dark pink for backgrounds
