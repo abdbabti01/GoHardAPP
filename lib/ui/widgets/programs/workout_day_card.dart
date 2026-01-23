@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../data/models/session.dart';
 
@@ -78,18 +79,18 @@ class WorkoutDayCard extends StatelessWidget {
       textColor = theme.primaryColor;
       borderColor = theme.primaryColor;
     } else if (isRestDay) {
-      backgroundColor = Colors.grey.shade50;
-      textColor = Colors.grey.shade600;
-      borderColor = Colors.grey.shade300;
+      backgroundColor = context.surfaceHighlight;
+      textColor = context.textTertiary;
+      borderColor = context.border;
     } else if (isNotStarted) {
-      // Not started - grey
-      backgroundColor = Colors.grey.shade100;
-      textColor = Colors.grey.shade700;
-      borderColor = Colors.grey.shade300;
+      // Not started - subtle
+      backgroundColor = context.surfaceHighlight;
+      textColor = context.textSecondary;
+      borderColor = context.border;
     } else {
-      backgroundColor = Colors.white;
-      textColor = Colors.grey.shade800;
-      borderColor = Colors.grey.shade300;
+      backgroundColor = context.surface;
+      textColor = context.textPrimary;
+      borderColor = context.border;
     }
 
     return InkWell(
@@ -169,11 +170,11 @@ class WorkoutDayCard extends StatelessWidget {
                 ),
               )
             else if (!isRestDay && !isPastDay)
-              Icon(Icons.circle_outlined, color: Colors.grey.shade400, size: 24)
+              Icon(Icons.circle_outlined, color: context.textTertiary, size: 24)
             else if (isRestDay)
               Icon(
                 Icons.self_improvement,
-                color: Colors.grey.shade400,
+                color: context.textTertiary,
                 size: 20,
               ),
           ],

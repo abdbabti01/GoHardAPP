@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
 
@@ -157,7 +158,7 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
     IconData? icon;
 
     if (workout.isRestDay) {
-      markerColor = Colors.grey.shade400;
+      markerColor = context.textTertiary;
       icon = Icons.self_improvement;
     } else if (workout.isCompleted) {
       markerColor = Colors.green.shade600;
@@ -295,12 +296,12 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
                   // Outside month days
                   outsideTextStyle: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey.shade400,
+                    color: context.textTertiary,
                   ),
                   // Disabled days (outside program range)
                   disabledTextStyle: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey.shade300,
+                    color: context.textTertiary.withValues(alpha: 0.5),
                   ),
                 ),
                 // Enable/disable dates based on program range
@@ -393,7 +394,7 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: context.surfaceHighlight,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -421,7 +422,7 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
               _buildLegendItem(
                 Icons.self_improvement,
                 'Rest Day',
-                Colors.grey.shade400,
+                context.textTertiary,
               ),
               _buildLegendItem(
                 Icons.circle,

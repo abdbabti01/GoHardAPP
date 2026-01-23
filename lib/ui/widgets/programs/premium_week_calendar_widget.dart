@@ -171,10 +171,16 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                       );
                       final dayWorkouts = groupedWorkouts[index];
                       final isToday = _isToday(date);
-                      final hasWorkouts = dayWorkouts.isNotEmpty;
+                      // Filter out rest days for workout count
+                      final actualWorkouts =
+                          dayWorkouts.where((w) => !w.isRestDay).toList();
+                      final hasWorkouts = actualWorkouts.isNotEmpty;
                       final allCompleted =
                           hasWorkouts &&
-                          dayWorkouts.every((w) => w.isCompleted);
+                          actualWorkouts.every((w) => w.isCompleted);
+                      final isRestDay =
+                          dayWorkouts.isNotEmpty &&
+                          dayWorkouts.every((w) => w.isRestDay);
 
                       return Expanded(
                         child: _buildCompactDayCell(
@@ -184,7 +190,8 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                           hasWorkouts,
                           allCompleted,
                           isToday,
-                          dayWorkouts.length,
+                          actualWorkouts.length,
+                          isRestDay: isRestDay,
                         ),
                       );
                     }),
@@ -259,8 +266,9 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     bool hasWorkouts,
     bool allCompleted,
     bool isToday,
-    int workoutCount,
-  ) {
+    int workoutCount, {
+    bool isRestDay = false,
+  }) {
     Color backgroundColor;
     Color textColor;
     Color labelColor;
@@ -343,6 +351,15 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                   ),
                 ),
               ),
+            )
+          else if (isRestDay)
+            Icon(
+              Icons.self_improvement,
+              size: 14,
+              color:
+                  isToday
+                      ? Colors.white.withValues(alpha: 0.7)
+                      : context.textTertiary,
             )
           else
             Icon(
@@ -948,8 +965,13 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     bool isDragTarget,
     Program program,
   ) {
-    final hasWorkouts = workouts.isNotEmpty;
-    final allCompleted = hasWorkouts && workouts.every((w) => w.isCompleted);
+    // Filter out rest days for workout count
+    final actualWorkouts = workouts.where((w) => !w.isRestDay).toList();
+    final hasWorkouts = actualWorkouts.isNotEmpty;
+    final allCompleted =
+        hasWorkouts && actualWorkouts.every((w) => w.isCompleted);
+    final isRestDayOnly =
+        workouts.isNotEmpty && workouts.every((w) => w.isRestDay);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -1073,7 +1095,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      '${workouts.length}',
+                      '${actualWorkouts.length}',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -1081,9 +1103,30 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                       ),
                     ),
                   )
+                else if (isRestDayOnly)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.self_improvement,
+                        size: 14,
+                        color: context.textTertiary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Rest day',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: context.textTertiary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  )
                 else
                   Text(
-                    'Rest day',
+                    'No workouts',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
