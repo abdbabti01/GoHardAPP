@@ -7,32 +7,36 @@ part of 'meal_entry.dart';
 // **************************************************************************
 
 MealEntry _$MealEntryFromJson(Map<String, dynamic> json) => MealEntry(
-      id: (json['id'] as num).toInt(),
-      mealLogId: (json['mealLogId'] as num).toInt(),
-      mealType: json['mealType'] as String? ?? 'Snack',
-      name: json['name'] as String?,
-      scheduledTime: json['scheduledTime'] == null
+  id: (json['id'] as num).toInt(),
+  mealLogId: (json['mealLogId'] as num).toInt(),
+  mealType: json['mealType'] as String? ?? 'Snack',
+  name: json['name'] as String?,
+  scheduledTime:
+      json['scheduledTime'] == null
           ? null
           : DateTime.parse(json['scheduledTime'] as String),
-      isConsumed: json['isConsumed'] as bool? ?? false,
-      consumedAt: json['consumedAt'] == null
+  isConsumed: json['isConsumed'] as bool? ?? false,
+  consumedAt:
+      json['consumedAt'] == null
           ? null
           : DateTime.parse(json['consumedAt'] as String),
-      notes: json['notes'] as String?,
-      totalCalories: (json['totalCalories'] as num?)?.toDouble() ?? 0,
-      totalProtein: (json['totalProtein'] as num?)?.toDouble() ?? 0,
-      totalCarbohydrates: (json['totalCarbohydrates'] as num?)?.toDouble() ?? 0,
-      totalFat: (json['totalFat'] as num?)?.toDouble() ?? 0,
-      totalFiber: (json['totalFiber'] as num?)?.toDouble(),
-      totalSodium: (json['totalSodium'] as num?)?.toDouble(),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: json['updatedAt'] == null
+  notes: json['notes'] as String?,
+  totalCalories: (json['totalCalories'] as num?)?.toDouble() ?? 0,
+  totalProtein: (json['totalProtein'] as num?)?.toDouble() ?? 0,
+  totalCarbohydrates: (json['totalCarbohydrates'] as num?)?.toDouble() ?? 0,
+  totalFat: (json['totalFat'] as num?)?.toDouble() ?? 0,
+  totalFiber: (json['totalFiber'] as num?)?.toDouble(),
+  totalSodium: (json['totalSodium'] as num?)?.toDouble(),
+  createdAt: DateTime.parse(json['createdAt'] as String),
+  updatedAt:
+      json['updatedAt'] == null
           ? null
           : DateTime.parse(json['updatedAt'] as String),
-      foodItems: (json['foodItems'] as List<dynamic>?)
+  foodItems:
+      (json['foodItems'] as List<dynamic>?)
           ?.map((e) => FoodItem.fromJson(e as Map<String, dynamic>))
           .toList(),
-    );
+);
 
 Map<String, dynamic> _$MealEntryToJson(MealEntry instance) {
   final val = <String, dynamic>{

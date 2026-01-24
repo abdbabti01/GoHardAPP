@@ -53,18 +53,23 @@ const LocalExerciseSchema = CollectionSchema(
       name: r'sessionServerId',
       type: IsarType.long,
     ),
-    r'syncError': PropertySchema(
+    r'sortOrder': PropertySchema(
       id: 12,
+      name: r'sortOrder',
+      type: IsarType.long,
+    ),
+    r'syncError': PropertySchema(
+      id: 13,
       name: r'syncError',
       type: IsarType.string,
     ),
     r'syncRetryCount': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'syncRetryCount',
       type: IsarType.long,
     ),
     r'syncStatus': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'syncStatus',
       type: IsarType.string,
     ),
@@ -151,9 +156,10 @@ void _localExerciseSerialize(
   writer.writeLong(offsets[9], object.serverId);
   writer.writeLong(offsets[10], object.sessionLocalId);
   writer.writeLong(offsets[11], object.sessionServerId);
-  writer.writeString(offsets[12], object.syncError);
-  writer.writeLong(offsets[13], object.syncRetryCount);
-  writer.writeString(offsets[14], object.syncStatus);
+  writer.writeLong(offsets[12], object.sortOrder);
+  writer.writeString(offsets[13], object.syncError);
+  writer.writeLong(offsets[14], object.syncRetryCount);
+  writer.writeString(offsets[15], object.syncStatus);
 }
 
 LocalExercise _localExerciseDeserialize(
@@ -175,9 +181,10 @@ LocalExercise _localExerciseDeserialize(
     serverId: reader.readLongOrNull(offsets[9]),
     sessionLocalId: reader.readLong(offsets[10]),
     sessionServerId: reader.readLongOrNull(offsets[11]),
-    syncError: reader.readStringOrNull(offsets[12]),
-    syncRetryCount: reader.readLongOrNull(offsets[13]) ?? 0,
-    syncStatus: reader.readStringOrNull(offsets[14]) ?? 'pending_create',
+    sortOrder: reader.readLongOrNull(offsets[12]) ?? 0,
+    syncError: reader.readStringOrNull(offsets[13]),
+    syncRetryCount: reader.readLongOrNull(offsets[14]) ?? 0,
+    syncStatus: reader.readStringOrNull(offsets[15]) ?? 'pending_create',
   );
   object.localId = id;
   return object;
@@ -215,10 +222,12 @@ P _localExerciseDeserializeProp<P>(
     case 11:
       return (reader.readLongOrNull(offset)) as P;
     case 12:
-      return (reader.readStringOrNull(offset)) as P;
-    case 13:
       return (reader.readLongOrNull(offset) ?? 0) as P;
+    case 13:
+      return (reader.readStringOrNull(offset)) as P;
     case 14:
+      return (reader.readLongOrNull(offset) ?? 0) as P;
+    case 15:
       return (reader.readStringOrNull(offset) ?? 'pending_create') as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1428,6 +1437,61 @@ extension LocalExerciseQueryFilter
   }
 
   QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  sortOrderEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'sortOrder', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  sortOrderGreaterThan(int value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'sortOrder',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  sortOrderLessThan(int value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'sortOrder',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  sortOrderBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'sortOrder',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
   syncErrorIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(
@@ -1951,6 +2015,19 @@ extension LocalExerciseQuerySortBy
     });
   }
 
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy> sortBySortOrder() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  sortBySortOrderDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.desc);
+    });
+  }
+
   QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy> sortBySyncError() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'syncError', Sort.asc);
@@ -2166,6 +2243,19 @@ extension LocalExerciseQuerySortThenBy
     });
   }
 
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy> thenBySortOrder() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  thenBySortOrderDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.desc);
+    });
+  }
+
   QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy> thenBySyncError() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'syncError', Sort.asc);
@@ -2291,6 +2381,12 @@ extension LocalExerciseQueryWhereDistinct
     });
   }
 
+  QueryBuilder<LocalExercise, LocalExercise, QDistinct> distinctBySortOrder() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sortOrder');
+    });
+  }
+
   QueryBuilder<LocalExercise, LocalExercise, QDistinct> distinctBySyncError({
     bool caseSensitive = true,
   }) {
@@ -2397,6 +2493,12 @@ extension LocalExerciseQueryProperty
   sessionServerIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'sessionServerId');
+    });
+  }
+
+  QueryBuilder<LocalExercise, int, QQueryOperations> sortOrderProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sortOrder');
     });
   }
 
