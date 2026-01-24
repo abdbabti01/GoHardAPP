@@ -15,6 +15,7 @@ import '../../../core/utils/date_utils.dart';
 import '../../widgets/sessions/session_card.dart';
 import '../../widgets/sessions/weekly_progress_card.dart';
 import '../../widgets/running/running_widget.dart';
+import '../../widgets/nutrition/nutrition_summary_card.dart';
 import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/active_workout_banner.dart';
 import '../../widgets/common/loading_indicator.dart';
@@ -1021,7 +1022,10 @@ class _SessionsScreenState extends State<SessionsScreen>
                             // Running Widget - always visible
                             const SizedBox(height: 12),
                             const RunningWidget(),
-                            const SizedBox(height: 32),
+                            // Nutrition Summary Card
+                            const SizedBox(height: 8),
+                            const NutritionSummaryCard(),
+                            const SizedBox(height: 24),
                             // Empty workout state
                             FadeSlideAnimation(
                               child: Column(
@@ -1259,6 +1263,10 @@ class _SessionsScreenState extends State<SessionsScreen>
                           // Running Widget
                           const SizedBox(height: 12),
                           const RunningWidget(),
+
+                          // Nutrition Summary Card
+                          const SizedBox(height: 8),
+                          const NutritionSummaryCard(),
 
                           // Program Workouts Section
                           _buildProgramWorkoutsSection(context),

@@ -379,15 +379,52 @@ class _FoodDetailSheet extends StatefulWidget {
 }
 
 class _FoodDetailSheetState extends State<_FoodDetailSheet> {
-  double _quantity = 1;
+  late TextEditingController _gramsController;
+  double _grams = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Default to the serving size in grams
+    _grams = widget.food.servingSize;
+    _gramsController = TextEditingController(text: _grams.toStringAsFixed(0));
+  }
+
+  @override
+  void dispose() {
+    _gramsController.dispose();
+    super.dispose();
+  }
+
+  void _updateGrams(String value) {
+    final parsed = double.tryParse(value);
+    if (parsed != null && parsed >= 0) {
+      setState(() {
+        _grams = parsed;
+      });
+    }
+  }
+
+  // Calculate nutrition based on grams entered
+  // Formula: (nutrition_per_serving / serving_size) * grams
+  double _calculateNutrition(double perServing) {
+    if (widget.food.servingSize <= 0) return 0;
+    return (perServing / widget.food.servingSize) * _grams;
+  }
+
+  // Calculate quantity (servings) for API
+  double _getQuantityForApi() {
+    if (widget.food.servingSize <= 0) return 1;
+    return _grams / widget.food.servingSize;
+  }
 
   @override
   Widget build(BuildContext context) {
     final food = widget.food;
-    final totalCalories = food.calories * _quantity;
-    final totalProtein = food.protein * _quantity;
-    final totalCarbs = food.carbohydrates * _quantity;
-    final totalFat = food.fat * _quantity;
+    final totalCalories = _calculateNutrition(food.calories);
+    final totalProtein = _calculateNutrition(food.protein);
+    final totalCarbs = _calculateNutrition(food.carbohydrates);
+    final totalFat = _calculateNutrition(food.fat);
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -410,29 +447,90 @@ class _FoodDetailSheetState extends State<_FoodDetailSheet> {
               ),
             ),
           ],
+          const SizedBox(height: 8),
+          // Show serving size info
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '1 serving = ${food.servingSize.toStringAsFixed(0)}${food.servingUnit} • ${food.calories.toStringAsFixed(0)} kcal',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
 
-          // Quantity selector
+          // Grams input
           Row(
             children: [
-              Text('Servings', style: Theme.of(context).textTheme.titleMedium),
+              Text('Amount', style: Theme.of(context).textTheme.titleMedium),
               const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.remove_circle_outline),
-                onPressed:
-                    _quantity > 0.5
-                        ? () => setState(() => _quantity -= 0.5)
-                        : null,
+              SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: _gramsController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  decoration: InputDecoration(
+                    suffixText: food.servingUnit,
+                    suffixStyle: Theme.of(context).textTheme.bodyMedium,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onChanged: _updateGrams,
+                ),
               ),
-              Text(
-                _quantity.toStringAsFixed(1),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Quick amount buttons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _QuickAmountButton(
+                label: '50${food.servingUnit}',
+                onTap: () {
+                  _gramsController.text = '50';
+                  _updateGrams('50');
+                },
               ),
-              IconButton(
-                icon: const Icon(Icons.add_circle_outline),
-                onPressed: () => setState(() => _quantity += 0.5),
+              const SizedBox(width: 8),
+              _QuickAmountButton(
+                label: '100${food.servingUnit}',
+                onTap: () {
+                  _gramsController.text = '100';
+                  _updateGrams('100');
+                },
+              ),
+              const SizedBox(width: 8),
+              _QuickAmountButton(
+                label: '150${food.servingUnit}',
+                onTap: () {
+                  _gramsController.text = '150';
+                  _updateGrams('150');
+                },
+              ),
+              const SizedBox(width: 8),
+              _QuickAmountButton(
+                label: '200${food.servingUnit}',
+                onTap: () {
+                  _gramsController.text = '200';
+                  _updateGrams('200');
+                },
               ),
             ],
           ),
@@ -463,7 +561,8 @@ class _FoodDetailSheetState extends State<_FoodDetailSheet> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () => widget.onAdd(_quantity),
+              onPressed:
+                  _grams > 0 ? () => widget.onAdd(_getQuantityForApi()) : null,
               icon: const Icon(Icons.add),
               label: Text('Add ${totalCalories.toStringAsFixed(0)} kcal'),
             ),
@@ -489,6 +588,35 @@ class _FoodDetailSheetState extends State<_FoodDetailSheet> {
             ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _QuickAmountButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickAmountButton({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
       ),
     );
   }
