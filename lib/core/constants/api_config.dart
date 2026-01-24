@@ -68,6 +68,15 @@ class ApiConfig {
   static const String bodyMetrics = 'bodymetrics';
   static const String programs = 'programs';
 
+  // Nutrition endpoints
+  static const String foodTemplates = 'foodtemplates';
+  static const String mealLogs = 'meallogs';
+  static const String mealEntries = 'mealentries';
+  static const String foodItems = 'fooditems';
+  static const String nutritionGoals = 'nutritiongoals';
+  static const String nutritionAnalytics = 'nutritionanalytics';
+  static const String mealPlans = 'mealplans';
+
   /// Helper methods for building endpoint URLs
   static String userById(int id) => '$users/$id';
   static String sessionById(int id) => '$sessions/$id';
@@ -114,4 +123,48 @@ class ApiConfig {
       '$programs/workouts/$workoutId';
   static String programWorkoutComplete(int workoutId) =>
       '$programs/workouts/$workoutId/complete';
+
+  // Nutrition helper methods
+  static String foodTemplateById(int id) => '$foodTemplates/$id';
+  static String foodTemplateCategories = '$foodTemplates/categories';
+  static String foodTemplateSearch(String query) =>
+      '$foodTemplates/search?query=$query';
+  static String foodTemplateByBarcode(String barcode) =>
+      '$foodTemplates/barcode/$barcode';
+  static String mealLogById(int id) => '$mealLogs/$id';
+  static String mealLogByDate(DateTime date) =>
+      '$mealLogs/date/${date.toIso8601String().split('T')[0]}';
+  static String mealLogToday = '$mealLogs/today';
+  static String mealLogWater(int id) => '$mealLogs/$id/water';
+  static String mealLogRecalculate(int id) => '$mealLogs/$id/recalculate';
+  static String mealEntriesByMealLog(int mealLogId) =>
+      '$mealEntries/meallog/$mealLogId';
+  static String mealEntryById(int id) => '$mealEntries/$id';
+  static String mealEntryConsume(int id) => '$mealEntries/$id/consume';
+  static String foodItemsByMealEntry(int mealEntryId) =>
+      '$foodItems/mealentry/$mealEntryId';
+  static String foodItemById(int id) => '$foodItems/$id';
+  static String foodItemQuickAdd = '$foodItems/quick';
+  static String foodItemQuantity(int id) => '$foodItems/$id/quantity';
+  static String nutritionGoalById(int id) => '$nutritionGoals/$id';
+  static String nutritionGoalActive = '$nutritionGoals/active';
+  static String nutritionGoalActivate(int id) => '$nutritionGoals/$id/activate';
+  static String nutritionGoalProgress = '$nutritionGoals/progress';
+  static String nutritionAnalyticsDailySummary =
+      '$nutritionAnalytics/summary/daily';
+  static String nutritionAnalyticsWeeklySummary =
+      '$nutritionAnalytics/summary/weekly';
+  static String nutritionAnalyticsMacroBreakdown =
+      '$nutritionAnalytics/macros/breakdown';
+  static String nutritionAnalyticsCalorieTrend =
+      '$nutritionAnalytics/calories/trend';
+  static String nutritionAnalyticsStreak = '$nutritionAnalytics/streak';
+  static String nutritionAnalyticsFrequentFoods =
+      '$nutritionAnalytics/frequent-foods';
+  static String mealPlanById(int id) => '$mealPlans/$id';
+  static String mealPlanApply(int id) => '$mealPlans/$id/apply';
+  static String mealPlanDays(int id) => '$mealPlans/$id/days';
+  static String mealPlanDayMeals(int dayId) => '$mealPlans/days/$dayId/meals';
+  static String mealPlanMealFoods(int mealId) =>
+      '$mealPlans/meals/$mealId/foods';
 }

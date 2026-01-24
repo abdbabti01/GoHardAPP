@@ -60,6 +60,10 @@ class RouteNames {
   static const String runHistory = '/run-history';
   static const String runDetail = '/run-detail';
 
+  // Nutrition routes
+  static const String nutrition = '/nutrition';
+  static const String nutritionFoodSearch = '/nutrition/food-search';
+
   // Initial route (shown when app starts)
   static const String initial = login;
 }

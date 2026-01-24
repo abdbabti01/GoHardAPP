@@ -28,6 +28,8 @@ import '../ui/screens/achievements/achievements_screen.dart';
 import '../ui/screens/running/active_run_screen.dart';
 import '../ui/screens/running/run_history_screen.dart';
 import '../ui/screens/running/run_detail_screen.dart';
+import '../ui/screens/nutrition/nutrition_dashboard_screen.dart';
+import '../ui/screens/nutrition/food_search_screen.dart';
 
 /// Central router for the application
 /// Handles route generation and navigation logic
@@ -329,6 +331,20 @@ class AppRouter {
         }
         return MaterialPageRoute(
           builder: (_) => RunDetailScreen(runId: runId),
+          settings: settings,
+        );
+
+      // Nutrition routes
+      case RouteNames.nutrition:
+        return MaterialPageRoute(
+          builder: (_) => const NutritionDashboardScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.nutritionFoodSearch:
+        final mealType = settings.arguments as String?;
+        return MaterialPageRoute(
+          builder: (_) => FoodSearchScreen(preselectedMealType: mealType),
           settings: settings,
         );
 

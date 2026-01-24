@@ -4,6 +4,7 @@ import 'sessions/sessions_screen.dart';
 import 'goals/goals_screen.dart';
 import 'exercises/exercises_screen.dart';
 import 'profile/profile_screen.dart';
+import 'nutrition/nutrition_dashboard_screen.dart';
 import '../../core/services/tab_navigation_service.dart';
 import '../../core/theme/theme_colors.dart';
 import '../../providers/sessions_provider.dart';
@@ -147,6 +148,19 @@ class _MainScreenState extends State<MainScreen> {
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.pushNamed(context, '/chat');
+                  },
+                ),
+                _QuickActionItem(
+                  icon: Icons.restaurant_menu,
+                  label: 'Log Food',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const NutritionDashboardScreen(),
+                      ),
+                    );
                   },
                 ),
                 SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
