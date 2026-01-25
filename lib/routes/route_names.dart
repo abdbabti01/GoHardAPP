@@ -25,9 +25,16 @@ class RouteNames {
 
   // Profile routes
   static const String profile = '/profile';
+  static const String editProfile = '/edit-profile';
 
   // Settings routes
   static const String settings = '/settings';
+
+  // Goals routes
+  static const String goals = '/goals';
+
+  // Body metrics routes
+  static const String bodyMetrics = '/body-metrics';
 
   // Analytics routes
   static const String analytics = '/analytics';

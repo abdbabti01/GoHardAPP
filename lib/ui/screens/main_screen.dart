@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'sessions/sessions_screen.dart';
-import 'goals/goals_screen.dart';
-import 'exercises/exercises_screen.dart';
-import 'profile/profile_screen.dart';
+import 'today/today_screen.dart';
+import 'train/train_screen.dart';
 import 'nutrition/nutrition_dashboard_screen.dart';
+import 'me/me_screen.dart';
 import '../../core/services/tab_navigation_service.dart';
 import '../../core/theme/theme_colors.dart';
 import '../../providers/sessions_provider.dart';
@@ -13,8 +12,7 @@ import '../widgets/common/curved_navigation_bar.dart';
 import '../widgets/sessions/workout_name_dialog.dart';
 
 /// Main screen wrapper with bottom navigation
-/// Provides 4-tab navigation: Dashboard, Diary, Exercises, More
-/// Features convex bump navigation bar with AI Coach FAB on top
+/// 4-tab navigation: Today, Train, Eat, Me
 class MainScreen extends StatefulWidget {
   final int? initialTab;
   final int? initialSubTab;
@@ -32,7 +30,6 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
 
-    // Set initial tab in TabNavigationService if provided
     if (widget.initialTab != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         context.read<TabNavigationService>().switchTab(
@@ -42,28 +39,23 @@ class _MainScreenState extends State<MainScreen> {
       });
     }
 
-    // Create screens with initial sub-tab if provided
-    // 4 tabs: Dashboard (Sessions), Goals, Exercises, More (Profile)
     _screens = [
-      SessionsScreen(initialTab: widget.initialSubTab),
-      const GoalsScreen(),
-      const ExercisesScreen(),
-      const ProfileScreen(),
+      const TodayScreen(),
+      TrainScreen(initialTab: widget.initialSubTab),
+      const NutritionDashboardScreen(),
+      const MeScreen(),
     ];
   }
 
   void _onFabPressed(BuildContext context) {
-    // Show quick action menu
     _showQuickActionsMenu(context);
   }
 
   Future<void> _startWorkout(BuildContext context) async {
-    // Store references before async gap
     final sessionsProvider = context.read<SessionsProvider>();
     final tabService = context.read<TabNavigationService>();
     final navigator = Navigator.of(context);
 
-    // Show workout name dialog
     final workoutName = await showDialog<String>(
       context: context,
       builder: (context) => const WorkoutNameDialog(),
@@ -71,13 +63,10 @@ class _MainScreenState extends State<MainScreen> {
 
     if (workoutName == null || !mounted) return;
 
-    // Create new workout session
     final session = await sessionsProvider.startNewWorkout(name: workoutName);
 
     if (session != null && mounted) {
-      // Switch to workouts tab first so when user comes back they're on workouts
-      tabService.switchTab(0);
-      // Navigate to active workout screen with session ID
+      tabService.switchTab(1); // Switch to Train tab
       navigator.pushNamed(RouteNames.activeWorkout, arguments: session.id);
     }
   }
@@ -136,10 +125,27 @@ class _MainScreenState extends State<MainScreen> {
                       context,
                       '/plan-workout',
                     );
-                    // Switch to workouts tab after planning
                     if (result == true && context.mounted) {
-                      context.read<TabNavigationService>().switchTab(0);
+                      context.read<TabNavigationService>().switchTab(1);
                     }
+                  },
+                ),
+                _QuickActionItem(
+                  icon: Icons.restaurant_menu,
+                  label: 'Log Food',
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.read<TabNavigationService>().switchTab(
+                      2,
+                    ); // Switch to Eat tab
+                  },
+                ),
+                _QuickActionItem(
+                  icon: Icons.directions_run,
+                  label: 'Start Run',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, RouteNames.activeRun);
                   },
                 ),
                 _QuickActionItem(
@@ -148,19 +154,6 @@ class _MainScreenState extends State<MainScreen> {
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.pushNamed(context, '/chat');
-                  },
-                ),
-                _QuickActionItem(
-                  icon: Icons.restaurant_menu,
-                  label: 'Log Food',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const NutritionDashboardScreen(),
-                      ),
-                    );
                   },
                 ),
                 SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
@@ -176,6 +169,19 @@ class _MainScreenState extends State<MainScreen> {
 
     return Scaffold(
       backgroundColor: context.scaffoldBackground,
+      appBar: AppBar(
+        backgroundColor: context.scaffoldBackground,
+        elevation: 0,
+        title: Text(
+          _getTitle(tabService.currentTab),
+          style: TextStyle(
+            color: context.textPrimary,
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: _buildAppBarActions(context, tabService.currentTab),
+      ),
       body: IndexedStack(index: tabService.currentTab, children: _screens),
       bottomNavigationBar: CurvedNavigationBar(
         currentIndex: tabService.currentTab,
@@ -184,23 +190,47 @@ class _MainScreenState extends State<MainScreen> {
         },
         onFabTap: () => _onFabPressed(context),
         items: const [
-          CurvedNavigationBarItem(
-            icon: Icons.dashboard_rounded,
-            label: 'Dashboard',
-          ),
-          CurvedNavigationBarItem(icon: Icons.flag_outlined, label: 'Goals'),
-          CurvedNavigationBarItem(
-            icon: Icons.fitness_center,
-            label: 'Exercises',
-          ),
-          CurvedNavigationBarItem(icon: Icons.menu, label: 'More'),
+          CurvedNavigationBarItem(icon: Icons.home_rounded, label: 'Today'),
+          CurvedNavigationBarItem(icon: Icons.fitness_center, label: 'Train'),
+          CurvedNavigationBarItem(icon: Icons.restaurant_menu, label: 'Eat'),
+          CurvedNavigationBarItem(icon: Icons.person_outline, label: 'Me'),
         ],
       ),
     );
   }
+
+  String _getTitle(int tabIndex) {
+    switch (tabIndex) {
+      case 0:
+        return 'Today';
+      case 1:
+        return 'Train';
+      case 2:
+        return 'Nutrition';
+      case 3:
+        return 'Profile';
+      default:
+        return 'GoHard';
+    }
+  }
+
+  List<Widget>? _buildAppBarActions(BuildContext context, int tabIndex) {
+    // Only show actions for certain tabs
+    if (tabIndex == 2) {
+      // Nutrition tab - settings
+      return [
+        IconButton(
+          icon: Icon(Icons.settings_outlined, color: context.textSecondary),
+          onPressed: () {
+            // TODO: Nutrition settings
+          },
+        ),
+      ];
+    }
+    return null;
+  }
 }
 
-/// Quick action item widget for the bottom sheet menu
 class _QuickActionItem extends StatelessWidget {
   final IconData icon;
   final String label;

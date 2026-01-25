@@ -12,7 +12,10 @@ import '../ui/screens/exercises/exercise_detail_screen.dart';
 import '../ui/screens/exercises/add_exercise_screen.dart';
 import '../ui/screens/exercises/log_sets_screen.dart';
 import '../ui/screens/profile/profile_screen.dart';
+import '../ui/screens/profile/edit_profile_screen.dart';
 import '../ui/screens/settings/settings_screen.dart';
+import '../ui/screens/goals/goals_screen.dart';
+import '../ui/screens/body_metrics/body_metrics_screen.dart';
 import '../ui/screens/analytics/analytics_screen.dart';
 import '../ui/screens/chat/chat_list_screen.dart';
 import '../ui/screens/chat/chat_conversation_screen.dart';
@@ -161,6 +164,26 @@ class AppRouter {
       case RouteNames.profile:
         return MaterialPageRoute(
           builder: (_) => const ProfileScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.editProfile:
+        return MaterialPageRoute(
+          builder: (_) => const EditProfileScreen(),
+          settings: settings,
+        );
+
+      // Goals routes
+      case RouteNames.goals:
+        return MaterialPageRoute(
+          builder: (_) => const GoalsScreen(),
+          settings: settings,
+        );
+
+      // Body Metrics routes
+      case RouteNames.bodyMetrics:
+        return MaterialPageRoute(
+          builder: (_) => const BodyMetricsScreen(),
           settings: settings,
         );
 

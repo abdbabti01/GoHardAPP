@@ -1,0 +1,556 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
+import '../../../providers/sessions_provider.dart';
+import '../../../providers/nutrition_provider.dart';
+import '../../../routes/route_names.dart';
+import '../../widgets/running/running_widget.dart';
+import '../../widgets/common/active_workout_banner.dart';
+
+/// Today screen - Home dashboard showing today's summary
+class TodayScreen extends StatefulWidget {
+  const TodayScreen({super.key});
+
+  @override
+  State<TodayScreen> createState() => _TodayScreenState();
+}
+
+class _TodayScreenState extends State<TodayScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<SessionsProvider>().loadSessions();
+      context.read<NutritionProvider>().loadTodaysData();
+    });
+  }
+
+  Future<void> _handleRefresh() async {
+    await Future.wait([
+      context.read<SessionsProvider>().loadSessions(),
+      context.read<NutritionProvider>().loadTodaysData(),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _handleRefresh,
+      color: context.accent,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Active workout banner
+            const ActiveWorkoutBanner(),
+
+            // Greeting
+            _buildGreeting(context),
+            const SizedBox(height: 20),
+
+            // Quick stats row
+            _buildQuickStats(context),
+            const SizedBox(height: 20),
+
+            // Running widget
+            const RunningWidget(),
+            const SizedBox(height: 20),
+
+            // Today's workouts
+            _buildTodaysWorkouts(context),
+            const SizedBox(height: 20),
+
+            // Nutrition summary
+            _buildNutritionSummary(context),
+
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGreeting(BuildContext context) {
+    final hour = DateTime.now().hour;
+    String greeting;
+    IconData icon;
+
+    if (hour < 12) {
+      greeting = 'Good Morning';
+      icon = Icons.wb_sunny_outlined;
+    } else if (hour < 17) {
+      greeting = 'Good Afternoon';
+      icon = Icons.wb_sunny;
+    } else {
+      greeting = 'Good Evening';
+      icon = Icons.nights_stay_outlined;
+    }
+
+    return Row(
+      children: [
+        Icon(icon, color: context.accent, size: 28),
+        const SizedBox(width: 12),
+        Text(
+          greeting,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: context.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickStats(BuildContext context) {
+    return Consumer2<SessionsProvider, NutritionProvider>(
+      builder: (context, sessionsProvider, nutritionProvider, child) {
+        // Count this week's workouts
+        final now = DateTime.now();
+        final weekStart = now.subtract(Duration(days: now.weekday - 1));
+        final thisWeekWorkouts =
+            sessionsProvider.sessions
+                .where(
+                  (s) =>
+                      s.status == 'completed' &&
+                      s.date.isAfter(
+                        weekStart.subtract(const Duration(days: 1)),
+                      ),
+                )
+                .length;
+
+        // Nutrition stats
+        final calories = nutritionProvider.todaysMealLog?.totalCalories ?? 0;
+        final calorieGoal = nutritionProvider.activeGoal?.dailyCalories ?? 2000;
+
+        return Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                icon: Icons.fitness_center,
+                iconColor: Colors.blue,
+                value: '$thisWeekWorkouts',
+                label: 'Workouts\nthis week',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                icon: Icons.local_fire_department,
+                iconColor: Colors.orange,
+                value: calories.toStringAsFixed(0),
+                label: 'Calories\ntoday',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                icon: Icons.flag_outlined,
+                iconColor: Colors.green,
+                value: (calorieGoal - calories).toStringAsFixed(0),
+                label: 'Calories\nremaining',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTodaysWorkouts(BuildContext context) {
+    return Consumer<SessionsProvider>(
+      builder: (context, provider, child) {
+        final today = DateTime.now();
+        final todayStart = DateTime(today.year, today.month, today.day);
+
+        final todaysWorkouts =
+            provider.sessions.where((s) {
+              final sessionDate = DateTime(
+                s.date.year,
+                s.date.month,
+                s.date.day,
+              );
+              return sessionDate == todayStart || s.status == 'in_progress';
+            }).toList();
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: context.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.fitness_center, color: context.accent, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Today's Workouts",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (todaysWorkouts.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.event_available,
+                          size: 40,
+                          color: context.textTertiary,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No workouts scheduled',
+                          style: TextStyle(color: context.textSecondary),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            // Navigate to plan workout
+                            Navigator.pushNamed(context, '/plan-workout');
+                          },
+                          icon: const Icon(Icons.add),
+                          label: const Text('Plan Workout'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ...todaysWorkouts.map(
+                  (session) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _WorkoutMiniCard(
+                      name: session.name ?? 'Workout',
+                      status: session.status,
+                      exerciseCount: session.exercises.length,
+                      onTap: () {
+                        if (session.status == 'in_progress' ||
+                            session.status == 'draft') {
+                          Navigator.pushNamed(
+                            context,
+                            RouteNames.activeWorkout,
+                            arguments: session.id,
+                          );
+                        } else if (session.status == 'completed') {
+                          Navigator.pushNamed(
+                            context,
+                            RouteNames.sessionDetail,
+                            arguments: session.id,
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNutritionSummary(BuildContext context) {
+    return Consumer<NutritionProvider>(
+      builder: (context, provider, child) {
+        final consumed = provider.todaysMealLog?.totalCalories ?? 0;
+        final goal = provider.activeGoal?.dailyCalories ?? 2000;
+        final percentage = (consumed / goal * 100).clamp(0, 100);
+
+        final protein = provider.todaysMealLog?.totalProtein ?? 0;
+        final carbs = provider.todaysMealLog?.totalCarbohydrates ?? 0;
+        final fat = provider.todaysMealLog?.totalFat ?? 0;
+
+        final proteinGoal = provider.activeGoal?.dailyProtein ?? 150;
+        final carbsGoal = provider.activeGoal?.dailyCarbohydrates ?? 200;
+        final fatGoal = provider.activeGoal?.dailyFat ?? 65;
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: context.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: context.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.restaurant_menu, color: Colors.orange, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Today's Nutrition",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} kcal',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: context.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Calorie progress bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: percentage / 100,
+                  minHeight: 10,
+                  backgroundColor: context.surfaceHighlight,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    percentage >= 100 ? Colors.red : Colors.orange,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Macro bars
+              Row(
+                children: [
+                  Expanded(
+                    child: _MacroMini(
+                      label: 'Protein',
+                      current: protein,
+                      goal: proteinGoal,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _MacroMini(
+                      label: 'Carbs',
+                      current: carbs,
+                      goal: carbsGoal,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _MacroMini(
+                      label: 'Fat',
+                      current: fat,
+                      goal: fatGoal,
+                      color: Colors.amber,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String value;
+  final String label;
+
+  const _StatCard({
+    required this.icon,
+    required this.iconColor,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.border),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: iconColor, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 10, color: context.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkoutMiniCard extends StatelessWidget {
+  final String name;
+  final String status;
+  final int exerciseCount;
+  final VoidCallback onTap;
+
+  const _WorkoutMiniCard({
+    required this.name,
+    required this.status,
+    required this.exerciseCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = status == 'in_progress';
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color:
+              isActive
+                  ? context.accent.withValues(alpha: 0.1)
+                  : context.surfaceHighlight,
+          borderRadius: BorderRadius.circular(12),
+          border: isActive ? Border.all(color: context.accent) : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isActive ? context.accent : context.surface,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.fitness_center,
+                color: isActive ? Colors.white : context.textSecondary,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    '$exerciseCount exercises',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isActive)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: context.accent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'ACTIVE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              )
+            else
+              Icon(Icons.chevron_right, color: context.textTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MacroMini extends StatelessWidget {
+  final String label;
+  final double current;
+  final double goal;
+  final Color color;
+
+  const _MacroMini({
+    required this.label,
+    required this.current,
+    required this.goal,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final percentage = (current / goal * 100).clamp(0, 100);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: TextStyle(fontSize: 10, color: context.textSecondary),
+            ),
+            Text(
+              '${current.toStringAsFixed(0)}g',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: context.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(
+            value: percentage / 100,
+            minHeight: 4,
+            backgroundColor: context.surfaceHighlight,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+      ],
+    );
+  }
+}
