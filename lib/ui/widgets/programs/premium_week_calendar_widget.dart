@@ -502,6 +502,8 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
           newScheduledDate: newScheduledDate,
         );
 
+        if (!mounted) return;
+
         widget.onWorkoutMoved?.call();
         HapticFeedback.lightImpact();
 
