@@ -5,6 +5,8 @@ import '../data/models/chat_message.dart';
 import '../data/repositories/chat_repository.dart';
 import '../core/services/connectivity_service.dart';
 
+export '../data/repositories/chat_repository.dart' show ApplyMealPlanResult;
+
 /// Provider for AI chat management
 class ChatProvider extends ChangeNotifier {
   final ChatRepository _chatRepository;
@@ -374,6 +376,32 @@ class ChatProvider extends ChangeNotifier {
       _errorMessage =
           'Failed to generate meal plan: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Generate meal plan error: $e');
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Apply meal plan from a conversation to today's meal log
+  Future<ApplyMealPlanResult?> applyMealPlanToToday(int conversationId) async {
+    if (isOffline) {
+      _errorMessage = 'Cannot apply meal plan offline';
+      notifyListeners();
+      return null;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _chatRepository.applyMealPlanToToday(conversationId);
+      return result;
+    } catch (e) {
+      _errorMessage =
+          'Failed to apply meal plan: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Apply meal plan error: $e');
       return null;
     } finally {
       _isLoading = false;

@@ -6,6 +6,7 @@ import '../../../core/theme/theme_colors.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/goals_provider.dart';
+import '../../../providers/nutrition_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/premium_bottom_sheet.dart';
@@ -348,6 +349,123 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     return hasSetPattern || hasRepPattern;
   }
 
+  /// Apply meal plan to today's nutrition log
+  Future<void> _applyMealPlanToToday() async {
+    final chatProvider = context.read<ChatProvider>();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final conversationId = chatProvider.currentConversation?.id;
+    if (conversationId == null) return;
+
+    // Show loading
+    PremiumLoadingDialog.show(context, message: 'Applying meal plan...');
+
+    final result = await chatProvider.applyMealPlanToToday(conversationId);
+
+    if (!mounted) return;
+    navigator.pop(); // Close loading
+
+    if (result != null && result.success) {
+      // Refresh nutrition data
+      if (mounted) {
+        await context.read<NutritionProvider>().loadTodaysData();
+      }
+
+      // Show success and offer to view nutrition
+      if (mounted) {
+        final goToNutrition = await showDialog<bool>(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    const SizedBox(width: 8),
+                    const Text('Meal Plan Applied!'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${result.foodsAdded} foods added to today\'s log'),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: context.surfaceHighlight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildStatRow(
+                            'Calories',
+                            '${result.totalCaloriesAdded.toStringAsFixed(0)} kcal',
+                          ),
+                          _buildStatRow(
+                            'Protein',
+                            '${result.totalProteinAdded.toStringAsFixed(0)}g',
+                          ),
+                          _buildStatRow(
+                            'Carbs',
+                            '${result.totalCarbsAdded.toStringAsFixed(0)}g',
+                          ),
+                          _buildStatRow(
+                            'Fat',
+                            '${result.totalFatAdded.toStringAsFixed(0)}g',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Stay Here'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('View Nutrition'),
+                  ),
+                ],
+              ),
+        );
+
+        if (goToNutrition == true && mounted) {
+          navigator.pushNamedAndRemoveUntil(
+            RouteNames.main,
+            (route) => false,
+            arguments: {'tab': 2}, // Nutrition tab
+          );
+        }
+      }
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            chatProvider.errorMessage ?? 'Failed to apply meal plan',
+          ),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+    }
+  }
+
+  Widget _buildStatRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: context.textSecondary)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
   Future<bool> _handleBackPressed(ChatProvider provider) async {
     if (!provider.isSending) return true; // Allow navigation if not sending
 
@@ -551,7 +669,8 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                     ),
                                   // Show "Create Program" button if AI message contains workout
                                   if (!isUser &&
-                                      _detectWorkoutPattern(message.content))
+                                      _detectWorkoutPattern(message.content) &&
+                                      conversation.type != 'meal_plan')
                                     Padding(
                                       padding: const EdgeInsets.only(top: 12),
                                       child: ElevatedButton.icon(
@@ -564,6 +683,30 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor:
                                               Theme.of(context).primaryColor,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 8,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  // Show "Apply to Today" button for meal plan conversations
+                                  if (!isUser &&
+                                      conversation.type == 'meal_plan' &&
+                                      index == conversation.messages.length - 1)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: ElevatedButton.icon(
+                                        onPressed:
+                                            () => _applyMealPlanToToday(),
+                                        icon: const Icon(
+                                          Icons.restaurant_menu,
+                                          size: 18,
+                                        ),
+                                        label: const Text('Apply to Today'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
                                           foregroundColor: Colors.white,
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 16,

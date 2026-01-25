@@ -61,79 +61,64 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
           );
         }
 
-        return Stack(
-          children: [
-            RefreshIndicator(
-              onRefresh: () => provider.loadTodaysData(),
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Calorie summary card
-                    _buildCalorieSummaryCard(context, provider),
-                    const SizedBox(height: 16),
+        return RefreshIndicator(
+          onRefresh: () => provider.loadTodaysData(),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Calorie summary card
+                _buildCalorieSummaryCard(context, provider),
+                const SizedBox(height: 16),
 
-                    // Macro progress bars
-                    _buildMacroProgress(context, provider),
-                    const SizedBox(height: 24),
+                // Macro progress bars
+                _buildMacroProgress(context, provider),
+                const SizedBox(height: 24),
 
-                    // Water intake
-                    _buildWaterSection(context, provider),
-                    const SizedBox(height: 24),
+                // Water intake
+                _buildWaterSection(context, provider),
+                const SizedBox(height: 24),
 
-                    // Meals section
-                    Text(
-                      "Today's Meals",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: context.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Meal cards for each meal type
-                    for (final mealType in MealTypes.all) ...[
-                      MealCardWidget(
-                        mealType: mealType,
-                        mealEntry: provider.getMealEntryByType(mealType),
-                        onAddFood:
-                            () => _navigateToFoodSearch(context, mealType),
-                        onMealTap: () {
-                          // TODO: Navigate to meal detail
-                        },
-                        onEditFood:
-                            (food) => _showEditFoodDialog(context, food),
-                        onDeleteFood: (food) => _deleteFood(context, food),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Streak info
-                    if (provider.streakInfo != null) ...[
-                      const SizedBox(height: 12),
-                      _buildStreakCard(context, provider),
-                    ],
-
-                    const SizedBox(height: 100), // FAB space
-                  ],
+                // Meals section
+                Text(
+                  "Today's Meals",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: context.textPrimary,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 12),
+
+                // Meal cards for each meal type
+                for (final mealType in MealTypes.all) ...[
+                  MealCardWidget(
+                    mealType: mealType,
+                    mealEntry: provider.getMealEntryByType(mealType),
+                    onAddFood: () => _navigateToFoodSearch(context, mealType),
+                    onMealTap: () {
+                      // TODO: Navigate to meal detail
+                    },
+                    onEditFood: (food) => _showEditFoodDialog(context, food),
+                    onDeleteFood: (food) => _deleteFood(context, food),
+                    onSuggestAlternative:
+                        (food) => _suggestAlternative(context, food),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Streak info
+                if (provider.streakInfo != null) ...[
+                  const SizedBox(height: 12),
+                  _buildStreakCard(context, provider),
+                ],
+
+                const SizedBox(height: 24),
+              ],
             ),
-            // Floating Action Button
-            Positioned(
-              right: 16,
-              bottom: 16,
-              child: FloatingActionButton.extended(
-                heroTag: 'nutrition_fab',
-                onPressed: () => _navigateToFoodSearch(context, null),
-                icon: const Icon(Icons.add),
-                label: const Text('Log Food'),
-              ),
-            ),
-          ],
+          ),
         );
       },
     );
@@ -474,5 +459,285 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
   Future<void> _deleteFood(BuildContext context, FoodItem food) async {
     final provider = context.read<NutritionProvider>();
     await provider.deleteFoodItem(food.id);
+  }
+
+  Future<void> _suggestAlternative(BuildContext context, FoodItem food) async {
+    final provider = context.read<NutritionProvider>();
+
+    // Show loading bottom sheet
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder:
+          (sheetContext) =>
+              _FoodAlternativesSheet(food: food, provider: provider),
+    );
+  }
+}
+
+/// Bottom sheet for showing food alternatives
+class _FoodAlternativesSheet extends StatefulWidget {
+  final FoodItem food;
+  final NutritionProvider provider;
+
+  const _FoodAlternativesSheet({required this.food, required this.provider});
+
+  @override
+  State<_FoodAlternativesSheet> createState() => _FoodAlternativesSheetState();
+}
+
+class _FoodAlternativesSheetState extends State<_FoodAlternativesSheet> {
+  List<FoodAlternative>? _alternatives;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAlternatives();
+  }
+
+  Future<void> _loadAlternatives() async {
+    try {
+      final alternatives = await widget.provider.getFoodAlternatives(
+        widget.food,
+      );
+      if (mounted) {
+        setState(() {
+          _alternatives = alternatives;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to get suggestions';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: context.textTertiary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.swap_horiz, color: Colors.blue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Alternatives for',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                        Text(
+                          widget.food.name,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: context.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            // Content
+            Expanded(child: _buildContent(context, scrollController)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    ScrollController scrollController,
+  ) {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              'Finding similar foods...',
+              style: TextStyle(color: context.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: context.textTertiary),
+            const SizedBox(height: 16),
+            Text(_error!, style: TextStyle(color: context.textSecondary)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _error = null;
+                });
+                _loadAlternatives();
+              },
+              child: const Text('Try Again'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_alternatives == null || _alternatives!.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 48, color: context.textTertiary),
+            const SizedBox(height: 16),
+            Text(
+              'No alternatives found',
+              style: TextStyle(color: context.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      controller: scrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount: _alternatives!.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final alt = _alternatives![index];
+        return _buildAlternativeCard(context, alt);
+      },
+    );
+  }
+
+  Widget _buildAlternativeCard(BuildContext context, FoodAlternative alt) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.surfaceHighlight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  alt.name,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: context.textPrimary,
+                  ),
+                ),
+              ),
+              Text(
+                '${alt.calories.toStringAsFixed(0)} kcal',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: context.accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${alt.servingSize.toStringAsFixed(0)}${alt.servingUnit}',
+            style: TextStyle(fontSize: 12, color: context.textSecondary),
+          ),
+          if (alt.reason != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              alt.reason!,
+              style: TextStyle(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: context.textSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildMacroChip('P', alt.protein, Colors.red),
+              const SizedBox(width: 8),
+              _buildMacroChip('C', alt.carbohydrates, Colors.blue),
+              const SizedBox(width: 8),
+              _buildMacroChip('F', alt.fat, Colors.amber),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMacroChip(String label, double value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$label: ${value.toStringAsFixed(0)}g',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
+      ),
+    );
   }
 }

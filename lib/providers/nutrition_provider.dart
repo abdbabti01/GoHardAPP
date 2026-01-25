@@ -9,6 +9,8 @@ import '../data/models/nutrition_summary.dart';
 import '../data/repositories/nutrition_repository.dart';
 import '../core/services/connectivity_service.dart';
 
+export '../data/repositories/nutrition_repository.dart' show FoodAlternative;
+
 /// Provider for nutrition tracking
 class NutritionProvider extends ChangeNotifier {
   final NutritionRepository _nutritionRepository;
@@ -244,6 +246,28 @@ class NutritionProvider extends ChangeNotifier {
       debugPrint('Delete food error: $e');
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Get AI-powered food alternatives for a food item
+  Future<List<FoodAlternative>> getFoodAlternatives(FoodItem food) async {
+    try {
+      // Calculate per-serving values for the request
+      final perServingCalories = food.calories / food.quantity;
+      final perServingProtein = food.protein / food.quantity;
+      final perServingCarbs = food.carbohydrates / food.quantity;
+      final perServingFat = food.fat / food.quantity;
+
+      return await _nutritionRepository.getFoodAlternatives(
+        foodName: food.name,
+        calories: perServingCalories,
+        protein: perServingProtein,
+        carbohydrates: perServingCarbs,
+        fat: perServingFat,
+      );
+    } catch (e) {
+      debugPrint('Get food alternatives error: $e');
+      return [];
     }
   }
 

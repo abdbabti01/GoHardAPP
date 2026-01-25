@@ -11,6 +11,7 @@ class MealCardWidget extends StatelessWidget {
   final VoidCallback? onMealTap;
   final Function(FoodItem)? onEditFood;
   final Function(FoodItem)? onDeleteFood;
+  final Function(FoodItem)? onSuggestAlternative;
 
   const MealCardWidget({
     super.key,
@@ -20,6 +21,7 @@ class MealCardWidget extends StatelessWidget {
     this.onMealTap,
     this.onEditFood,
     this.onDeleteFood,
+    this.onSuggestAlternative,
   });
 
   @override
@@ -140,7 +142,7 @@ class MealCardWidget extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       subtitle: Text(
-                        food.servingDescription,
+                        _formatServingDescription(food),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -181,17 +183,73 @@ class MealCardWidget extends StatelessWidget {
                               ),
                             ],
                           ),
-                          if (onEditFood != null) ...[
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.edit_outlined,
-                              size: 18,
+                          PopupMenuButton<String>(
+                            icon: Icon(
+                              Icons.more_vert,
+                              size: 20,
                               color:
                                   Theme.of(
                                     context,
                                   ).colorScheme.onSurfaceVariant,
                             ),
-                          ],
+                            padding: EdgeInsets.zero,
+                            onSelected: (value) {
+                              switch (value) {
+                                case 'edit':
+                                  onEditFood?.call(food);
+                                  break;
+                                case 'suggest':
+                                  onSuggestAlternative?.call(food);
+                                  break;
+                                case 'delete':
+                                  onDeleteFood?.call(food);
+                                  break;
+                              }
+                            },
+                            itemBuilder:
+                                (context) => [
+                                  if (onEditFood != null)
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit_outlined, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Edit Quantity'),
+                                        ],
+                                      ),
+                                    ),
+                                  if (onSuggestAlternative != null)
+                                    const PopupMenuItem(
+                                      value: 'suggest',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.swap_horiz, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Suggest Alternative'),
+                                        ],
+                                      ),
+                                    ),
+                                  if (onDeleteFood != null)
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.delete_outline,
+                                            size: 18,
+                                            color: Colors.red,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          const Text(
+                                            'Delete',
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                          ),
                         ],
                       ),
                     ),
@@ -246,5 +304,40 @@ class MealCardWidget extends StatelessWidget {
       default:
         return Theme.of(context).colorScheme.primary;
     }
+  }
+
+  /// Format serving description based on unit type
+  /// For weight units (g, ml, oz), show "quantity x servingSize unit"
+  /// For count units (egg, piece, slice, serving), show "quantity unit(s)"
+  String _formatServingDescription(FoodItem food) {
+    final unit = food.servingUnit.toLowerCase();
+    final quantity = food.quantity * food.servingSize;
+
+    // Count-based units that should display as "2 eggs" instead of "2 x 1egg"
+    final countUnits = [
+      'egg',
+      'piece',
+      'slice',
+      'serving',
+      'cup',
+      'tbsp',
+      'tsp',
+      'scoop',
+    ];
+
+    if (countUnits.any((u) => unit.contains(u))) {
+      final displayQty = quantity.toStringAsFixed(
+        quantity.truncateToDouble() == quantity ? 0 : 1,
+      );
+      // Pluralize if needed
+      final unitDisplay =
+          quantity != 1 && !unit.endsWith('s')
+              ? '${food.servingUnit}s'
+              : food.servingUnit;
+      return '$displayQty $unitDisplay';
+    }
+
+    // Weight/volume based - show as "quantity x servingSizeunit"
+    return food.servingDescription;
   }
 }

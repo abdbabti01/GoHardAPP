@@ -427,4 +427,69 @@ class NutritionRepository {
         .map((json) => FrequentFood.fromJson(json as Map<String, dynamic>))
         .toList();
   }
+
+  /// Get AI-powered food alternatives
+  Future<List<FoodAlternative>> getFoodAlternatives({
+    required String foodName,
+    required double calories,
+    required double protein,
+    required double carbohydrates,
+    required double fat,
+  }) async {
+    final data = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.chatFoodSuggestion,
+      data: {
+        'foodName': foodName,
+        'calories': calories,
+        'protein': protein,
+        'carbohydrates': carbohydrates,
+        'fat': fat,
+      },
+    );
+
+    final alternatives = data['alternatives'] as List<dynamic>?;
+    if (alternatives == null || alternatives.isEmpty) {
+      return [];
+    }
+
+    return alternatives
+        .map((json) => FoodAlternative.fromJson(json as Map<String, dynamic>))
+        .toList();
+  }
+}
+
+/// Food alternative suggestion from AI
+class FoodAlternative {
+  final String name;
+  final double servingSize;
+  final String servingUnit;
+  final double calories;
+  final double protein;
+  final double carbohydrates;
+  final double fat;
+  final String? reason;
+
+  FoodAlternative({
+    required this.name,
+    required this.servingSize,
+    required this.servingUnit,
+    required this.calories,
+    required this.protein,
+    required this.carbohydrates,
+    required this.fat,
+    this.reason,
+  });
+
+  factory FoodAlternative.fromJson(Map<String, dynamic> json) {
+    return FoodAlternative(
+      name: json['name'] as String? ?? '',
+      servingSize: (json['servingSize'] as num?)?.toDouble() ?? 100,
+      servingUnit: json['servingUnit'] as String? ?? 'g',
+      calories: (json['calories'] as num?)?.toDouble() ?? 0,
+      protein: (json['protein'] as num?)?.toDouble() ?? 0,
+      carbohydrates: (json['carbohydrates'] as num?)?.toDouble() ?? 0,
+      fat: (json['fat'] as num?)?.toDouble() ?? 0,
+      reason: json['reason'] as String?,
+    );
+  }
 }

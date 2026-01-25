@@ -62,6 +62,9 @@ class ApiConfig {
   static const String chatWorkoutPlan = 'chat/workout-plan';
   static const String chatMealPlan = 'chat/meal-plan';
   static const String chatAnalyzeProgress = 'chat/analyze-progress';
+  static const String chatFoodSuggestion = 'chat/food-suggestion';
+  static String chatApplyMealPlan(int conversationId) =>
+      'chat/conversations/$conversationId/apply-meal-plan';
   static const String sharedWorkouts = 'sharedworkouts';
   static const String workoutTemplates = 'workouttemplates';
   static const String goals = 'goals';

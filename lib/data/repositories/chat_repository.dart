@@ -574,6 +574,27 @@ class ChatRepository {
     }
   }
 
+  /// Apply meal plan from a conversation to today's meal log
+  /// Requires online connection
+  Future<ApplyMealPlanResult> applyMealPlanToToday(int conversationId) async {
+    if (!_connectivity.isOnline) {
+      throw Exception('Cannot apply meal plan offline');
+    }
+
+    try {
+      final response = await _apiService.post<Map<String, dynamic>>(
+        ApiConfig.chatApplyMealPlan(conversationId),
+      );
+
+      debugPrint('✅ Applied meal plan: ${response['foodsAdded']} foods added');
+
+      return ApplyMealPlanResult.fromJson(response);
+    } catch (e) {
+      debugPrint('❌ Error applying meal plan: $e');
+      rethrow;
+    }
+  }
+
   /// Preview workout sessions from an AI-generated workout plan (without creating)
   /// Requires online connection
   Future<Map<String, dynamic>> previewSessionsFromPlan({
@@ -669,5 +690,38 @@ class ChatRepository {
       debugPrint('❌ Error creating program from plan: $e');
       rethrow;
     }
+  }
+}
+
+/// Result of applying a meal plan to today's log
+class ApplyMealPlanResult {
+  final bool success;
+  final String message;
+  final int foodsAdded;
+  final double totalCaloriesAdded;
+  final double totalProteinAdded;
+  final double totalCarbsAdded;
+  final double totalFatAdded;
+
+  ApplyMealPlanResult({
+    required this.success,
+    required this.message,
+    required this.foodsAdded,
+    required this.totalCaloriesAdded,
+    required this.totalProteinAdded,
+    required this.totalCarbsAdded,
+    required this.totalFatAdded,
+  });
+
+  factory ApplyMealPlanResult.fromJson(Map<String, dynamic> json) {
+    return ApplyMealPlanResult(
+      success: json['success'] as bool? ?? false,
+      message: json['message'] as String? ?? '',
+      foodsAdded: json['foodsAdded'] as int? ?? 0,
+      totalCaloriesAdded: (json['totalCaloriesAdded'] as num?)?.toDouble() ?? 0,
+      totalProteinAdded: (json['totalProteinAdded'] as num?)?.toDouble() ?? 0,
+      totalCarbsAdded: (json['totalCarbsAdded'] as num?)?.toDouble() ?? 0,
+      totalFatAdded: (json['totalFatAdded'] as num?)?.toDouble() ?? 0,
+    );
   }
 }
