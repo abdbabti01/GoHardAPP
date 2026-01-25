@@ -271,6 +271,44 @@ class NutritionProvider extends ChangeNotifier {
     }
   }
 
+  /// Replace a food item with an alternative
+  Future<bool> replaceFoodWithAlternative(
+    FoodItem oldFood,
+    FoodAlternative alternative,
+  ) async {
+    try {
+      // Delete the old food
+      await _nutritionRepository.deleteFoodItem(oldFood.id);
+
+      // Add the new food
+      final newFoodItem = FoodItem(
+        id: 0,
+        mealEntryId: oldFood.mealEntryId,
+        name: alternative.name,
+        quantity: 1,
+        servingSize: alternative.servingSize,
+        servingUnit: alternative.servingUnit,
+        calories: alternative.calories,
+        protein: alternative.protein,
+        carbohydrates: alternative.carbohydrates,
+        fat: alternative.fat,
+        createdAt: DateTime.now(),
+      );
+
+      await _nutritionRepository.addFoodItem(newFoodItem);
+      await loadTodaysData();
+
+      debugPrint('✅ Replaced ${oldFood.name} with ${alternative.name}');
+      return true;
+    } catch (e) {
+      _errorMessage =
+          'Failed to replace food: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Replace food error: $e');
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Mark meal as consumed
   Future<bool> markMealAsConsumed(
     int mealEntryId, {

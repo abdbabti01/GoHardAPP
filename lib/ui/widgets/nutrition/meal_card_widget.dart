@@ -12,6 +12,7 @@ class MealCardWidget extends StatelessWidget {
   final Function(FoodItem)? onEditFood;
   final Function(FoodItem)? onDeleteFood;
   final Function(FoodItem)? onSuggestAlternative;
+  final VoidCallback? onMarkConsumed;
 
   const MealCardWidget({
     super.key,
@@ -22,12 +23,14 @@ class MealCardWidget extends StatelessWidget {
     this.onEditFood,
     this.onDeleteFood,
     this.onSuggestAlternative,
+    this.onMarkConsumed,
   });
 
   @override
   Widget build(BuildContext context) {
     final hasFood =
         mealEntry != null && (mealEntry!.foodItems?.isNotEmpty ?? false);
+    final isPlanned = hasFood && !(mealEntry!.isConsumed);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -40,7 +43,9 @@ class MealCardWidget extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: _getMealColor(context).withValues(alpha: 0.1),
+                color: isPlanned
+                    ? Colors.orange.withValues(alpha: 0.1)
+                    : _getMealColor(context).withValues(alpha: 0.1),
               ),
               child: Row(
                 children: [
@@ -53,10 +58,35 @@ class MealCardWidget extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          mealType,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                        Row(
+                          children: [
+                            Text(
+                              mealType,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            if (isPlanned) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'Planned',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         if (hasFood)
                           Text(
@@ -85,6 +115,42 @@ class MealCardWidget extends StatelessWidget {
             // Food items or empty state
             if (hasFood) ...[
               const Divider(height: 1),
+              // Show "Mark as Eaten" button for planned meals
+              if (isPlanned && onMarkConsumed != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  color: Colors.orange.withValues(alpha: 0.05),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
+                        size: 16,
+                        color: Colors.orange[700],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'This meal is planned',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: onMarkConsumed,
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: const Text('Mark as Eaten'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.green,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (isPlanned && onMarkConsumed != null)
+                const Divider(height: 1),
               ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
