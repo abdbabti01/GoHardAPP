@@ -165,15 +165,24 @@ class _TodayScreenState extends State<TodayScreen> {
         final today = DateTime.now();
         final todayStart = DateTime(today.year, today.month, today.day);
 
-        final todaysWorkouts =
+        // Separate in-progress workouts from today's scheduled workouts
+        final inProgressWorkouts =
+            provider.sessions.where((s) => s.status == 'in_progress').toList();
+
+        final todaysScheduledWorkouts =
             provider.sessions.where((s) {
               final sessionDate = DateTime(
                 s.date.year,
                 s.date.month,
                 s.date.day,
               );
-              return sessionDate == todayStart || s.status == 'in_progress';
+              // Only include today's workouts that are NOT in_progress
+              // (in_progress are shown separately above)
+              return sessionDate == todayStart && s.status != 'in_progress';
             }).toList();
+
+        final hasWorkouts =
+            inProgressWorkouts.isNotEmpty || todaysScheduledWorkouts.isNotEmpty;
 
         return Container(
           padding: const EdgeInsets.all(16),
@@ -200,7 +209,105 @@ class _TodayScreenState extends State<TodayScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              if (todaysWorkouts.isEmpty)
+
+              // Continue workout section (in-progress from any date)
+              if (inProgressWorkouts.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.accent.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.play_circle_filled,
+                        size: 14,
+                        color: context.accent,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Continue Workout',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: context.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...inProgressWorkouts.map(
+                  (session) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _WorkoutMiniCard(
+                      name: session.name ?? 'Workout',
+                      status: session.status,
+                      exerciseCount: session.exercises.length,
+                      scheduledDate: session.date,
+                      onTap: () {
+                        Navigator.pushNamed(
+                          context,
+                          RouteNames.activeWorkout,
+                          arguments: session.id,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                if (todaysScheduledWorkouts.isNotEmpty)
+                  const SizedBox(height: 12),
+              ],
+
+              // Today's scheduled workouts section
+              if (todaysScheduledWorkouts.isNotEmpty) ...[
+                if (inProgressWorkouts.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Scheduled for Today',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: context.textSecondary,
+                      ),
+                    ),
+                  ),
+                ...todaysScheduledWorkouts.map(
+                  (session) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _WorkoutMiniCard(
+                      name: session.name ?? 'Workout',
+                      status: session.status,
+                      exerciseCount: session.exercises.length,
+                      onTap: () {
+                        if (session.status == 'draft' ||
+                            session.status == 'planned') {
+                          Navigator.pushNamed(
+                            context,
+                            RouteNames.activeWorkout,
+                            arguments: session.id,
+                          );
+                        } else if (session.status == 'completed') {
+                          Navigator.pushNamed(
+                            context,
+                            RouteNames.sessionDetail,
+                            arguments: session.id,
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ],
+
+              // Empty state
+              if (!hasWorkouts)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Center(
@@ -219,40 +326,12 @@ class _TodayScreenState extends State<TodayScreen> {
                         const SizedBox(height: 12),
                         OutlinedButton.icon(
                           onPressed: () {
-                            // Navigate to plan workout
                             Navigator.pushNamed(context, '/plan-workout');
                           },
                           icon: const Icon(Icons.add),
                           label: const Text('Plan Workout'),
                         ),
                       ],
-                    ),
-                  ),
-                )
-              else
-                ...todaysWorkouts.map(
-                  (session) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _WorkoutMiniCard(
-                      name: session.name ?? 'Workout',
-                      status: session.status,
-                      exerciseCount: session.exercises.length,
-                      onTap: () {
-                        if (session.status == 'in_progress' ||
-                            session.status == 'draft') {
-                          Navigator.pushNamed(
-                            context,
-                            RouteNames.activeWorkout,
-                            arguments: session.id,
-                          );
-                        } else if (session.status == 'completed') {
-                          Navigator.pushNamed(
-                            context,
-                            RouteNames.sessionDetail,
-                            arguments: session.id,
-                          );
-                        }
-                      },
                     ),
                   ),
                 ),
@@ -414,18 +493,53 @@ class _WorkoutMiniCard extends StatelessWidget {
   final String name;
   final String status;
   final int exerciseCount;
+  final DateTime? scheduledDate;
   final VoidCallback onTap;
 
   const _WorkoutMiniCard({
     required this.name,
     required this.status,
     required this.exerciseCount,
+    this.scheduledDate,
     required this.onTap,
   });
+
+  String _getSubtitle() {
+    if (scheduledDate != null) {
+      final today = DateTime.now();
+      final todayStart = DateTime(today.year, today.month, today.day);
+      final scheduleDay = DateTime(
+        scheduledDate!.year,
+        scheduledDate!.month,
+        scheduledDate!.day,
+      );
+
+      if (scheduleDay != todayStart) {
+        // Show the scheduled date if it's not today
+        final months = [
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dec',
+        ];
+        return '$exerciseCount exercises • Scheduled ${months[scheduledDate!.month - 1]} ${scheduledDate!.day}';
+      }
+    }
+    return '$exerciseCount exercises';
+  }
 
   @override
   Widget build(BuildContext context) {
     final isActive = status == 'in_progress';
+    final isCompleted = status == 'completed';
 
     return InkWell(
       onTap: onTap,
@@ -436,9 +550,16 @@ class _WorkoutMiniCard extends StatelessWidget {
           color:
               isActive
                   ? context.accent.withValues(alpha: 0.1)
+                  : isCompleted
+                  ? Colors.green.withValues(alpha: 0.1)
                   : context.surfaceHighlight,
           borderRadius: BorderRadius.circular(12),
-          border: isActive ? Border.all(color: context.accent) : null,
+          border:
+              isActive
+                  ? Border.all(color: context.accent)
+                  : isCompleted
+                  ? Border.all(color: Colors.green.withValues(alpha: 0.5))
+                  : null,
         ),
         child: Row(
           children: [
@@ -446,12 +567,20 @@ class _WorkoutMiniCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: isActive ? context.accent : context.surface,
+                color:
+                    isActive
+                        ? context.accent
+                        : isCompleted
+                        ? Colors.green
+                        : context.surface,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
-                Icons.fitness_center,
-                color: isActive ? Colors.white : context.textSecondary,
+                isCompleted ? Icons.check : Icons.fitness_center,
+                color:
+                    (isActive || isCompleted)
+                        ? Colors.white
+                        : context.textSecondary,
                 size: 20,
               ),
             ),
@@ -469,7 +598,7 @@ class _WorkoutMiniCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '$exerciseCount exercises',
+                    _getSubtitle(),
                     style: TextStyle(
                       fontSize: 12,
                       color: context.textSecondary,
@@ -487,6 +616,22 @@ class _WorkoutMiniCard extends StatelessWidget {
                 ),
                 child: const Text(
                   'ACTIVE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              )
+            else if (isCompleted)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'DONE',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,

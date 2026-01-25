@@ -346,6 +346,99 @@ class NutritionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update nutrition goal
+  Future<bool> updateNutritionGoal({
+    required double dailyCalories,
+    required double dailyProtein,
+    required double dailyCarbohydrates,
+    required double dailyFat,
+    double? dailyFiber,
+    double? dailyWater,
+  }) async {
+    if (_activeGoal == null) return false;
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final updatedGoal = _activeGoal!.copyWith(
+        dailyCalories: dailyCalories,
+        dailyProtein: dailyProtein,
+        dailyCarbohydrates: dailyCarbohydrates,
+        dailyFat: dailyFat,
+        dailyFiber: dailyFiber,
+        dailyWater: dailyWater,
+        updatedAt: DateTime.now(),
+      );
+
+      await _nutritionRepository.updateNutritionGoal(
+        _activeGoal!.id,
+        updatedGoal,
+      );
+      _activeGoal = updatedGoal;
+
+      debugPrint(
+        '✅ Updated nutrition goal: ${dailyCalories.toStringAsFixed(0)} cals',
+      );
+      return true;
+    } catch (e) {
+      _errorMessage =
+          'Failed to update goals: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Update nutrition goal error: $e');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Create a new nutrition goal
+  Future<bool> createNutritionGoal({
+    String? name,
+    required double dailyCalories,
+    required double dailyProtein,
+    required double dailyCarbohydrates,
+    required double dailyFat,
+    double? dailyFiber,
+    double? dailyWater,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final newGoal = NutritionGoal(
+        id: 0,
+        userId: 0, // Will be set by API
+        name: name ?? 'My Goals',
+        dailyCalories: dailyCalories,
+        dailyProtein: dailyProtein,
+        dailyCarbohydrates: dailyCarbohydrates,
+        dailyFat: dailyFat,
+        dailyFiber: dailyFiber,
+        dailyWater: dailyWater,
+        isActive: true,
+        createdAt: DateTime.now(),
+      );
+
+      _activeGoal = await _nutritionRepository.createNutritionGoal(newGoal);
+
+      debugPrint(
+        '✅ Created nutrition goal: ${dailyCalories.toStringAsFixed(0)} cals',
+      );
+      return true;
+    } catch (e) {
+      _errorMessage =
+          'Failed to create goals: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Create nutrition goal error: $e');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Clear all data (called on logout)
   void clear() {
     _todaysMealLog = null;

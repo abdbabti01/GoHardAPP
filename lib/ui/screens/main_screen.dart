@@ -222,7 +222,7 @@ class _MainScreenState extends State<MainScreen> {
         IconButton(
           icon: Icon(Icons.settings_outlined, color: context.textSecondary),
           onPressed: () {
-            // TODO: Nutrition settings
+            Navigator.pushNamed(context, RouteNames.nutritionGoals);
           },
         ),
       ];

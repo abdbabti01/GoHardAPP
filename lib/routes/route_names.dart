@@ -70,6 +70,7 @@ class RouteNames {
   // Nutrition routes
   static const String nutrition = '/nutrition';
   static const String nutritionFoodSearch = '/nutrition/food-search';
+  static const String nutritionGoals = '/nutrition/goals';
 
   // Initial route (shown when app starts)
   static const String initial = login;

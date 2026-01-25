@@ -7,6 +7,7 @@ import '../../../core/constants/colors.dart';
 import '../../../data/models/program.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
+import '../../../providers/sessions_provider.dart';
 
 /// Premium horizontal week calendar widget with drag-and-drop rescheduling
 /// Compact view that expands to fullscreen modal for drag-and-drop
@@ -72,11 +73,12 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     );
   }
 
-  /// Check if a day number (1=Monday, 7=Sunday) is today's actual weekday
-  bool _isTodayWeekday(int dayNumber) {
-    // dayNumber: 1=Monday, 2=Tuesday, ..., 7=Sunday
-    // DateTime.weekday: 1=Monday, 2=Tuesday, ..., 7=Sunday (ISO 8601)
-    return DateTime.now().weekday == dayNumber;
+  /// Check if the given date is actually today (compares full date, not just weekday)
+  bool _isActualToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
   }
 
   void _openFullscreenCalendar() {
@@ -171,7 +173,7 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                         dayNumber,
                       );
                       final dayWorkouts = groupedWorkouts[index];
-                      final isToday = _isTodayWeekday(dayNumber);
+                      final isToday = _isActualToday(date);
                       // Filter out rest days for workout count
                       final actualWorkouts =
                           dayWorkouts.where((w) => !w.isRestDay).toList();
@@ -448,14 +450,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     );
   }
 
-  /// Check if a day number (1=Monday, 7=Sunday) is today's actual weekday
-  bool _isTodayWeekday(int dayNumber) {
-    // dayNumber: 1=Monday, 2=Tuesday, ..., 7=Sunday
-    // DateTime.weekday: 1=Monday, 2=Tuesday, ..., 7=Sunday (ISO 8601)
-    return DateTime.now().weekday == dayNumber;
-  }
-
-  /// Check if the given date is actually today (for showing "Today" badge)
+  /// Check if the given date is actually today (compares full date, not just weekday)
   bool _isActualToday(DateTime date) {
     final now = DateTime.now();
     return date.year == now.year &&
@@ -474,6 +469,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     setState(() => _isMoving = true);
 
     final provider = context.read<ProgramsProvider>();
+    final sessionsProvider = context.read<SessionsProvider>();
     HapticFeedback.mediumImpact();
 
     final dayWorkouts =
@@ -496,6 +492,16 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
       setState(() => _isMoving = false);
 
       if (success) {
+        // Also update any linked session's date to match the new scheduled date
+        // Calculate new date: programStartDate + (weekNumber-1)*7 + (newDay-1)
+        final newScheduledDate = program.startDate.add(
+          Duration(days: (_currentWeek - 1) * 7 + (newDay - 1)),
+        );
+        await sessionsProvider.updateSessionDateForProgramWorkout(
+          programWorkoutId: workout.id,
+          newScheduledDate: newScheduledDate,
+        );
+
         widget.onWorkoutMoved?.call();
         HapticFeedback.lightImpact();
 
@@ -898,7 +904,6 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
         final dayNumber = index + 1;
         final date = _getDateForDay(program, weekNumber, dayNumber);
         final dayWorkouts = groupedWorkouts[index];
-        final isTodayWeekday = _isTodayWeekday(dayNumber);
         final isActualToday = _isActualToday(date);
         final isDragTarget = _dragTargetDay == dayNumber;
 
@@ -936,7 +941,6 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                       dayLabels[index],
                       date,
                       dayWorkouts,
-                      isTodayWeekday,
                       isActualToday,
                       isDragTarget,
                       program,
@@ -956,8 +960,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     String dayLabel,
     DateTime date,
     List<ProgramWorkout> workouts,
-    bool isTodayWeekday,
-    bool isActualToday,
+    bool isToday,
     bool isDragTarget,
     Program program,
   ) {
@@ -967,8 +970,8 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     final allCompleted =
         hasWorkouts && actualWorkouts.every((w) => w.isCompleted);
 
-    // Use weekday match for highlighting, actual date for "Today" badge
-    final shouldHighlight = isTodayWeekday;
+    // Only highlight the actual today's date, not all days matching the weekday
+    final shouldHighlight = isToday;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -1051,7 +1054,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                     color: context.textPrimary,
                   ),
                 ),
-                if (isTodayWeekday) ...[
+                if (isToday) ...[
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -1063,7 +1066,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      isActualToday ? 'Today' : dayLabel,
+                      'Today',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,

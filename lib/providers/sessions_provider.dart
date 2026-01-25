@@ -489,6 +489,65 @@ class SessionsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update session date when its program workout is moved to a different day
+  /// Called when dragging a program workout to a new day in the calendar
+  Future<bool> updateSessionDateForProgramWorkout({
+    required int programWorkoutId,
+    required DateTime newScheduledDate,
+  }) async {
+    try {
+      // Find any session linked to this program workout
+      final linkedSession = _sessions.firstWhere(
+        (s) =>
+            s.programWorkoutId == programWorkoutId &&
+            s.status != 'completed', // Only update non-completed sessions
+        orElse:
+            () => Session(
+              id: -1,
+              userId: 0,
+              date: DateTime.now(),
+              type: '',
+              status: '',
+            ),
+      );
+
+      // If no linked session found (id == -1), nothing to update
+      if (linkedSession.id == -1) {
+        debugPrint(
+          '📅 No active session found for program workout $programWorkoutId',
+        );
+        return true;
+      }
+
+      // Normalize to date-only
+      final newDate = DateTime(
+        newScheduledDate.year,
+        newScheduledDate.month,
+        newScheduledDate.day,
+      );
+
+      // Update the session date
+      await _sessionRepository.updateWorkoutDate(linkedSession.id, newDate);
+
+      // Update local session in the list
+      final index = _sessions.indexWhere((s) => s.id == linkedSession.id);
+      if (index != -1) {
+        _sessions[index] = _sessions[index].copyWith(date: newDate);
+        notifyListeners();
+      }
+
+      debugPrint(
+        '📅 Updated session ${linkedSession.id} date to $newDate (moved program workout $programWorkoutId)',
+      );
+      return true;
+    } catch (e) {
+      debugPrint(
+        'Failed to update session date for program workout $programWorkoutId: $e',
+      );
+      return false;
+    }
+  }
+
   /// Clear all sessions data (called on logout)
   void clear() {
     _sessions = [];
