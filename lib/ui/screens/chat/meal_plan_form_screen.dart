@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/chat_provider.dart';
+import '../../../providers/nutrition_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/common/offline_banner.dart';
 
@@ -17,15 +18,39 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _goalController = TextEditingController();
   final _caloriesController = TextEditingController();
-  final _macrosController = TextEditingController();
+  final _proteinController = TextEditingController();
+  final _carbsController = TextEditingController();
+  final _fatController = TextEditingController();
   final _restrictionsController = TextEditingController();
   final _preferencesController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill from user's nutrition goals
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadNutritionGoals();
+    });
+  }
+
+  void _loadNutritionGoals() {
+    final nutritionProvider = context.read<NutritionProvider>();
+    final goal = nutritionProvider.activeGoal;
+    if (goal != null) {
+      _caloriesController.text = goal.dailyCalories.toInt().toString();
+      _proteinController.text = goal.dailyProtein.toInt().toString();
+      _carbsController.text = goal.dailyCarbohydrates.toInt().toString();
+      _fatController.text = goal.dailyFat.toInt().toString();
+    }
+  }
 
   @override
   void dispose() {
     _goalController.dispose();
     _caloriesController.dispose();
-    _macrosController.dispose();
+    _proteinController.dispose();
+    _carbsController.dispose();
+    _fatController.dispose();
     _restrictionsController.dispose();
     _preferencesController.dispose();
     super.dispose();
@@ -36,10 +61,33 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
 
     final provider = context.read<ChatProvider>();
 
-    // Parse calories
+    // Parse values
     int? targetCalories;
+    int? targetProtein;
+    int? targetCarbs;
+    int? targetFat;
+
     if (_caloriesController.text.trim().isNotEmpty) {
       targetCalories = int.tryParse(_caloriesController.text.trim());
+    }
+    if (_proteinController.text.trim().isNotEmpty) {
+      targetProtein = int.tryParse(_proteinController.text.trim());
+    }
+    if (_carbsController.text.trim().isNotEmpty) {
+      targetCarbs = int.tryParse(_carbsController.text.trim());
+    }
+    if (_fatController.text.trim().isNotEmpty) {
+      targetFat = int.tryParse(_fatController.text.trim());
+    }
+
+    // Build macros string from individual values
+    String? macros;
+    if (targetProtein != null || targetCarbs != null || targetFat != null) {
+      final parts = <String>[];
+      if (targetProtein != null) parts.add('${targetProtein}g protein');
+      if (targetCarbs != null) parts.add('${targetCarbs}g carbs');
+      if (targetFat != null) parts.add('${targetFat}g fat');
+      macros = parts.join(', ');
     }
 
     // Capture context-dependent objects before async operation
@@ -56,10 +104,7 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
     final conversation = await provider.generateMealPlan(
       dietaryGoal: _goalController.text.trim(),
       targetCalories: targetCalories,
-      macros:
-          _macrosController.text.trim().isEmpty
-              ? null
-              : _macrosController.text.trim(),
+      macros: macros,
       restrictions:
           _restrictionsController.text.trim().isEmpty
               ? null
@@ -139,7 +184,7 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                     TextFormField(
                       controller: _caloriesController,
                       decoration: const InputDecoration(
-                        labelText: 'Target Calories (Optional)',
+                        labelText: 'Target Calories',
                         hintText: 'e.g., 2500',
                         border: OutlineInputBorder(),
                         suffixText: 'cal/day',
@@ -160,14 +205,65 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Macro Split
-                    TextFormField(
-                      controller: _macrosController,
-                      decoration: const InputDecoration(
-                        labelText: 'Macro Split (Optional)',
-                        hintText: 'e.g., 40/30/30 protein/carbs/fat',
-                        border: OutlineInputBorder(),
+                    // Macro Targets
+                    const Text(
+                      'Macro Targets',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _proteinController,
+                            decoration: const InputDecoration(
+                              labelText: 'Protein',
+                              hintText: '150',
+                              border: OutlineInputBorder(),
+                              suffixText: 'g',
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _carbsController,
+                            decoration: const InputDecoration(
+                              labelText: 'Carbs',
+                              hintText: '200',
+                              border: OutlineInputBorder(),
+                              suffixText: 'g',
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _fatController,
+                            decoration: const InputDecoration(
+                              labelText: 'Fat',
+                              hintText: '65',
+                              border: OutlineInputBorder(),
+                              suffixText: 'g',
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
 
