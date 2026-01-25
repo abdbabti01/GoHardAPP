@@ -43,9 +43,10 @@ class MealCardWidget extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isPlanned
-                    ? Colors.orange.withValues(alpha: 0.1)
-                    : _getMealColor(context).withValues(alpha: 0.1),
+                color:
+                    isPlanned
+                        ? Colors.orange.withValues(alpha: 0.1)
+                        : _getMealColor(context).withValues(alpha: 0.1),
               ),
               child: Row(
                 children: [
@@ -118,15 +119,14 @@ class MealCardWidget extends StatelessWidget {
               // Show "Mark as Eaten" button for planned meals
               if (isPlanned && onMarkConsumed != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   color: Colors.orange.withValues(alpha: 0.05),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.schedule,
-                        size: 16,
-                        color: Colors.orange[700],
-                      ),
+                      Icon(Icons.schedule, size: 16, color: Colors.orange[700]),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -149,8 +149,7 @@ class MealCardWidget extends StatelessWidget {
                     ],
                   ),
                 ),
-              if (isPlanned && onMarkConsumed != null)
-                const Divider(height: 1),
+              if (isPlanned && onMarkConsumed != null) const Divider(height: 1),
               ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
