@@ -105,6 +105,11 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
                     onDeleteFood: (food) => _deleteFood(context, food),
                     onSuggestAlternative:
                         (food) => _suggestAlternative(context, food),
+                    onMarkConsumed:
+                        () => _markMealConsumed(
+                          context,
+                          provider.getMealEntryByType(mealType),
+                        ),
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -461,6 +466,26 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
     await provider.deleteFoodItem(food.id);
   }
 
+  Future<void> _markMealConsumed(
+    BuildContext context,
+    MealEntry? mealEntry,
+  ) async {
+    if (mealEntry == null || mealEntry.id == 0) return;
+
+    final provider = context.read<NutritionProvider>();
+    final success = await provider.markMealAsConsumed(mealEntry.id);
+
+    if (success && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${mealEntry.mealType} marked as eaten'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   Future<void> _suggestAlternative(BuildContext context, FoodItem food) async {
     final provider = context.read<NutritionProvider>();
 
@@ -716,11 +741,66 @@ class _FoodAlternativesSheetState extends State<_FoodAlternativesSheet> {
               _buildMacroChip('C', alt.carbohydrates, Colors.blue),
               const SizedBox(width: 8),
               _buildMacroChip('F', alt.fat, Colors.amber),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: () => _replaceFood(context, alt),
+                icon: const Icon(Icons.swap_horiz, size: 18),
+                label: const Text('Replace'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                ),
+              ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _replaceFood(BuildContext context, FoodAlternative alt) async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final success = await widget.provider.replaceFoodWithAlternative(
+      widget.food,
+      alt,
+    );
+
+    // Close loading dialog
+    if (context.mounted) Navigator.pop(context);
+
+    if (success) {
+      // Close the alternatives sheet
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Replaced with ${alt.name}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.provider.errorMessage ?? 'Failed to replace food',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildMacroChip(String label, double value, Color color) {
