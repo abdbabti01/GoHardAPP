@@ -86,7 +86,9 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
     final water = double.tryParse(_waterController.text);
 
     bool success;
-    if (provider.activeGoal != null) {
+    // Check if we have a real goal (id > 0) or just the default placeholder (id == 0)
+    final existingGoal = provider.activeGoal;
+    if (existingGoal != null && existingGoal.id > 0) {
       success = await provider.updateNutritionGoal(
         dailyCalories: calories,
         dailyProtein: protein,
