@@ -311,6 +311,7 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
                           style: AppTypography.labelLarge.copyWith(
                             color: context.accent,
                             letterSpacing: 4,
+                            decoration: TextDecoration.none,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -318,6 +319,7 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
                           'Complete!',
                           style: AppTypography.displayLarge.copyWith(
                             color: context.textPrimary,
+                            decoration: TextDecoration.none,
                           ),
                         ),
                       ],
@@ -334,6 +336,7 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
                         widget.workoutName!,
                         style: AppTypography.titleMedium.copyWith(
                           color: context.textSecondary,
+                          decoration: TextDecoration.none,
                         ),
                       ),
                     ),
@@ -367,6 +370,7 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
                               'New Personal Record!',
                               style: AppTypography.labelLarge.copyWith(
                                 color: Colors.white,
+                                decoration: TextDecoration.none,
                               ),
                             ),
                           ],
@@ -499,13 +503,17 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
         const SizedBox(height: 12),
         Text(
           value,
-          style: AppTypography.statSmall.copyWith(color: context.textPrimary),
+          style: AppTypography.statSmall.copyWith(
+            color: context.textPrimary,
+            decoration: TextDecoration.none,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
           label,
           style: AppTypography.labelMedium.copyWith(
             color: context.textSecondary,
+            decoration: TextDecoration.none,
           ),
         ),
       ],
@@ -535,6 +543,7 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
               'Continue',
               style: AppTypography.titleLarge.copyWith(
                 color: AppColors.charcoal,
+                decoration: TextDecoration.none,
               ),
             ),
           ),

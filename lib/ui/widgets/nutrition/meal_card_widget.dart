@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../data/models/meal_entry.dart';
+import '../../../data/models/food_item.dart';
 import 'macro_progress_bar.dart';
 
 /// A card widget for displaying a meal with its food items
@@ -8,6 +9,8 @@ class MealCardWidget extends StatelessWidget {
   final MealEntry? mealEntry;
   final VoidCallback? onAddFood;
   final VoidCallback? onMealTap;
+  final Function(FoodItem)? onEditFood;
+  final Function(FoodItem)? onDeleteFood;
 
   const MealCardWidget({
     super.key,
@@ -15,6 +18,8 @@ class MealCardWidget extends StatelessWidget {
     this.mealEntry,
     this.onAddFood,
     this.onMealTap,
+    this.onEditFood,
+    this.onDeleteFood,
   });
 
   @override
@@ -85,50 +90,110 @@ class MealCardWidget extends StatelessWidget {
                 separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final food = mealEntry!.foodItems![index];
-                  return ListTile(
-                    dense: true,
-                    title: Text(
-                      food.name,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                  return Dismissible(
+                    key: Key('food_${food.id}'),
+                    direction:
+                        onDeleteFood != null
+                            ? DismissDirection.endToStart
+                            : DismissDirection.none,
+                    background: Container(
+                      color: Colors.red,
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 16),
+                      child: const Icon(Icons.delete, color: Colors.white),
                     ),
-                    subtitle: Text(
-                      food.servingDescription,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    confirmDismiss: (direction) async {
+                      return await showDialog<bool>(
+                        context: context,
+                        builder:
+                            (context) => AlertDialog(
+                              title: const Text('Delete Food'),
+                              content: Text(
+                                'Remove "${food.name}" from this meal?',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed:
+                                      () => Navigator.pop(context, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                  ),
+                                  child: const Text('Delete'),
+                                ),
+                              ],
+                            ),
+                      );
+                    },
+                    onDismissed: (direction) {
+                      onDeleteFood?.call(food);
+                    },
+                    child: ListTile(
+                      dense: true,
+                      onTap:
+                          onEditFood != null ? () => onEditFood!(food) : null,
+                      title: Text(
+                        food.name,
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${food.calories.toStringAsFixed(0)} kcal',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w500),
+                      subtitle: Text(
+                        food.servingDescription,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            MacroChip(
-                              label: 'P',
-                              value: food.protein,
-                              color: Colors.red,
-                            ),
-                            const SizedBox(width: 4),
-                            MacroChip(
-                              label: 'C',
-                              value: food.carbohydrates,
-                              color: Colors.blue,
-                            ),
-                            const SizedBox(width: 4),
-                            MacroChip(
-                              label: 'F',
-                              value: food.fat,
-                              color: Colors.amber,
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${food.calories.toStringAsFixed(0)} kcal',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w500),
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  MacroChip(
+                                    label: 'P',
+                                    value: food.protein,
+                                    color: Colors.red,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  MacroChip(
+                                    label: 'C',
+                                    value: food.carbohydrates,
+                                    color: Colors.blue,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  MacroChip(
+                                    label: 'F',
+                                    value: food.fat,
+                                    color: Colors.amber,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          if (onEditFood != null) ...[
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.edit_outlined,
+                              size: 18,
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                             ),
                           ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   );
                 },

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../providers/nutrition_provider.dart';
 import '../../../data/models/meal_entry.dart';
+import '../../../data/models/food_item.dart';
 import '../../widgets/nutrition/calorie_ring_widget.dart';
 import '../../widgets/nutrition/macro_progress_bar.dart';
 import '../../widgets/nutrition/meal_card_widget.dart';
@@ -103,6 +104,9 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
                         onMealTap: () {
                           // TODO: Navigate to meal detail
                         },
+                        onEditFood:
+                            (food) => _showEditFoodDialog(context, food),
+                        onDeleteFood: (food) => _deleteFood(context, food),
                       ),
                       const SizedBox(height: 12),
                     ],
@@ -402,5 +406,73 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
         builder: (context) => FoodSearchScreen(preselectedMealType: mealType),
       ),
     );
+  }
+
+  Future<void> _showEditFoodDialog(BuildContext context, FoodItem food) async {
+    final provider = context.read<NutritionProvider>();
+    final quantityController = TextEditingController(
+      text: food.quantity.toStringAsFixed(1),
+    );
+
+    final result = await showDialog<double>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text('Edit ${food.name}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Serving: ${food.servingSize.toStringAsFixed(0)}${food.servingUnit}',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: quantityController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Quantity (servings)',
+                    border: OutlineInputBorder(),
+                  ),
+                  autofocus: true,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Per serving: ${(food.calories / food.quantity).toStringAsFixed(0)} kcal',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final newQuantity = double.tryParse(quantityController.text);
+                  if (newQuantity != null && newQuantity > 0) {
+                    Navigator.pop(context, newQuantity);
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+    );
+
+    if (result != null && result != food.quantity) {
+      await provider.updateFoodQuantity(food.id, result);
+    }
+  }
+
+  Future<void> _deleteFood(BuildContext context, FoodItem food) async {
+    final provider = context.read<NutritionProvider>();
+    await provider.deleteFoodItem(food.id);
   }
 }

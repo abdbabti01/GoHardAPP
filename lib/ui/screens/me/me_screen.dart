@@ -29,13 +29,6 @@ class MeScreen extends StatelessWidget {
               onTap: () => Navigator.pushNamed(context, RouteNames.goals),
             ),
             _MenuItem(
-              icon: Icons.analytics_outlined,
-              iconColor: Colors.purple,
-              title: 'Analytics',
-              subtitle: 'View your workout stats',
-              onTap: () => Navigator.pushNamed(context, RouteNames.analytics),
-            ),
-            _MenuItem(
               icon: Icons.monitor_weight_outlined,
               iconColor: Colors.teal,
               title: 'Body Metrics',
