@@ -484,6 +484,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
   }
 
   Widget _buildMenuButton(BuildContext context, Program program) {
+    // Check if program needs recalibration (not started on Monday)
+    final daysSinceMonday = ((program.startDate.weekday + 6) % 7);
+    final needsRecalibration = daysSinceMonday != 0;
+
     return PopupMenuButton<String>(
       icon: Icon(Icons.more_vert_rounded, color: context.textSecondary),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -509,6 +513,17 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     Icon(Icons.link_off_rounded, size: 20),
                     SizedBox(width: 12),
                     Text('Unlink from Goal'),
+                  ],
+                ),
+              ),
+            if (needsRecalibration)
+              const PopupMenuItem(
+                value: 'recalibrate',
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today_rounded, size: 20),
+                    SizedBox(width: 12),
+                    Text('Fix Calendar Dates'),
                   ],
                 ),
               ),
@@ -763,10 +778,38 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       _showLinkGoalDialog(context, program);
     } else if (value == 'unlink_goal') {
       _unlinkGoal(context, program);
+    } else if (value == 'recalibrate') {
+      _recalibrateProgram(context, program);
     } else if (value == 'complete') {
       _showCompleteConfirmation(context, program);
     } else if (value == 'delete') {
       _showDeleteConfirmation(context, program);
+    }
+  }
+
+  Future<void> _recalibrateProgram(
+    BuildContext context,
+    Program program,
+  ) async {
+    final provider = context.read<ProgramsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    final success = await provider.recalibrateProgram(program.id);
+
+    if (success && mounted) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Calendar dates fixed! Days now align correctly.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (!success && mounted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Failed to fix calendar'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 

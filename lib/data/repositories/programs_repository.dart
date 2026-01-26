@@ -163,6 +163,15 @@ class ProgramsRepository {
     await _apiService.put<void>(ApiConfig.programComplete(id));
   }
 
+  /// Recalibrate a program's start date to Monday of its week
+  /// Fixes calendar alignment issues for programs created on non-Monday days
+  Future<Map<String, dynamic>> recalibrateProgram(int id) async {
+    final data = await _apiService.put<Map<String, dynamic>>(
+      ApiConfig.programRecalibrate(id),
+    );
+    return data;
+  }
+
   /// Advance to next workout (increment day/week)
   Future<Program> advanceProgram(int id) async {
     final data = await _apiService.put<Map<String, dynamic>>(

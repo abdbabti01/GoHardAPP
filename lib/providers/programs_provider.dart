@@ -235,6 +235,25 @@ class ProgramsProvider extends ChangeNotifier {
     }
   }
 
+  /// Recalibrate a program's start date to Monday of its week
+  /// Fixes calendar alignment issues for programs created on non-Monday days
+  Future<bool> recalibrateProgram(int id) async {
+    try {
+      final result = await _programsRepository.recalibrateProgram(id);
+      debugPrint('✅ Recalibrated program: $result');
+
+      // Reload programs to get updated start date
+      await loadPrograms();
+      return true;
+    } catch (e) {
+      _errorMessage =
+          'Failed to recalibrate program: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Recalibrate program error: $e');
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Advance to next workout (increment day/week)
   Future<bool> advanceProgram(int id) async {
     try {

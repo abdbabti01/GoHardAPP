@@ -116,6 +116,7 @@ class ApiConfig {
   static String programById(int id) => '$programs/$id';
   static String programComplete(int id) => '$programs/$id/complete';
   static String programAdvance(int id) => '$programs/$id/advance';
+  static String programRecalibrate(int id) => '$programs/$id/recalibrate';
   static String programDeletionImpact(int id) =>
       '$programs/$id/deletion-impact';
   static String programWeek(int id, int weekNumber) =>
