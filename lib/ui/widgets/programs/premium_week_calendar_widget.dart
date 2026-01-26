@@ -68,7 +68,9 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
   }
 
   DateTime _getDateForDay(int weekNumber, int dayNumber) {
-    return widget.program.startDate.add(
+    // Convert UTC startDate to local time for consistent UI display
+    final localStartDate = widget.program.startDate.toLocal();
+    return localStartDate.add(
       Duration(days: (weekNumber - 1) * 7 + (dayNumber - 1)),
     );
   }
@@ -76,9 +78,11 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
   /// Check if the given date is actually today (compares full date, not just weekday)
   bool _isActualToday(DateTime date) {
     final now = DateTime.now();
-    return date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
+    // Convert to local date for comparison
+    final localDate = date.isUtc ? date.toLocal() : date;
+    return localDate.year == now.year &&
+        localDate.month == now.month &&
+        localDate.day == now.day;
   }
 
   void _openFullscreenCalendar() {
@@ -445,7 +449,9 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
   }
 
   DateTime _getDateForDay(Program program, int weekNumber, int dayNumber) {
-    return program.startDate.add(
+    // Convert UTC startDate to local time for consistent UI display
+    final localStartDate = program.startDate.toLocal();
+    return localStartDate.add(
       Duration(days: (weekNumber - 1) * 7 + (dayNumber - 1)),
     );
   }
@@ -453,9 +459,11 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
   /// Check if the given date is actually today (compares full date, not just weekday)
   bool _isActualToday(DateTime date) {
     final now = DateTime.now();
-    return date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
+    // Convert to local date for comparison
+    final localDate = date.isUtc ? date.toLocal() : date;
+    return localDate.year == now.year &&
+        localDate.month == now.month &&
+        localDate.day == now.day;
   }
 
   Future<void> _moveWorkout(

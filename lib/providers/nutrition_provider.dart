@@ -596,6 +596,30 @@ class NutritionProvider extends ChangeNotifier {
     );
   }
 
+  /// Clear all food for today's meal log
+  Future<bool> clearAllFood() async {
+    if (_todaysMealLog == null) return false;
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _nutritionRepository.clearAllFood(_todaysMealLog!.id);
+      await loadTodaysData();
+      debugPrint('✅ Cleared all food for today');
+      return true;
+    } catch (e) {
+      _errorMessage =
+          'Failed to clear food: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Clear all food error: $e');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Clear all data (called on logout)
   void clear() {
     _todaysMealLog = null;

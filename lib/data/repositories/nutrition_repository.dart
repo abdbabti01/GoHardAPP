@@ -187,6 +187,14 @@ class NutritionRepository {
     return MealLog.fromJson(data);
   }
 
+  /// Clear all food from a meal log
+  Future<MealLog> clearAllFood(int mealLogId) async {
+    final data = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.mealLogClear(mealLogId),
+    );
+    return MealLog.fromJson(data);
+  }
+
   // ============ Meal Entries ============
 
   /// Get meal entries for a meal log

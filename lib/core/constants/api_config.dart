@@ -140,6 +140,7 @@ class ApiConfig {
   static String mealLogToday = '$mealLogs/today';
   static String mealLogWater(int id) => '$mealLogs/$id/water';
   static String mealLogRecalculate(int id) => '$mealLogs/$id/recalculate';
+  static String mealLogClear(int id) => '$mealLogs/$id/clear';
   static String mealEntriesByMealLog(int mealLogId) =>
       '$mealEntries/meallog/$mealLogId';
   static String mealEntryById(int id) => '$mealEntries/$id';

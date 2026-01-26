@@ -172,8 +172,9 @@ class Program {
   bool isWorkoutMissed(ProgramWorkout workout) {
     if (workout.isCompleted || workout.isRestDay) return false;
 
-    // Calculate the actual date of this workout
-    final workoutDate = startDate.add(
+    // Calculate the actual date of this workout (convert UTC startDate to local)
+    final localStartDate = startDate.toLocal();
+    final workoutDate = localStartDate.add(
       Duration(days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1)),
     );
 

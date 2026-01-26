@@ -81,14 +81,38 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
                 _buildWaterSection(context, provider),
                 const SizedBox(height: 24),
 
-                // Meals section
-                Text(
-                  "Today's Meals",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: context.textPrimary,
-                  ),
+                // Meals section header with clear button
+                Row(
+                  children: [
+                    Text(
+                      "Today's Meals",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (_hasFoodItems(provider))
+                      TextButton.icon(
+                        onPressed: () => _showClearAllDialog(context, provider),
+                        icon: Icon(
+                          Icons.delete_sweep,
+                          size: 18,
+                          color: context.textSecondary,
+                        ),
+                        label: Text(
+                          'Clear All',
+                          style: TextStyle(
+                            color: context.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 12),
 
@@ -599,6 +623,57 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
           (sheetContext) =>
               _FoodAlternativesSheet(food: food, provider: provider),
     );
+  }
+
+  /// Check if there are any food items in today's meals
+  bool _hasFoodItems(NutritionProvider provider) {
+    final mealLog = provider.todaysMealLog;
+    if (mealLog == null || mealLog.mealEntries == null) return false;
+    return mealLog.mealEntries!.any(
+      (entry) => entry.foodItems != null && entry.foodItems!.isNotEmpty,
+    );
+  }
+
+  /// Show confirmation dialog to clear all food
+  Future<void> _showClearAllDialog(
+    BuildContext context,
+    NutritionProvider provider,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Clear All Food?'),
+            content: const Text(
+              'This will remove all food items from today\'s meals. This action cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Clear All'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed == true) {
+      final success = await provider.clearAllFood();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success ? 'All food cleared' : 'Failed to clear food',
+            ),
+            backgroundColor: success ? Colors.green : Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
 
