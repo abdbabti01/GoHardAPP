@@ -40,18 +40,36 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
     });
   }
 
-  String _dayLabel(int day) =>
-      ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][day - 1];
-  String _dayFull(int day) =>
-      [
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-        'Sunday',
-      ][day - 1];
+  /// Get the actual date for a specific day in the current week
+  DateTime _getDateForDay(int dayNumber) {
+    final localStartDate = widget.program.startDate.toLocal();
+    final week = widget.program.currentWeek;
+    return localStartDate.add(
+      Duration(days: (week - 1) * 7 + (dayNumber - 1)),
+    );
+  }
+
+  /// Get short day label from actual date
+  String _dayLabel(int day) {
+    final date = _getDateForDay(day);
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return labels[date.weekday - 1];
+  }
+
+  /// Get full day name from actual date
+  String _dayFull(int day) {
+    final date = _getDateForDay(day);
+    const names = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    return names[date.weekday - 1];
+  }
 
   String _cleanName(String name) {
     final i = name.indexOf(':');

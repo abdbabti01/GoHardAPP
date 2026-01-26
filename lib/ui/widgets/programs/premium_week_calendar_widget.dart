@@ -106,12 +106,17 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
     );
   }
 
+  /// Get short day label from date (M, T, W, etc.)
+  String _getShortDayLabel(DateTime date) {
+    const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    // DateTime.weekday: Monday=1, ..., Sunday=7
+    return dayLabels[date.weekday - 1];
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final groupedWorkouts = _getWeekWorkoutsGrouped(widget.selectedWeek);
-    // Fixed day labels - programs always follow Monday-Sunday structure
-    const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
     return AnimatedBuilder(
       animation: _pulseAnimation,
@@ -185,11 +190,13 @@ class _PremiumWeekCalendarWidgetState extends State<PremiumWeekCalendarWidget>
                       final allCompleted =
                           hasWorkouts &&
                           actualWorkouts.every((w) => w.isCompleted);
+                      // Use actual day label from date
+                      final dayLabel = _getShortDayLabel(date);
 
                       return Expanded(
                         child: _buildCompactDayCell(
                           theme,
-                          dayLabels[index],
+                          dayLabel,
                           date.day,
                           hasWorkouts,
                           allCompleted,
@@ -893,10 +900,9 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
     );
   }
 
-  Widget _buildWeekContent(int weekNumber, ThemeData theme, Program program) {
-    final groupedWorkouts = _getWeekWorkoutsGrouped(program, weekNumber);
-    // Fixed day labels - programs always follow Monday-Sunday structure
-    const dayLabels = [
+  /// Get the actual day name from a date
+  String _getDayName(DateTime date) {
+    const dayNames = [
       'Monday',
       'Tuesday',
       'Wednesday',
@@ -905,6 +911,12 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
       'Saturday',
       'Sunday',
     ];
+    // DateTime.weekday: Monday=1, ..., Sunday=7
+    return dayNames[date.weekday - 1];
+  }
+
+  Widget _buildWeekContent(int weekNumber, ThemeData theme, Program program) {
+    final groupedWorkouts = _getWeekWorkoutsGrouped(program, weekNumber);
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
@@ -916,6 +928,8 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
         final dayWorkouts = groupedWorkouts[index];
         final isActualToday = _isActualToday(date);
         final isDragTarget = _dragTargetDay == dayNumber;
+        // Use actual day name from the date, not fixed position
+        final dayLabel = _getDayName(date);
 
         return TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.0, end: 1.0),
@@ -948,7 +962,7 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
                   builder: (context, candidateData, rejectedData) {
                     return _buildDayRow(
                       theme,
-                      dayLabels[index],
+                      dayLabel,
                       date,
                       dayWorkouts,
                       isActualToday,
