@@ -369,7 +369,32 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildPreferencesCard(BuildContext context, ProfileProvider profile) {
     final user = profile.currentUser;
-    if (user == null) return const SizedBox.shrink();
+    if (user == null) {
+      // Trigger profile load if not loaded
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (profile.currentUser == null && !profile.isLoading) {
+          profile.loadUserProfile();
+        }
+      });
+      return Card(
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: Column(
+              children: [
+                const CircularProgressIndicator(strokeWidth: 2),
+                const SizedBox(height: 8),
+                Text(
+                  'Loading preferences...',
+                  style: TextStyle(color: context.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     final currentUnitPreference = UnitPreference.fromString(
       user.unitPreference,

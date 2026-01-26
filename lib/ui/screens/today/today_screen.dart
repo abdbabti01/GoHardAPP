@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/nutrition_provider.dart';
+import '../../../providers/programs_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/running/running_widget.dart';
 import '../../widgets/common/active_workout_banner.dart';
@@ -22,6 +23,7 @@ class _TodayScreenState extends State<TodayScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SessionsProvider>().loadSessions();
       context.read<NutritionProvider>().loadTodaysData();
+      context.read<ProgramsProvider>().loadPrograms();
     });
   }
 
@@ -29,6 +31,7 @@ class _TodayScreenState extends State<TodayScreen> {
     await Future.wait([
       context.read<SessionsProvider>().loadSessions(),
       context.read<NutritionProvider>().loadTodaysData(),
+      context.read<ProgramsProvider>().loadPrograms(),
     ]);
   }
 
@@ -160,17 +163,19 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   Widget _buildTodaysWorkouts(BuildContext context) {
-    return Consumer<SessionsProvider>(
-      builder: (context, provider, child) {
+    return Consumer2<SessionsProvider, ProgramsProvider>(
+      builder: (context, sessionsProvider, programsProvider, child) {
         final today = DateTime.now();
         final todayStart = DateTime(today.year, today.month, today.day);
 
         // Separate in-progress workouts from today's scheduled workouts
         final inProgressWorkouts =
-            provider.sessions.where((s) => s.status == 'in_progress').toList();
+            sessionsProvider.sessions
+                .where((s) => s.status == 'in_progress')
+                .toList();
 
         final todaysScheduledWorkouts =
-            provider.sessions.where((s) {
+            sessionsProvider.sessions.where((s) {
               final sessionDate = DateTime(
                 s.date.year,
                 s.date.month,
@@ -181,8 +186,13 @@ class _TodayScreenState extends State<TodayScreen> {
               return sessionDate == todayStart && s.status != 'in_progress';
             }).toList();
 
+        // Get today's program workouts
+        final todaysProgramWorkouts = programsProvider.getTodaysWorkouts();
+
         final hasWorkouts =
-            inProgressWorkouts.isNotEmpty || todaysScheduledWorkouts.isNotEmpty;
+            inProgressWorkouts.isNotEmpty ||
+            todaysScheduledWorkouts.isNotEmpty ||
+            todaysProgramWorkouts.isNotEmpty;
 
         return Container(
           padding: const EdgeInsets.all(16),
@@ -300,6 +310,62 @@ class _TodayScreenState extends State<TodayScreen> {
                             arguments: session.id,
                           );
                         }
+                      },
+                    ),
+                  ),
+                ),
+              ],
+
+              // Program workouts section
+              if (todaysProgramWorkouts.isNotEmpty) ...[
+                if (inProgressWorkouts.isNotEmpty ||
+                    todaysScheduledWorkouts.isNotEmpty)
+                  const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        size: 14,
+                        color: Colors.purple,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'From Program',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.purple,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...todaysProgramWorkouts.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _ProgramWorkoutMiniCard(
+                      name: item.workout.workoutName,
+                      programName: item.program.title,
+                      exerciseCount: item.workout.exercisesJson?.length ?? 0,
+                      isCompleted: item.workout.isCompleted,
+                      onTap: () {
+                        // Navigate to program detail or start workout
+                        Navigator.pushNamed(
+                          context,
+                          RouteNames.programDetail,
+                          arguments: item.program.id,
+                        );
                       },
                     ),
                   ),
@@ -696,6 +762,102 @@ class _MacroMini extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ProgramWorkoutMiniCard extends StatelessWidget {
+  final String name;
+  final String programName;
+  final int exerciseCount;
+  final bool isCompleted;
+  final VoidCallback onTap;
+
+  const _ProgramWorkoutMiniCard({
+    required this.name,
+    required this.programName,
+    required this.exerciseCount,
+    required this.isCompleted,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color:
+              isCompleted
+                  ? Colors.green.withValues(alpha: 0.1)
+                  : Colors.purple.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border:
+              isCompleted
+                  ? Border.all(color: Colors.green.withValues(alpha: 0.5))
+                  : Border.all(color: Colors.purple.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isCompleted ? Colors.green : Colors.purple,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                isCompleted ? Icons.check : Icons.fitness_center,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    '$programName • $exerciseCount exercises',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isCompleted)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'DONE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              )
+            else
+              Icon(Icons.chevron_right, color: context.textTertiary),
+          ],
+        ),
+      ),
     );
   }
 }

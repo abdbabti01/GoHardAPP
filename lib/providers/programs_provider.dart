@@ -533,6 +533,40 @@ class ProgramsProvider extends ChangeNotifier {
     }
   }
 
+  /// Get all program workouts scheduled for today from active programs
+  /// Returns a list of (Program, ProgramWorkout) tuples
+  List<({Program program, ProgramWorkout workout})> getTodaysWorkouts() {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final result = <({Program program, ProgramWorkout workout})>[];
+
+    for (final program in _activePrograms) {
+      if (program.workouts == null || program.workouts!.isEmpty) continue;
+
+      final localStartDate = program.startDate.toLocal();
+      final startDate = DateTime(
+        localStartDate.year,
+        localStartDate.month,
+        localStartDate.day,
+      );
+
+      for (final workout in program.workouts!) {
+        // Calculate the date for this workout
+        final workoutDate = startDate.add(
+          Duration(
+            days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1),
+          ),
+        );
+
+        if (workoutDate == todayDate && !workout.isRestDay) {
+          result.add((program: program, workout: workout));
+        }
+      }
+    }
+
+    return result;
+  }
+
   @override
   void dispose() {
     _connectivitySubscription?.cancel();

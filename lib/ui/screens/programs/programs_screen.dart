@@ -380,10 +380,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
           if (program.goal != null && !program.isCompleted) ...[
             const SizedBox(height: 12),
             GestureDetector(
-              onTap: () {
-                context.read<TabNavigationService>().switchTab(1);
-                Navigator.popUntil(context, (route) => route.isFirst);
-              },
+              onTap: () => _showGoalDetailSheet(context, program.goal!),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -1046,5 +1043,180 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       );
       await provider.loadPrograms();
     }
+  }
+
+  void _showGoalDetailSheet(BuildContext context, goal) {
+    final theme = Theme.of(context);
+    final progress = (goal.progressPercentage / 100).clamp(0.0, 1.0);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder:
+          (context) => Container(
+            decoration: BoxDecoration(
+              color: theme.scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: context.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Goal type header
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.flag, color: theme.primaryColor),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            goal.goalType,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            goal.isCompleted ? 'Completed' : 'In Progress',
+                            style: TextStyle(
+                              color:
+                                  goal.isCompleted
+                                      ? Colors.green
+                                      : context.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Progress bar
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Progress',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          '${goal.progressPercentage.toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: theme.primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 10,
+                        backgroundColor: context.border,
+                        valueColor: AlwaysStoppedAnimation(theme.primaryColor),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Stats row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildGoalStat(
+                        context,
+                        'Current',
+                        '${goal.currentValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
+                      ),
+                    ),
+                    Expanded(
+                      child: _buildGoalStat(
+                        context,
+                        'Target',
+                        '${goal.targetValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // View in Goals button
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.read<TabNavigationService>().switchTab(1);
+                      Navigator.popUntil(context, (route) => route.isFirst);
+                    },
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('View in Goals'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+    );
+  }
+
+  Widget _buildGoalStat(BuildContext context, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: context.surfaceHighlight,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: context.textSecondary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
   }
 }
