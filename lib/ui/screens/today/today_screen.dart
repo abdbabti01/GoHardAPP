@@ -357,7 +357,7 @@ class _TodayScreenState extends State<TodayScreen> {
                     child: _ProgramWorkoutMiniCard(
                       name: item.workout.workoutName,
                       programName: item.program.title,
-                      exerciseCount: item.workout.exercisesJson?.length ?? 0,
+                      exerciseCount: item.workout.exerciseCount,
                       isCompleted: item.workout.isCompleted,
                       onTap: () {
                         // Navigate to program detail or start workout
