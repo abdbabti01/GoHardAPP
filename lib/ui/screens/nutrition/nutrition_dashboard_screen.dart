@@ -133,62 +133,141 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
     BuildContext context,
     NutritionProvider provider,
   ) {
-    final consumed = provider.todaysMealLog?.totalCalories ?? 0;
+    final mealLog = provider.todaysMealLog;
     final goal = provider.activeGoal?.dailyCalories ?? 2000;
-    final remaining = goal - consumed;
+    final planned = mealLog?.plannedCalories ?? 0;
+    final consumed = mealLog?.consumedCalories ?? 0;
+    final remaining = goal - planned;
+    final isOverBudget = planned > goal;
+    final isOverConsumed = consumed > goal;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: context.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.border),
+        border: Border.all(
+          color:
+              isOverBudget ? Colors.red.withValues(alpha: 0.5) : context.border,
+          width: isOverBudget ? 2 : 1,
+        ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          // Calorie ring
-          CalorieRingWidget(consumed: consumed, goal: goal, size: 120),
-          const SizedBox(width: 24),
-          // Stats
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Calories',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: context.textPrimary,
-                  ),
+          Row(
+            children: [
+              // Calorie ring - shows planned vs goal
+              CalorieRingWidget(consumed: planned, goal: goal, size: 120),
+              const SizedBox(width: 24),
+              // Stats
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Calories',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildCalorieRow(
+                      context,
+                      'Goal',
+                      goal.toStringAsFixed(0),
+                      Icons.track_changes,
+                      Colors.blue,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCalorieRow(
+                      context,
+                      'Planned',
+                      planned.toStringAsFixed(0),
+                      Icons.calendar_today,
+                      isOverBudget ? Colors.red : Colors.orange,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCalorieRow(
+                      context,
+                      'Consumed',
+                      consumed.toStringAsFixed(0),
+                      Icons.local_fire_department,
+                      isOverConsumed ? Colors.red : Colors.green,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCalorieRow(
+                      context,
+                      'Remaining',
+                      '${remaining >= 0 ? '' : '+'}${remaining.abs().toStringAsFixed(0)}',
+                      remaining >= 0
+                          ? Icons.flag_outlined
+                          : Icons.warning_amber,
+                      remaining >= 0 ? Colors.green : Colors.red,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                _buildCalorieRow(
-                  context,
-                  'Consumed',
-                  consumed.toStringAsFixed(0),
-                  Icons.local_fire_department,
-                  Colors.orange,
-                ),
-                const SizedBox(height: 8),
-                _buildCalorieRow(
-                  context,
-                  'Remaining',
-                  remaining.toStringAsFixed(0),
-                  Icons.flag_outlined,
-                  remaining >= 0 ? Colors.green : Colors.red,
-                ),
-                const SizedBox(height: 8),
-                _buildCalorieRow(
-                  context,
-                  'Goal',
-                  goal.toStringAsFixed(0),
-                  Icons.track_changes,
-                  Colors.blue,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
+          // Warning messages
+          if (isOverBudget) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber, color: Colors.red, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Over budget by ${(planned - goal).toStringAsFixed(0)} cal',
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (isOverConsumed && !isOverBudget) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    color: Colors.orange,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'You\'ve exceeded your goal by ${(consumed - goal).toStringAsFixed(0)} cal',
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -226,6 +305,15 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
     final mealLog = provider.todaysMealLog;
     final goal = provider.activeGoal;
 
+    // Use planned values (all meals) for macro tracking
+    final plannedProtein = mealLog?.plannedProtein ?? 0;
+    final plannedCarbs = mealLog?.plannedCarbohydrates ?? 0;
+    final plannedFat = mealLog?.plannedFat ?? 0;
+
+    final goalProtein = goal?.dailyProtein ?? 150;
+    final goalCarbs = goal?.dailyCarbohydrates ?? 200;
+    final goalFat = goal?.dailyFat ?? 65;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -236,36 +324,46 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Macros',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: context.textPrimary,
-            ),
+          Row(
+            children: [
+              Text(
+                'Macros',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: context.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Planned',
+                style: TextStyle(fontSize: 12, color: context.textSecondary),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           MacroProgressBar(
             label: 'Protein',
-            current: mealLog?.totalProtein ?? 0,
-            goal: goal?.dailyProtein ?? 150,
-            color: Colors.red,
+            current: plannedProtein,
+            goal: goalProtein,
+            color:
+                plannedProtein > goalProtein ? Colors.red : Colors.red.shade400,
             unit: 'g',
           ),
           const SizedBox(height: 12),
           MacroProgressBar(
             label: 'Carbs',
-            current: mealLog?.totalCarbohydrates ?? 0,
-            goal: goal?.dailyCarbohydrates ?? 200,
-            color: Colors.blue,
+            current: plannedCarbs,
+            goal: goalCarbs,
+            color: plannedCarbs > goalCarbs ? Colors.red : Colors.blue,
             unit: 'g',
           ),
           const SizedBox(height: 12),
           MacroProgressBar(
             label: 'Fat',
-            current: mealLog?.totalFat ?? 0,
-            goal: goal?.dailyFat ?? 65,
-            color: Colors.amber,
+            current: plannedFat,
+            goal: goalFat,
+            color: plannedFat > goalFat ? Colors.red : Colors.amber,
             unit: 'g',
           ),
         ],

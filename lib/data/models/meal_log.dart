@@ -59,6 +59,55 @@ class MealLog {
   /// Get snack entries
   List<MealEntry> get snackEntries => getMealsByType('Snack');
 
+  // ============ Planned Totals (ALL meals) ============
+
+  /// Get planned calories (all meals, regardless of consumption status)
+  double get plannedCalories =>
+      mealEntries?.fold<double>(0.0, (sum, e) => sum + e.totalCalories) ?? 0;
+
+  /// Get planned protein (all meals)
+  double get plannedProtein =>
+      mealEntries?.fold<double>(0.0, (sum, e) => sum + e.totalProtein) ?? 0;
+
+  /// Get planned carbohydrates (all meals)
+  double get plannedCarbohydrates =>
+      mealEntries?.fold<double>(0.0, (sum, e) => sum + e.totalCarbohydrates) ??
+      0;
+
+  /// Get planned fat (all meals)
+  double get plannedFat =>
+      mealEntries?.fold<double>(0.0, (sum, e) => sum + e.totalFat) ?? 0;
+
+  // ============ Consumed Totals (only eaten meals) ============
+
+  /// Get consumed calories (only consumed meals)
+  double get consumedCalories =>
+      mealEntries
+          ?.where((e) => e.isConsumed)
+          .fold<double>(0.0, (sum, e) => sum + e.totalCalories) ??
+      0;
+
+  /// Get consumed protein (only consumed meals)
+  double get consumedProtein =>
+      mealEntries
+          ?.where((e) => e.isConsumed)
+          .fold<double>(0.0, (sum, e) => sum + e.totalProtein) ??
+      0;
+
+  /// Get consumed carbohydrates (only consumed meals)
+  double get consumedCarbohydrates =>
+      mealEntries
+          ?.where((e) => e.isConsumed)
+          .fold<double>(0.0, (sum, e) => sum + e.totalCarbohydrates) ??
+      0;
+
+  /// Get consumed fat (only consumed meals)
+  double get consumedFat =>
+      mealEntries
+          ?.where((e) => e.isConsumed)
+          .fold<double>(0.0, (sum, e) => sum + e.totalFat) ??
+      0;
+
   MealLog copyWith({
     int? id,
     int? userId,
