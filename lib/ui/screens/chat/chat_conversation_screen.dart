@@ -359,7 +359,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     if (conversationId == null) return;
 
     // Show loading
-    PremiumLoadingDialog.show(context, message: 'Applying meal plan...');
+    PremiumLoadingDialog.show(context, message: 'Updating nutrition goals...');
 
     final result = await chatProvider.applyMealPlanToToday(conversationId);
 
@@ -382,14 +382,16 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                   children: [
                     Icon(Icons.check_circle, color: Colors.green),
                     const SizedBox(width: 8),
-                    const Text('Meal Plan Applied!'),
+                    const Text('Goals Updated!'),
                   ],
                 ),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${result.foodsAdded} foods added to today\'s log'),
+                    const Text(
+                      'Your nutrition goals have been updated based on the meal plan:',
+                    ),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -400,19 +402,19 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                       child: Column(
                         children: [
                           _buildStatRow(
-                            'Calories',
+                            'Daily Calories',
                             '${result.totalCaloriesAdded.toStringAsFixed(0)} kcal',
                           ),
                           _buildStatRow(
-                            'Protein',
+                            'Daily Protein',
                             '${result.totalProteinAdded.toStringAsFixed(0)}g',
                           ),
                           _buildStatRow(
-                            'Carbs',
+                            'Daily Carbs',
                             '${result.totalCarbsAdded.toStringAsFixed(0)}g',
                           ),
                           _buildStatRow(
-                            'Fat',
+                            'Daily Fat',
                             '${result.totalFatAdded.toStringAsFixed(0)}g',
                           ),
                         ],
@@ -701,10 +703,10 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                         onPressed:
                                             () => _applyMealPlanToToday(),
                                         icon: const Icon(
-                                          Icons.restaurant_menu,
+                                          Icons.track_changes,
                                           size: 18,
                                         ),
-                                        label: const Text('Apply to Today'),
+                                        label: const Text('Set as My Goals'),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.green,
                                           foregroundColor: Colors.white,
