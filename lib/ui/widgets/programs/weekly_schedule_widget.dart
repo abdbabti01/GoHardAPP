@@ -44,9 +44,7 @@ class _WeeklyScheduleWidgetState extends State<WeeklyScheduleWidget> {
   DateTime _getDateForDay(int dayNumber) {
     final localStartDate = widget.program.startDate.toLocal();
     final week = widget.program.currentWeek;
-    return localStartDate.add(
-      Duration(days: (week - 1) * 7 + (dayNumber - 1)),
-    );
+    return localStartDate.add(Duration(days: (week - 1) * 7 + (dayNumber - 1)));
   }
 
   /// Get short day label from actual date
