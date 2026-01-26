@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/nutrition_provider.dart';
 import '../../../data/models/food_template.dart';
 import '../../../data/models/meal_entry.dart';
+import 'create_custom_food_screen.dart';
 
 class FoodSearchScreen extends StatefulWidget {
   final String? preselectedMealType;
@@ -38,6 +39,13 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Add Food'),
+        actions: [
+          IconButton(
+            onPressed: () => _navigateToCreateCustomFood(context),
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'Create Custom Food',
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
@@ -242,15 +250,29 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
           ),
           const SizedBox(height: 16),
           OutlinedButton.icon(
-            onPressed: () {
-              // TODO: Navigate to custom food creation
-            },
+            onPressed: () => _navigateToCreateCustomFood(context),
             icon: const Icon(Icons.add),
             label: const Text('Create Custom Food'),
           ),
         ],
       ),
     );
+  }
+
+  void _navigateToCreateCustomFood(BuildContext context) async {
+    final navigator = Navigator.of(context);
+
+    final result = await navigator.push<bool>(
+      MaterialPageRoute(
+        builder:
+            (context) =>
+                CreateCustomFoodScreen(preselectedMealType: _selectedMealType),
+      ),
+    );
+
+    if (result == true && mounted) {
+      navigator.pop(); // Go back to dashboard
+    }
   }
 
   Widget _buildFoodItem(

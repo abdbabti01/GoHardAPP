@@ -501,6 +501,101 @@ class NutritionProvider extends ChangeNotifier {
     }
   }
 
+  /// Create a custom food template
+  Future<FoodTemplate?> createCustomFoodTemplate({
+    required String name,
+    String? brand,
+    String? category,
+    required double servingSize,
+    required String servingUnit,
+    required double calories,
+    required double protein,
+    required double carbohydrates,
+    required double fat,
+    double? fiber,
+    double? sugar,
+    double? sodium,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final template = FoodTemplate(
+        id: 0, // Will be set by API
+        name: name,
+        brand: brand,
+        category: category ?? 'Custom',
+        servingSize: servingSize,
+        servingUnit: servingUnit,
+        calories: calories,
+        protein: protein,
+        carbohydrates: carbohydrates,
+        fat: fat,
+        fiber: fiber,
+        sugar: sugar,
+        sodium: sodium,
+        isCustom: true,
+        createdAt: DateTime.now(),
+      );
+
+      final created = await _nutritionRepository.createFoodTemplate(template);
+      debugPrint('✅ Created custom food template: $name');
+      return created;
+    } catch (e) {
+      _errorMessage =
+          'Failed to create food: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Create custom food template error: $e');
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Create custom food template and add to meal
+  Future<bool> createAndAddCustomFood({
+    required int mealEntryId,
+    required String name,
+    String? brand,
+    String? category,
+    required double servingSize,
+    required String servingUnit,
+    required double calories,
+    required double protein,
+    required double carbohydrates,
+    required double fat,
+    double? fiber,
+    double? sugar,
+    double? sodium,
+    double quantity = 1,
+  }) async {
+    // First create the template
+    final template = await createCustomFoodTemplate(
+      name: name,
+      brand: brand,
+      category: category,
+      servingSize: servingSize,
+      servingUnit: servingUnit,
+      calories: calories,
+      protein: protein,
+      carbohydrates: carbohydrates,
+      fat: fat,
+      fiber: fiber,
+      sugar: sugar,
+      sodium: sodium,
+    );
+
+    if (template == null) return false;
+
+    // Then add it to the meal
+    return quickAddFood(
+      mealEntryId: mealEntryId,
+      foodTemplateId: template.id,
+      quantity: quantity,
+    );
+  }
+
   /// Clear all data (called on logout)
   void clear() {
     _todaysMealLog = null;
