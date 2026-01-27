@@ -18,6 +18,21 @@ class ModelMapper {
     int? localId,
     bool isSynced = true,
   }) {
+    // Determine sync status:
+    // - If synced: 'synced'
+    // - If not synced and has serverId (exists on server): 'pending_update'
+    // - If not synced and no serverId (new local): 'pending_create'
+    String syncStatus;
+    if (isSynced) {
+      syncStatus = 'synced';
+    } else if (apiSession.id > 0) {
+      // Session exists on server, we're updating it
+      syncStatus = 'pending_update';
+    } else {
+      // New session not yet on server
+      syncStatus = 'pending_create';
+    }
+
     final session = LocalSession(
       serverId: apiSession.id,
       userId: apiSession.userId,
@@ -35,7 +50,7 @@ class ModelMapper {
           apiSession
               .programWorkoutId, // Fix: preserve programWorkoutId when caching
       isSynced: isSynced,
-      syncStatus: isSynced ? 'synced' : 'pending_create',
+      syncStatus: syncStatus,
       lastModifiedLocal: DateTime.now(),
       lastModifiedServer: DateTime.now(),
     );
