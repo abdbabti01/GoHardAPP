@@ -45,30 +45,61 @@ void main() {
       expect(localSession.pausedAt, null);
     });
 
-    test('sessionToLocal should mark as unsynced when specified', () {
-      // Arrange
-      final apiSession = Session(
-        id: 123,
-        userId: 456,
-        date: DateTime(2024, 1, 15),
-        duration: 3600,
-        notes: 'Test workout',
-        type: 'strength',
-        status: 'in_progress',
-        exercises: [],
-      );
+    test(
+      'sessionToLocal should mark as pending_update when unsynced with server id',
+      () {
+        // Arrange - Session that exists on server (has id)
+        final apiSession = Session(
+          id: 123,
+          userId: 456,
+          date: DateTime(2024, 1, 15),
+          duration: 3600,
+          notes: 'Test workout',
+          type: 'strength',
+          status: 'in_progress',
+          exercises: [],
+        );
 
-      // Act
-      final localSession = ModelMapper.sessionToLocal(
-        apiSession,
-        isSynced: false,
-      );
+        // Act
+        final localSession = ModelMapper.sessionToLocal(
+          apiSession,
+          isSynced: false,
+        );
 
-      // Assert
-      expect(localSession.serverId, 123);
-      expect(localSession.isSynced, false);
-      expect(localSession.syncStatus, 'pending_create');
-    });
+        // Assert - Should be pending_update since session exists on server
+        expect(localSession.serverId, 123);
+        expect(localSession.isSynced, false);
+        expect(localSession.syncStatus, 'pending_update');
+      },
+    );
+
+    test(
+      'sessionToLocal should mark as pending_create when unsynced without server id',
+      () {
+        // Arrange - New session that doesn't exist on server yet
+        final apiSession = Session(
+          id: 0, // No server id
+          userId: 456,
+          date: DateTime(2024, 1, 15),
+          duration: 3600,
+          notes: 'Test workout',
+          type: 'strength',
+          status: 'in_progress',
+          exercises: [],
+        );
+
+        // Act
+        final localSession = ModelMapper.sessionToLocal(
+          apiSession,
+          isSynced: false,
+        );
+
+        // Assert - Should be pending_create since session is new
+        expect(localSession.serverId, 0);
+        expect(localSession.isSynced, false);
+        expect(localSession.syncStatus, 'pending_create');
+      },
+    );
 
     test('localToSession should convert LocalSession to API Session', () {
       // Arrange
