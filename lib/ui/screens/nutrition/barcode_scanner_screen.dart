@@ -3,7 +3,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/nutrition_provider.dart';
 import '../../../data/models/food_template.dart';
-import '../../../data/services/open_food_facts_service.dart';
 
 class BarcodeScannerScreen extends StatefulWidget {
   final String? preselectedMealType;
@@ -20,8 +19,6 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     facing: CameraFacing.back,
     torchEnabled: false,
   );
-
-  final OpenFoodFactsService _openFoodFactsService = OpenFoodFactsService();
 
   bool _isProcessing = false;
   String? _lastScannedBarcode;
@@ -47,12 +44,9 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     _scannerController.stop();
 
     try {
-      // First try to find in our database
+      // API handles both local database and Open Food Facts lookup
       final provider = context.read<NutritionProvider>();
-      FoodTemplate? food = await provider.getFoodByBarcode(barcode);
-
-      // If not found, try Open Food Facts
-      food ??= await _openFoodFactsService.getFoodByBarcode(barcode);
+      final food = await provider.getFoodByBarcode(barcode);
 
       if (!mounted) return;
 
@@ -441,33 +435,12 @@ class _ScannedFoodDialogState extends State<_ScannedFoodDialog> {
       return;
     }
 
-    bool success;
-
-    // If food has no ID (from Open Food Facts), create it first
-    if (widget.food.id == 0) {
-      success = await provider.createAndAddCustomFood(
-        mealEntryId: mealEntry.id,
-        name: widget.food.name,
-        brand: widget.food.brand,
-        category: widget.food.category,
-        servingSize: widget.food.servingSize,
-        servingUnit: widget.food.servingUnit,
-        calories: widget.food.calories,
-        protein: widget.food.protein,
-        carbohydrates: widget.food.carbohydrates,
-        fat: widget.food.fat,
-        fiber: widget.food.fiber,
-        sugar: widget.food.sugar,
-        sodium: widget.food.sodium,
-        quantity: _getQuantityForApi(),
-      );
-    } else {
-      success = await provider.quickAddFood(
-        mealEntryId: mealEntry.id,
-        foodTemplateId: widget.food.id,
-        quantity: _getQuantityForApi(),
-      );
-    }
+    // Food always has an ID since API saves it to database
+    final success = await provider.quickAddFood(
+      mealEntryId: mealEntry.id,
+      foodTemplateId: widget.food.id,
+      quantity: _getQuantityForApi(),
+    );
 
     if (!mounted) return;
 
