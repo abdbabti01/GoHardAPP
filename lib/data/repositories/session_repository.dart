@@ -572,21 +572,28 @@ class SessionRepository {
         );
         var apiSession = Session.fromJson(data);
 
-        // Recalculate the correct date using local time to match UI display
-        // The API calculates in UTC which can differ from local time
-        final localStartDate = programStartDate.toLocal();
-        final startDate = DateTime(
-          localStartDate.year,
-          localStartDate.month,
-          localStartDate.day,
-        );
-        final correctScheduledDate = startDate.add(
-          Duration(
-            days:
-                (programWorkout.weekNumber - 1) * 7 +
-                (programWorkout.dayNumber - 1),
-          ),
-        );
+        // Use scheduledDate from ProgramWorkout if available (single source of truth)
+        // This avoids timezone calculation issues - the date is stored on the server
+        DateTime correctScheduledDate;
+        if (programWorkout.scheduledDate != null) {
+          final sd = programWorkout.scheduledDate!;
+          correctScheduledDate = DateTime(sd.year, sd.month, sd.day);
+        } else {
+          // Fallback for old data: calculate using local time
+          final localStartDate = programStartDate.toLocal();
+          final startDate = DateTime(
+            localStartDate.year,
+            localStartDate.month,
+            localStartDate.day,
+          );
+          correctScheduledDate = startDate.add(
+            Duration(
+              days:
+                  (programWorkout.weekNumber - 1) * 7 +
+                  (programWorkout.dayNumber - 1),
+            ),
+          );
+        }
 
         final today = DateTime(
           DateTime.now().year,
@@ -594,12 +601,11 @@ class SessionRepository {
           DateTime.now().day,
         );
 
-        // Determine the actual date to use
         // If scheduled date is in the past, reschedule to today
         final actualDate =
             correctScheduledDate.isBefore(today) ? today : correctScheduledDate;
 
-        // Check if the date from API differs from our locally calculated date
+        // Use the correct date from ProgramWorkout, not the API-calculated one
         final apiDate = DateTime(
           apiSession.date.year,
           apiSession.date.month,
@@ -608,29 +614,16 @@ class SessionRepository {
 
         if (apiDate != actualDate) {
           debugPrint(
-            '📅 Correcting date from API: $apiDate -> $actualDate (local calculation)',
+            '📅 Using scheduledDate from program workout: $apiDate -> $actualDate',
           );
           apiSession = apiSession.copyWith(date: actualDate);
-          // Update on server
-          try {
-            await _apiService.patch(
-              '${ApiConfig.sessions}/${apiSession.id}',
-              data: {'date': actualDate.toIso8601String()},
-            );
-          } catch (e) {
-            debugPrint('⚠️ Failed to update date on server: $e');
-            // Continue anyway, the local update will sync later
-          }
         }
 
         // Cache the session locally with exercises
         await db.writeTxn(() async {
           final localSession = ModelMapper.sessionToLocal(
             apiSession,
-            isSynced:
-                apiDate != actualDate
-                    ? false
-                    : true, // Mark as not synced if we corrected the date
+            isSynced: true, // Session from server with correct date
           );
           await db.localSessions.put(localSession);
 
@@ -662,29 +655,32 @@ class SessionRepository {
     final exercisesData = programWorkout.exercises;
     final exercises = <Exercise>[];
 
-    // Calculate the actual scheduled date for this workout
-    // based on program start date + (weekNumber - 1) * 7 days + (dayNumber - 1) days
-    // Convert to local time for consistent display across the app
-    final localStartDate = programStartDate.toLocal();
-    final startDate = DateTime(
-      localStartDate.year,
-      localStartDate.month,
-      localStartDate.day,
-    );
-    final scheduledDate = startDate.add(
-      Duration(
-        days:
-            (programWorkout.weekNumber - 1) * 7 +
-            (programWorkout.dayNumber - 1),
-      ),
-    );
-
-    // Normalize to midnight (already in local time)
-    final normalizedScheduledDate = DateTime(
-      scheduledDate.year,
-      scheduledDate.month,
-      scheduledDate.day,
-    );
+    // Use scheduledDate from ProgramWorkout if available (single source of truth)
+    DateTime normalizedScheduledDate;
+    if (programWorkout.scheduledDate != null) {
+      final sd = programWorkout.scheduledDate!;
+      normalizedScheduledDate = DateTime(sd.year, sd.month, sd.day);
+    } else {
+      // Fallback for old data: calculate using local time
+      final localStartDate = programStartDate.toLocal();
+      final startDate = DateTime(
+        localStartDate.year,
+        localStartDate.month,
+        localStartDate.day,
+      );
+      final scheduledDate = startDate.add(
+        Duration(
+          days:
+              (programWorkout.weekNumber - 1) * 7 +
+              (programWorkout.dayNumber - 1),
+        ),
+      );
+      normalizedScheduledDate = DateTime(
+        scheduledDate.year,
+        scheduledDate.month,
+        scheduledDate.day,
+      );
+    }
 
     final today = DateTime(
       DateTime.now().year,

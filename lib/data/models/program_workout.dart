@@ -22,6 +22,10 @@ class ProgramWorkout {
   final String? completionNotes;
   final int orderIndex;
 
+  /// The actual calendar date this workout is scheduled for.
+  /// Stored on server to avoid timezone calculation issues.
+  final DateTime? scheduledDate;
+
   ProgramWorkout({
     required this.id,
     required this.programId,
@@ -39,6 +43,7 @@ class ProgramWorkout {
     this.completedAt,
     this.completionNotes,
     required this.orderIndex,
+    this.scheduledDate,
   });
 
   // Helper method to ensure datetime is in UTC
@@ -50,6 +55,13 @@ class ProgramWorkout {
 
   factory ProgramWorkout.fromJson(Map<String, dynamic> json) {
     final workout = _$ProgramWorkoutFromJson(json);
+
+    // Normalize scheduledDate to local date (date-only, no time component issues)
+    DateTime? normalizedScheduledDate;
+    if (workout.scheduledDate != null) {
+      final sd = workout.scheduledDate!;
+      normalizedScheduledDate = DateTime(sd.year, sd.month, sd.day);
+    }
 
     return ProgramWorkout(
       id: workout.id,
@@ -68,6 +80,7 @@ class ProgramWorkout {
       completedAt: _toUtcNullable(workout.completedAt),
       completionNotes: workout.completionNotes,
       orderIndex: workout.orderIndex,
+      scheduledDate: normalizedScheduledDate,
     );
   }
 
@@ -146,6 +159,7 @@ class ProgramWorkout {
     DateTime? completedAt,
     String? completionNotes,
     int? orderIndex,
+    DateTime? scheduledDate,
   }) {
     return ProgramWorkout(
       id: id ?? this.id,
@@ -164,6 +178,7 @@ class ProgramWorkout {
       completedAt: completedAt ?? this.completedAt,
       completionNotes: completionNotes ?? this.completionNotes,
       orderIndex: orderIndex ?? this.orderIndex,
+      scheduledDate: scheduledDate ?? this.scheduledDate,
     );
   }
 }

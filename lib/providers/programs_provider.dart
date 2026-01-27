@@ -543,20 +543,29 @@ class ProgramsProvider extends ChangeNotifier {
     for (final program in _activePrograms) {
       if (program.workouts == null || program.workouts!.isEmpty) continue;
 
-      final localStartDate = program.startDate.toLocal();
-      final startDate = DateTime(
-        localStartDate.year,
-        localStartDate.month,
-        localStartDate.day,
-      );
-
       for (final workout in program.workouts!) {
-        // Calculate the date for this workout
-        final workoutDate = startDate.add(
-          Duration(
-            days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1),
-          ),
-        );
+        // Use stored scheduledDate if available, otherwise fall back to calculation
+        DateTime workoutDate;
+        if (workout.scheduledDate != null) {
+          workoutDate = DateTime(
+            workout.scheduledDate!.year,
+            workout.scheduledDate!.month,
+            workout.scheduledDate!.day,
+          );
+        } else {
+          // Fallback for old data without scheduledDate
+          final localStartDate = program.startDate.toLocal();
+          final startDate = DateTime(
+            localStartDate.year,
+            localStartDate.month,
+            localStartDate.day,
+          );
+          workoutDate = startDate.add(
+            Duration(
+              days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1),
+            ),
+          );
+        }
 
         if (workoutDate == todayDate && !workout.isRestDay) {
           result.add((program: program, workout: workout));
