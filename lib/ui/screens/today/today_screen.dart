@@ -186,8 +186,25 @@ class _TodayScreenState extends State<TodayScreen> {
               return sessionDate == todayStart && s.status != 'in_progress';
             }).toList();
 
-        // Get today's program workouts
-        final todaysProgramWorkouts = programsProvider.getTodaysWorkouts();
+        // Get today's program workouts, excluding those that already have sessions
+        final allTodaysProgramWorkouts = programsProvider.getTodaysWorkouts();
+
+        // Get IDs of program workouts that already have sessions
+        final sessionProgramWorkoutIds =
+            sessionsProvider.sessions
+                .where((s) => s.programWorkoutId != null)
+                .map((s) => s.programWorkoutId!)
+                .toSet();
+
+        // Filter out program workouts that already have sessions or are completed
+        final todaysProgramWorkouts =
+            allTodaysProgramWorkouts
+                .where(
+                  (item) =>
+                      !item.workout.isCompleted &&
+                      !sessionProgramWorkoutIds.contains(item.workout.id),
+                )
+                .toList();
 
         final hasWorkouts =
             inProgressWorkouts.isNotEmpty ||

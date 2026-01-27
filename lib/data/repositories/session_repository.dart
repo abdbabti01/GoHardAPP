@@ -572,29 +572,50 @@ class SessionRepository {
         );
         var apiSession = Session.fromJson(data);
 
-        // Check if workout is in the past and reschedule to today
+        // Recalculate the correct date using local time to match UI display
+        // The API calculates in UTC which can differ from local time
+        final localStartDate = programStartDate.toLocal();
+        final startDate = DateTime(
+          localStartDate.year,
+          localStartDate.month,
+          localStartDate.day,
+        );
+        final correctScheduledDate = startDate.add(
+          Duration(
+            days:
+                (programWorkout.weekNumber - 1) * 7 +
+                (programWorkout.dayNumber - 1),
+          ),
+        );
+
         final today = DateTime(
           DateTime.now().year,
           DateTime.now().month,
           DateTime.now().day,
         );
-        final sessionDate = DateTime(
+
+        // Determine the actual date to use
+        // If scheduled date is in the past, reschedule to today
+        final actualDate =
+            correctScheduledDate.isBefore(today) ? today : correctScheduledDate;
+
+        // Check if the date from API differs from our locally calculated date
+        final apiDate = DateTime(
           apiSession.date.year,
           apiSession.date.month,
           apiSession.date.day,
         );
 
-        if (sessionDate.isBefore(today) && apiSession.status != 'completed') {
+        if (apiDate != actualDate) {
           debugPrint(
-            '📅 Rescheduling missed workout from $sessionDate to today',
+            '📅 Correcting date from API: $apiDate -> $actualDate (local calculation)',
           );
-          // Update date to today for missed workouts
-          apiSession = apiSession.copyWith(date: today);
+          apiSession = apiSession.copyWith(date: actualDate);
           // Update on server
           try {
             await _apiService.patch(
               '${ApiConfig.sessions}/${apiSession.id}',
-              data: {'date': today.toIso8601String()},
+              data: {'date': actualDate.toIso8601String()},
             );
           } catch (e) {
             debugPrint('⚠️ Failed to update date on server: $e');
@@ -607,9 +628,9 @@ class SessionRepository {
           final localSession = ModelMapper.sessionToLocal(
             apiSession,
             isSynced:
-                sessionDate.isBefore(today)
+                apiDate != actualDate
                     ? false
-                    : true, // Mark as not synced if we rescheduled
+                    : true, // Mark as not synced if we corrected the date
           );
           await db.localSessions.put(localSession);
 
