@@ -104,6 +104,8 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
   }
 
   Future<bool> _handleBackPressed() async {
+    // Capture provider before async gap to avoid lint warning
+    final provider = context.read<ActiveWorkoutProvider>();
     final result = await PremiumBottomSheet.show<String>(
       context: context,
       child: Column(
@@ -133,7 +135,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Your workout is still in progress. If you leave now, the timer will be lost.',
+            'Your workout is still in progress. If you leave, the timer will be paused and you can resume later.',
             style: TextStyle(
               fontSize: 15,
               color: context.textSecondary,
@@ -180,6 +182,10 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       _handleFinishWorkout();
       return false;
     } else if (result == 'leave') {
+      // Auto-pause timer before leaving to preserve elapsed time
+      if (provider.isTimerRunning) {
+        await provider.pauseTimer();
+      }
       return true;
     }
     return false;

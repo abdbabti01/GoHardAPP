@@ -359,13 +359,23 @@ class _TodayScreenState extends State<TodayScreen> {
                       programName: item.program.title,
                       exerciseCount: item.workout.exerciseCount,
                       isCompleted: item.workout.isCompleted,
-                      onTap: () {
-                        // Navigate to program detail or start workout
-                        Navigator.pushNamed(
-                          context,
-                          RouteNames.programDetail,
-                          arguments: item.program.id,
-                        );
+                      onTap: () async {
+                        // Start the workout from program
+                        final session = await context
+                            .read<SessionsProvider>()
+                            .startProgramWorkout(
+                              item.workout.id,
+                              item.workout,
+                              item.program.startDate,
+                              item.program.id,
+                            );
+                        if (session != null && context.mounted) {
+                          Navigator.pushNamed(
+                            context,
+                            RouteNames.activeWorkout,
+                            arguments: session.id,
+                          );
+                        }
                       },
                     ),
                   ),
