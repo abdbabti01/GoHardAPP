@@ -4,6 +4,7 @@ import '../../../providers/nutrition_provider.dart';
 import '../../../data/models/food_template.dart';
 import '../../../data/models/meal_entry.dart';
 import 'create_custom_food_screen.dart';
+import 'barcode_scanner_screen.dart';
 
 class FoodSearchScreen extends StatefulWidget {
   final String? preselectedMealType;
@@ -40,6 +41,11 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
       appBar: AppBar(
         title: const Text('Add Food'),
         actions: [
+          IconButton(
+            onPressed: () => _openBarcodeScanner(context),
+            icon: const Icon(Icons.qr_code_scanner),
+            tooltip: 'Scan Barcode',
+          ),
           IconButton(
             onPressed: () => _navigateToCreateCustomFood(context),
             icon: const Icon(Icons.add_circle_outline),
@@ -226,6 +232,12 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: () => _openBarcodeScanner(context),
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan Barcode'),
+          ),
         ],
       ),
     );
@@ -267,6 +279,22 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
         builder:
             (context) =>
                 CreateCustomFoodScreen(preselectedMealType: _selectedMealType),
+      ),
+    );
+
+    if (result == true && mounted) {
+      navigator.pop(); // Go back to dashboard
+    }
+  }
+
+  void _openBarcodeScanner(BuildContext context) async {
+    final navigator = Navigator.of(context);
+
+    final result = await navigator.push<bool>(
+      MaterialPageRoute(
+        builder:
+            (context) =>
+                BarcodeScannerScreen(preselectedMealType: _selectedMealType),
       ),
     );
 

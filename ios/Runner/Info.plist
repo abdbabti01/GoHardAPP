@@ -47,7 +47,7 @@
 	<true/>
 	<!-- Camera and Photo Library permissions -->
 	<key>NSCameraUsageDescription</key>
-	<string>GoHard needs camera access to take profile photos</string>
+	<string>GoHard needs camera access to take profile photos and scan food barcodes</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>GoHard needs photo library access to select profile photos</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
