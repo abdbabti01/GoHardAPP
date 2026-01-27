@@ -6,7 +6,6 @@ import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/goals_provider.dart';
-import '../../../core/services/tab_navigation_service.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/programs/program_calendar_widget.dart';
 
@@ -1167,8 +1166,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                   child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      context.read<TabNavigationService>().switchTab(1);
-                      Navigator.popUntil(context, (route) => route.isFirst);
+                      Navigator.pushNamed(context, RouteNames.goals);
                     },
                     icon: const Icon(Icons.open_in_new),
                     label: const Text('View in Goals'),

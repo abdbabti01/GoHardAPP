@@ -69,6 +69,27 @@ class ModelMapper {
     LocalSession localSession, {
     List<Exercise> exercises = const [],
   }) {
+    // CRITICAL: Isar stores DateTime without timezone info.
+    // When we stored UTC timestamps, they come back as local DateTime with the same raw value.
+    // We need to reconstruct them as UTC to avoid timezone drift.
+    // Example: Stored 15:00 UTC -> Isar returns 15:00 local -> must convert to 15:00 UTC
+    DateTime? toUtcTimestamp(DateTime? dt) {
+      if (dt == null) return null;
+      // If already UTC, return as-is
+      if (dt.isUtc) return dt;
+      // Construct UTC DateTime from the raw components (not using toUtc which would shift the time)
+      return DateTime.utc(
+        dt.year,
+        dt.month,
+        dt.day,
+        dt.hour,
+        dt.minute,
+        dt.second,
+        dt.millisecond,
+        dt.microsecond,
+      );
+    }
+
     return Session(
       id:
           localSession.serverId ??
@@ -80,9 +101,9 @@ class ModelMapper {
       type: localSession.type,
       name: localSession.name,
       status: localSession.status,
-      startedAt: localSession.startedAt,
-      completedAt: localSession.completedAt,
-      pausedAt: localSession.pausedAt,
+      startedAt: toUtcTimestamp(localSession.startedAt),
+      completedAt: toUtcTimestamp(localSession.completedAt),
+      pausedAt: toUtcTimestamp(localSession.pausedAt),
       programId: localSession.programId,
       programWorkoutId: localSession.programWorkoutId,
       exercises: exercises,

@@ -1179,8 +1179,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      context.read<TabNavigationService>().switchTab(1);
-                      Navigator.popUntil(context, (route) => route.isFirst);
+                      Navigator.pushNamed(context, RouteNames.goals);
                     },
                     icon: const Icon(Icons.open_in_new),
                     label: const Text('View in Goals'),
