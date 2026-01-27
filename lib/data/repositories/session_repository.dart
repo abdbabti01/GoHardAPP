@@ -643,7 +643,14 @@ class SessionRepository {
 
     // Calculate the actual scheduled date for this workout
     // based on program start date + (weekNumber - 1) * 7 days + (dayNumber - 1) days
-    final scheduledDate = programStartDate.add(
+    // Convert to local time for consistent display across the app
+    final localStartDate = programStartDate.toLocal();
+    final startDate = DateTime(
+      localStartDate.year,
+      localStartDate.month,
+      localStartDate.day,
+    );
+    final scheduledDate = startDate.add(
       Duration(
         days:
             (programWorkout.weekNumber - 1) * 7 +
@@ -651,7 +658,7 @@ class SessionRepository {
       ),
     );
 
-    // Normalize to midnight
+    // Normalize to midnight (already in local time)
     final normalizedScheduledDate = DateTime(
       scheduledDate.year,
       scheduledDate.month,

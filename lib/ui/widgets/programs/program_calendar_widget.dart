@@ -45,33 +45,41 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
     }
   }
 
-  /// Calculate what "today" means - uses real calendar date
+  /// Calculate what "today" means - uses real calendar date in local time
   DateTime _calculateTodayInProgram() {
     final now = DateTime.now();
-    return DateTime.utc(now.year, now.month, now.day);
+    return DateTime(now.year, now.month, now.day);
   }
 
   /// Build a map of dates to workouts for O(1) lookup
   Map<DateTime, ProgramWorkout> _buildWorkoutMap() {
     final map = <DateTime, ProgramWorkout>{};
 
+    // Convert program start date to local time for consistent display
+    final localStartDate = widget.program.startDate.toLocal();
+    final startDate = DateTime(
+      localStartDate.year,
+      localStartDate.month,
+      localStartDate.day,
+    );
+
     for (final workout in widget.program.workouts ?? []) {
-      // Calculate the actual calendar date for this workout
-      final date = widget.program.startDate.add(
+      // Calculate the actual calendar date for this workout in local time
+      final date = startDate.add(
         Duration(days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1)),
       );
 
-      // Normalize to UTC midnight for consistent comparison
-      final normalizedDate = DateTime.utc(date.year, date.month, date.day);
+      // Normalize to local midnight for consistent comparison
+      final normalizedDate = DateTime(date.year, date.month, date.day);
       map[normalizedDate] = workout;
     }
 
     return map;
   }
 
-  /// Normalize a date to UTC midnight for map lookup
+  /// Normalize a date to local midnight for map lookup
   DateTime _normalizeDate(DateTime date) {
-    return DateTime.utc(date.year, date.month, date.day);
+    return DateTime(date.year, date.month, date.day);
   }
 
   /// Handle date selection with edge case handling

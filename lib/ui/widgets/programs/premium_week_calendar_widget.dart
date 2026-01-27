@@ -509,7 +509,14 @@ class _FullscreenCalendarModalState extends State<_FullscreenCalendarModal>
       if (success) {
         // Also update any linked session's date to match the new scheduled date
         // Calculate new date: programStartDate + (weekNumber-1)*7 + (newDay-1)
-        final newScheduledDate = program.startDate.add(
+        // Use local time for consistency with display calculations
+        final localStartDate = program.startDate.toLocal();
+        final startDate = DateTime(
+          localStartDate.year,
+          localStartDate.month,
+          localStartDate.day,
+        );
+        final newScheduledDate = startDate.add(
           Duration(days: (_currentWeek - 1) * 7 + (newDay - 1)),
         );
         await sessionsProvider.updateSessionDateForProgramWorkout(
