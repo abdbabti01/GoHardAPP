@@ -103,6 +103,8 @@ void main() {
 
     test('localToSession should convert LocalSession to API Session', () {
       // Arrange
+      // Note: LocalSession stores timestamps as local DateTime (from Isar)
+      // but ModelMapper converts them to UTC for API compatibility
       final localSession = LocalSession(
         serverId: 123,
         userId: 456,
@@ -130,8 +132,9 @@ void main() {
       expect(apiSession.notes, 'Test workout');
       expect(apiSession.type, 'strength');
       expect(apiSession.status, 'completed');
-      expect(apiSession.startedAt, DateTime(2024, 1, 15, 10, 0));
-      expect(apiSession.completedAt, DateTime(2024, 1, 15, 11, 0));
+      // Timestamps are converted to UTC (Isar stores without timezone, we reconstruct as UTC)
+      expect(apiSession.startedAt, DateTime.utc(2024, 1, 15, 10, 0));
+      expect(apiSession.completedAt, DateTime.utc(2024, 1, 15, 11, 0));
       expect(apiSession.pausedAt, null);
     });
 
