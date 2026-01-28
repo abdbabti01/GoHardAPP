@@ -913,17 +913,38 @@ class SessionRepository {
     int serverId,
     LocalSession localSession,
   ) async {
+    // Helper to convert Isar timestamp to proper UTC ISO8601 string with 'Z' suffix
+    // CRITICAL: Isar loses the isUtc flag, so we must reconstruct UTC DateTime
+    // before serializing to ensure the 'Z' suffix is included
+    String? toUtcIso8601(DateTime? dt) {
+      if (dt == null) return null;
+      // Reconstruct as UTC (Isar stores the raw value, loses isUtc flag)
+      final utc =
+          dt.isUtc
+              ? dt
+              : DateTime.utc(
+                dt.year,
+                dt.month,
+                dt.day,
+                dt.hour,
+                dt.minute,
+                dt.second,
+                dt.millisecond,
+              );
+      return utc.toIso8601String(); // Will include 'Z' suffix
+    }
+
     try {
       // Send status AND timestamps to server (preserves timer state)
-      // Timestamps are already in UTC format from storage
+      // IMPORTANT: Use toUtcIso8601 to ensure proper UTC format with 'Z' suffix
       final data = {
         'status': localSession.status,
         if (localSession.startedAt != null)
-          'startedAt': localSession.startedAt!.toIso8601String(),
+          'startedAt': toUtcIso8601(localSession.startedAt),
         if (localSession.completedAt != null)
-          'completedAt': localSession.completedAt!.toIso8601String(),
+          'completedAt': toUtcIso8601(localSession.completedAt),
         if (localSession.pausedAt != null)
-          'pausedAt': localSession.pausedAt!.toIso8601String(),
+          'pausedAt': toUtcIso8601(localSession.pausedAt),
         // When pausedAt is null, tell server to clear it (for resume operation)
         if (localSession.pausedAt == null) 'clearPausedAt': true,
         if (localSession.duration != null) 'duration': localSession.duration,
