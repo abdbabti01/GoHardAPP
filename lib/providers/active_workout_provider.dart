@@ -51,8 +51,17 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     if (state == AppLifecycleState.resumed) {
       debugPrint('⏱️ App resumed - recalculating elapsed time');
-      // Recalculate elapsed time when app comes back from background
+      // Recalculate elapsed time immediately for responsive UI
       _recalculateElapsedTime();
+
+      // Also reload session from DB to catch any changes
+      // (sync updates, app kill/restore, multi-device scenarios)
+      if (_currentSession != null) {
+        debugPrint(
+          '🔄 Reloading session ${_currentSession!.id} from DB after resume',
+        );
+        loadSession(_currentSession!.id, showLoading: false);
+      }
     }
   }
 
