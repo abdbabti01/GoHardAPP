@@ -130,8 +130,12 @@ class AuthProvider extends ChangeNotifier {
       _currentUserName = response.name;
       _currentUserEmail = response.email;
 
-      // Save token for background service
-      await BackgroundService.saveAuthToken(response.token);
+      // Save token for background service (non-blocking)
+      try {
+        await BackgroundService.saveAuthToken(response.token);
+      } catch (e) {
+        debugPrint('⚠️ Failed to save token for background service: $e');
+      }
 
       // Clear password for security
       _password = '';
@@ -202,8 +206,12 @@ class AuthProvider extends ChangeNotifier {
       _currentUserName = response.name;
       _currentUserEmail = response.email;
 
-      // Save token for background service
-      await BackgroundService.saveAuthToken(response.token);
+      // Save token for background service (non-blocking)
+      try {
+        await BackgroundService.saveAuthToken(response.token);
+      } catch (e) {
+        debugPrint('⚠️ Failed to save token for background service: $e');
+      }
 
       // Clear passwords for security
       _signupPassword = '';
@@ -226,11 +234,13 @@ class AuthProvider extends ChangeNotifier {
     // Clear authentication token
     await _authService.clearToken();
 
-    // Clear background service token
-    await BackgroundService.clearAuthToken();
-
-    // Cancel nutrition check task
-    await BackgroundService.cancelNutritionCheck();
+    // Clear background service token and cancel tasks (non-blocking)
+    try {
+      await BackgroundService.clearAuthToken();
+      await BackgroundService.cancelNutritionCheck();
+    } catch (e) {
+      debugPrint('⚠️ Failed to clear background service: $e');
+    }
 
     // Clear all local database data for privacy/security
     try {
