@@ -4,6 +4,7 @@ import '../data/models/signup_request.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/services/auth_service.dart';
 import '../data/local/services/local_database_service.dart';
+import '../core/services/background_service.dart';
 
 /// Provider for authentication state management
 /// Combines LoginViewModel and SignupViewModel from MAUI app
@@ -129,6 +130,9 @@ class AuthProvider extends ChangeNotifier {
       _currentUserName = response.name;
       _currentUserEmail = response.email;
 
+      // Save token for background service
+      await BackgroundService.saveAuthToken(response.token);
+
       // Clear password for security
       _password = '';
 
@@ -198,6 +202,9 @@ class AuthProvider extends ChangeNotifier {
       _currentUserName = response.name;
       _currentUserEmail = response.email;
 
+      // Save token for background service
+      await BackgroundService.saveAuthToken(response.token);
+
       // Clear passwords for security
       _signupPassword = '';
       _signupConfirmPassword = '';
@@ -218,6 +225,12 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     // Clear authentication token
     await _authService.clearToken();
+
+    // Clear background service token
+    await BackgroundService.clearAuthToken();
+
+    // Cancel nutrition check task
+    await BackgroundService.cancelNutritionCheck();
 
     // Clear all local database data for privacy/security
     try {

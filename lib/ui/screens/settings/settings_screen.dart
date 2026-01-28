@@ -128,6 +128,62 @@ class SettingsScreen extends StatelessWidget {
                 },
               ),
             ],
+            const Divider(height: 32),
+
+            // Smart Nutrition Reminder
+            _buildNotificationToggle(
+              context,
+              title: 'Smart Nutrition Reminder',
+              subtitle:
+                  settings.nutritionReminderEnabled
+                      ? 'Reminds at ${settings.nutritionReminderTime.formatted} if goals not met'
+                      : 'Get reminded only when nutrition goals are under 80%',
+              enabled: settings.nutritionReminderEnabled,
+              onChanged: (value) {
+                settings.setNutritionReminderEnabled(value);
+              },
+            ),
+            if (settings.nutritionReminderEnabled) ...[
+              const SizedBox(height: 8),
+              _buildTimePicker(
+                context,
+                label: 'Reminder Time',
+                time: settings.nutritionReminderTime,
+                onTimeSelected: (time) {
+                  settings.setNutritionReminderTime(time);
+                },
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.lightbulb_outline,
+                      size: 18,
+                      color: Colors.green.shade700,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This smart reminder only notifies you if you\'re under 80% of your calorie goal.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

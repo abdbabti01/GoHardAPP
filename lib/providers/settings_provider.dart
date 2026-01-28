@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/services/notification_service.dart';
+import '../core/services/background_service.dart';
 import '../core/constants/colors.dart';
 
 /// Provider for app settings including notification preferences and accent color
@@ -11,8 +12,10 @@ class SettingsProvider extends ChangeNotifier {
   // Notification settings
   bool _morningReminderEnabled = true;
   bool _eveningReminderEnabled = true;
+  bool _nutritionReminderEnabled = false;
   TimeOfDay _morningReminderTime = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _eveningReminderTime = const TimeOfDay(hour: 19, minute: 0);
+  TimeOfDay _nutritionReminderTime = const TimeOfDay(hour: 20, minute: 0);
 
   // Accent color theme
   AccentColorTheme _accentColor = AccentColorTheme.green;
@@ -34,8 +37,10 @@ class SettingsProvider extends ChangeNotifier {
   // Getters
   bool get morningReminderEnabled => _morningReminderEnabled;
   bool get eveningReminderEnabled => _eveningReminderEnabled;
+  bool get nutritionReminderEnabled => _nutritionReminderEnabled;
   TimeOfDay get morningReminderTime => _morningReminderTime;
   TimeOfDay get eveningReminderTime => _eveningReminderTime;
+  TimeOfDay get nutritionReminderTime => _nutritionReminderTime;
   AccentColorTheme get accentColor => _accentColor;
   bool get isLoading => _isLoading;
 
@@ -85,6 +90,27 @@ class SettingsProvider extends ChangeNotifier {
       final accentColorStr = await _storage.read(key: 'accent_color');
       _accentColor = AccentColorTheme.fromString(accentColorStr);
 
+      // Load nutrition reminder enabled state
+      final nutritionEnabledStr = await _storage.read(
+        key: 'nutrition_reminder_enabled',
+      );
+      _nutritionReminderEnabled =
+          nutritionEnabledStr == 'true'; // Default false
+
+      // Load nutrition reminder time
+      final nutritionHourStr = await _storage.read(
+        key: 'nutrition_reminder_hour',
+      );
+      final nutritionMinuteStr = await _storage.read(
+        key: 'nutrition_reminder_minute',
+      );
+      if (nutritionHourStr != null && nutritionMinuteStr != null) {
+        _nutritionReminderTime = TimeOfDay(
+          hour: int.parse(nutritionHourStr),
+          minute: int.parse(nutritionMinuteStr),
+        );
+      }
+
       debugPrint('Settings loaded successfully');
 
       // Schedule notifications if enabled
@@ -99,6 +125,14 @@ class SettingsProvider extends ChangeNotifier {
         await _notificationService.scheduleEveningReminder(
           hour: _eveningReminderTime.hour,
           minute: _eveningReminderTime.minute,
+        );
+      }
+
+      // Schedule nutrition reminder if enabled
+      if (_nutritionReminderEnabled) {
+        await BackgroundService.scheduleNutritionCheck(
+          hour: _nutritionReminderTime.hour,
+          minute: _nutritionReminderTime.minute,
         );
       }
     } catch (e) {
@@ -186,6 +220,49 @@ class SettingsProvider extends ChangeNotifier {
 
     if (_eveningReminderEnabled) {
       await _notificationService.scheduleEveningReminder(
+        hour: time.hour,
+        minute: time.minute,
+      );
+    }
+
+    notifyListeners();
+  }
+
+  /// Set nutrition reminder enabled/disabled
+  Future<void> setNutritionReminderEnabled(bool enabled) async {
+    _nutritionReminderEnabled = enabled;
+    await _storage.write(
+      key: 'nutrition_reminder_enabled',
+      value: enabled.toString(),
+    );
+
+    if (enabled) {
+      await BackgroundService.scheduleNutritionCheck(
+        hour: _nutritionReminderTime.hour,
+        minute: _nutritionReminderTime.minute,
+      );
+    } else {
+      await BackgroundService.cancelNutritionCheck();
+      await _notificationService.cancelNutritionReminder();
+    }
+
+    notifyListeners();
+  }
+
+  /// Set nutrition reminder time
+  Future<void> setNutritionReminderTime(TimeOfDay time) async {
+    _nutritionReminderTime = time;
+    await _storage.write(
+      key: 'nutrition_reminder_hour',
+      value: time.hour.toString(),
+    );
+    await _storage.write(
+      key: 'nutrition_reminder_minute',
+      value: time.minute.toString(),
+    );
+
+    if (_nutritionReminderEnabled) {
+      await BackgroundService.scheduleNutritionCheck(
         hour: time.hour,
         minute: time.minute,
       );

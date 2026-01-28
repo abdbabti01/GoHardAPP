@@ -24,6 +24,7 @@ import 'core/services/connectivity_service.dart';
 import 'core/services/sync_service.dart';
 import 'core/services/sync_service_initializer.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/background_service.dart';
 import 'core/services/tab_navigation_service.dart';
 import 'core/utils/database_cleanup.dart';
 import 'providers/auth_provider.dart';
@@ -78,6 +79,9 @@ void main() async {
   // Initialize health service (Apple Health / Google Fit)
   final healthService = HealthService.instance;
   await healthService.initialize();
+
+  // Initialize background service for smart notifications
+  await BackgroundService.initialize();
 
   // Initialize secure storage
   const secureStorage = FlutterSecureStorage();

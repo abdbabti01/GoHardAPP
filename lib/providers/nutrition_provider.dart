@@ -30,6 +30,14 @@ class NutritionProvider extends ChangeNotifier {
   bool _isAddingFood = false;
   String? _errorMessage;
 
+  // Day change detection
+  DateTime? _lastLoadedDate;
+
+  // Nutrition history
+  List<MealLog> _nutritionHistory = [];
+  bool _isLoadingHistory = false;
+  String _historyFilter = 'week'; // 'week', 'month', '3months'
+
   StreamSubscription<bool>? _connectivitySubscription;
 
   NutritionProvider(this._nutritionRepository, [this._connectivity]) {
@@ -55,6 +63,9 @@ class NutritionProvider extends ChangeNotifier {
   bool get isSearching => _isSearching;
   bool get isAddingFood => _isAddingFood;
   String? get errorMessage => _errorMessage;
+  List<MealLog> get nutritionHistory => _nutritionHistory;
+  bool get isLoadingHistory => _isLoadingHistory;
+  String get historyFilter => _historyFilter;
 
   /// Load today's meal log, active goal, and progress
   Future<void> loadTodaysData() async {
@@ -76,6 +87,9 @@ class NutritionProvider extends ChangeNotifier {
       _todaysProgress = results[2] as NutritionProgress;
       _streakInfo = results[3] as StreakInfo;
 
+      // Track when data was loaded for day change detection
+      _lastLoadedDate = DateTime.now();
+
       debugPrint(
         '✅ Loaded nutrition data - ${_todaysMealLog?.totalCalories.toStringAsFixed(0)} cals today',
       );
@@ -86,6 +100,73 @@ class NutritionProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Check if day changed and refresh data if needed
+  /// Called when app resumes from background
+  void checkAndRefreshIfDayChanged() {
+    final today = DateTime.now();
+    if (_lastLoadedDate != null &&
+        (_lastLoadedDate!.day != today.day ||
+            _lastLoadedDate!.month != today.month ||
+            _lastLoadedDate!.year != today.year)) {
+      debugPrint('📅 Day changed - reloading nutrition data');
+      loadTodaysData();
+      // Also reload history if it was previously loaded
+      if (_nutritionHistory.isNotEmpty) {
+        loadNutritionHistory();
+      }
+    }
+  }
+
+  /// Load nutrition history for past days
+  Future<void> loadNutritionHistory() async {
+    _isLoadingHistory = true;
+    notifyListeners();
+
+    try {
+      final now = DateTime.now();
+      final startDate = _getHistoryStartDate(now);
+
+      _nutritionHistory = await _nutritionRepository.getMealLogs(
+        startDate: startDate,
+        endDate: now.subtract(const Duration(days: 1)), // Exclude today
+      );
+
+      // Sort by date descending (most recent first)
+      _nutritionHistory.sort((a, b) => b.date.compareTo(a.date));
+
+      debugPrint(
+        '✅ Loaded ${_nutritionHistory.length} days of nutrition history',
+      );
+    } catch (e) {
+      debugPrint('Load nutrition history error: $e');
+    } finally {
+      _isLoadingHistory = false;
+      notifyListeners();
+    }
+  }
+
+  /// Get history start date based on filter
+  DateTime _getHistoryStartDate(DateTime now) {
+    switch (_historyFilter) {
+      case 'week':
+        return now.subtract(const Duration(days: 7));
+      case 'month':
+        return now.subtract(const Duration(days: 30));
+      case '3months':
+        return now.subtract(const Duration(days: 90));
+      default:
+        return now.subtract(const Duration(days: 7));
+    }
+  }
+
+  /// Set history filter and reload
+  void setHistoryFilter(String filter) {
+    if (_historyFilter != filter) {
+      _historyFilter = filter;
+      loadNutritionHistory();
     }
   }
 

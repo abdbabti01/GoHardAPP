@@ -21,6 +21,7 @@ class NotificationService {
   /// Notification IDs
   static const int morningReminderId = 1;
   static const int eveningReminderId = 2;
+  static const int nutritionReminderId = 3;
 
   /// Goal reminders start at ID 100
   /// Each goal uses its goalId + 100 as the notification ID
@@ -412,6 +413,63 @@ class NotificationService {
   /// Cancel all notifications
   Future<void> cancelAll() async {
     await _notifications.cancelAll();
+  }
+
+  /// Show nutrition goal notification (called from background task)
+  /// Only shows if calorie goal < 80% met
+  Future<void> showNutritionGoalNotification({
+    required double consumed,
+    required double goal,
+  }) async {
+    final percentAchieved =
+        goal > 0 ? (consumed / goal * 100).clamp(0, 100) : 0;
+
+    // Only show if less than 80% achieved
+    if (percentAchieved >= 80) {
+      debugPrint(
+        '🍎 Nutrition goal ${percentAchieved.toStringAsFixed(0)}% met - skipping notification',
+      );
+      return;
+    }
+
+    final remaining = goal - consumed;
+    String body;
+    if (consumed == 0) {
+      body = "You haven't logged any meals today. Don't forget to track!";
+    } else {
+      body =
+          "You're ${remaining.toStringAsFixed(0)} calories short of your goal today.";
+    }
+
+    const androidDetails = AndroidNotificationDetails(
+      'nutrition_reminders',
+      'Nutrition Reminders',
+      channelDescription: 'Evening reminders about nutrition goals',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    await _notifications.show(
+      nutritionReminderId,
+      '🍎 Nutrition Goal Reminder',
+      body,
+      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      payload: 'nutrition_reminder',
+    );
+
+    debugPrint('🍎 Showed nutrition reminder notification');
+  }
+
+  /// Cancel nutrition reminder
+  Future<void> cancelNutritionReminder() async {
+    await _notifications.cancel(nutritionReminderId);
   }
 
   /// Show immediate test notification

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../providers/nutrition_provider.dart';
 import '../../../data/models/meal_entry.dart';
+import '../../../data/models/meal_log.dart';
 import '../../../data/models/food_item.dart';
 import '../../widgets/nutrition/calorie_ring_widget.dart';
 import '../../widgets/nutrition/macro_progress_bar.dart';
@@ -18,13 +20,30 @@ class NutritionDashboardScreen extends StatefulWidget {
       _NutritionDashboardScreenState();
 }
 
-class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
+class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<NutritionProvider>().loadTodaysData();
+      final provider = context.read<NutritionProvider>();
+      provider.loadTodaysData();
+      provider.loadNutritionHistory();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      context.read<NutritionProvider>().checkAndRefreshIfDayChanged();
+    }
   }
 
   @override
@@ -143,6 +162,11 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
                   const SizedBox(height: 12),
                   _buildStreakCard(context, provider),
                 ],
+
+                const SizedBox(height: 24),
+
+                // History section
+                _buildHistorySection(context, provider),
 
                 const SizedBox(height: 24),
               ],
@@ -508,6 +532,191 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildHistorySection(
+    BuildContext context,
+    NutritionProvider provider,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header with filter dropdown
+        Row(
+          children: [
+            Text(
+              'History',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: context.textPrimary,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: context.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: context.border),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: provider.historyFilter,
+                  isDense: true,
+                  icon: Icon(
+                    Icons.keyboard_arrow_down,
+                    color: context.textSecondary,
+                  ),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: context.textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'week', child: Text('Last Week')),
+                    DropdownMenuItem(value: 'month', child: Text('Last Month')),
+                    DropdownMenuItem(value: '3months', child: Text('3 Months')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      provider.setHistoryFilter(value);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // History list
+        if (provider.isLoadingHistory)
+          Container(
+            padding: const EdgeInsets.all(24),
+            child: const Center(child: CircularProgressIndicator()),
+          )
+        else if (provider.nutritionHistory.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: context.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.border),
+            ),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.history, size: 40, color: context.textTertiary),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No past nutrition logs',
+                    style: TextStyle(color: context.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...provider.nutritionHistory.map(
+            (log) => _buildHistoryDayCard(context, log, provider),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHistoryDayCard(
+    BuildContext context,
+    MealLog log,
+    NutritionProvider provider,
+  ) {
+    final goal = provider.activeGoal;
+    final goalCalories = goal?.dailyCalories ?? 2000;
+    final progressPercent = (log.totalCalories / goalCalories * 100).clamp(
+      0,
+      150,
+    );
+    final isGoalMet = progressPercent >= 80 && progressPercent <= 110;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.border),
+      ),
+      child: Row(
+        children: [
+          // Date column
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                DateFormat('EEE, MMM d').format(log.date),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Icon(
+                    isGoalMet
+                        ? Icons.check_circle
+                        : Icons.remove_circle_outline,
+                    size: 14,
+                    color: isGoalMet ? Colors.green : context.textTertiary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${progressPercent.toStringAsFixed(0)}% of goal',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isGoalMet ? Colors.green : context.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const Spacer(),
+          // Macros column
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${log.totalCalories.toStringAsFixed(0)} cal',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildMiniMacro('P', log.totalProtein, Colors.red.shade400),
+                  const SizedBox(width: 8),
+                  _buildMiniMacro('C', log.totalCarbohydrates, Colors.blue),
+                  const SizedBox(width: 8),
+                  _buildMiniMacro('F', log.totalFat, Colors.amber),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniMacro(String label, double value, Color color) {
+    return Text(
+      '$label: ${value.toStringAsFixed(0)}g',
+      style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500),
     );
   }
 

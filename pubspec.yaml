@@ -102,6 +102,12 @@ dependencies:
   # Route line drawing on maps
   flutter_polyline_points: ^2.0.0
 
+  # Background task scheduling for smart notifications
+  workmanager: ^0.5.2
+
+  # Shared preferences for background service
+  shared_preferences: ^2.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
