@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
@@ -18,10 +20,13 @@ class TodayScreen extends StatefulWidget {
 }
 
 class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
+  Timer? _midnightTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scheduleMidnightRefresh();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SessionsProvider>().loadSessions();
       final nutritionProvider = context.read<NutritionProvider>();
@@ -34,8 +39,41 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _midnightTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// Schedule a timer to refresh data at midnight when the day changes
+  void _scheduleMidnightRefresh() {
+    _midnightTimer?.cancel();
+
+    // Calculate duration until next midnight
+    final now = DateTime.now();
+    final nextMidnight = DateTime(now.year, now.month, now.day + 1);
+    final timeUntilMidnight = nextMidnight.difference(now);
+
+    debugPrint(
+      '⏰ Scheduling midnight refresh in ${timeUntilMidnight.inMinutes} minutes',
+    );
+
+    _midnightTimer = Timer(timeUntilMidnight, () {
+      debugPrint('🌙 Midnight reached - refreshing Today screen data');
+      if (mounted) {
+        // Refresh all data for the new day
+        final nutritionProvider = context.read<NutritionProvider>();
+        nutritionProvider.loadTodaysData();
+        nutritionProvider.loadNutritionHistory();
+        context.read<SessionsProvider>().loadSessions(showLoading: false);
+        context.read<ProgramsProvider>().loadPrograms();
+
+        // Rebuild to update greeting (Good Evening -> Good Morning)
+        setState(() {});
+
+        // Schedule next midnight check
+        _scheduleMidnightRefresh();
+      }
+    });
   }
 
   @override
@@ -45,6 +83,8 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
       context.read<NutritionProvider>().checkAndRefreshIfDayChanged();
       // Also refresh sessions to update "today's workouts"
       context.read<SessionsProvider>().loadSessions(showLoading: false);
+      // Reschedule midnight timer (in case it fired while app was in background)
+      _scheduleMidnightRefresh();
     }
   }
 
