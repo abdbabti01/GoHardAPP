@@ -1,4 +1,3 @@
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
@@ -16,7 +15,6 @@ import 'package:go_hard_app/data/models/exercise_set.dart';
 import 'package:go_hard_app/data/models/program.dart';
 import 'package:go_hard_app/data/models/program_workout.dart';
 import 'package:go_hard_app/data/models/meal_log.dart';
-import 'package:go_hard_app/data/models/meal_entry.dart';
 import 'package:go_hard_app/data/models/nutrition_goal.dart';
 import 'package:go_hard_app/data/models/nutrition_summary.dart';
 import 'package:go_hard_app/core/services/connectivity_service.dart';
