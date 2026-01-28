@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/services/tab_navigation_service.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/nutrition_provider.dart';
 import '../../../providers/programs_provider.dart';
@@ -16,21 +17,43 @@ class TodayScreen extends StatefulWidget {
   State<TodayScreen> createState() => _TodayScreenState();
 }
 
-class _TodayScreenState extends State<TodayScreen> {
+class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SessionsProvider>().loadSessions();
-      context.read<NutritionProvider>().loadTodaysData();
+      final nutritionProvider = context.read<NutritionProvider>();
+      nutritionProvider.loadTodaysData();
+      nutritionProvider
+          .loadNutritionHistory(); // Load history for yesterday's summary
       context.read<ProgramsProvider>().loadPrograms();
     });
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Check if day changed and refresh data if needed
+      context.read<NutritionProvider>().checkAndRefreshIfDayChanged();
+      // Also refresh sessions to update "today's workouts"
+      context.read<SessionsProvider>().loadSessions(showLoading: false);
+    }
+  }
+
   Future<void> _handleRefresh() async {
+    final nutritionProvider = context.read<NutritionProvider>();
     await Future.wait([
       context.read<SessionsProvider>().loadSessions(),
-      context.read<NutritionProvider>().loadTodaysData(),
+      nutritionProvider.loadTodaysData(),
+      nutritionProvider.loadNutritionHistory(),
       context.read<ProgramsProvider>().loadPrograms(),
     ]);
   }
@@ -450,85 +473,141 @@ class _TodayScreenState extends State<TodayScreen> {
         final carbsGoal = provider.activeGoal?.dailyCarbohydrates ?? 200;
         final fatGoal = provider.activeGoal?.dailyFat ?? 65;
 
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: context.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: context.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.restaurant_menu, color: Colors.orange, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    "Today's Nutrition",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: context.textPrimary,
+        // Check if there's nutrition history
+        final hasHistory = provider.nutritionHistory.isNotEmpty;
+
+        return GestureDetector(
+          onTap: () {
+            // Navigate to Eat tab (index 2) for full nutrition dashboard
+            context.read<TabNavigationService>().switchTab(2);
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: context.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.restaurant_menu, color: Colors.orange, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Today's Nutrition",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} kcal',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: context.textSecondary,
+                    const Spacer(),
+                    Text(
+                      '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} kcal',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: context.textSecondary,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Calorie progress bar
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  value: percentage / 100,
-                  minHeight: 10,
-                  backgroundColor: context.surfaceHighlight,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    percentage >= 100 ? Colors.red : Colors.orange,
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 20,
+                      color: context.textTertiary,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Calorie progress bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: percentage / 100,
+                    minHeight: 10,
+                    backgroundColor: context.surfaceHighlight,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      percentage >= 100 ? Colors.red : Colors.orange,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              // Macro bars
-              Row(
-                children: [
-                  Expanded(
-                    child: _MacroMini(
-                      label: 'Protein',
-                      current: protein,
-                      goal: proteinGoal,
-                      color: Colors.red,
+                const SizedBox(height: 16),
+                // Macro bars
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MacroMini(
+                        label: 'Protein',
+                        current: protein,
+                        goal: proteinGoal,
+                        color: Colors.red,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _MacroMini(
-                      label: 'Carbs',
-                      current: carbs,
-                      goal: carbsGoal,
-                      color: Colors.blue,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _MacroMini(
+                        label: 'Carbs',
+                        current: carbs,
+                        goal: carbsGoal,
+                        color: Colors.blue,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _MacroMini(
-                      label: 'Fat',
-                      current: fat,
-                      goal: fatGoal,
-                      color: Colors.amber,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _MacroMini(
+                        label: 'Fat',
+                        current: fat,
+                        goal: fatGoal,
+                        color: Colors.amber,
+                      ),
+                    ),
+                  ],
+                ),
+                // Yesterday's summary / History link
+                if (hasHistory) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.surfaceHighlight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.history,
+                          size: 14,
+                          color: context.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Yesterday: ${provider.nutritionHistory.isNotEmpty ? provider.nutritionHistory.first.totalCalories.toStringAsFixed(0) : 0} kcal',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'View History',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: context.accent,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

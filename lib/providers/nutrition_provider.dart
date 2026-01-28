@@ -113,10 +113,8 @@ class NutritionProvider extends ChangeNotifier {
             _lastLoadedDate!.year != today.year)) {
       debugPrint('📅 Day changed - reloading nutrition data');
       loadTodaysData();
-      // Also reload history if it was previously loaded
-      if (_nutritionHistory.isNotEmpty) {
-        loadNutritionHistory();
-      }
+      // Always reload history when day changes to update "yesterday" correctly
+      loadNutritionHistory();
     }
   }
 

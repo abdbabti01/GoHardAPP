@@ -54,9 +54,28 @@ Future<void> _checkNutritionGoal() async {
     );
 
     final progressData = response.data ?? {};
-    final consumed =
-        (progressData['consumedCalories'] as num?)?.toDouble() ?? 0;
-    final goal = (progressData['goalCalories'] as num?)?.toDouble() ?? 2000;
+
+    // Parse the nested API response structure
+    // API returns: { consumed: { calories: X }, goal: { dailyCalories: Y } }
+    double consumed = 0;
+    double goal = 2000;
+
+    // Try new nested structure first
+    if (progressData['consumed'] is Map<String, dynamic>) {
+      final consumedData = progressData['consumed'] as Map<String, dynamic>;
+      consumed = (consumedData['calories'] as num?)?.toDouble() ?? 0;
+    } else {
+      // Fallback to flat structure
+      consumed = (progressData['consumedCalories'] as num?)?.toDouble() ?? 0;
+    }
+
+    if (progressData['goal'] is Map<String, dynamic>) {
+      final goalData = progressData['goal'] as Map<String, dynamic>;
+      goal = (goalData['dailyCalories'] as num?)?.toDouble() ?? 2000;
+    } else {
+      // Fallback to flat structure
+      goal = (progressData['goalCalories'] as num?)?.toDouble() ?? 2000;
+    }
 
     debugPrint(
       '🍎 Nutrition progress: ${consumed.toStringAsFixed(0)}/${goal.toStringAsFixed(0)} cal',
