@@ -43,121 +43,296 @@ class _SocialTabState extends State<SocialTab> {
         ]);
       },
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         children: [
+          // Friend Requests Banner (if any)
+          if (friendsProvider.incomingRequests.isNotEmpty)
+            _buildFriendRequestsBanner(context, friendsProvider),
+
+          // Friends Section
           _buildFriendsSection(context, friendsProvider),
-          const SizedBox(height: 24),
+
+          const SizedBox(height: 20),
+
+          // Messages Section
           _buildMessagesSection(context, messagesProvider),
-          const SizedBox(height: 24),
-          _buildQuickActions(context),
         ],
       ),
     );
   }
 
-  Widget _buildFriendsSection(BuildContext context, FriendsProvider provider) {
-    final friends = provider.friends.take(5).toList();
-    final pendingCount = provider.pendingRequestCount;
+  Widget _buildFriendRequestsBanner(
+    BuildContext context,
+    FriendsProvider provider,
+  ) {
+    final requests = provider.incomingRequests;
+    final request = requests.first;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            context.primary.withOpacity(0.15),
+            context.primary.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.primary.withOpacity(0.3)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => Navigator.pushNamed(context, '/friends'),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
-                Text(
-                  'Friends',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: context.textPrimary,
+                // Stacked avatars
+                SizedBox(
+                  width: 52,
+                  height: 40,
+                  child: Stack(
+                    children: [
+                      _buildSmallAvatar(request.name, request.profilePhotoUrl),
+                      if (requests.length > 1)
+                        Positioned(
+                          left: 20,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: context.surfaceElevated,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: context.surface,
+                                width: 2,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '+${requests.length - 1}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: context.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                if (pendingCount > 0) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: context.primary,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$pendingCount pending',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        requests.length == 1
+                            ? '${request.name} wants to be friends'
+                            : '${requests.length} friend requests',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: context.textPrimary,
+                          fontSize: 14,
+                        ),
                       ),
-                    ),
+                      Text(
+                        'Tap to view',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+                Icon(Icons.chevron_right, color: context.primary),
               ],
             ),
-            TextButton(
-              onPressed: () => Navigator.pushNamed(context, '/friends'),
-              child: Text('See All', style: TextStyle(color: context.primary)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (friends.isEmpty)
-          _buildEmptyFriendsCard(context)
-        else
-          _buildFriendsHorizontalList(context, friends, provider),
-      ],
-    );
-  }
-
-  Widget _buildEmptyFriendsCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Icon(Icons.people_outline, size: 48, color: context.textTertiary),
-            const SizedBox(height: 12),
-            Text(
-              'No friends yet',
-              style: TextStyle(fontSize: 16, color: context.textSecondary),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.pushNamed(context, '/friends'),
-              icon: const Icon(Icons.person_add, size: 18),
-              label: const Text('Find Friends'),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildFriendsHorizontalList(
-    BuildContext context,
-    List<Friend> friends,
-    FriendsProvider provider,
-  ) {
+  Widget _buildSmallAvatar(String name, String? photoUrl) {
+    return CircleAvatar(
+      radius: 16,
+      backgroundImage:
+          photoUrl != null
+              ? NetworkImage(ApiConfig.getPhotoUrl(photoUrl))
+              : null,
+      child:
+          photoUrl == null
+              ? Text(
+                name[0].toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+              : null,
+    );
+  }
+
+  Widget _buildFriendsSection(BuildContext context, FriendsProvider provider) {
+    final friends = provider.friends;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.people, size: 20, color: context.textSecondary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Friends',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  if (friends.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.surfaceElevated,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${friends.length}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: context.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              TextButton.icon(
+                onPressed: () => Navigator.pushNamed(context, '/friends'),
+                icon: Icon(
+                  Icons.arrow_forward,
+                  size: 16,
+                  color: context.primary,
+                ),
+                label: Text(
+                  'All',
+                  style: TextStyle(
+                    color: context.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Friends list or empty state
+        if (friends.isEmpty)
+          _buildEmptyFriendsState(context)
+        else
+          _buildFriendsGrid(context, friends.take(6).toList()),
+      ],
+    );
+  }
+
+  Widget _buildEmptyFriendsState(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: context.surfaceElevated,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.surface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.person_add,
+              size: 32,
+              color: context.textTertiary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Find your workout buddies',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Connect with friends to share progress',
+            style: TextStyle(fontSize: 13, color: context.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => Navigator.pushNamed(context, '/friends'),
+            icon: const Icon(Icons.search, size: 18),
+            label: const Text('Find Friends'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFriendsGrid(BuildContext context, List<Friend> friends) {
     return SizedBox(
-      height: 100,
+      height: 88,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: friends.length + 1, // +1 for "Add" button
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: friends.length + 1,
         itemBuilder: (context, index) {
           if (index == friends.length) {
             return _buildAddFriendButton(context);
           }
-          return _buildFriendAvatar(context, friends[index]);
+          return _buildFriendItem(context, friends[index]);
         },
       ),
     );
   }
 
-  Widget _buildFriendAvatar(BuildContext context, Friend friend) {
+  Widget _buildFriendItem(BuildContext context, Friend friend) {
     return GestureDetector(
       onTap: () {
         Navigator.pushNamed(
@@ -172,30 +347,57 @@ class _SocialTabState extends State<SocialTab> {
         );
       },
       child: Container(
-        width: 72,
+        width: 68,
         margin: const EdgeInsets.only(right: 12),
         child: Column(
           children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundImage:
-                  friend.profilePhotoUrl != null
-                      ? NetworkImage(
-                        ApiConfig.getPhotoUrl(friend.profilePhotoUrl),
-                      )
-                      : null,
-              child:
-                  friend.profilePhotoUrl == null
-                      ? Text(
-                        friend.name[0].toUpperCase(),
-                        style: const TextStyle(fontSize: 20),
-                      )
-                      : null,
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [context.primary, context.primary.withOpacity(0.5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: context.surface,
+                ),
+                child: CircleAvatar(
+                  radius: 26,
+                  backgroundColor: context.surfaceElevated,
+                  backgroundImage:
+                      friend.profilePhotoUrl != null
+                          ? NetworkImage(
+                            ApiConfig.getPhotoUrl(friend.profilePhotoUrl),
+                          )
+                          : null,
+                  child:
+                      friend.profilePhotoUrl == null
+                          ? Text(
+                            friend.name[0].toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: context.textPrimary,
+                            ),
+                          )
+                          : null,
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               friend.name.split(' ').first,
-              style: TextStyle(fontSize: 12, color: context.textSecondary),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: context.textSecondary,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
@@ -209,29 +411,36 @@ class _SocialTabState extends State<SocialTab> {
   Widget _buildAddFriendButton(BuildContext context) {
     return GestureDetector(
       onTap: () => Navigator.pushNamed(context, '/friends'),
-      child: Container(
-        width: 72,
-        margin: const EdgeInsets.only(right: 12),
+      child: SizedBox(
+        width: 68,
         child: Column(
           children: [
             Container(
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: context.surfaceElevated,
                 shape: BoxShape.circle,
+                color: context.surfaceElevated,
                 border: Border.all(
                   color: context.borderSubtle,
-                  width: 2,
+                  width: 1.5,
                   strokeAlign: BorderSide.strokeAlignInside,
                 ),
               ),
-              child: Icon(Icons.add, color: context.textSecondary),
+              child: Icon(
+                Icons.person_add,
+                size: 22,
+                color: context.textSecondary,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               'Add',
-              style: TextStyle(fontSize: 12, color: context.textSecondary),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: context.textSecondary,
+              ),
             ),
           ],
         ),
@@ -243,82 +452,131 @@ class _SocialTabState extends State<SocialTab> {
     BuildContext context,
     MessagesProvider provider,
   ) {
-    final conversations = provider.conversations.take(3).toList();
+    final conversations = provider.conversations;
     final totalUnread = provider.totalUnreadCount;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Messages',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: context.textPrimary,
+        // Header
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.chat_bubble_outline,
+                    size: 20,
+                    color: context.textSecondary,
                   ),
-                ),
-                if (totalUnread > 0) ...[
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
+                  Text(
+                    'Messages',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: context.textPrimary,
                     ),
-                    decoration: BoxDecoration(
-                      color: context.primary,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      totalUnread > 99 ? '99+' : '$totalUnread',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                  ),
+                  if (totalUnread > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.primary,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        totalUnread > 99 ? '99+' : '$totalUnread',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
-            ),
-            TextButton(
-              onPressed: () => Navigator.pushNamed(context, '/messages'),
-              child: Text('See All', style: TextStyle(color: context.primary)),
-            ),
-          ],
+              ),
+              TextButton.icon(
+                onPressed: () => Navigator.pushNamed(context, '/messages'),
+                icon: Icon(
+                  Icons.arrow_forward,
+                  size: 16,
+                  color: context.primary,
+                ),
+                label: Text(
+                  'All',
+                  style: TextStyle(
+                    color: context.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
+
+        // Messages list or empty state
         if (conversations.isEmpty)
-          _buildEmptyMessagesCard(context)
+          _buildEmptyMessagesState(context)
         else
-          _buildMessagesList(context, conversations),
+          _buildMessagesList(context, conversations.take(4).toList()),
       ],
     );
   }
 
-  Widget _buildEmptyMessagesCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Icon(Icons.message_outlined, size: 48, color: context.textTertiary),
-            const SizedBox(height: 12),
-            Text(
-              'No messages yet',
-              style: TextStyle(fontSize: 16, color: context.textSecondary),
+  Widget _buildEmptyMessagesState(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: context.surfaceElevated,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.surface,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Start a conversation with a friend',
-              style: TextStyle(fontSize: 14, color: context.textTertiary),
+            child: Icon(
+              Icons.chat_bubble_outline,
+              size: 32,
+              color: context.textTertiary,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No messages yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Start a conversation with a friend',
+            style: TextStyle(fontSize: 13, color: context.textSecondary),
+          ),
+        ],
       ),
     );
   }
@@ -327,148 +585,167 @@ class _SocialTabState extends State<SocialTab> {
     BuildContext context,
     List<DMConversation> conversations,
   ) {
-    return Card(
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: context.surfaceElevated,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         children:
             conversations.asMap().entries.map((entry) {
               final index = entry.key;
               final conv = entry.value;
-              return Column(
-                children: [
-                  _buildMessageTile(context, conv),
-                  if (index < conversations.length - 1)
-                    Divider(height: 1, color: context.borderSubtle),
-                ],
-              );
+              final isLast = index == conversations.length - 1;
+              return _buildMessageItem(context, conv, isLast);
             }).toList(),
       ),
     );
   }
 
-  Widget _buildMessageTile(BuildContext context, DMConversation conv) {
-    return ListTile(
-      leading: Stack(
-        children: [
-          CircleAvatar(
-            backgroundImage:
-                conv.friendPhotoUrl != null
-                    ? NetworkImage(ApiConfig.getPhotoUrl(conv.friendPhotoUrl))
-                    : null,
-            child:
-                conv.friendPhotoUrl == null
-                    ? Text(conv.friendName[0].toUpperCase())
-                    : null,
+  Widget _buildMessageItem(
+    BuildContext context,
+    DMConversation conv,
+    bool isLast,
+  ) {
+    final hasUnread = conv.unreadCount > 0;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.pushNamed(
+            context,
+            '/conversation',
+            arguments: {
+              'friendId': conv.friendId,
+              'friendName': conv.friendName,
+              'friendUsername': conv.friendUsername,
+              'friendPhotoUrl': conv.friendPhotoUrl,
+            },
+          );
+        },
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(isLast ? 0 : 0),
+          bottom: Radius.circular(isLast ? 16 : 0),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border:
+                isLast
+                    ? null
+                    : Border(
+                      bottom: BorderSide(
+                        color: context.borderSubtle,
+                        width: 0.5,
+                      ),
+                    ),
           ),
-          if (conv.unreadCount > 0)
-            Positioned(
-              right: 0,
-              top: 0,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: context.primary,
-                  shape: BoxShape.circle,
-                ),
-                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                child: Text(
-                  conv.unreadCount > 9 ? '9+' : '${conv.unreadCount}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+          child: Row(
+            children: [
+              // Avatar with unread indicator
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: context.surface,
+                    backgroundImage:
+                        conv.friendPhotoUrl != null
+                            ? NetworkImage(
+                              ApiConfig.getPhotoUrl(conv.friendPhotoUrl),
+                            )
+                            : null,
+                    child:
+                        conv.friendPhotoUrl == null
+                            ? Text(
+                              conv.friendName[0].toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: context.textPrimary,
+                              ),
+                            )
+                            : null,
                   ),
-                  textAlign: TextAlign.center,
+                  if (hasUnread)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: context.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: context.surfaceElevated,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+
+              // Name and message
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      conv.friendName,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight:
+                            hasUnread ? FontWeight.w600 : FontWeight.w500,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      conv.lastMessage ?? 'No messages yet',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color:
+                            hasUnread
+                                ? context.textPrimary
+                                : context.textSecondary,
+                        fontWeight:
+                            hasUnread ? FontWeight.w500 : FontWeight.normal,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-        ],
-      ),
-      title: Text(
-        conv.friendName,
-        style: TextStyle(
-          fontWeight:
-              conv.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-        ),
-      ),
-      subtitle:
-          conv.lastMessage != null
-              ? Text(
-                conv.lastMessage!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color:
-                      conv.unreadCount > 0
-                          ? context.textPrimary
-                          : context.textSecondary,
+              const SizedBox(width: 8),
+
+              // Time
+              if (conv.lastMessageAt != null)
+                Text(
+                  _formatTime(conv.lastMessageAt!),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: hasUnread ? context.primary : context.textTertiary,
+                    fontWeight: hasUnread ? FontWeight.w500 : FontWeight.normal,
+                  ),
                 ),
-              )
-              : null,
-      trailing: _buildTimeText(context, conv),
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          '/conversation',
-          arguments: {
-            'friendId': conv.friendId,
-            'friendName': conv.friendName,
-            'friendUsername': conv.friendUsername,
-            'friendPhotoUrl': conv.friendPhotoUrl,
-          },
-        );
-      },
-    );
-  }
-
-  Widget? _buildTimeText(BuildContext context, DMConversation conv) {
-    if (conv.lastMessageAt == null) return null;
-
-    final diff = DateTime.now().difference(conv.lastMessageAt!);
-    String text;
-    if (diff.inMinutes < 1) {
-      text = 'Now';
-    } else if (diff.inHours < 1) {
-      text = '${diff.inMinutes}m';
-    } else if (diff.inDays < 1) {
-      text = '${diff.inHours}h';
-    } else {
-      text = '${diff.inDays}d';
-    }
-
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 12,
-        color: conv.unreadCount > 0 ? context.primary : context.textTertiary,
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildQuickActions(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () => Navigator.pushNamed(context, '/friends'),
-            icon: const Icon(Icons.person_add),
-            label: const Text('Add Friend'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () => Navigator.pushNamed(context, '/messages'),
-            icon: const Icon(Icons.message),
-            label: const Text('Messages'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-      ],
-    );
+  String _formatTime(DateTime dateTime) {
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inMinutes < 1) return 'Now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m';
+    if (diff.inDays < 1) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    return '${dateTime.day}/${dateTime.month}';
   }
 }
