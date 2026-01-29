@@ -254,17 +254,28 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
         );
       }
 
-      // Now start the new workout
+      // CRITICAL FIX: Calculate UTC timestamp HERE (same pattern as pauseTimer)
+      // This ensures consistent UTC handling - calculating inside Isar transactions
+      // was causing the 5-hour bug where local time was treated as UTC
+      final startedAtUtc = DateTime.now().toUtc();
+      debugPrint('🏋️ Starting workout with UTC timestamp: $startedAtUtc');
+      debugPrint('   DateTime.now(): ${DateTime.now()}');
+      debugPrint('   DateTime.now().toUtc(): $startedAtUtc');
+      debugPrint('   startedAtUtc.isUtc: ${startedAtUtc.isUtc}');
+      debugPrint('   startedAtUtc.hour: ${startedAtUtc.hour}');
+
+      // Now start the new workout - pass UTC timestamp to repository
       final updatedSession = await _sessionRepository.updateSessionStatus(
         _currentSession!.id,
         'in_progress',
+        startedAtUtc: startedAtUtc,
       );
 
       // Use the session from DB to ensure timestamps match
       _currentSession = updatedSession;
       _elapsedTime = Duration.zero;
       _startTimer();
-      debugPrint('🏋️ Workout started with DB timestamps');
+      debugPrint('🏋️ Workout started with provider-calculated UTC timestamp');
       notifyListeners();
     } catch (e) {
       _errorMessage =

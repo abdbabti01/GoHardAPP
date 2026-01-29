@@ -871,10 +871,12 @@ class SessionRepository {
 
   /// Update session status
   /// Optimistic update: updates locally first, syncs to server if online
+  /// [startedAtUtc] optional timestamp for when starting workout (calculated by provider)
   Future<Session> updateSessionStatus(
     int id,
     String status, {
     int? duration,
+    DateTime? startedAtUtc,
   }) async {
     final Isar db = _localDb.database;
 
@@ -887,6 +889,7 @@ class SessionRepository {
       localSession,
       status,
       duration: duration,
+      startedAtUtc: startedAtUtc,
     );
 
     // Then sync to server in background if online (using helper)
@@ -978,35 +981,42 @@ class SessionRepository {
   }
 
   /// Update session status in local database
+  /// [startedAtUtc] optional timestamp from provider (ensures UTC consistency)
   Future<void> _updateLocalSessionStatus(
     Isar db,
     LocalSession localSession,
     String status, {
     int? duration,
+    DateTime? startedAtUtc,
   }) async {
     await db.writeTxn(() async {
       final now = DateTime.now();
-      final nowUtc = DateTime.now().toUtc(); // Use UTC for timestamps
       localSession.status = status;
       localSession.lastModifiedLocal = now;
       localSession.isSynced = false;
 
       // Set startedAt when status changes to 'in_progress'
       if (status == 'in_progress' && localSession.startedAt == null) {
-        localSession.startedAt = nowUtc; // Store as UTC
+        // CRITICAL FIX: Use timestamp from provider if provided (calculated outside transaction)
+        // This ensures the same UTC calculation pattern as pause/resume which work correctly
+        final timestampToUse = startedAtUtc ?? DateTime.now().toUtc();
+        localSession.startedAt = timestampToUse;
         localSession.pausedAt = null; // Clear any pause state
-        debugPrint('🏋️ Set startedAt in DB (UTC): $nowUtc');
+        debugPrint('🏋️ Set startedAt in DB (UTC): $timestampToUse');
+        debugPrint('   startedAt.isUtc: ${timestampToUse.isUtc}');
+        debugPrint('   startedAt.hour: ${timestampToUse.hour}');
       }
 
       // Set completedAt when status changes to 'completed'
       if (status == 'completed' && localSession.completedAt == null) {
-        localSession.completedAt = nowUtc; // Store as UTC
-        debugPrint('✅ Set completedAt in DB (UTC): $nowUtc');
+        final completedAtUtc = DateTime.now().toUtc();
+        localSession.completedAt = completedAtUtc;
+        debugPrint('✅ Set completedAt in DB (UTC): $completedAtUtc');
 
         // Update workout frequency goals when a workout is completed (Issue #11)
         final userId = await _authService.getUserId();
         if (userId != null) {
-          await _updateWorkoutGoals(db, userId, nowUtc);
+          await _updateWorkoutGoals(db, userId, completedAtUtc);
         }
       }
 
