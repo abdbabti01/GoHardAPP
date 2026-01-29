@@ -64,9 +64,10 @@ class FriendsProvider extends ChangeNotifier {
   Future<void> loadIncomingRequests() async {
     try {
       _incomingRequests = await _repository.getIncomingRequests();
-      notifyListeners();
     } catch (e) {
       debugPrint('⚠️ FriendsProvider.loadIncomingRequests error: $e');
+    } finally {
+      notifyListeners();
     }
   }
 
@@ -74,9 +75,10 @@ class FriendsProvider extends ChangeNotifier {
   Future<void> loadOutgoingRequests() async {
     try {
       _outgoingRequests = await _repository.getOutgoingRequests();
-      notifyListeners();
     } catch (e) {
       debugPrint('⚠️ FriendsProvider.loadOutgoingRequests error: $e');
+    } finally {
+      notifyListeners();
     }
   }
 

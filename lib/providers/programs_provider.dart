@@ -26,8 +26,8 @@ class ProgramsProvider extends ChangeNotifier {
     _connectivitySubscription = _connectivity?.connectivityStream.listen((
       isOnline,
     ) {
-      if (isOnline && _programs.isEmpty) {
-        debugPrint('📡 Connection restored - loading programs');
+      if (isOnline) {
+        debugPrint('📡 Connection restored - refreshing programs');
         loadPrograms();
       }
     });

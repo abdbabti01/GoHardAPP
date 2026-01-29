@@ -292,9 +292,10 @@ class NutritionProvider extends ChangeNotifier {
       _errorMessage =
           'Failed to add food: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Add custom food error: $e');
+      return false;
+    } finally {
       _isAddingFood = false;
       notifyListeners();
-      return false;
     }
   }
 
