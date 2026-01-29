@@ -22,7 +22,8 @@ class SharedWorkoutRepository {
   );
 
   /// Get all shared workouts from community (friends only by default)
-  /// Offline-first: returns cached data immediately, syncs in background
+  /// Online: fetches fresh data from server
+  /// Offline: returns cached data
   Future<List<SharedWorkout>> getSharedWorkouts({
     String? category,
     String? difficulty,
@@ -31,28 +32,28 @@ class SharedWorkoutRepository {
   }) async {
     final Isar db = _localDb.database;
 
-    // Load from cache first for instant response
-    final cachedWorkouts = await _getLocalSharedWorkouts(
+    // If online, fetch fresh data from server
+    if (_connectivity.isOnline) {
+      try {
+        await _syncSharedWorkoutsFromServer(
+          db,
+          category: category,
+          difficulty: difficulty,
+          friendsOnly: friendsOnly,
+          limit: limit,
+        );
+      } catch (e) {
+        debugPrint('⚠️ Server sync failed, using cache: $e');
+      }
+    }
+
+    // Return from cache (either freshly synced or offline data)
+    return await _getLocalSharedWorkouts(
       db,
       category: category,
       difficulty: difficulty,
       limit: limit,
     );
-
-    // Sync with server in background if online
-    if (_connectivity.isOnline) {
-      _syncSharedWorkoutsFromServer(
-        db,
-        category: category,
-        difficulty: difficulty,
-        friendsOnly: friendsOnly,
-        limit: limit,
-      ).catchError((e) {
-        debugPrint('⚠️ Background sync failed: $e');
-      });
-    }
-
-    return cachedWorkouts;
   }
 
   /// Get shared workouts created by a specific user
