@@ -366,7 +366,20 @@ class SessionRepository {
         final data = await _apiService.get<Map<String, dynamic>>(
           ApiConfig.sessionById(id),
         );
+
+        // DEBUG: Log what the server returns
+        debugPrint('🔽 SERVER RESPONSE for session $id:');
+        debugPrint('   Raw startedAt from API: ${data['startedAt']}');
+        debugPrint('   Raw pausedAt from API: ${data['pausedAt']}');
+
         final apiSession = Session.fromJson(data);
+
+        // DEBUG: Log what fromJson produces
+        debugPrint('   Parsed startedAt: ${apiSession.startedAt}');
+        debugPrint('   Parsed startedAt.isUtc: ${apiSession.startedAt?.isUtc}');
+        debugPrint('   Parsed startedAt.hour: ${apiSession.startedAt?.hour}');
+        debugPrint('   Parsed pausedAt: ${apiSession.pausedAt}');
+        debugPrint('   Parsed pausedAt.isUtc: ${apiSession.pausedAt?.isUtc}');
 
         // Update local cache (session AND exercises)
         await db.writeTxn(() async {
@@ -940,18 +953,34 @@ class SessionRepository {
     try {
       // Send status AND timestamps to server (preserves timer state)
       // IMPORTANT: Use toUtcIso8601 to ensure proper UTC format with 'Z' suffix
+      final startedAtString = toUtcIso8601(localSession.startedAt);
+      final pausedAtString = toUtcIso8601(localSession.pausedAt);
+
+      // DEBUG: Log exactly what we're sending
+      debugPrint('🔄 SYNC DEBUG - Sending to server:');
+      debugPrint('   localSession.startedAt: ${localSession.startedAt}');
+      debugPrint(
+        '   localSession.startedAt.isUtc: ${localSession.startedAt?.isUtc}',
+      );
+      debugPrint(
+        '   localSession.startedAt.hour: ${localSession.startedAt?.hour}',
+      );
+      debugPrint('   toUtcIso8601 result: $startedAtString');
+      debugPrint('   localSession.pausedAt: ${localSession.pausedAt}');
+      debugPrint('   pausedAt toUtcIso8601: $pausedAtString');
+
       final data = {
         'status': localSession.status,
-        if (localSession.startedAt != null)
-          'startedAt': toUtcIso8601(localSession.startedAt),
+        if (localSession.startedAt != null) 'startedAt': startedAtString,
         if (localSession.completedAt != null)
           'completedAt': toUtcIso8601(localSession.completedAt),
-        if (localSession.pausedAt != null)
-          'pausedAt': toUtcIso8601(localSession.pausedAt),
+        if (localSession.pausedAt != null) 'pausedAt': pausedAtString,
         // When pausedAt is null, tell server to clear it (for resume operation)
         if (localSession.pausedAt == null) 'clearPausedAt': true,
         if (localSession.duration != null) 'duration': localSession.duration,
       };
+
+      debugPrint('   Full data payload: $data');
 
       await _apiService.patch<void>(
         ApiConfig.sessionStatus(serverId),
@@ -1000,11 +1029,27 @@ class SessionRepository {
         // CRITICAL FIX: Use timestamp from provider if provided (calculated outside transaction)
         // This ensures the same UTC calculation pattern as pause/resume which work correctly
         final timestampToUse = startedAtUtc ?? DateTime.now().toUtc();
+
+        debugPrint('🏋️ REPOSITORY - Setting startedAt:');
+        debugPrint('   Received startedAtUtc param: $startedAtUtc');
+        debugPrint('   startedAtUtc.isUtc: ${startedAtUtc?.isUtc}');
+        debugPrint('   startedAtUtc.hour: ${startedAtUtc?.hour}');
+        debugPrint('   timestampToUse: $timestampToUse');
+        debugPrint('   timestampToUse.isUtc: ${timestampToUse.isUtc}');
+        debugPrint('   timestampToUse.hour: ${timestampToUse.hour}');
+
         localSession.startedAt = timestampToUse;
         localSession.pausedAt = null; // Clear any pause state
-        debugPrint('🏋️ Set startedAt in DB (UTC): $timestampToUse');
-        debugPrint('   startedAt.isUtc: ${timestampToUse.isUtc}');
-        debugPrint('   startedAt.hour: ${timestampToUse.hour}');
+
+        debugPrint(
+          '   After assignment - localSession.startedAt: ${localSession.startedAt}',
+        );
+        debugPrint(
+          '   After assignment - localSession.startedAt.isUtc: ${localSession.startedAt?.isUtc}',
+        );
+        debugPrint(
+          '   After assignment - localSession.startedAt.hour: ${localSession.startedAt?.hour}',
+        );
       }
 
       // Set completedAt when status changes to 'completed'
@@ -1032,6 +1077,16 @@ class SessionRepository {
         localSession.syncStatus = 'pending_update';
       }
       await db.localSessions.put(localSession);
+
+      // DEBUG: Check if Isar modified the object
+      debugPrint('🗄️ AFTER ISAR PUT:');
+      debugPrint('   localSession.startedAt: ${localSession.startedAt}');
+      debugPrint(
+        '   localSession.startedAt.isUtc: ${localSession.startedAt?.isUtc}',
+      );
+      debugPrint(
+        '   localSession.startedAt.hour: ${localSession.startedAt?.hour}',
+      );
     });
   }
 

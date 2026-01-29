@@ -1,6 +1,11 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\lib",
+    "\\lib\\ui",
+    "\\lib\\ui\\screens",
+    "\\lib\\ui\\screens\\sessions"
   ],
+  "SelectedNode": "\\lib\\ui\\screens\\sessions\\sessions_screen.dart",
   "PreviewInSolutionExplorer": false
 }

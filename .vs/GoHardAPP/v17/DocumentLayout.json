@@ -1,7 +1,36 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\",
-  "Documents": [],
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\test\\integration\\user_workflow_test.dart||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:test\\integration\\user_workflow_test.dart||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\sessions\\active_workout_screen.dart||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:lib\\ui\\screens\\sessions\\active_workout_screen.dart||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\sessions\\planned_workout_form_screen.dart||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:lib\\ui\\screens\\sessions\\planned_workout_form_screen.dart||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\exercises\\add_exercise_screen.dart||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:lib\\ui\\screens\\exercises\\add_exercise_screen.dart||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\sessions\\sessions_screen.dart||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:lib\\ui\\screens\\sessions\\sessions_screen.dart||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\core\\theme\\app_theme.dart||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:lib\\core\\theme\\app_theme.dart||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\nutrition\\nutrition_dashboard_screen.dart||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:lib\\ui\\screens\\nutrition\\nutrition_dashboard_screen.dart||{8B382828-6202-11D1-8870-0000F87579D2}"
+    }
+  ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
@@ -9,7 +38,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": -1,
+          "SelectedChildIndex": 4,
           "Children": [
             {
               "$type": "Bookmark",
@@ -26,6 +55,92 @@
             {
               "$type": "Bookmark",
               "Name": "ST:131:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "user_workflow_test.dart",
+              "DocumentMoniker": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\test\\integration\\user_workflow_test.dart",
+              "RelativeDocumentMoniker": "test\\integration\\user_workflow_test.dart",
+              "ToolTip": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\test\\integration\\user_workflow_test.dart",
+              "RelativeToolTip": "test\\integration\\user_workflow_test.dart",
+              "ViewState": "AQIAAG8AAAAAAAAAAAAAAAAAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-01-28T15:53:33.023Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "planned_workout_form_screen.dart",
+              "DocumentMoniker": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\sessions\\planned_workout_form_screen.dart",
+              "RelativeDocumentMoniker": "lib\\ui\\screens\\sessions\\planned_workout_form_screen.dart",
+              "ToolTip": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\sessions\\planned_workout_form_screen.dart",
+              "RelativeToolTip": "lib\\ui\\screens\\sessions\\planned_workout_form_screen.dart",
+              "ViewState": "AQIAAKEBAAAAAAAAAAAowLABAAAlAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-01-25T14:00:25.947Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "active_workout_screen.dart",
+              "DocumentMoniker": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\sessions\\active_workout_screen.dart",
+              "RelativeDocumentMoniker": "lib\\ui\\screens\\sessions\\active_workout_screen.dart",
+              "ToolTip": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\sessions\\active_workout_screen.dart",
+              "RelativeToolTip": "lib\\ui\\screens\\sessions\\active_workout_screen.dart",
+              "ViewState": "AQIAAL8BAAAAAAAAAAAqwMkBAAAZAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-01-25T14:00:08.856Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "add_exercise_screen.dart",
+              "DocumentMoniker": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\exercises\\add_exercise_screen.dart",
+              "RelativeDocumentMoniker": "lib\\ui\\screens\\exercises\\add_exercise_screen.dart",
+              "ToolTip": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\exercises\\add_exercise_screen.dart",
+              "RelativeToolTip": "lib\\ui\\screens\\exercises\\add_exercise_screen.dart",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAwAAAAEAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-01-25T13:59:57.201Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "app_theme.dart",
+              "DocumentMoniker": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\core\\theme\\app_theme.dart",
+              "RelativeDocumentMoniker": "lib\\core\\theme\\app_theme.dart",
+              "ToolTip": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\core\\theme\\app_theme.dart",
+              "RelativeToolTip": "lib\\core\\theme\\app_theme.dart",
+              "ViewState": "AQIAAAIBAAAAAAAAAAAowBEBAAAJAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-01-25T13:59:02.148Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "sessions_screen.dart",
+              "DocumentMoniker": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\sessions\\sessions_screen.dart",
+              "RelativeDocumentMoniker": "lib\\ui\\screens\\sessions\\sessions_screen.dart",
+              "ToolTip": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\sessions\\sessions_screen.dart",
+              "RelativeToolTip": "lib\\ui\\screens\\sessions\\sessions_screen.dart",
+              "ViewState": "AQIAAIcAAAAAAAAAAAAcwKYAAAAMAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-01-25T13:58:16.905Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "nutrition_dashboard_screen.dart",
+              "DocumentMoniker": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\nutrition\\nutrition_dashboard_screen.dart",
+              "RelativeDocumentMoniker": "lib\\ui\\screens\\nutrition\\nutrition_dashboard_screen.dart",
+              "ToolTip": "C:\\Users\\babti\\Documents\\GitHub\\GoHardAPP\\lib\\ui\\screens\\nutrition\\nutrition_dashboard_screen.dart",
+              "RelativeToolTip": "lib\\ui\\screens\\nutrition\\nutrition_dashboard_screen.dart",
+              "ViewState": "AQIAAJIAAAAAAAAAAAAAAJUAAAAKAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-01-25T13:50:20.751Z"
             }
           ]
         }
