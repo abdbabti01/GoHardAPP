@@ -168,12 +168,13 @@ class MockSessionRepository extends _i1.Mock implements _i11.SessionRepository {
     int? id,
     String? status, {
     int? duration,
+    DateTime? startedAtUtc,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #updateSessionStatus,
               [id, status],
-              {#duration: duration},
+              {#duration: duration, #startedAtUtc: startedAtUtc},
             ),
             returnValue: _i12.Future<_i2.Session>.value(
               _FakeSession_0(
@@ -181,7 +182,7 @@ class MockSessionRepository extends _i1.Mock implements _i11.SessionRepository {
                 Invocation.method(
                   #updateSessionStatus,
                   [id, status],
-                  {#duration: duration},
+                  {#duration: duration, #startedAtUtc: startedAtUtc},
                 ),
               ),
             ),
@@ -511,6 +512,50 @@ class MockNutritionRepository extends _i1.Mock
             ),
           )
           as _i12.Future<_i4.MealLog>);
+
+  @override
+  _i12.Future<_i5.FoodItem> addFoodItem(_i5.FoodItem? foodItem) =>
+      (super.noSuchMethod(
+            Invocation.method(#addFoodItem, [foodItem]),
+            returnValue: _i12.Future<_i5.FoodItem>.value(
+              _FakeFoodItem_3(
+                this,
+                Invocation.method(#addFoodItem, [foodItem]),
+              ),
+            ),
+          )
+          as _i12.Future<_i5.FoodItem>);
+
+  @override
+  _i12.Future<void> updateFoodQuantity(int? foodItemId, double? quantity) =>
+      (super.noSuchMethod(
+            Invocation.method(#updateFoodQuantity, [foodItemId, quantity]),
+            returnValue: _i12.Future<void>.value(),
+            returnValueForMissingStub: _i12.Future<void>.value(),
+          )
+          as _i12.Future<void>);
+
+  @override
+  _i12.Future<List<_i13.FoodAlternative>> getFoodAlternatives({
+    required String? foodName,
+    required double? calories,
+    required double? protein,
+    required double? carbohydrates,
+    required double? fat,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getFoodAlternatives, [], {
+              #foodName: foodName,
+              #calories: calories,
+              #protein: protein,
+              #carbohydrates: carbohydrates,
+              #fat: fat,
+            }),
+            returnValue: _i12.Future<List<_i13.FoodAlternative>>.value(
+              <_i13.FoodAlternative>[],
+            ),
+          )
+          as _i12.Future<List<_i13.FoodAlternative>>);
 }
 
 /// A class which mocks [ProgramsRepository].
