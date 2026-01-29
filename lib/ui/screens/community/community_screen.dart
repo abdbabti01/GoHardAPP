@@ -5,6 +5,7 @@ import '../../../providers/shared_workout_provider.dart';
 import '../../../data/models/shared_workout.dart';
 import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/loading_indicator.dart';
+import '../../widgets/community/social_tab.dart';
 
 /// Community screen for browsing and sharing workouts
 class CommunityScreen extends StatefulWidget {
@@ -59,9 +60,9 @@ class _CommunityScreenState extends State<CommunityScreen>
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
+            Tab(text: 'Social', icon: Icon(Icons.people)),
             Tab(text: 'Discover', icon: Icon(Icons.explore)),
-            Tab(text: 'Saved', icon: Icon(Icons.bookmark)),
-            Tab(text: 'My Shares', icon: Icon(Icons.share)),
+            Tab(text: 'My Content', icon: Icon(Icons.folder)),
           ],
         ),
       ),
@@ -77,9 +78,9 @@ class _CommunityScreenState extends State<CommunityScreen>
                     : TabBarView(
                       controller: _tabController,
                       children: [
+                        const SocialTab(),
                         _buildDiscoverTab(context, provider),
-                        _buildSavedTab(context, provider),
-                        _buildMySharesTab(context, provider),
+                        _buildMyContentTab(context, provider),
                       ],
                     ),
           ),
@@ -149,23 +150,27 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
-  Widget _buildSavedTab(BuildContext context, SharedWorkoutProvider provider) {
-    final workouts = provider.savedWorkouts;
+  Widget _buildMyContentTab(
+    BuildContext context,
+    SharedWorkoutProvider provider,
+  ) {
+    final savedWorkouts = provider.savedWorkouts;
+    final myShares = provider.mySharedWorkouts;
 
-    if (workouts.isEmpty) {
+    if (savedWorkouts.isEmpty && myShares.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.bookmark_border, size: 64, color: context.textTertiary),
+            Icon(Icons.folder_outlined, size: 64, color: context.textTertiary),
             const SizedBox(height: 16),
             Text(
-              'No saved workouts',
+              'No content yet',
               style: TextStyle(fontSize: 16, color: context.textSecondary),
             ),
             const SizedBox(height: 8),
             Text(
-              'Save workouts to access them later',
+              'Save or share workouts to see them here',
               style: TextStyle(fontSize: 14, color: context.textTertiary),
             ),
           ],
@@ -174,55 +179,58 @@ class _CommunityScreenState extends State<CommunityScreen>
     }
 
     return RefreshIndicator(
-      onRefresh: () => provider.loadSavedWorkouts(),
-      child: ListView.builder(
+      onRefresh: () async {
+        await provider.loadSavedWorkouts();
+        await provider.refresh();
+      },
+      child: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: workouts.length,
-        itemBuilder: (context, index) {
-          return _buildWorkoutCard(context, workouts[index], provider);
-        },
+        children: [
+          // Saved Workouts Section
+          if (savedWorkouts.isNotEmpty) ...[
+            _buildSectionHeader(context, 'Saved Workouts', Icons.bookmark),
+            const SizedBox(height: 12),
+            ...savedWorkouts.map(
+              (workout) => _buildWorkoutCard(context, workout, provider),
+            ),
+            const SizedBox(height: 24),
+          ],
+          // My Shares Section
+          if (myShares.isNotEmpty) ...[
+            _buildSectionHeader(context, 'My Shares', Icons.share),
+            const SizedBox(height: 12),
+            ...myShares.map(
+              (workout) => _buildWorkoutCard(
+                context,
+                workout,
+                provider,
+                isMyShare: true,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 
-  Widget _buildMySharesTab(
+  Widget _buildSectionHeader(
     BuildContext context,
-    SharedWorkoutProvider provider,
+    String title,
+    IconData icon,
   ) {
-    final workouts = provider.mySharedWorkouts;
-
-    if (workouts.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.share_outlined, size: 64, color: context.textTertiary),
-            const SizedBox(height: 16),
-            Text(
-              'You haven\'t shared any workouts',
-              style: TextStyle(fontSize: 16, color: context.textSecondary),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Share your workouts with the community!',
-              style: TextStyle(fontSize: 14, color: context.textTertiary),
-            ),
-          ],
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: context.textSecondary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: context.textPrimary,
+          ),
         ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: workouts.length,
-      itemBuilder: (context, index) {
-        return _buildWorkoutCard(
-          context,
-          workouts[index],
-          provider,
-          isMyShare: true,
-        );
-      },
+      ],
     );
   }
 

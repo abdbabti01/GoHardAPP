@@ -216,6 +216,18 @@ class _MainScreenState extends State<MainScreen> {
 
   List<Widget>? _buildAppBarActions(BuildContext context, int tabIndex) {
     // Only show actions for certain tabs
+    if (tabIndex == 0) {
+      // Today tab - community button
+      return [
+        IconButton(
+          icon: Icon(Icons.people_outline, color: context.textSecondary),
+          onPressed: () {
+            Navigator.pushNamed(context, '/community');
+          },
+          tooltip: 'Community',
+        ),
+      ];
+    }
     if (tabIndex == 2) {
       // Nutrition tab - settings
       return [
