@@ -211,7 +211,11 @@ void main() {
           mockSessionRepository.getInProgressSessions(),
         ).thenAnswer((_) async => []);
         when(
-          mockSessionRepository.updateSessionStatus(1, 'in_progress'),
+          mockSessionRepository.updateSessionStatus(
+            1,
+            'in_progress',
+            startedAtUtc: anyNamed('startedAtUtc'),
+          ),
         ).thenAnswer((_) async => inProgressSession);
         when(
           mockSessionRepository.pauseSession(any, any),
@@ -268,7 +272,11 @@ void main() {
 
         await activeWorkoutProvider.startWorkout();
         verify(
-          mockSessionRepository.updateSessionStatus(1, 'in_progress'),
+          mockSessionRepository.updateSessionStatus(
+            1,
+            'in_progress',
+            startedAtUtc: anyNamed('startedAtUtc'),
+          ),
         ).called(1);
 
         // Act & Assert - Step 3: Pause workout
@@ -349,7 +357,11 @@ void main() {
           (_) async => existingInProgress.copyWith(status: 'completed'),
         );
         when(
-          mockSessionRepository.updateSessionStatus(1, 'in_progress'),
+          mockSessionRepository.updateSessionStatus(
+            1,
+            'in_progress',
+            startedAtUtc: anyNamed('startedAtUtc'),
+          ),
         ).thenAnswer((_) async => newInProgress);
 
         final provider = ActiveWorkoutProvider(
@@ -371,7 +383,11 @@ void main() {
         ).called(1);
         // New workout should be started
         verify(
-          mockSessionRepository.updateSessionStatus(1, 'in_progress'),
+          mockSessionRepository.updateSessionStatus(
+            1,
+            'in_progress',
+            startedAtUtc: anyNamed('startedAtUtc'),
+          ),
         ).called(1);
       },
     );
@@ -1262,7 +1278,11 @@ void main() {
         mockSessionRepository.getInProgressSessions(),
       ).thenAnswer((_) async => []);
       when(
-        mockSessionRepository.updateSessionStatus(1, 'in_progress'),
+        mockSessionRepository.updateSessionStatus(
+          1,
+          'in_progress',
+          startedAtUtc: anyNamed('startedAtUtc'),
+        ),
       ).thenThrow(Exception('Server error'));
 
       final provider = ActiveWorkoutProvider(
@@ -1581,7 +1601,11 @@ void main() {
         mockSessionRepository.getInProgressSessions(),
       ).thenAnswer((_) async => []);
       when(
-        mockSessionRepository.updateSessionStatus(1, 'in_progress'),
+        mockSessionRepository.updateSessionStatus(
+          1,
+          'in_progress',
+          startedAtUtc: anyNamed('startedAtUtc'),
+        ),
       ).thenAnswer((_) async => startedSession);
 
       final provider = ActiveWorkoutProvider(
@@ -1599,7 +1623,11 @@ void main() {
       expect(provider.isTimerRunning, isTrue);
       expect(provider.elapsedTime, equals(Duration.zero));
       verify(
-        mockSessionRepository.updateSessionStatus(1, 'in_progress'),
+        mockSessionRepository.updateSessionStatus(
+          1,
+          'in_progress',
+          startedAtUtc: anyNamed('startedAtUtc'),
+        ),
       ).called(1);
     });
   });
@@ -2237,7 +2265,11 @@ void main() {
         mockSessionRepository.getInProgressSessions(),
       ).thenAnswer((_) async => []);
       when(
-        mockSessionRepository.updateSessionStatus(1, 'in_progress'),
+        mockSessionRepository.updateSessionStatus(
+          1,
+          'in_progress',
+          startedAtUtc: anyNamed('startedAtUtc'),
+        ),
       ).thenAnswer((_) async => startedSession);
       when(
         mockSessionRepository.updateSessionStatus(
@@ -2260,7 +2292,11 @@ void main() {
       // Assert - Should work offline (data saved locally)
       expect(finished, isTrue);
       verify(
-        mockSessionRepository.updateSessionStatus(1, 'in_progress'),
+        mockSessionRepository.updateSessionStatus(
+          1,
+          'in_progress',
+          startedAtUtc: anyNamed('startedAtUtc'),
+        ),
       ).called(1);
       verify(
         mockSessionRepository.updateSessionStatus(
