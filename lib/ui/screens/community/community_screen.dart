@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
@@ -122,15 +123,16 @@ class _CommunityScreenState extends State<CommunityScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.explore_off, size: 64, color: context.textTertiary),
+            Icon(Icons.people_outline, size: 64, color: context.textTertiary),
             const SizedBox(height: 16),
             Text(
-              'No shared workouts found',
+              'No shared content yet',
               style: TextStyle(fontSize: 16, color: context.textSecondary),
             ),
             const SizedBox(height: 8),
             Text(
-              'Be the first to share a workout!',
+              'When friends share workouts or runs,\nthey\'ll appear here',
+              textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: context.textTertiary),
             ),
           ],
@@ -303,27 +305,30 @@ class _CommunityScreenState extends State<CommunityScreen>
               ],
               const SizedBox(height: 8),
 
-              // Tags
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  Chip(
-                    label: Text(workout.category),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  if (workout.difficulty != null)
+              // Tags or Run Stats
+              if (workout.type == 'run')
+                _buildRunStats(context, workout)
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
                     Chip(
-                      label: Text(workout.difficulty!),
+                      label: Text(workout.category),
                       visualDensity: VisualDensity.compact,
                     ),
-                  Chip(
-                    label: Text(workout.formattedDuration),
-                    visualDensity: VisualDensity.compact,
-                    avatar: const Icon(Icons.timer, size: 16),
-                  ),
-                ],
-              ),
+                    if (workout.difficulty != null)
+                      Chip(
+                        label: Text(workout.difficulty!),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    Chip(
+                      label: Text(workout.formattedDuration),
+                      visualDensity: VisualDensity.compact,
+                      avatar: const Icon(Icons.timer, size: 16),
+                    ),
+                  ],
+                ),
               const SizedBox(height: 12),
 
               // Actions
@@ -351,11 +356,12 @@ class _CommunityScreenState extends State<CommunityScreen>
                   ),
                   Text('${workout.saveCount}'),
                   const Spacer(),
-                  ElevatedButton.icon(
-                    onPressed: () => _useWorkout(workout),
-                    icon: const Icon(Icons.play_arrow, size: 18),
-                    label: const Text('Use'),
-                  ),
+                  if (workout.type != 'run')
+                    ElevatedButton.icon(
+                      onPressed: () => _useWorkout(workout),
+                      icon: const Icon(Icons.play_arrow, size: 18),
+                      label: const Text('Use'),
+                    ),
                 ],
               ),
             ],
@@ -365,12 +371,111 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
+  Widget _buildRunStats(BuildContext context, SharedWorkout workout) {
+    // Parse run data from exercisesJson
+    Map<String, dynamic> runData = {};
+    try {
+      runData = jsonDecode(workout.exercisesJson) as Map<String, dynamic>;
+    } catch (_) {
+      // Fallback if parsing fails
+    }
+
+    final distance = runData['distance'] as num? ?? 0;
+    final duration = runData['duration'] as num? ?? 0;
+    final pace = runData['pace'] as num? ?? 0;
+
+    String formatDistance(num d) {
+      return '${d.toStringAsFixed(2)} km';
+    }
+
+    String formatDuration(num seconds) {
+      final mins = (seconds / 60).floor();
+      final secs = (seconds % 60).floor();
+      if (mins >= 60) {
+        final hours = (mins / 60).floor();
+        final remainingMins = mins % 60;
+        return '$hours:${remainingMins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+      }
+      return '$mins:${secs.toString().padLeft(2, '0')}';
+    }
+
+    String formatPace(num p) {
+      if (p <= 0) return '--';
+      final mins = p.floor();
+      final secs = ((p - mins) * 60).round();
+      return "$mins'${secs.toString().padLeft(2, '0')}\"";
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: context.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildRunStatItem(
+            context,
+            Icons.straighten,
+            formatDistance(distance),
+            'Distance',
+          ),
+          _buildRunStatItem(
+            context,
+            Icons.timer_outlined,
+            formatDuration(duration),
+            'Time',
+          ),
+          _buildRunStatItem(context, Icons.speed, formatPace(pace), 'Pace'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRunStatItem(
+    BuildContext context,
+    IconData icon,
+    String value,
+    String label,
+  ) {
+    return Column(
+      children: [
+        Icon(icon, size: 20, color: context.primary),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: context.textPrimary,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: context.textSecondary),
+        ),
+      ],
+    );
+  }
+
   void _showWorkoutDetails(SharedWorkout workout) {
+    final isRun = workout.type == 'run';
+
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text(workout.workoutName),
+            title: Row(
+              children: [
+                Icon(
+                  isRun ? Icons.directions_run : Icons.fitness_center,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(workout.workoutName)),
+              ],
+            ),
             content: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,14 +497,21 @@ class _CommunityScreenState extends State<CommunityScreen>
                     Text(workout.description!),
                     const SizedBox(height: 16),
                   ],
-                  const Text(
-                    'Exercises:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    workout.exercisesJson,
-                  ), // TODO: Parse and display properly
+                  if (isRun) ...[
+                    const Text(
+                      'Run Stats:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildRunStats(context, workout),
+                  ] else ...[
+                    const Text(
+                      'Exercises:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(workout.exercisesJson),
+                  ],
                 ],
               ),
             ),
@@ -408,13 +520,14 @@ class _CommunityScreenState extends State<CommunityScreen>
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Close'),
               ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _useWorkout(workout);
-                },
-                child: const Text('Use Workout'),
-              ),
+              if (!isRun)
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _useWorkout(workout);
+                  },
+                  child: const Text('Use Workout'),
+                ),
             ],
           ),
     );

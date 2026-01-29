@@ -8,6 +8,7 @@ import '../../../providers/running_provider.dart';
 import '../../../data/models/run_session.dart';
 import '../../../data/repositories/running_repository.dart';
 import '../../widgets/running/run_stats_row.dart';
+import '../../widgets/community/share_run_dialog.dart';
 
 /// Screen showing detailed view of a single run with route map
 class RunDetailScreen extends StatefulWidget {
@@ -46,6 +47,22 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
   void dispose() {
     _mapController?.dispose();
     super.dispose();
+  }
+
+  Future<void> _showShareDialog(BuildContext context, RunSession run) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => ShareRunDialog(run: run),
+    );
+
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Run shared with friends!'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _handleDelete() async {
@@ -146,6 +163,19 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
             onPressed: () => Navigator.pop(context),
           ),
           actions: [
+            if (run.status == 'completed')
+              IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: context.surface.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.share, color: context.textPrimary),
+                ),
+                tooltip: 'Share with friends',
+                onPressed: () => _showShareDialog(context, run),
+              ),
             IconButton(
               icon: Container(
                 padding: const EdgeInsets.all(8),

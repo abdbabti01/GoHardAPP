@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../data/models/session.dart';
 import '../../widgets/sessions/status_badge.dart';
+import '../../widgets/community/share_workout_dialog.dart';
 
 /// Session detail screen for viewing completed workout
 /// Matches SessionDetailPage.xaml from MAUI app
@@ -56,9 +57,37 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Workout Details')),
+      appBar: AppBar(
+        title: const Text('Workout Details'),
+        actions: [
+          if (_session != null && _session!.status == 'completed')
+            IconButton(
+              icon: const Icon(Icons.share),
+              tooltip: 'Share with friends',
+              onPressed: () => _showShareDialog(context),
+            ),
+        ],
+      ),
       body: _buildBody(),
     );
+  }
+
+  Future<void> _showShareDialog(BuildContext context) async {
+    if (_session == null) return;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => ShareWorkoutDialog(session: _session!),
+    );
+
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Workout shared with friends!'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _buildBody() {

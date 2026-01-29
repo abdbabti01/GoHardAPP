@@ -21,11 +21,12 @@ class SharedWorkoutRepository {
     this._authService,
   );
 
-  /// Get all shared workouts from community
+  /// Get all shared workouts from community (friends only by default)
   /// Offline-first: returns cached data immediately, syncs in background
   Future<List<SharedWorkout>> getSharedWorkouts({
     String? category,
     String? difficulty,
+    bool friendsOnly = true,
     int? limit = 50,
   }) async {
     final Isar db = _localDb.database;
@@ -44,6 +45,7 @@ class SharedWorkoutRepository {
         db,
         category: category,
         difficulty: difficulty,
+        friendsOnly: friendsOnly,
         limit: limit,
       ).catchError((e) {
         debugPrint('⚠️ Background sync failed: $e');
@@ -301,6 +303,7 @@ class SharedWorkoutRepository {
     Isar db, {
     String? category,
     String? difficulty,
+    bool friendsOnly = true,
     int? limit,
   }) async {
     try {
@@ -309,6 +312,7 @@ class SharedWorkoutRepository {
 
       if (category != null) queryParams.add('category=$category');
       if (difficulty != null) queryParams.add('difficulty=$difficulty');
+      queryParams.add('friendsOnly=$friendsOnly');
       if (limit != null) queryParams.add('limit=$limit');
 
       if (queryParams.isNotEmpty) {
