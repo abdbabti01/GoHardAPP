@@ -26,6 +26,9 @@ class ActiveWorkoutScreen extends StatefulWidget {
 }
 
 class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
+  // Debug toggle for timer investigation
+  bool _showDebugInfo = false;
+
   @override
   void initState() {
     super.initState();
@@ -694,8 +697,174 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             const SizedBox(height: 28),
             // Control button
             _buildControlButton(provider, isDraft, isRunning),
+            // DEBUG: Timer debug info (tap to toggle)
+            const SizedBox(height: 16),
+            _buildDebugToggle(provider),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDebugToggle(ActiveWorkoutProvider provider) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _showDebugInfo = !_showDebugInfo;
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _showDebugInfo ? Icons.bug_report : Icons.bug_report_outlined,
+                  size: 14,
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _showDebugInfo ? 'Hide Debug' : 'Show Debug',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_showDebugInfo) ...[
+          const SizedBox(height: 12),
+          _buildDebugInfo(provider),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildDebugInfo(ActiveWorkoutProvider provider) {
+    final session = provider.currentSession;
+    final now = DateTime.now();
+    final nowUtc = now.toUtc();
+    final offset = now.timeZoneOffset;
+
+    // Calculate what the elapsed time should be
+    Duration? calculatedElapsed;
+    if (session?.startedAt != null) {
+      if (session?.pausedAt != null) {
+        calculatedElapsed = session!.pausedAt!.difference(session.startedAt!);
+      } else {
+        calculatedElapsed = nowUtc.difference(session!.startedAt!);
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _debugRow('Session ID', '${session?.id ?? "null"}'),
+          _debugRow('Status', session?.status ?? 'null'),
+          const Divider(color: Colors.white24, height: 16),
+          _debugRow(
+            'startedAt',
+            session?.startedAt?.toIso8601String() ?? 'null',
+          ),
+          _debugRow(
+            'startedAt.isUtc',
+            '${session?.startedAt?.isUtc ?? "n/a"}',
+            highlight: session?.startedAt != null && !session!.startedAt!.isUtc,
+          ),
+          _debugRow('startedAt.hour', '${session?.startedAt?.hour ?? "n/a"}'),
+          const Divider(color: Colors.white24, height: 16),
+          _debugRow('pausedAt', session?.pausedAt?.toIso8601String() ?? 'null'),
+          _debugRow(
+            'pausedAt.isUtc',
+            '${session?.pausedAt?.isUtc ?? "n/a"}',
+            highlight: session?.pausedAt != null && !session!.pausedAt!.isUtc,
+          ),
+          const Divider(color: Colors.white24, height: 16),
+          _debugRow('Now (local)', now.toIso8601String()),
+          _debugRow('Now (UTC)', nowUtc.toIso8601String()),
+          _debugRow(
+            'Timezone Offset',
+            '${offset.inHours}h ${offset.inMinutes.remainder(60)}m',
+          ),
+          const Divider(color: Colors.white24, height: 16),
+          _debugRow(
+            'Calculated Elapsed',
+            calculatedElapsed != null
+                ? '${calculatedElapsed.inHours}h ${calculatedElapsed.inMinutes.remainder(60)}m ${calculatedElapsed.inSeconds.remainder(60)}s'
+                : 'n/a',
+          ),
+          _debugRow(
+            'Provider Elapsed',
+            '${provider.elapsedTime.inHours}h ${provider.elapsedTime.inMinutes.remainder(60)}m ${provider.elapsedTime.inSeconds.remainder(60)}s',
+          ),
+          if (calculatedElapsed != null && calculatedElapsed.inHours >= 5)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '⚠️ BUG DETECTED: Elapsed > 5 hours!\nThis may indicate a UTC conversion issue.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _debugRow(String label, String value, {bool highlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.6),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 10,
+                color: highlight ? Colors.red : Colors.white,
+                fontWeight: highlight ? FontWeight.bold : FontWeight.w600,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
