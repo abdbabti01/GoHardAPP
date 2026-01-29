@@ -30,6 +30,7 @@ class _CommunityScreenState extends State<CommunityScreen>
       final provider = context.read<SharedWorkoutProvider>();
       provider.loadSharedWorkouts();
       provider.loadSavedWorkouts();
+      provider.loadMySharedWorkouts();
     });
   }
 

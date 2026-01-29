@@ -92,9 +92,9 @@ class SharedWorkoutProvider extends ChangeNotifier {
   }
 
   /// Load workouts shared by current user
-  Future<void> loadMySharedWorkouts(int userId) async {
+  Future<void> loadMySharedWorkouts() async {
     try {
-      final workouts = await _repository.getSharedWorkoutsByUser(userId);
+      final workouts = await _repository.getMySharedWorkouts();
       _mySharedWorkouts = workouts;
       notifyListeners();
       debugPrint('✅ Loaded ${_mySharedWorkouts.length} of my shared workouts');
@@ -307,6 +307,7 @@ class SharedWorkoutProvider extends ChangeNotifier {
   Future<void> refresh() async {
     await loadSharedWorkouts();
     await loadSavedWorkouts();
+    await loadMySharedWorkouts();
   }
 
   /// Clear error message

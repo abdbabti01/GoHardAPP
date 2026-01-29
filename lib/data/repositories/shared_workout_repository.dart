@@ -84,6 +84,16 @@ class SharedWorkoutRepository {
     }
   }
 
+  /// Get shared workouts created by the current authenticated user
+  Future<List<SharedWorkout>> getMySharedWorkouts() async {
+    final currentUserId = await _authService.getUserId();
+    if (currentUserId == null) {
+      debugPrint('⚠️ Cannot get my shared workouts: not authenticated');
+      return [];
+    }
+    return getSharedWorkoutsByUser(currentUserId);
+  }
+
   /// Share a workout to the community
   Future<SharedWorkout> shareWorkout({
     required int originalId,
