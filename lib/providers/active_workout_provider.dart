@@ -120,9 +120,15 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('⏱️ TIMER DEBUG - loadSession called');
       debugPrint('  Session ID: ${_currentSession?.id}');
       debugPrint('  Status: ${_currentSession?.status}');
-      debugPrint('  StartedAt: ${_currentSession?.startedAt}');
-      debugPrint('  PausedAt: ${_currentSession?.pausedAt}');
+      debugPrint(
+        '  StartedAt: ${_currentSession?.startedAt} (isUtc: ${_currentSession?.startedAt?.isUtc})',
+      );
+      debugPrint(
+        '  PausedAt: ${_currentSession?.pausedAt} (isUtc: ${_currentSession?.pausedAt?.isUtc})',
+      );
+      debugPrint('  Current time LOCAL: ${DateTime.now()}');
       debugPrint('  Current time UTC: ${DateTime.now().toUtc()}');
+      debugPrint('  Timezone offset: ${DateTime.now().timeZoneOffset}');
 
       // Calculate elapsed time if session has started
       // (startedAt and pausedAt are already in UTC from Session.fromJson)
@@ -136,14 +142,29 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
             _currentSession!.startedAt!,
           );
           shouldBeRunning = false;
-          debugPrint('  Timer PAUSED - calculated: ${calculated.inSeconds}s');
+          debugPrint('  Timer PAUSED:');
+          debugPrint(
+            '    pausedAt: ${_currentSession!.pausedAt} (isUtc: ${_currentSession!.pausedAt!.isUtc})',
+          );
+          debugPrint(
+            '    startedAt: ${_currentSession!.startedAt} (isUtc: ${_currentSession!.startedAt!.isUtc})',
+          );
+          debugPrint(
+            '    calculated difference: ${calculated.inSeconds}s (${calculated.inMinutes}m ${calculated.inSeconds % 60}s)',
+          );
         } else {
           // Timer is running - calculate from current time
-          calculated = DateTime.now().toUtc().difference(
-            _currentSession!.startedAt!,
-          );
+          final nowUtc = DateTime.now().toUtc();
+          calculated = nowUtc.difference(_currentSession!.startedAt!);
           shouldBeRunning = _currentSession?.status == 'in_progress';
-          debugPrint('  Timer RUNNING - calculated: ${calculated.inSeconds}s');
+          debugPrint('  Timer RUNNING:');
+          debugPrint('    nowUtc: $nowUtc');
+          debugPrint(
+            '    startedAt: ${_currentSession!.startedAt} (isUtc: ${_currentSession!.startedAt!.isUtc})',
+          );
+          debugPrint(
+            '    calculated difference: ${calculated.inSeconds}s (${calculated.inMinutes}m ${calculated.inSeconds % 60}s)',
+          );
         }
 
         // CRITICAL: Always stop timer first to avoid race condition
