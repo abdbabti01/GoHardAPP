@@ -24,7 +24,6 @@ class RouteNames {
   static const String logSets = '/log-sets';
 
   // Profile routes
-  static const String profile = '/profile';
   static const String editProfile = '/edit-profile';
 
   // Settings routes

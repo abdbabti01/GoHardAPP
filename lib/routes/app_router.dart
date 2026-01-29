@@ -11,7 +11,6 @@ import '../ui/screens/exercises/exercises_screen.dart';
 import '../ui/screens/exercises/exercise_detail_screen.dart';
 import '../ui/screens/exercises/add_exercise_screen.dart';
 import '../ui/screens/exercises/log_sets_screen.dart';
-import '../ui/screens/profile/profile_screen.dart';
 import '../ui/screens/profile/edit_profile_screen.dart';
 import '../ui/screens/settings/settings_screen.dart';
 import '../ui/screens/goals/goals_screen.dart';
@@ -166,12 +165,6 @@ class AppRouter {
         );
 
       // Profile routes
-      case RouteNames.profile:
-        return MaterialPageRoute(
-          builder: (_) => const ProfileScreen(),
-          settings: settings,
-        );
-
       case RouteNames.editProfile:
         return MaterialPageRoute(
           builder: (_) => const EditProfileScreen(),
