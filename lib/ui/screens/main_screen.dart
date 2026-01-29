@@ -7,6 +7,7 @@ import 'me/me_screen.dart';
 import '../../core/services/tab_navigation_service.dart';
 import '../../core/theme/theme_colors.dart';
 import '../../providers/sessions_provider.dart';
+import '../../providers/messages_provider.dart';
 import '../../routes/route_names.dart';
 import '../widgets/common/curved_navigation_bar.dart';
 import '../widgets/sessions/workout_name_dialog.dart';
@@ -217,10 +218,18 @@ class _MainScreenState extends State<MainScreen> {
   List<Widget>? _buildAppBarActions(BuildContext context, int tabIndex) {
     // Only show actions for certain tabs
     if (tabIndex == 0) {
-      // Today tab - community button
+      // Today tab - community button with unread badge
+      final unreadCount = context.watch<MessagesProvider>().totalUnreadCount;
       return [
         IconButton(
-          icon: Icon(Icons.people_outline, color: context.textSecondary),
+          icon: Badge(
+            isLabelVisible: unreadCount > 0,
+            label: Text(
+              unreadCount > 99 ? '99+' : unreadCount.toString(),
+              style: const TextStyle(fontSize: 10),
+            ),
+            child: Icon(Icons.people_outline, color: context.textSecondary),
+          ),
           onPressed: () {
             Navigator.pushNamed(context, '/community');
           },

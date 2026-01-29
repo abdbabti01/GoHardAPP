@@ -158,7 +158,7 @@ class SharedWorkoutRepository {
 
     try {
       await _apiService.post(
-        '${ApiConfig.sharedWorkouts}/$sharedWorkoutId/${isLiked ? 'like' : 'unlike'}',
+        '${ApiConfig.sharedWorkouts}/$sharedWorkoutId/like',
         data: {},
       );
 
@@ -186,7 +186,7 @@ class SharedWorkoutRepository {
 
     try {
       await _apiService.post(
-        '${ApiConfig.sharedWorkouts}/$sharedWorkoutId/${isSaved ? 'save' : 'unsave'}',
+        '${ApiConfig.sharedWorkouts}/$sharedWorkoutId/save',
         data: {},
       );
 
