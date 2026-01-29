@@ -88,7 +88,7 @@ dependencies:
   # Local Notifications
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
-  flutter_native_timezone: ^2.0.0
+  flutter_timezone: ^1.0.2
 
   # Health / Fitness Data Integration (Apple Health / Google Fit)
   health: ^10.2.0

@@ -3,7 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:flutter_native_timezone/flutter_native_timezone.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import '../../data/models/session.dart';
 
 /// Service for managing local notifications
@@ -37,7 +37,7 @@ class NotificationService {
 
       // Set local timezone to device's timezone
       final String timezoneName =
-          await FlutterNativeTimezone.getLocalTimezone();
+          await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(timezoneName));
       debugPrint('🕒 Timezone set to: $timezoneName');
 
