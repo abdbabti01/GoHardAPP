@@ -73,14 +73,14 @@ class _SocialTabState extends State<SocialTab> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            context.primary.withOpacity(0.15),
-            context.primary.withOpacity(0.05),
+            context.primary.withValues(alpha: 0.15),
+            context.primary.withValues(alpha: 0.05),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.primary.withOpacity(0.3)),
+        border: Border.all(color: context.primary.withValues(alpha: 0.3)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -356,7 +356,7 @@ class _SocialTabState extends State<SocialTab> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
-                  colors: [context.primary, context.primary.withOpacity(0.5)],
+                  colors: [context.primary, context.primary.withValues(alpha: 0.5)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
