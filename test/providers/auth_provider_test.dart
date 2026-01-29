@@ -156,6 +156,7 @@ void main() {
       ).thenAnswer((_) async => {});
 
       authProvider.setSignupName(name);
+      authProvider.setSignupUsername('testuser');
       authProvider.setSignupEmail(email);
       authProvider.setSignupPassword(password);
       authProvider.setSignupConfirmPassword(password); // Must match password
@@ -172,9 +173,11 @@ void main() {
 
     test('signup() should fail with short password', () async {
       // Arrange
-      authProvider.updateName('Test User');
-      authProvider.updateEmail('test@example.com');
-      authProvider.updatePassword('123'); // Too short
+      authProvider.setSignupName('Test User');
+      authProvider.setSignupUsername('testuser');
+      authProvider.setSignupEmail('test@example.com');
+      authProvider.setSignupPassword('123'); // Too short
+      authProvider.setSignupConfirmPassword('123');
 
       // Act
       final result = await authProvider.signup();
