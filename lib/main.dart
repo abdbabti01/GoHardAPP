@@ -247,10 +247,21 @@ void main() async {
               (_, localDb, connectivity, authService, __) =>
                   RunningRepository(localDb, connectivity, authService),
         ),
-        ProxyProvider2<ApiService, ConnectivityService, NutritionRepository>(
+        ProxyProvider4<
+          ApiService,
+          LocalDatabaseService,
+          ConnectivityService,
+          AuthService,
+          NutritionRepository
+        >(
           update:
-              (_, apiService, connectivity, __) =>
-                  NutritionRepository(apiService, connectivity),
+              (_, apiService, localDb, connectivity, authService, __) =>
+                  NutritionRepository(
+                    apiService,
+                    localDb,
+                    connectivity,
+                    authService,
+                  ),
         ),
         ProxyProvider2<ApiService, ConnectivityService, FriendsRepository>(
           update:

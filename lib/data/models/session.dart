@@ -50,10 +50,29 @@ class Session {
       session.date.day,
     );
 
-    // Convert timestamp fields to UTC using standard conversion
-    // NOTE: The 'date' field is date-only and normalized to local timezone midnight above
-    // Timestamps (startedAt, completedAt, pausedAt) MUST be UTC for proper time calculations
-    // Using toUtc() ensures proper conversion regardless of JSON parser behavior
+    // CRITICAL FIX: Convert timestamp fields to UTC properly
+    // The API returns timestamps in UTC, but if the 'Z' suffix is missing,
+    // Dart's DateTime.parse() creates a LOCAL DateTime with the raw values.
+    // Calling .toUtc() on a local DateTime SHIFTS the time by timezone offset (BUG!).
+    // Instead, we must reconstruct the DateTime as UTC from the raw components.
+    // This treats the raw values AS UTC, which is correct since the API sends UTC.
+    DateTime? toUtcTimestamp(DateTime? dt) {
+      if (dt == null) return null;
+      // If already UTC, return as-is
+      if (dt.isUtc) return dt;
+      // Construct UTC DateTime from the raw components (NOT using toUtc which would shift the time)
+      return DateTime.utc(
+        dt.year,
+        dt.month,
+        dt.day,
+        dt.hour,
+        dt.minute,
+        dt.second,
+        dt.millisecond,
+        dt.microsecond,
+      );
+    }
+
     return Session(
       id: session.id,
       userId: session.userId,
@@ -64,9 +83,9 @@ class Session {
       type: session.type,
       name: session.name, // Preserve workout name
       status: session.status,
-      startedAt: session.startedAt?.toUtc(), // Convert to UTC (timestamp)
-      completedAt: session.completedAt?.toUtc(), // Convert to UTC (timestamp)
-      pausedAt: session.pausedAt?.toUtc(), // Convert to UTC (timestamp)
+      startedAt: toUtcTimestamp(session.startedAt), // Properly treat as UTC
+      completedAt: toUtcTimestamp(session.completedAt), // Properly treat as UTC
+      pausedAt: toUtcTimestamp(session.pausedAt), // Properly treat as UTC
       exercises: session.exercises,
       programId: session.programId,
       programWorkoutId: session.programWorkoutId,

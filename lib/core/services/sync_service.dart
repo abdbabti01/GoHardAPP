@@ -10,6 +10,11 @@ import '../../data/local/models/local_exercise_set.dart';
 import '../../data/local/models/local_program.dart';
 import '../../data/local/models/local_goal.dart';
 import '../../data/local/models/local_program_workout.dart';
+import '../../data/local/models/local_meal_log.dart';
+import '../../data/local/models/local_meal_entry.dart';
+import '../../data/local/models/local_food_item.dart';
+import '../../data/local/models/local_nutrition_goal.dart';
+import '../../data/local/models/local_food_template.dart';
 import '../../core/constants/api_config.dart';
 import 'connectivity_service.dart';
 
@@ -136,6 +141,13 @@ class SyncService {
       await _syncPrograms(db);
       await _syncGoals(db);
       await _syncProgramWorkouts(db);
+
+      // Nutrition sync (respects hierarchy: Goals/Templates → MealLogs → MealEntries → FoodItems)
+      await _syncNutritionGoals(db);
+      await _syncFoodTemplates(db);
+      await _syncMealLogs(db);
+      await _syncMealEntries(db);
+      await _syncFoodItems(db);
 
       debugPrint('✅ Sync completed successfully');
     } catch (e) {
@@ -1070,6 +1082,780 @@ class SyncService {
     });
 
     debugPrint('    ✅ Deleted program workout');
+  }
+
+  // ========== Nutrition Goal Sync Methods ==========
+
+  /// Sync all pending nutrition goals
+  Future<void> _syncNutritionGoals(Isar db) async {
+    final userId = await _authService.getUserId();
+    if (userId == null) {
+      debugPrint('  ⚠️ No authenticated user, skipping nutrition goal sync');
+      return;
+    }
+
+    final pendingGoals =
+        await db.localNutritionGoals
+            .filter()
+            .isSyncedEqualTo(false)
+            .userIdEqualTo(userId)
+            .findAll();
+
+    if (pendingGoals.isEmpty) {
+      return;
+    }
+
+    debugPrint('  Syncing ${pendingGoals.length} nutrition goals...');
+
+    for (final goal in pendingGoals) {
+      try {
+        switch (goal.syncStatus) {
+          case 'pending_create':
+            await _syncCreateNutritionGoal(db, goal);
+            break;
+          case 'pending_update':
+            await _syncUpdateNutritionGoal(db, goal);
+            break;
+          case 'pending_delete':
+            await _syncDeleteNutritionGoal(db, goal);
+            break;
+        }
+      } catch (e) {
+        debugPrint('    ⚠️ Nutrition goal sync failed: $e');
+        await _markNutritionGoalSyncError(db, goal, e.toString());
+      }
+    }
+  }
+
+  Future<void> _syncCreateNutritionGoal(
+    Isar db,
+    LocalNutritionGoal goal,
+  ) async {
+    final response = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.nutritionGoals,
+      data: {
+        'userId': goal.userId,
+        'name': goal.name,
+        'dailyCalories': goal.dailyCalories,
+        'dailyProtein': goal.dailyProtein,
+        'dailyCarbohydrates': goal.dailyCarbohydrates,
+        'dailyFat': goal.dailyFat,
+        'dailyFiber': goal.dailyFiber,
+        'dailySodium': goal.dailySodium,
+        'dailySugar': goal.dailySugar,
+        'dailyWater': goal.dailyWater,
+        'proteinPercentage': goal.proteinPercentage,
+        'carbohydratesPercentage': goal.carbohydratesPercentage,
+        'fatPercentage': goal.fatPercentage,
+        'isActive': goal.isActive,
+      },
+    );
+
+    await db.writeTxn(() async {
+      goal.serverId = response['id'] as int;
+      goal.isSynced = true;
+      goal.syncStatus = 'synced';
+      goal.syncRetryCount = 0;
+      goal.syncError = null;
+      goal.lastSyncAttempt = DateTime.now();
+      await db.localNutritionGoals.put(goal);
+    });
+
+    debugPrint('    ✅ Created nutrition goal ${goal.serverId}');
+  }
+
+  Future<void> _syncUpdateNutritionGoal(
+    Isar db,
+    LocalNutritionGoal goal,
+  ) async {
+    if (goal.serverId == null) {
+      await _syncCreateNutritionGoal(db, goal);
+      return;
+    }
+
+    await _apiService.put<void>(
+      ApiConfig.nutritionGoalById(goal.serverId!),
+      data: {
+        'id': goal.serverId!,
+        'userId': goal.userId,
+        'name': goal.name,
+        'dailyCalories': goal.dailyCalories,
+        'dailyProtein': goal.dailyProtein,
+        'dailyCarbohydrates': goal.dailyCarbohydrates,
+        'dailyFat': goal.dailyFat,
+        'dailyFiber': goal.dailyFiber,
+        'dailySodium': goal.dailySodium,
+        'dailySugar': goal.dailySugar,
+        'dailyWater': goal.dailyWater,
+        'proteinPercentage': goal.proteinPercentage,
+        'carbohydratesPercentage': goal.carbohydratesPercentage,
+        'fatPercentage': goal.fatPercentage,
+        'isActive': goal.isActive,
+      },
+    );
+
+    await db.writeTxn(() async {
+      goal.isSynced = true;
+      goal.syncStatus = 'synced';
+      goal.syncRetryCount = 0;
+      goal.syncError = null;
+      goal.lastSyncAttempt = DateTime.now();
+      await db.localNutritionGoals.put(goal);
+    });
+
+    debugPrint('    ✅ Updated nutrition goal ${goal.serverId}');
+  }
+
+  Future<void> _syncDeleteNutritionGoal(
+    Isar db,
+    LocalNutritionGoal goal,
+  ) async {
+    if (goal.serverId != null) {
+      await _apiService.delete(ApiConfig.nutritionGoalById(goal.serverId!));
+    }
+
+    await db.writeTxn(() async {
+      await db.localNutritionGoals.delete(goal.localId);
+    });
+
+    debugPrint('    ✅ Deleted nutrition goal');
+  }
+
+  Future<void> _markNutritionGoalSyncError(
+    Isar db,
+    LocalNutritionGoal goal,
+    String error,
+  ) async {
+    await db.writeTxn(() async {
+      goal.syncRetryCount += 1;
+      goal.syncError = error;
+      goal.lastSyncAttempt = DateTime.now();
+      await db.localNutritionGoals.put(goal);
+    });
+  }
+
+  // ========== Food Template Sync Methods ==========
+
+  /// Sync all pending custom food templates
+  Future<void> _syncFoodTemplates(Isar db) async {
+    final userId = await _authService.getUserId();
+    if (userId == null) {
+      debugPrint('  ⚠️ No authenticated user, skipping food template sync');
+      return;
+    }
+
+    // Only sync custom food templates created by current user
+    final pendingTemplates =
+        await db.localFoodTemplates
+            .filter()
+            .isSyncedEqualTo(false)
+            .isCustomEqualTo(true)
+            .createdByUserIdEqualTo(userId)
+            .findAll();
+
+    if (pendingTemplates.isEmpty) {
+      return;
+    }
+
+    debugPrint('  Syncing ${pendingTemplates.length} food templates...');
+
+    for (final template in pendingTemplates) {
+      try {
+        switch (template.syncStatus) {
+          case 'pending_create':
+            await _syncCreateFoodTemplate(db, template);
+            break;
+          case 'pending_update':
+            await _syncUpdateFoodTemplate(db, template);
+            break;
+          case 'pending_delete':
+            await _syncDeleteFoodTemplate(db, template);
+            break;
+        }
+      } catch (e) {
+        debugPrint('    ⚠️ Food template sync failed: $e');
+        await _markFoodTemplateSyncError(db, template, e.toString());
+      }
+    }
+  }
+
+  Future<void> _syncCreateFoodTemplate(
+    Isar db,
+    LocalFoodTemplate template,
+  ) async {
+    final response = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.foodTemplates,
+      data: {
+        'name': template.name,
+        'brand': template.brand,
+        'category': template.category,
+        'barcode': template.barcode,
+        'servingSize': template.servingSize,
+        'servingUnit': template.servingUnit,
+        'calories': template.calories,
+        'protein': template.protein,
+        'carbohydrates': template.carbohydrates,
+        'fat': template.fat,
+        'fiber': template.fiber,
+        'sugar': template.sugar,
+        'sodium': template.sodium,
+        'description': template.description,
+        'imageUrl': template.imageUrl,
+        'isCustom': template.isCustom,
+      },
+    );
+
+    await db.writeTxn(() async {
+      template.serverId = response['id'] as int;
+      template.isSynced = true;
+      template.syncStatus = 'synced';
+      template.syncRetryCount = 0;
+      template.syncError = null;
+      template.lastSyncAttempt = DateTime.now();
+      await db.localFoodTemplates.put(template);
+    });
+
+    debugPrint('    ✅ Created food template ${template.serverId}');
+  }
+
+  Future<void> _syncUpdateFoodTemplate(
+    Isar db,
+    LocalFoodTemplate template,
+  ) async {
+    if (template.serverId == null) {
+      await _syncCreateFoodTemplate(db, template);
+      return;
+    }
+
+    await _apiService.put<void>(
+      ApiConfig.foodTemplateById(template.serverId!),
+      data: {
+        'id': template.serverId!,
+        'name': template.name,
+        'brand': template.brand,
+        'category': template.category,
+        'barcode': template.barcode,
+        'servingSize': template.servingSize,
+        'servingUnit': template.servingUnit,
+        'calories': template.calories,
+        'protein': template.protein,
+        'carbohydrates': template.carbohydrates,
+        'fat': template.fat,
+        'fiber': template.fiber,
+        'sugar': template.sugar,
+        'sodium': template.sodium,
+        'description': template.description,
+        'imageUrl': template.imageUrl,
+        'isCustom': template.isCustom,
+      },
+    );
+
+    await db.writeTxn(() async {
+      template.isSynced = true;
+      template.syncStatus = 'synced';
+      template.syncRetryCount = 0;
+      template.syncError = null;
+      template.lastSyncAttempt = DateTime.now();
+      await db.localFoodTemplates.put(template);
+    });
+
+    debugPrint('    ✅ Updated food template ${template.serverId}');
+  }
+
+  Future<void> _syncDeleteFoodTemplate(
+    Isar db,
+    LocalFoodTemplate template,
+  ) async {
+    if (template.serverId != null) {
+      await _apiService.delete(ApiConfig.foodTemplateById(template.serverId!));
+    }
+
+    await db.writeTxn(() async {
+      await db.localFoodTemplates.delete(template.localId);
+    });
+
+    debugPrint('    ✅ Deleted food template');
+  }
+
+  Future<void> _markFoodTemplateSyncError(
+    Isar db,
+    LocalFoodTemplate template,
+    String error,
+  ) async {
+    await db.writeTxn(() async {
+      template.syncRetryCount += 1;
+      template.syncError = error;
+      template.lastSyncAttempt = DateTime.now();
+      await db.localFoodTemplates.put(template);
+    });
+  }
+
+  // ========== Meal Log Sync Methods ==========
+
+  /// Sync all pending meal logs
+  Future<void> _syncMealLogs(Isar db) async {
+    final userId = await _authService.getUserId();
+    if (userId == null) {
+      debugPrint('  ⚠️ No authenticated user, skipping meal log sync');
+      return;
+    }
+
+    final pendingLogs =
+        await db.localMealLogs
+            .filter()
+            .isSyncedEqualTo(false)
+            .userIdEqualTo(userId)
+            .findAll();
+
+    if (pendingLogs.isEmpty) {
+      return;
+    }
+
+    debugPrint('  Syncing ${pendingLogs.length} meal logs...');
+
+    for (final log in pendingLogs) {
+      try {
+        switch (log.syncStatus) {
+          case 'pending_create':
+            await _syncCreateMealLog(db, log);
+            break;
+          case 'pending_update':
+            await _syncUpdateMealLog(db, log);
+            break;
+          case 'pending_delete':
+            await _syncDeleteMealLog(db, log);
+            break;
+        }
+      } catch (e) {
+        debugPrint('    ⚠️ Meal log sync failed: $e');
+        await _markMealLogSyncError(db, log, e.toString());
+      }
+    }
+  }
+
+  Future<void> _syncCreateMealLog(Isar db, LocalMealLog log) async {
+    final response = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.mealLogs,
+      data: {
+        'userId': log.userId,
+        'date': log.date.toIso8601String(),
+        'notes': log.notes,
+        'waterIntake': log.waterIntake,
+        'totalCalories': log.totalCalories,
+        'totalProtein': log.totalProtein,
+        'totalCarbohydrates': log.totalCarbohydrates,
+        'totalFat': log.totalFat,
+        'totalFiber': log.totalFiber,
+        'totalSodium': log.totalSodium,
+      },
+    );
+
+    await db.writeTxn(() async {
+      log.serverId = response['id'] as int;
+      log.isSynced = true;
+      log.syncStatus = 'synced';
+      log.syncRetryCount = 0;
+      log.syncError = null;
+      log.lastSyncAttempt = DateTime.now();
+      await db.localMealLogs.put(log);
+    });
+
+    debugPrint('    ✅ Created meal log ${log.serverId}');
+  }
+
+  Future<void> _syncUpdateMealLog(Isar db, LocalMealLog log) async {
+    if (log.serverId == null) {
+      await _syncCreateMealLog(db, log);
+      return;
+    }
+
+    await _apiService.put<void>(
+      ApiConfig.mealLogById(log.serverId!),
+      data: {
+        'id': log.serverId!,
+        'userId': log.userId,
+        'date': log.date.toIso8601String(),
+        'notes': log.notes,
+        'waterIntake': log.waterIntake,
+        'totalCalories': log.totalCalories,
+        'totalProtein': log.totalProtein,
+        'totalCarbohydrates': log.totalCarbohydrates,
+        'totalFat': log.totalFat,
+        'totalFiber': log.totalFiber,
+        'totalSodium': log.totalSodium,
+      },
+    );
+
+    await db.writeTxn(() async {
+      log.isSynced = true;
+      log.syncStatus = 'synced';
+      log.syncRetryCount = 0;
+      log.syncError = null;
+      log.lastSyncAttempt = DateTime.now();
+      await db.localMealLogs.put(log);
+    });
+
+    debugPrint('    ✅ Updated meal log ${log.serverId}');
+  }
+
+  Future<void> _syncDeleteMealLog(Isar db, LocalMealLog log) async {
+    if (log.serverId != null) {
+      await _apiService.delete(ApiConfig.mealLogById(log.serverId!));
+    }
+
+    await db.writeTxn(() async {
+      // Delete related meal entries and food items
+      final entries =
+          await db.localMealEntrys
+              .filter()
+              .mealLogLocalIdEqualTo(log.localId)
+              .findAll();
+
+      for (final entry in entries) {
+        await db.localFoodItems
+            .filter()
+            .mealEntryLocalIdEqualTo(entry.localId)
+            .deleteAll();
+      }
+
+      await db.localMealEntrys
+          .filter()
+          .mealLogLocalIdEqualTo(log.localId)
+          .deleteAll();
+
+      await db.localMealLogs.delete(log.localId);
+    });
+
+    debugPrint('    ✅ Deleted meal log');
+  }
+
+  Future<void> _markMealLogSyncError(
+    Isar db,
+    LocalMealLog log,
+    String error,
+  ) async {
+    await db.writeTxn(() async {
+      log.syncRetryCount += 1;
+      log.syncError = error;
+      log.lastSyncAttempt = DateTime.now();
+      await db.localMealLogs.put(log);
+    });
+  }
+
+  // ========== Meal Entry Sync Methods ==========
+
+  /// Sync all pending meal entries
+  Future<void> _syncMealEntries(Isar db) async {
+    final pendingEntries =
+        await db.localMealEntrys.filter().isSyncedEqualTo(false).findAll();
+
+    if (pendingEntries.isEmpty) {
+      return;
+    }
+
+    debugPrint('  Syncing ${pendingEntries.length} meal entries...');
+
+    for (final entry in pendingEntries) {
+      // Skip if parent meal log doesn't have serverId yet
+      final parentLog = await db.localMealLogs.get(entry.mealLogLocalId);
+      if (parentLog == null || parentLog.serverId == null) {
+        debugPrint(
+          '    ! Skipping meal entry - parent meal log not synced yet',
+        );
+        continue;
+      }
+
+      // Update entry's mealLogServerId if not set
+      if (entry.mealLogServerId != parentLog.serverId) {
+        await db.writeTxn(() async {
+          entry.mealLogServerId = parentLog.serverId;
+          await db.localMealEntrys.put(entry);
+        });
+      }
+
+      try {
+        switch (entry.syncStatus) {
+          case 'pending_create':
+            await _syncCreateMealEntry(db, entry, parentLog);
+            break;
+          case 'pending_update':
+            await _syncUpdateMealEntry(db, entry);
+            break;
+          case 'pending_delete':
+            await _syncDeleteMealEntry(db, entry);
+            break;
+        }
+      } catch (e) {
+        debugPrint('    ⚠️ Meal entry sync failed: $e');
+        await _markMealEntrySyncError(db, entry, e.toString());
+      }
+    }
+  }
+
+  Future<void> _syncCreateMealEntry(
+    Isar db,
+    LocalMealEntry entry,
+    LocalMealLog parentLog,
+  ) async {
+    final response = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.mealEntries,
+      data: {
+        'mealLogId': parentLog.serverId,
+        'mealType': entry.mealType,
+        'name': entry.name,
+        'scheduledTime': entry.scheduledTime?.toIso8601String(),
+        'isConsumed': entry.isConsumed,
+        'consumedAt': entry.consumedAt?.toIso8601String(),
+        'notes': entry.notes,
+        'totalCalories': entry.totalCalories,
+        'totalProtein': entry.totalProtein,
+        'totalCarbohydrates': entry.totalCarbohydrates,
+        'totalFat': entry.totalFat,
+        'totalFiber': entry.totalFiber,
+        'totalSodium': entry.totalSodium,
+      },
+    );
+
+    await db.writeTxn(() async {
+      entry.serverId = response['id'] as int;
+      entry.mealLogServerId = parentLog.serverId;
+      entry.isSynced = true;
+      entry.syncStatus = 'synced';
+      entry.syncRetryCount = 0;
+      entry.syncError = null;
+      entry.lastSyncAttempt = DateTime.now();
+      await db.localMealEntrys.put(entry);
+    });
+
+    debugPrint('    ✅ Created meal entry ${entry.serverId}');
+  }
+
+  Future<void> _syncUpdateMealEntry(Isar db, LocalMealEntry entry) async {
+    if (entry.serverId == null) {
+      final parentLog = await db.localMealLogs.get(entry.mealLogLocalId);
+      if (parentLog != null && parentLog.serverId != null) {
+        await _syncCreateMealEntry(db, entry, parentLog);
+      }
+      return;
+    }
+
+    await _apiService.put<void>(
+      ApiConfig.mealEntryById(entry.serverId!),
+      data: {
+        'id': entry.serverId!,
+        'mealLogId': entry.mealLogServerId,
+        'mealType': entry.mealType,
+        'name': entry.name,
+        'scheduledTime': entry.scheduledTime?.toIso8601String(),
+        'isConsumed': entry.isConsumed,
+        'consumedAt': entry.consumedAt?.toIso8601String(),
+        'notes': entry.notes,
+        'totalCalories': entry.totalCalories,
+        'totalProtein': entry.totalProtein,
+        'totalCarbohydrates': entry.totalCarbohydrates,
+        'totalFat': entry.totalFat,
+        'totalFiber': entry.totalFiber,
+        'totalSodium': entry.totalSodium,
+      },
+    );
+
+    await db.writeTxn(() async {
+      entry.isSynced = true;
+      entry.syncStatus = 'synced';
+      entry.syncRetryCount = 0;
+      entry.syncError = null;
+      entry.lastSyncAttempt = DateTime.now();
+      await db.localMealEntrys.put(entry);
+    });
+
+    debugPrint('    ✅ Updated meal entry ${entry.serverId}');
+  }
+
+  Future<void> _syncDeleteMealEntry(Isar db, LocalMealEntry entry) async {
+    if (entry.serverId != null) {
+      await _apiService.delete(ApiConfig.mealEntryById(entry.serverId!));
+    }
+
+    await db.writeTxn(() async {
+      // Delete related food items
+      await db.localFoodItems
+          .filter()
+          .mealEntryLocalIdEqualTo(entry.localId)
+          .deleteAll();
+
+      await db.localMealEntrys.delete(entry.localId);
+    });
+
+    debugPrint('    ✅ Deleted meal entry');
+  }
+
+  Future<void> _markMealEntrySyncError(
+    Isar db,
+    LocalMealEntry entry,
+    String error,
+  ) async {
+    await db.writeTxn(() async {
+      entry.syncRetryCount += 1;
+      entry.syncError = error;
+      entry.lastSyncAttempt = DateTime.now();
+      await db.localMealEntrys.put(entry);
+    });
+  }
+
+  // ========== Food Item Sync Methods ==========
+
+  /// Sync all pending food items
+  Future<void> _syncFoodItems(Isar db) async {
+    final pendingItems =
+        await db.localFoodItems.filter().isSyncedEqualTo(false).findAll();
+
+    if (pendingItems.isEmpty) {
+      return;
+    }
+
+    debugPrint('  Syncing ${pendingItems.length} food items...');
+
+    for (final item in pendingItems) {
+      // Skip if parent meal entry doesn't have serverId yet
+      final parentEntry = await db.localMealEntrys.get(item.mealEntryLocalId);
+      if (parentEntry == null || parentEntry.serverId == null) {
+        debugPrint(
+          '    ! Skipping food item - parent meal entry not synced yet',
+        );
+        continue;
+      }
+
+      // Update item's mealEntryServerId if not set
+      if (item.mealEntryServerId != parentEntry.serverId) {
+        await db.writeTxn(() async {
+          item.mealEntryServerId = parentEntry.serverId;
+          await db.localFoodItems.put(item);
+        });
+      }
+
+      try {
+        switch (item.syncStatus) {
+          case 'pending_create':
+            await _syncCreateFoodItem(db, item, parentEntry);
+            break;
+          case 'pending_update':
+            await _syncUpdateFoodItem(db, item);
+            break;
+          case 'pending_delete':
+            await _syncDeleteFoodItem(db, item);
+            break;
+        }
+      } catch (e) {
+        debugPrint('    ⚠️ Food item sync failed: $e');
+        await _markFoodItemSyncError(db, item, e.toString());
+      }
+    }
+  }
+
+  Future<void> _syncCreateFoodItem(
+    Isar db,
+    LocalFoodItem item,
+    LocalMealEntry parentEntry,
+  ) async {
+    final response = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.foodItems,
+      data: {
+        'mealEntryId': parentEntry.serverId,
+        'foodTemplateId': item.foodTemplateId,
+        'name': item.name,
+        'brand': item.brand,
+        'quantity': item.quantity,
+        'servingSize': item.servingSize,
+        'servingUnit': item.servingUnit,
+        'calories': item.calories,
+        'protein': item.protein,
+        'carbohydrates': item.carbohydrates,
+        'fat': item.fat,
+        'fiber': item.fiber,
+        'sugar': item.sugar,
+        'sodium': item.sodium,
+      },
+    );
+
+    await db.writeTxn(() async {
+      item.serverId = response['id'] as int;
+      item.mealEntryServerId = parentEntry.serverId;
+      item.isSynced = true;
+      item.syncStatus = 'synced';
+      item.syncRetryCount = 0;
+      item.syncError = null;
+      item.lastSyncAttempt = DateTime.now();
+      await db.localFoodItems.put(item);
+    });
+
+    debugPrint('    ✅ Created food item ${item.serverId}');
+  }
+
+  Future<void> _syncUpdateFoodItem(Isar db, LocalFoodItem item) async {
+    if (item.serverId == null) {
+      final parentEntry = await db.localMealEntrys.get(item.mealEntryLocalId);
+      if (parentEntry != null && parentEntry.serverId != null) {
+        await _syncCreateFoodItem(db, item, parentEntry);
+      }
+      return;
+    }
+
+    await _apiService.put<void>(
+      ApiConfig.foodItemById(item.serverId!),
+      data: {
+        'id': item.serverId!,
+        'mealEntryId': item.mealEntryServerId,
+        'foodTemplateId': item.foodTemplateId,
+        'name': item.name,
+        'brand': item.brand,
+        'quantity': item.quantity,
+        'servingSize': item.servingSize,
+        'servingUnit': item.servingUnit,
+        'calories': item.calories,
+        'protein': item.protein,
+        'carbohydrates': item.carbohydrates,
+        'fat': item.fat,
+        'fiber': item.fiber,
+        'sugar': item.sugar,
+        'sodium': item.sodium,
+      },
+    );
+
+    await db.writeTxn(() async {
+      item.isSynced = true;
+      item.syncStatus = 'synced';
+      item.syncRetryCount = 0;
+      item.syncError = null;
+      item.lastSyncAttempt = DateTime.now();
+      await db.localFoodItems.put(item);
+    });
+
+    debugPrint('    ✅ Updated food item ${item.serverId}');
+  }
+
+  Future<void> _syncDeleteFoodItem(Isar db, LocalFoodItem item) async {
+    if (item.serverId != null) {
+      await _apiService.delete(ApiConfig.foodItemById(item.serverId!));
+    }
+
+    await db.writeTxn(() async {
+      await db.localFoodItems.delete(item.localId);
+    });
+
+    debugPrint('    ✅ Deleted food item');
+  }
+
+  Future<void> _markFoodItemSyncError(
+    Isar db,
+    LocalFoodItem item,
+    String error,
+  ) async {
+    await db.writeTxn(() async {
+      item.syncRetryCount += 1;
+      item.syncError = error;
+      item.lastSyncAttempt = DateTime.now();
+      await db.localFoodItems.put(item);
+    });
   }
 
   /// Get sync status summary

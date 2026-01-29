@@ -2,10 +2,20 @@ import '../../models/session.dart';
 import '../../models/exercise.dart';
 import '../../models/exercise_set.dart';
 import '../../models/exercise_template.dart';
+import '../../models/meal_log.dart';
+import '../../models/meal_entry.dart';
+import '../../models/food_item.dart';
+import '../../models/nutrition_goal.dart';
+import '../../models/food_template.dart';
 import '../models/local_session.dart';
 import '../models/local_exercise.dart';
 import '../models/local_exercise_set.dart';
 import '../models/local_exercise_template.dart';
+import '../models/local_meal_log.dart';
+import '../models/local_meal_entry.dart';
+import '../models/local_food_item.dart';
+import '../models/local_nutrition_goal.dart';
+import '../models/local_food_template.dart';
 
 /// Service for converting between API models and local database models
 class ModelMapper {
@@ -346,5 +356,345 @@ class ModelMapper {
     return localTemplates
         .map((template) => localToExerciseTemplate(template))
         .toList();
+  }
+
+  // ========== MealLog Mapping ==========
+
+  /// Convert API MealLog to LocalMealLog
+  static LocalMealLog mealLogToLocal(
+    MealLog apiMealLog, {
+    int? localId,
+    bool isSynced = true,
+  }) {
+    String syncStatus;
+    if (isSynced) {
+      syncStatus = 'synced';
+    } else if (apiMealLog.id > 0) {
+      syncStatus = 'pending_update';
+    } else {
+      syncStatus = 'pending_create';
+    }
+
+    final mealLog = LocalMealLog(
+      serverId: apiMealLog.id > 0 ? apiMealLog.id : null,
+      userId: apiMealLog.userId,
+      date: apiMealLog.date,
+      notes: apiMealLog.notes,
+      waterIntake: apiMealLog.waterIntake,
+      totalCalories: apiMealLog.totalCalories,
+      totalProtein: apiMealLog.totalProtein,
+      totalCarbohydrates: apiMealLog.totalCarbohydrates,
+      totalFat: apiMealLog.totalFat,
+      totalFiber: apiMealLog.totalFiber,
+      totalSodium: apiMealLog.totalSodium,
+      createdAt: apiMealLog.createdAt,
+      updatedAt: apiMealLog.updatedAt,
+      isSynced: isSynced,
+      syncStatus: syncStatus,
+      lastModifiedLocal: DateTime.now(),
+      lastModifiedServer: isSynced ? DateTime.now() : null,
+    );
+
+    if (localId != null) {
+      mealLog.localId = localId;
+    }
+
+    return mealLog;
+  }
+
+  /// Convert LocalMealLog to API MealLog
+  static MealLog localToMealLog(
+    LocalMealLog localMealLog, {
+    List<MealEntry>? mealEntries,
+  }) {
+    return MealLog(
+      id: localMealLog.serverId ?? localMealLog.localId,
+      userId: localMealLog.userId,
+      date: localMealLog.date,
+      notes: localMealLog.notes,
+      waterIntake: localMealLog.waterIntake,
+      totalCalories: localMealLog.totalCalories,
+      totalProtein: localMealLog.totalProtein,
+      totalCarbohydrates: localMealLog.totalCarbohydrates,
+      totalFat: localMealLog.totalFat,
+      totalFiber: localMealLog.totalFiber,
+      totalSodium: localMealLog.totalSodium,
+      createdAt: localMealLog.createdAt,
+      updatedAt: localMealLog.updatedAt,
+      mealEntries: mealEntries,
+    );
+  }
+
+  // ========== MealEntry Mapping ==========
+
+  /// Convert API MealEntry to LocalMealEntry
+  static LocalMealEntry mealEntryToLocal(
+    MealEntry apiMealEntry, {
+    required int mealLogLocalId,
+    int? mealLogServerId,
+    int? localId,
+    bool isSynced = true,
+  }) {
+    final mealEntry = LocalMealEntry(
+      serverId: apiMealEntry.id > 0 ? apiMealEntry.id : null,
+      mealLogLocalId: mealLogLocalId,
+      mealLogServerId: mealLogServerId ?? apiMealEntry.mealLogId,
+      mealType: apiMealEntry.mealType,
+      name: apiMealEntry.name,
+      scheduledTime: apiMealEntry.scheduledTime,
+      isConsumed: apiMealEntry.isConsumed,
+      consumedAt: apiMealEntry.consumedAt,
+      notes: apiMealEntry.notes,
+      totalCalories: apiMealEntry.totalCalories,
+      totalProtein: apiMealEntry.totalProtein,
+      totalCarbohydrates: apiMealEntry.totalCarbohydrates,
+      totalFat: apiMealEntry.totalFat,
+      totalFiber: apiMealEntry.totalFiber,
+      totalSodium: apiMealEntry.totalSodium,
+      createdAt: apiMealEntry.createdAt,
+      updatedAt: apiMealEntry.updatedAt,
+      isSynced: isSynced,
+      syncStatus: isSynced ? 'synced' : 'pending_create',
+      lastModifiedLocal: DateTime.now(),
+      lastModifiedServer: isSynced ? DateTime.now() : null,
+    );
+
+    if (localId != null) {
+      mealEntry.localId = localId;
+    }
+
+    return mealEntry;
+  }
+
+  /// Convert LocalMealEntry to API MealEntry
+  static MealEntry localToMealEntry(
+    LocalMealEntry localMealEntry, {
+    List<FoodItem>? foodItems,
+  }) {
+    return MealEntry(
+      id: localMealEntry.serverId ?? localMealEntry.localId,
+      mealLogId:
+          localMealEntry.mealLogServerId ?? localMealEntry.mealLogLocalId,
+      mealType: localMealEntry.mealType,
+      name: localMealEntry.name,
+      scheduledTime: localMealEntry.scheduledTime,
+      isConsumed: localMealEntry.isConsumed,
+      consumedAt: localMealEntry.consumedAt,
+      notes: localMealEntry.notes,
+      totalCalories: localMealEntry.totalCalories,
+      totalProtein: localMealEntry.totalProtein,
+      totalCarbohydrates: localMealEntry.totalCarbohydrates,
+      totalFat: localMealEntry.totalFat,
+      totalFiber: localMealEntry.totalFiber,
+      totalSodium: localMealEntry.totalSodium,
+      createdAt: localMealEntry.createdAt,
+      updatedAt: localMealEntry.updatedAt,
+      foodItems: foodItems,
+    );
+  }
+
+  // ========== FoodItem Mapping ==========
+
+  /// Convert API FoodItem to LocalFoodItem
+  static LocalFoodItem foodItemToLocal(
+    FoodItem apiFoodItem, {
+    required int mealEntryLocalId,
+    int? mealEntryServerId,
+    int? localId,
+    bool isSynced = true,
+  }) {
+    final foodItem = LocalFoodItem(
+      serverId: apiFoodItem.id > 0 ? apiFoodItem.id : null,
+      mealEntryLocalId: mealEntryLocalId,
+      mealEntryServerId: mealEntryServerId ?? apiFoodItem.mealEntryId,
+      foodTemplateId: apiFoodItem.foodTemplateId,
+      name: apiFoodItem.name,
+      brand: apiFoodItem.brand,
+      quantity: apiFoodItem.quantity,
+      servingSize: apiFoodItem.servingSize,
+      servingUnit: apiFoodItem.servingUnit,
+      calories: apiFoodItem.calories,
+      protein: apiFoodItem.protein,
+      carbohydrates: apiFoodItem.carbohydrates,
+      fat: apiFoodItem.fat,
+      fiber: apiFoodItem.fiber,
+      sugar: apiFoodItem.sugar,
+      sodium: apiFoodItem.sodium,
+      createdAt: apiFoodItem.createdAt,
+      updatedAt: apiFoodItem.updatedAt,
+      isSynced: isSynced,
+      syncStatus: isSynced ? 'synced' : 'pending_create',
+      lastModifiedLocal: DateTime.now(),
+      lastModifiedServer: isSynced ? DateTime.now() : null,
+    );
+
+    if (localId != null) {
+      foodItem.localId = localId;
+    }
+
+    return foodItem;
+  }
+
+  /// Convert LocalFoodItem to API FoodItem
+  static FoodItem localToFoodItem(LocalFoodItem localFoodItem) {
+    return FoodItem(
+      id: localFoodItem.serverId ?? localFoodItem.localId,
+      mealEntryId:
+          localFoodItem.mealEntryServerId ?? localFoodItem.mealEntryLocalId,
+      foodTemplateId: localFoodItem.foodTemplateId,
+      name: localFoodItem.name,
+      brand: localFoodItem.brand,
+      quantity: localFoodItem.quantity,
+      servingSize: localFoodItem.servingSize,
+      servingUnit: localFoodItem.servingUnit,
+      calories: localFoodItem.calories,
+      protein: localFoodItem.protein,
+      carbohydrates: localFoodItem.carbohydrates,
+      fat: localFoodItem.fat,
+      fiber: localFoodItem.fiber,
+      sugar: localFoodItem.sugar,
+      sodium: localFoodItem.sodium,
+      createdAt: localFoodItem.createdAt,
+      updatedAt: localFoodItem.updatedAt,
+    );
+  }
+
+  // ========== NutritionGoal Mapping ==========
+
+  /// Convert API NutritionGoal to LocalNutritionGoal
+  static LocalNutritionGoal nutritionGoalToLocal(
+    NutritionGoal apiGoal, {
+    int? localId,
+    bool isSynced = true,
+  }) {
+    String syncStatus;
+    if (isSynced) {
+      syncStatus = 'synced';
+    } else if (apiGoal.id > 0) {
+      syncStatus = 'pending_update';
+    } else {
+      syncStatus = 'pending_create';
+    }
+
+    final goal = LocalNutritionGoal(
+      serverId: apiGoal.id > 0 ? apiGoal.id : null,
+      userId: apiGoal.userId,
+      name: apiGoal.name,
+      dailyCalories: apiGoal.dailyCalories,
+      dailyProtein: apiGoal.dailyProtein,
+      dailyCarbohydrates: apiGoal.dailyCarbohydrates,
+      dailyFat: apiGoal.dailyFat,
+      dailyFiber: apiGoal.dailyFiber,
+      dailySodium: apiGoal.dailySodium,
+      dailySugar: apiGoal.dailySugar,
+      dailyWater: apiGoal.dailyWater,
+      proteinPercentage: apiGoal.proteinPercentage,
+      carbohydratesPercentage: apiGoal.carbohydratesPercentage,
+      fatPercentage: apiGoal.fatPercentage,
+      isActive: apiGoal.isActive,
+      createdAt: apiGoal.createdAt,
+      updatedAt: apiGoal.updatedAt,
+      isSynced: isSynced,
+      syncStatus: syncStatus,
+      lastModifiedLocal: DateTime.now(),
+      lastModifiedServer: isSynced ? DateTime.now() : null,
+    );
+
+    if (localId != null) {
+      goal.localId = localId;
+    }
+
+    return goal;
+  }
+
+  /// Convert LocalNutritionGoal to API NutritionGoal
+  static NutritionGoal localToNutritionGoal(LocalNutritionGoal localGoal) {
+    return NutritionGoal(
+      id: localGoal.serverId ?? localGoal.localId,
+      userId: localGoal.userId,
+      name: localGoal.name,
+      dailyCalories: localGoal.dailyCalories,
+      dailyProtein: localGoal.dailyProtein,
+      dailyCarbohydrates: localGoal.dailyCarbohydrates,
+      dailyFat: localGoal.dailyFat,
+      dailyFiber: localGoal.dailyFiber,
+      dailySodium: localGoal.dailySodium,
+      dailySugar: localGoal.dailySugar,
+      dailyWater: localGoal.dailyWater,
+      proteinPercentage: localGoal.proteinPercentage,
+      carbohydratesPercentage: localGoal.carbohydratesPercentage,
+      fatPercentage: localGoal.fatPercentage,
+      isActive: localGoal.isActive,
+      createdAt: localGoal.createdAt,
+      updatedAt: localGoal.updatedAt,
+    );
+  }
+
+  // ========== FoodTemplate Mapping ==========
+
+  /// Convert API FoodTemplate to LocalFoodTemplate
+  static LocalFoodTemplate foodTemplateToLocal(
+    FoodTemplate apiTemplate, {
+    int? localId,
+    bool isSynced = true,
+  }) {
+    final template = LocalFoodTemplate(
+      serverId: apiTemplate.id > 0 ? apiTemplate.id : null,
+      name: apiTemplate.name,
+      brand: apiTemplate.brand,
+      category: apiTemplate.category,
+      barcode: apiTemplate.barcode,
+      servingSize: apiTemplate.servingSize,
+      servingUnit: apiTemplate.servingUnit,
+      calories: apiTemplate.calories,
+      protein: apiTemplate.protein,
+      carbohydrates: apiTemplate.carbohydrates,
+      fat: apiTemplate.fat,
+      fiber: apiTemplate.fiber,
+      sugar: apiTemplate.sugar,
+      sodium: apiTemplate.sodium,
+      description: apiTemplate.description,
+      imageUrl: apiTemplate.imageUrl,
+      isCustom: apiTemplate.isCustom,
+      createdByUserId: apiTemplate.createdByUserId,
+      createdAt: apiTemplate.createdAt,
+      updatedAt: apiTemplate.updatedAt,
+      isSynced: isSynced,
+      syncStatus: isSynced ? 'synced' : 'pending_create',
+      lastModifiedLocal: DateTime.now(),
+      lastModifiedServer: isSynced ? DateTime.now() : null,
+    );
+
+    if (localId != null) {
+      template.localId = localId;
+    }
+
+    return template;
+  }
+
+  /// Convert LocalFoodTemplate to API FoodTemplate
+  static FoodTemplate localToFoodTemplate(LocalFoodTemplate localTemplate) {
+    return FoodTemplate(
+      id: localTemplate.serverId ?? localTemplate.localId,
+      name: localTemplate.name,
+      brand: localTemplate.brand,
+      category: localTemplate.category,
+      barcode: localTemplate.barcode,
+      servingSize: localTemplate.servingSize,
+      servingUnit: localTemplate.servingUnit,
+      calories: localTemplate.calories,
+      protein: localTemplate.protein,
+      carbohydrates: localTemplate.carbohydrates,
+      fat: localTemplate.fat,
+      fiber: localTemplate.fiber,
+      sugar: localTemplate.sugar,
+      sodium: localTemplate.sodium,
+      description: localTemplate.description,
+      imageUrl: localTemplate.imageUrl,
+      isCustom: localTemplate.isCustom,
+      createdByUserId: localTemplate.createdByUserId,
+      createdAt: localTemplate.createdAt,
+      updatedAt: localTemplate.updatedAt,
+    );
   }
 }

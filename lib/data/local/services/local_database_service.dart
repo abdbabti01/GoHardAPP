@@ -11,6 +11,11 @@ import '../models/local_run_session.dart';
 import '../models/local_program.dart';
 import '../models/local_goal.dart';
 import '../models/local_program_workout.dart';
+import '../models/local_meal_log.dart';
+import '../models/local_meal_entry.dart';
+import '../models/local_food_item.dart';
+import '../models/local_nutrition_goal.dart';
+import '../models/local_food_template.dart';
 import '../../models/shared_workout.dart';
 import '../../models/workout_template.dart';
 import '../../models/achievement.dart';
@@ -55,6 +60,12 @@ class LocalDatabaseService {
         SharedWorkoutSchema,
         WorkoutTemplateSchema,
         AchievementSchema,
+        // Nutrition schemas
+        LocalMealLogSchema,
+        LocalMealEntrySchema,
+        LocalFoodItemSchema,
+        LocalNutritionGoalSchema,
+        LocalFoodTemplateSchema,
       ],
       directory: dir.path,
       name: 'go_hard_local_db',
@@ -133,6 +144,25 @@ class LocalDatabaseService {
             .isSyncedEqualTo(false)
             .count();
 
+    // Nutrition collections
+    final mealLogCount =
+        await _isar!.localMealLogs.filter().isSyncedEqualTo(false).count();
+
+    final mealEntryCount =
+        await _isar!.localMealEntrys.filter().isSyncedEqualTo(false).count();
+
+    final foodItemCount =
+        await _isar!.localFoodItems.filter().isSyncedEqualTo(false).count();
+
+    final nutritionGoalCount =
+        await _isar!.localNutritionGoals
+            .filter()
+            .isSyncedEqualTo(false)
+            .count();
+
+    final foodTemplateCount =
+        await _isar!.localFoodTemplates.filter().isSyncedEqualTo(false).count();
+
     return sessionCount +
         exerciseCount +
         setCount +
@@ -141,7 +171,12 @@ class LocalDatabaseService {
         chatMessageCount +
         programCount +
         goalCount +
-        programWorkoutCount;
+        programWorkoutCount +
+        mealLogCount +
+        mealEntryCount +
+        foodItemCount +
+        nutritionGoalCount +
+        foodTemplateCount;
   }
 
   /// Get last sync time across all collections
