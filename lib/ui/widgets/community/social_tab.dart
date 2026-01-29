@@ -356,7 +356,10 @@ class _SocialTabState extends State<SocialTab> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
-                  colors: [context.primary, context.primary.withValues(alpha: 0.5)],
+                  colors: [
+                    context.primary,
+                    context.primary.withValues(alpha: 0.5),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
