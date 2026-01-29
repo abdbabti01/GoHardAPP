@@ -217,6 +217,16 @@ class SessionRepository {
             continue;
           }
 
+          // CRITICAL FIX: Never overwrite in-progress sessions from server!
+          // This prevents the 5-hour timer bug caused by server returning incorrect timestamps.
+          // Local state is authoritative for active workouts.
+          if (existingLocal != null && existingLocal.status == 'in_progress') {
+            debugPrint(
+              '  ⏭️ Skipping session ${apiSession.id} - in_progress workout, keeping local timestamps',
+            );
+            continue;
+          }
+
           LocalSession savedSession;
           if (existingLocal != null) {
             // Update existing local session
@@ -357,6 +367,16 @@ class SessionRepository {
     // If local session has pending changes, return it instead of fetching from server
     if (localSession != null && !localSession.isSynced) {
       debugPrint('📝 Session has pending changes, returning local version');
+      return await _getLocalSession(db, id);
+    }
+
+    // CRITICAL FIX: Always use local data for in-progress sessions!
+    // This prevents the 5-hour timer bug caused by server returning incorrect timestamps.
+    // Local timestamps are authoritative during active workouts.
+    if (localSession != null && localSession.status == 'in_progress') {
+      debugPrint(
+        '🏋️ In-progress session - using local timestamps (startedAt: ${localSession.startedAt})',
+      );
       return await _getLocalSession(db, id);
     }
 
