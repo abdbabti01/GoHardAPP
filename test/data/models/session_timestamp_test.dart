@@ -141,9 +141,9 @@ void main() {
         // 3. App goes to background, comes back
         // 4. Timer should show ~30 min, NOT 5h30m
 
-        // Arrange
-        final startTime = DateTime.utc(2024, 1, 15, 10, 0, 0);
-        final pauseTime = DateTime.utc(2024, 1, 15, 10, 30, 0);
+        // Arrange - expected UTC times
+        final expectedStartTime = DateTime.utc(2024, 1, 15, 10, 0, 0);
+        final expectedPauseTime = DateTime.utc(2024, 1, 15, 10, 30, 0);
 
         final json = {
           'id': 5,
@@ -165,6 +165,10 @@ void main() {
         // Assert - Both timestamps should be treated as UTC
         expect(session.startedAt!.isUtc, true);
         expect(session.pausedAt!.isUtc, true);
+
+        // Assert - Parsed values should match expected UTC times exactly
+        expect(session.startedAt, expectedStartTime);
+        expect(session.pausedAt, expectedPauseTime);
 
         // The time difference should be 30 minutes
         final elapsedDuration = session.pausedAt!.difference(
