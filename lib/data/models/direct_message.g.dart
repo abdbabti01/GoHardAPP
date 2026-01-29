@@ -12,9 +12,10 @@ DirectMessage _$DirectMessageFromJson(Map<String, dynamic> json) =>
       senderId: (json['senderId'] as num).toInt(),
       content: json['content'] as String,
       sentAt: DateTime.parse(json['sentAt'] as String),
-      readAt: json['readAt'] == null
-          ? null
-          : DateTime.parse(json['readAt'] as String),
+      readAt:
+          json['readAt'] == null
+              ? null
+              : DateTime.parse(json['readAt'] as String),
       isFromMe: json['isFromMe'] as bool,
     );
 

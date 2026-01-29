@@ -13,9 +13,10 @@ DMConversation _$DMConversationFromJson(Map<String, dynamic> json) =>
       friendName: json['friendName'] as String,
       friendPhotoUrl: json['friendPhotoUrl'] as String?,
       lastMessage: json['lastMessage'] as String?,
-      lastMessageAt: json['lastMessageAt'] == null
-          ? null
-          : DateTime.parse(json['lastMessageAt'] as String),
+      lastMessageAt:
+          json['lastMessageAt'] == null
+              ? null
+              : DateTime.parse(json['lastMessageAt'] as String),
       unreadCount: (json['unreadCount'] as num).toInt(),
     );
 
