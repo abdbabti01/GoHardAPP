@@ -2,14 +2,33 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/friends_provider.dart';
+import '../../../providers/messages_provider.dart';
 import '../../../routes/route_names.dart';
 
 /// Me screen - Profile hub with goals, analytics, settings
-class MeScreen extends StatelessWidget {
+class MeScreen extends StatefulWidget {
   const MeScreen({super.key});
 
   @override
+  State<MeScreen> createState() => _MeScreenState();
+}
+
+class _MeScreenState extends State<MeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<FriendsProvider>().loadIncomingRequests();
+      context.read<MessagesProvider>().loadUnreadCount();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final friendsProvider = context.watch<FriendsProvider>();
+    final messagesProvider = context.watch<MessagesProvider>();
+
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
@@ -42,6 +61,27 @@ class MeScreen extends StatelessWidget {
               subtitle: 'View your badges',
               onTap:
                   () => Navigator.pushNamed(context, RouteNames.achievements),
+            ),
+          ]),
+          const SizedBox(height: 16),
+
+          // Social section
+          _buildMenuSection(context, 'Social', [
+            _MenuItem(
+              icon: Icons.people_outlined,
+              iconColor: Colors.indigo,
+              title: 'Friends',
+              subtitle: 'Manage friends & requests',
+              badge: friendsProvider.pendingRequestCount,
+              onTap: () => Navigator.pushNamed(context, RouteNames.friends),
+            ),
+            _MenuItem(
+              icon: Icons.message_outlined,
+              iconColor: Colors.green,
+              title: 'Messages',
+              subtitle: 'Direct messages',
+              badge: messagesProvider.totalUnreadCount,
+              onTap: () => Navigator.pushNamed(context, RouteNames.messages),
             ),
           ]),
           const SizedBox(height: 16),
@@ -230,6 +270,23 @@ class MeScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (item.badge > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  item.badge > 99 ? '99+' : item.badge.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            if (item.badge > 0) const SizedBox(width: 8),
             Icon(Icons.chevron_right, color: context.textTertiary, size: 20),
           ],
         ),
@@ -289,6 +346,7 @@ class _MenuItem {
   final Color iconColor;
   final String title;
   final String? subtitle;
+  final int badge;
   final VoidCallback onTap;
 
   const _MenuItem({
@@ -296,6 +354,7 @@ class _MenuItem {
     required this.iconColor,
     required this.title,
     this.subtitle,
+    this.badge = 0,
     required this.onTap,
   });
 }
