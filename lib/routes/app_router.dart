@@ -34,6 +34,10 @@ import '../ui/screens/running/run_detail_screen.dart';
 import '../ui/screens/nutrition/nutrition_dashboard_screen.dart';
 import '../ui/screens/nutrition/food_search_screen.dart';
 import '../ui/screens/nutrition/nutrition_goals_screen.dart';
+import '../ui/screens/friends/friends_screen.dart';
+import '../ui/screens/friends/friend_profile_screen.dart';
+import '../ui/screens/messages/messages_list_screen.dart';
+import '../ui/screens/messages/conversation_screen.dart';
 
 /// Central router for the application
 /// Handles route generation and navigation logic
@@ -375,6 +379,50 @@ class AppRouter {
       case RouteNames.nutritionGoals:
         return MaterialPageRoute(
           builder: (_) => const NutritionGoalsScreen(),
+          settings: settings,
+        );
+
+      // Friends routes
+      case RouteNames.friends:
+        return MaterialPageRoute(
+          builder: (_) => const FriendsScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.friendProfile:
+        final userId = settings.arguments as int?;
+        if (userId == null) {
+          return MaterialPageRoute(
+            builder: (_) => const _NotFoundScreen(routeName: 'friend-profile'),
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => FriendProfileScreen(userId: userId),
+          settings: settings,
+        );
+
+      // Messages routes
+      case RouteNames.messages:
+        return MaterialPageRoute(
+          builder: (_) => const MessagesListScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.conversation:
+        final args = settings.arguments as Map<String, dynamic>?;
+        if (args == null || args['friendId'] == null) {
+          return MaterialPageRoute(
+            builder: (_) => const _NotFoundScreen(routeName: 'conversation'),
+          );
+        }
+        return MaterialPageRoute(
+          builder:
+              (_) => ConversationScreen(
+                friendId: args['friendId'] as int,
+                friendName: args['friendName'] as String? ?? 'Unknown',
+                friendUsername: args['friendUsername'] as String? ?? '',
+                friendPhotoUrl: args['friendPhotoUrl'] as String?,
+              ),
           settings: settings,
         );
 

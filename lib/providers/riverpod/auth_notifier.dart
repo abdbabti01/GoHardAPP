@@ -131,6 +131,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final request = SignupRequest(
         name: name,
+        username:
+            email.split('@').first, // Use email prefix as default username
         email: email,
         password: password,
       );

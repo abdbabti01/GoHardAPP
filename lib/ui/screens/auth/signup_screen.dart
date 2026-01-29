@@ -15,6 +15,7 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -24,6 +25,7 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -48,6 +50,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
     // Update provider with credentials
     authProvider.setSignupName(_nameController.text);
+    authProvider.setSignupUsername(_usernameController.text);
     authProvider.setSignupEmail(_emailController.text);
     authProvider.setSignupPassword(_passwordController.text);
     authProvider.setSignupConfirmPassword(_confirmPasswordController.text);
@@ -129,6 +132,36 @@ class _SignupScreenState extends State<SignupScreen> {
                       }
                       if (value.trim().length < 2) {
                         return 'Name must be at least 2 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Username field
+                  TextFormField(
+                    controller: _usernameController,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: 'Username',
+                      hintText: 'Choose a username',
+                      prefixIcon: const Icon(Icons.alternate_email),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter a username';
+                      }
+                      if (value.trim().length < 3) {
+                        return 'Username must be at least 3 characters';
+                      }
+                      if (value.trim().length > 30) {
+                        return 'Username must be 30 characters or less';
+                      }
+                      if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
+                        return 'Only letters, numbers, and underscores';
                       }
                       return null;
                     },

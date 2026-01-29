@@ -38,66 +38,126 @@ import 'package:mockito/mockito.dart' as _i1;
 // ignore_for_file: subtype_of_sealed_class
 
 class _FakeSession_0 extends _i1.SmartFake implements _i2.Session {
-  _FakeSession_0(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeSession_0(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeExercise_1 extends _i1.SmartFake implements _i3.Exercise {
-  _FakeExercise_1(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeExercise_1(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeFoodTemplate_2 extends _i1.SmartFake implements _i4.FoodTemplate {
-  _FakeFoodTemplate_2(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeFoodTemplate_2(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeMealLog_3 extends _i1.SmartFake implements _i5.MealLog {
-  _FakeMealLog_3(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeMealLog_3(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeMealEntry_4 extends _i1.SmartFake implements _i6.MealEntry {
-  _FakeMealEntry_4(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeMealEntry_4(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeFoodItem_5 extends _i1.SmartFake implements _i7.FoodItem {
-  _FakeFoodItem_5(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeFoodItem_5(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeNutritionGoal_6 extends _i1.SmartFake implements _i8.NutritionGoal {
-  _FakeNutritionGoal_6(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeNutritionGoal_6(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeNutritionProgress_7 extends _i1.SmartFake
     implements _i9.NutritionProgress {
-  _FakeNutritionProgress_7(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeNutritionProgress_7(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeMacroBreakdown_8 extends _i1.SmartFake
     implements _i9.MacroBreakdown {
-  _FakeMacroBreakdown_8(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeMacroBreakdown_8(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeStreakInfo_9 extends _i1.SmartFake implements _i9.StreakInfo {
-  _FakeStreakInfo_9(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeStreakInfo_9(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeProgram_10 extends _i1.SmartFake implements _i10.Program {
-  _FakeProgram_10(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeProgram_10(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 class _FakeProgramWorkout_11 extends _i1.SmartFake
     implements _i11.ProgramWorkout {
-  _FakeProgramWorkout_11(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
+  _FakeProgramWorkout_11(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
 }
 
 /// A class which mocks [SessionRepository].
@@ -111,41 +171,53 @@ class MockSessionRepository extends _i1.Mock implements _i12.SessionRepository {
   @override
   _i13.Future<List<_i2.Session>> getSessions({bool? waitForSync = false}) =>
       (super.noSuchMethod(
-            Invocation.method(#getSessions, [], {#waitForSync: waitForSync}),
-            returnValue: _i13.Future<List<_i2.Session>>.value(<_i2.Session>[]),
-          )
-          as _i13.Future<List<_i2.Session>>);
+        Invocation.method(
+          #getSessions,
+          [],
+          {#waitForSync: waitForSync},
+        ),
+        returnValue: _i13.Future<List<_i2.Session>>.value(<_i2.Session>[]),
+      ) as _i13.Future<List<_i2.Session>>);
 
   @override
-  _i13.Future<List<_i2.Session>> getInProgressSessions() =>
-      (super.noSuchMethod(
-            Invocation.method(#getInProgressSessions, []),
-            returnValue: _i13.Future<List<_i2.Session>>.value(<_i2.Session>[]),
-          )
-          as _i13.Future<List<_i2.Session>>);
+  _i13.Future<List<_i2.Session>> getInProgressSessions() => (super.noSuchMethod(
+        Invocation.method(
+          #getInProgressSessions,
+          [],
+        ),
+        returnValue: _i13.Future<List<_i2.Session>>.value(<_i2.Session>[]),
+      ) as _i13.Future<List<_i2.Session>>);
 
   @override
-  _i13.Future<_i2.Session> getSession(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#getSession, [id]),
-            returnValue: _i13.Future<_i2.Session>.value(
-              _FakeSession_0(this, Invocation.method(#getSession, [id])),
-            ),
-          )
-          as _i13.Future<_i2.Session>);
+  _i13.Future<_i2.Session> getSession(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #getSession,
+          [id],
+        ),
+        returnValue: _i13.Future<_i2.Session>.value(_FakeSession_0(
+          this,
+          Invocation.method(
+            #getSession,
+            [id],
+          ),
+        )),
+      ) as _i13.Future<_i2.Session>);
 
   @override
   _i13.Future<_i2.Session> createSession(_i2.Session? session) =>
       (super.noSuchMethod(
-            Invocation.method(#createSession, [session]),
-            returnValue: _i13.Future<_i2.Session>.value(
-              _FakeSession_0(
-                this,
-                Invocation.method(#createSession, [session]),
-              ),
-            ),
-          )
-          as _i13.Future<_i2.Session>);
+        Invocation.method(
+          #createSession,
+          [session],
+        ),
+        returnValue: _i13.Future<_i2.Session>.value(_FakeSession_0(
+          this,
+          Invocation.method(
+            #createSession,
+            [session],
+          ),
+        )),
+      ) as _i13.Future<_i2.Session>);
 
   @override
   _i13.Future<_i2.Session> createSessionFromProgramWorkout(
@@ -155,25 +227,28 @@ class MockSessionRepository extends _i1.Mock implements _i12.SessionRepository {
     int? programId,
   ) =>
       (super.noSuchMethod(
-            Invocation.method(#createSessionFromProgramWorkout, [
+        Invocation.method(
+          #createSessionFromProgramWorkout,
+          [
+            programWorkoutId,
+            programWorkout,
+            programStartDate,
+            programId,
+          ],
+        ),
+        returnValue: _i13.Future<_i2.Session>.value(_FakeSession_0(
+          this,
+          Invocation.method(
+            #createSessionFromProgramWorkout,
+            [
               programWorkoutId,
               programWorkout,
               programStartDate,
               programId,
-            ]),
-            returnValue: _i13.Future<_i2.Session>.value(
-              _FakeSession_0(
-                this,
-                Invocation.method(#createSessionFromProgramWorkout, [
-                  programWorkoutId,
-                  programWorkout,
-                  programStartDate,
-                  programId,
-                ]),
-              ),
-            ),
-          )
-          as _i13.Future<_i2.Session>);
+            ],
+          ),
+        )),
+      ) as _i13.Future<_i2.Session>);
 
   @override
   _i13.Future<_i2.Session> updateSessionStatus(
@@ -182,87 +257,130 @@ class MockSessionRepository extends _i1.Mock implements _i12.SessionRepository {
     int? duration,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(
-              #updateSessionStatus,
-              [id, status],
-              {#duration: duration},
-            ),
-            returnValue: _i13.Future<_i2.Session>.value(
-              _FakeSession_0(
-                this,
-                Invocation.method(
-                  #updateSessionStatus,
-                  [id, status],
-                  {#duration: duration},
-                ),
-              ),
-            ),
-          )
-          as _i13.Future<_i2.Session>);
+        Invocation.method(
+          #updateSessionStatus,
+          [
+            id,
+            status,
+          ],
+          {#duration: duration},
+        ),
+        returnValue: _i13.Future<_i2.Session>.value(_FakeSession_0(
+          this,
+          Invocation.method(
+            #updateSessionStatus,
+            [
+              id,
+              status,
+            ],
+            {#duration: duration},
+          ),
+        )),
+      ) as _i13.Future<_i2.Session>);
 
   @override
-  _i13.Future<void> pauseSession(int? id, DateTime? pausedAt) =>
+  _i13.Future<void> pauseSession(
+    int? id,
+    DateTime? pausedAt,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#pauseSession, [id, pausedAt]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #pauseSession,
+          [
+            id,
+            pausedAt,
+          ],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<void> resumeSession(int? id, DateTime? newStartedAt) =>
+  _i13.Future<void> resumeSession(
+    int? id,
+    DateTime? newStartedAt,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#resumeSession, [id, newStartedAt]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #resumeSession,
+          [
+            id,
+            newStartedAt,
+          ],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<bool> archiveSession(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#archiveSession, [id]),
-            returnValue: _i13.Future<bool>.value(false),
-          )
-          as _i13.Future<bool>);
+  _i13.Future<bool> archiveSession(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #archiveSession,
+          [id],
+        ),
+        returnValue: _i13.Future<bool>.value(false),
+      ) as _i13.Future<bool>);
 
   @override
-  _i13.Future<bool> deleteSession(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#deleteSession, [id]),
-            returnValue: _i13.Future<bool>.value(false),
-          )
-          as _i13.Future<bool>);
+  _i13.Future<bool> deleteSession(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteSession,
+          [id],
+        ),
+        returnValue: _i13.Future<bool>.value(false),
+      ) as _i13.Future<bool>);
 
   @override
-  _i13.Future<_i2.Session> updateSessionName(int? id, String? name) =>
+  _i13.Future<_i2.Session> updateSessionName(
+    int? id,
+    String? name,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#updateSessionName, [id, name]),
-            returnValue: _i13.Future<_i2.Session>.value(
-              _FakeSession_0(
-                this,
-                Invocation.method(#updateSessionName, [id, name]),
-              ),
-            ),
-          )
-          as _i13.Future<_i2.Session>);
+        Invocation.method(
+          #updateSessionName,
+          [
+            id,
+            name,
+          ],
+        ),
+        returnValue: _i13.Future<_i2.Session>.value(_FakeSession_0(
+          this,
+          Invocation.method(
+            #updateSessionName,
+            [
+              id,
+              name,
+            ],
+          ),
+        )),
+      ) as _i13.Future<_i2.Session>);
 
   @override
-  _i13.Future<void> updateWorkoutDate(int? id, DateTime? newDate) =>
+  _i13.Future<void> updateWorkoutDate(
+    int? id,
+    DateTime? newDate,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#updateWorkoutDate, [id, newDate]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #updateWorkoutDate,
+          [
+            id,
+            newDate,
+          ],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
   _i13.Stream<List<_i2.Session>> watchSessions(int? userId) =>
       (super.noSuchMethod(
-            Invocation.method(#watchSessions, [userId]),
-            returnValue: _i13.Stream<List<_i2.Session>>.empty(),
-          )
-          as _i13.Stream<List<_i2.Session>>);
+        Invocation.method(
+          #watchSessions,
+          [userId],
+        ),
+        returnValue: _i13.Stream<List<_i2.Session>>.empty(),
+      ) as _i13.Stream<List<_i2.Session>>);
 
   @override
   _i13.Future<_i3.Exercise> addExerciseToSession(
@@ -270,21 +388,24 @@ class MockSessionRepository extends _i1.Mock implements _i12.SessionRepository {
     int? exerciseTemplateId,
   ) =>
       (super.noSuchMethod(
-            Invocation.method(#addExerciseToSession, [
+        Invocation.method(
+          #addExerciseToSession,
+          [
+            sessionId,
+            exerciseTemplateId,
+          ],
+        ),
+        returnValue: _i13.Future<_i3.Exercise>.value(_FakeExercise_1(
+          this,
+          Invocation.method(
+            #addExerciseToSession,
+            [
               sessionId,
               exerciseTemplateId,
-            ]),
-            returnValue: _i13.Future<_i3.Exercise>.value(
-              _FakeExercise_1(
-                this,
-                Invocation.method(#addExerciseToSession, [
-                  sessionId,
-                  exerciseTemplateId,
-                ]),
-              ),
-            ),
-          )
-          as _i13.Future<_i3.Exercise>);
+            ],
+          ),
+        )),
+      ) as _i13.Future<_i3.Exercise>);
 }
 
 /// A class which mocks [NutritionRepository].
@@ -304,38 +425,44 @@ class MockNutritionRepository extends _i1.Mock
     int? pageSize = 50,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#getFoodTemplates, [], {
-              #category: category,
-              #isCustom: isCustom,
-              #page: page,
-              #pageSize: pageSize,
-            }),
-            returnValue: _i13.Future<List<_i4.FoodTemplate>>.value(
-              <_i4.FoodTemplate>[],
-            ),
-          )
-          as _i13.Future<List<_i4.FoodTemplate>>);
+        Invocation.method(
+          #getFoodTemplates,
+          [],
+          {
+            #category: category,
+            #isCustom: isCustom,
+            #page: page,
+            #pageSize: pageSize,
+          },
+        ),
+        returnValue:
+            _i13.Future<List<_i4.FoodTemplate>>.value(<_i4.FoodTemplate>[]),
+      ) as _i13.Future<List<_i4.FoodTemplate>>);
 
   @override
   _i13.Future<_i4.FoodTemplate> getFoodTemplateById(int? id) =>
       (super.noSuchMethod(
-            Invocation.method(#getFoodTemplateById, [id]),
-            returnValue: _i13.Future<_i4.FoodTemplate>.value(
-              _FakeFoodTemplate_2(
-                this,
-                Invocation.method(#getFoodTemplateById, [id]),
-              ),
-            ),
-          )
-          as _i13.Future<_i4.FoodTemplate>);
+        Invocation.method(
+          #getFoodTemplateById,
+          [id],
+        ),
+        returnValue: _i13.Future<_i4.FoodTemplate>.value(_FakeFoodTemplate_2(
+          this,
+          Invocation.method(
+            #getFoodTemplateById,
+            [id],
+          ),
+        )),
+      ) as _i13.Future<_i4.FoodTemplate>);
 
   @override
-  _i13.Future<List<String>> getFoodCategories() =>
-      (super.noSuchMethod(
-            Invocation.method(#getFoodCategories, []),
-            returnValue: _i13.Future<List<String>>.value(<String>[]),
-          )
-          as _i13.Future<List<String>>);
+  _i13.Future<List<String>> getFoodCategories() => (super.noSuchMethod(
+        Invocation.method(
+          #getFoodCategories,
+          [],
+        ),
+        returnValue: _i13.Future<List<String>>.value(<String>[]),
+      ) as _i13.Future<List<String>>);
 
   @override
   _i13.Future<List<_i4.FoodTemplate>> searchFoods(
@@ -344,39 +471,44 @@ class MockNutritionRepository extends _i1.Mock
     int? limit = 20,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(
-              #searchFoods,
-              [query],
-              {#category: category, #limit: limit},
-            ),
-            returnValue: _i13.Future<List<_i4.FoodTemplate>>.value(
-              <_i4.FoodTemplate>[],
-            ),
-          )
-          as _i13.Future<List<_i4.FoodTemplate>>);
+        Invocation.method(
+          #searchFoods,
+          [query],
+          {
+            #category: category,
+            #limit: limit,
+          },
+        ),
+        returnValue:
+            _i13.Future<List<_i4.FoodTemplate>>.value(<_i4.FoodTemplate>[]),
+      ) as _i13.Future<List<_i4.FoodTemplate>>);
 
   @override
   _i13.Future<_i4.FoodTemplate?> getFoodByBarcode(String? barcode) =>
       (super.noSuchMethod(
-            Invocation.method(#getFoodByBarcode, [barcode]),
-            returnValue: _i13.Future<_i4.FoodTemplate?>.value(),
-          )
-          as _i13.Future<_i4.FoodTemplate?>);
+        Invocation.method(
+          #getFoodByBarcode,
+          [barcode],
+        ),
+        returnValue: _i13.Future<_i4.FoodTemplate?>.value(),
+      ) as _i13.Future<_i4.FoodTemplate?>);
 
   @override
   _i13.Future<_i4.FoodTemplate> createFoodTemplate(
-    _i4.FoodTemplate? template,
-  ) =>
+          _i4.FoodTemplate? template) =>
       (super.noSuchMethod(
-            Invocation.method(#createFoodTemplate, [template]),
-            returnValue: _i13.Future<_i4.FoodTemplate>.value(
-              _FakeFoodTemplate_2(
-                this,
-                Invocation.method(#createFoodTemplate, [template]),
-              ),
-            ),
-          )
-          as _i13.Future<_i4.FoodTemplate>);
+        Invocation.method(
+          #createFoodTemplate,
+          [template],
+        ),
+        returnValue: _i13.Future<_i4.FoodTemplate>.value(_FakeFoodTemplate_2(
+          this,
+          Invocation.method(
+            #createFoodTemplate,
+            [template],
+          ),
+        )),
+      ) as _i13.Future<_i4.FoodTemplate>);
 
   @override
   _i13.Future<List<_i5.MealLog>> getMealLogs({
@@ -386,127 +518,163 @@ class MockNutritionRepository extends _i1.Mock
     int? pageSize = 30,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#getMealLogs, [], {
-              #startDate: startDate,
-              #endDate: endDate,
-              #page: page,
-              #pageSize: pageSize,
-            }),
-            returnValue: _i13.Future<List<_i5.MealLog>>.value(<_i5.MealLog>[]),
-          )
-          as _i13.Future<List<_i5.MealLog>>);
+        Invocation.method(
+          #getMealLogs,
+          [],
+          {
+            #startDate: startDate,
+            #endDate: endDate,
+            #page: page,
+            #pageSize: pageSize,
+          },
+        ),
+        returnValue: _i13.Future<List<_i5.MealLog>>.value(<_i5.MealLog>[]),
+      ) as _i13.Future<List<_i5.MealLog>>);
 
   @override
-  _i13.Future<_i5.MealLog> getMealLogById(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#getMealLogById, [id]),
-            returnValue: _i13.Future<_i5.MealLog>.value(
-              _FakeMealLog_3(this, Invocation.method(#getMealLogById, [id])),
-            ),
-          )
-          as _i13.Future<_i5.MealLog>);
+  _i13.Future<_i5.MealLog> getMealLogById(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #getMealLogById,
+          [id],
+        ),
+        returnValue: _i13.Future<_i5.MealLog>.value(_FakeMealLog_3(
+          this,
+          Invocation.method(
+            #getMealLogById,
+            [id],
+          ),
+        )),
+      ) as _i13.Future<_i5.MealLog>);
 
   @override
   _i13.Future<_i5.MealLog?> getMealLogByDate(DateTime? date) =>
       (super.noSuchMethod(
-            Invocation.method(#getMealLogByDate, [date]),
-            returnValue: _i13.Future<_i5.MealLog?>.value(),
-          )
-          as _i13.Future<_i5.MealLog?>);
+        Invocation.method(
+          #getMealLogByDate,
+          [date],
+        ),
+        returnValue: _i13.Future<_i5.MealLog?>.value(),
+      ) as _i13.Future<_i5.MealLog?>);
 
   @override
-  _i13.Future<_i5.MealLog> getTodaysMealLog() =>
-      (super.noSuchMethod(
-            Invocation.method(#getTodaysMealLog, []),
-            returnValue: _i13.Future<_i5.MealLog>.value(
-              _FakeMealLog_3(this, Invocation.method(#getTodaysMealLog, [])),
-            ),
-          )
-          as _i13.Future<_i5.MealLog>);
+  _i13.Future<_i5.MealLog> getTodaysMealLog() => (super.noSuchMethod(
+        Invocation.method(
+          #getTodaysMealLog,
+          [],
+        ),
+        returnValue: _i13.Future<_i5.MealLog>.value(_FakeMealLog_3(
+          this,
+          Invocation.method(
+            #getTodaysMealLog,
+            [],
+          ),
+        )),
+      ) as _i13.Future<_i5.MealLog>);
 
   @override
   _i13.Future<_i5.MealLog> createMealLog(_i5.MealLog? mealLog) =>
       (super.noSuchMethod(
-            Invocation.method(#createMealLog, [mealLog]),
-            returnValue: _i13.Future<_i5.MealLog>.value(
-              _FakeMealLog_3(
-                this,
-                Invocation.method(#createMealLog, [mealLog]),
-              ),
-            ),
-          )
-          as _i13.Future<_i5.MealLog>);
+        Invocation.method(
+          #createMealLog,
+          [mealLog],
+        ),
+        returnValue: _i13.Future<_i5.MealLog>.value(_FakeMealLog_3(
+          this,
+          Invocation.method(
+            #createMealLog,
+            [mealLog],
+          ),
+        )),
+      ) as _i13.Future<_i5.MealLog>);
 
   @override
-  _i13.Future<void> updateWaterIntake(int? mealLogId, double? waterIntake) =>
+  _i13.Future<void> updateWaterIntake(
+    int? mealLogId,
+    double? waterIntake,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#updateWaterIntake, [mealLogId, waterIntake]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #updateWaterIntake,
+          [
+            mealLogId,
+            waterIntake,
+          ],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
   _i13.Future<_i5.MealLog> recalculateMealLog(int? mealLogId) =>
       (super.noSuchMethod(
-            Invocation.method(#recalculateMealLog, [mealLogId]),
-            returnValue: _i13.Future<_i5.MealLog>.value(
-              _FakeMealLog_3(
-                this,
-                Invocation.method(#recalculateMealLog, [mealLogId]),
-              ),
-            ),
-          )
-          as _i13.Future<_i5.MealLog>);
+        Invocation.method(
+          #recalculateMealLog,
+          [mealLogId],
+        ),
+        returnValue: _i13.Future<_i5.MealLog>.value(_FakeMealLog_3(
+          this,
+          Invocation.method(
+            #recalculateMealLog,
+            [mealLogId],
+          ),
+        )),
+      ) as _i13.Future<_i5.MealLog>);
 
   @override
-  _i13.Future<_i5.MealLog> clearAllFood(int? mealLogId) =>
-      (super.noSuchMethod(
-            Invocation.method(#clearAllFood, [mealLogId]),
-            returnValue: _i13.Future<_i5.MealLog>.value(
-              _FakeMealLog_3(
-                this,
-                Invocation.method(#clearAllFood, [mealLogId]),
-              ),
-            ),
-          )
-          as _i13.Future<_i5.MealLog>);
+  _i13.Future<_i5.MealLog> clearAllFood(int? mealLogId) => (super.noSuchMethod(
+        Invocation.method(
+          #clearAllFood,
+          [mealLogId],
+        ),
+        returnValue: _i13.Future<_i5.MealLog>.value(_FakeMealLog_3(
+          this,
+          Invocation.method(
+            #clearAllFood,
+            [mealLogId],
+          ),
+        )),
+      ) as _i13.Future<_i5.MealLog>);
 
   @override
   _i13.Future<List<_i6.MealEntry>> getMealEntries(int? mealLogId) =>
       (super.noSuchMethod(
-            Invocation.method(#getMealEntries, [mealLogId]),
-            returnValue: _i13.Future<List<_i6.MealEntry>>.value(
-              <_i6.MealEntry>[],
-            ),
-          )
-          as _i13.Future<List<_i6.MealEntry>>);
+        Invocation.method(
+          #getMealEntries,
+          [mealLogId],
+        ),
+        returnValue: _i13.Future<List<_i6.MealEntry>>.value(<_i6.MealEntry>[]),
+      ) as _i13.Future<List<_i6.MealEntry>>);
 
   @override
-  _i13.Future<_i6.MealEntry> getMealEntryById(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#getMealEntryById, [id]),
-            returnValue: _i13.Future<_i6.MealEntry>.value(
-              _FakeMealEntry_4(
-                this,
-                Invocation.method(#getMealEntryById, [id]),
-              ),
-            ),
-          )
-          as _i13.Future<_i6.MealEntry>);
+  _i13.Future<_i6.MealEntry> getMealEntryById(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #getMealEntryById,
+          [id],
+        ),
+        returnValue: _i13.Future<_i6.MealEntry>.value(_FakeMealEntry_4(
+          this,
+          Invocation.method(
+            #getMealEntryById,
+            [id],
+          ),
+        )),
+      ) as _i13.Future<_i6.MealEntry>);
 
   @override
   _i13.Future<_i6.MealEntry> createMealEntry(_i6.MealEntry? entry) =>
       (super.noSuchMethod(
-            Invocation.method(#createMealEntry, [entry]),
-            returnValue: _i13.Future<_i6.MealEntry>.value(
-              _FakeMealEntry_4(
-                this,
-                Invocation.method(#createMealEntry, [entry]),
-              ),
-            ),
-          )
-          as _i13.Future<_i6.MealEntry>);
+        Invocation.method(
+          #createMealEntry,
+          [entry],
+        ),
+        returnValue: _i13.Future<_i6.MealEntry>.value(_FakeMealEntry_4(
+          this,
+          Invocation.method(
+            #createMealEntry,
+            [entry],
+          ),
+        )),
+      ) as _i13.Future<_i6.MealEntry>);
 
   @override
   _i13.Future<void> markMealAsConsumed(
@@ -515,47 +683,53 @@ class MockNutritionRepository extends _i1.Mock
     DateTime? consumedAt,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(
-              #markMealAsConsumed,
-              [entryId],
-              {#isConsumed: isConsumed, #consumedAt: consumedAt},
-            ),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #markMealAsConsumed,
+          [entryId],
+          {
+            #isConsumed: isConsumed,
+            #consumedAt: consumedAt,
+          },
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<void> deleteMealEntry(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#deleteMealEntry, [id]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+  _i13.Future<void> deleteMealEntry(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteMealEntry,
+          [id],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
   _i13.Future<List<_i7.FoodItem>> getFoodItems(int? mealEntryId) =>
       (super.noSuchMethod(
-            Invocation.method(#getFoodItems, [mealEntryId]),
-            returnValue: _i13.Future<List<_i7.FoodItem>>.value(
-              <_i7.FoodItem>[],
-            ),
-          )
-          as _i13.Future<List<_i7.FoodItem>>);
+        Invocation.method(
+          #getFoodItems,
+          [mealEntryId],
+        ),
+        returnValue: _i13.Future<List<_i7.FoodItem>>.value(<_i7.FoodItem>[]),
+      ) as _i13.Future<List<_i7.FoodItem>>);
 
   @override
   _i13.Future<_i7.FoodItem> addFoodItem(_i7.FoodItem? foodItem) =>
       (super.noSuchMethod(
-            Invocation.method(#addFoodItem, [foodItem]),
-            returnValue: _i13.Future<_i7.FoodItem>.value(
-              _FakeFoodItem_5(
-                this,
-                Invocation.method(#addFoodItem, [foodItem]),
-              ),
-            ),
-          )
-          as _i13.Future<_i7.FoodItem>);
+        Invocation.method(
+          #addFoodItem,
+          [foodItem],
+        ),
+        returnValue: _i13.Future<_i7.FoodItem>.value(_FakeFoodItem_5(
+          this,
+          Invocation.method(
+            #addFoodItem,
+            [foodItem],
+          ),
+        )),
+      ) as _i13.Future<_i7.FoodItem>);
 
   @override
   _i13.Future<_i7.FoodItem> quickAddFood({
@@ -564,23 +738,28 @@ class MockNutritionRepository extends _i1.Mock
     double? quantity = 1.0,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#quickAddFood, [], {
+        Invocation.method(
+          #quickAddFood,
+          [],
+          {
+            #mealEntryId: mealEntryId,
+            #foodTemplateId: foodTemplateId,
+            #quantity: quantity,
+          },
+        ),
+        returnValue: _i13.Future<_i7.FoodItem>.value(_FakeFoodItem_5(
+          this,
+          Invocation.method(
+            #quickAddFood,
+            [],
+            {
               #mealEntryId: mealEntryId,
               #foodTemplateId: foodTemplateId,
               #quantity: quantity,
-            }),
-            returnValue: _i13.Future<_i7.FoodItem>.value(
-              _FakeFoodItem_5(
-                this,
-                Invocation.method(#quickAddFood, [], {
-                  #mealEntryId: mealEntryId,
-                  #foodTemplateId: foodTemplateId,
-                  #quantity: quantity,
-                }),
-              ),
-            ),
-          )
-          as _i13.Future<_i7.FoodItem>);
+            },
+          ),
+        )),
+      ) as _i13.Future<_i7.FoodItem>);
 
   @override
   _i13.Future<_i7.FoodItem> updateFoodQuantity(
@@ -588,100 +767,133 @@ class MockNutritionRepository extends _i1.Mock
     double? quantity,
   ) =>
       (super.noSuchMethod(
-            Invocation.method(#updateFoodQuantity, [foodItemId, quantity]),
-            returnValue: _i13.Future<_i7.FoodItem>.value(
-              _FakeFoodItem_5(
-                this,
-                Invocation.method(#updateFoodQuantity, [foodItemId, quantity]),
-              ),
-            ),
-          )
-          as _i13.Future<_i7.FoodItem>);
+        Invocation.method(
+          #updateFoodQuantity,
+          [
+            foodItemId,
+            quantity,
+          ],
+        ),
+        returnValue: _i13.Future<_i7.FoodItem>.value(_FakeFoodItem_5(
+          this,
+          Invocation.method(
+            #updateFoodQuantity,
+            [
+              foodItemId,
+              quantity,
+            ],
+          ),
+        )),
+      ) as _i13.Future<_i7.FoodItem>);
 
   @override
-  _i13.Future<void> deleteFoodItem(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#deleteFoodItem, [id]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+  _i13.Future<void> deleteFoodItem(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteFoodItem,
+          [id],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
   _i13.Future<List<_i8.NutritionGoal>> getNutritionGoals() =>
       (super.noSuchMethod(
-            Invocation.method(#getNutritionGoals, []),
-            returnValue: _i13.Future<List<_i8.NutritionGoal>>.value(
-              <_i8.NutritionGoal>[],
-            ),
-          )
-          as _i13.Future<List<_i8.NutritionGoal>>);
+        Invocation.method(
+          #getNutritionGoals,
+          [],
+        ),
+        returnValue:
+            _i13.Future<List<_i8.NutritionGoal>>.value(<_i8.NutritionGoal>[]),
+      ) as _i13.Future<List<_i8.NutritionGoal>>);
 
   @override
   _i13.Future<_i8.NutritionGoal> getActiveNutritionGoal() =>
       (super.noSuchMethod(
-            Invocation.method(#getActiveNutritionGoal, []),
-            returnValue: _i13.Future<_i8.NutritionGoal>.value(
-              _FakeNutritionGoal_6(
-                this,
-                Invocation.method(#getActiveNutritionGoal, []),
-              ),
-            ),
-          )
-          as _i13.Future<_i8.NutritionGoal>);
+        Invocation.method(
+          #getActiveNutritionGoal,
+          [],
+        ),
+        returnValue: _i13.Future<_i8.NutritionGoal>.value(_FakeNutritionGoal_6(
+          this,
+          Invocation.method(
+            #getActiveNutritionGoal,
+            [],
+          ),
+        )),
+      ) as _i13.Future<_i8.NutritionGoal>);
 
   @override
   _i13.Future<_i8.NutritionGoal> createNutritionGoal(_i8.NutritionGoal? goal) =>
       (super.noSuchMethod(
-            Invocation.method(#createNutritionGoal, [goal]),
-            returnValue: _i13.Future<_i8.NutritionGoal>.value(
-              _FakeNutritionGoal_6(
-                this,
-                Invocation.method(#createNutritionGoal, [goal]),
-              ),
-            ),
-          )
-          as _i13.Future<_i8.NutritionGoal>);
+        Invocation.method(
+          #createNutritionGoal,
+          [goal],
+        ),
+        returnValue: _i13.Future<_i8.NutritionGoal>.value(_FakeNutritionGoal_6(
+          this,
+          Invocation.method(
+            #createNutritionGoal,
+            [goal],
+          ),
+        )),
+      ) as _i13.Future<_i8.NutritionGoal>);
 
   @override
-  _i13.Future<void> updateNutritionGoal(int? id, _i8.NutritionGoal? goal) =>
+  _i13.Future<void> updateNutritionGoal(
+    int? id,
+    _i8.NutritionGoal? goal,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#updateNutritionGoal, [id, goal]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #updateNutritionGoal,
+          [
+            id,
+            goal,
+          ],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<void> activateNutritionGoal(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#activateNutritionGoal, [id]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+  _i13.Future<void> activateNutritionGoal(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #activateNutritionGoal,
+          [id],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
   _i13.Future<_i9.NutritionProgress> getNutritionProgress({DateTime? date}) =>
       (super.noSuchMethod(
-            Invocation.method(#getNutritionProgress, [], {#date: date}),
-            returnValue: _i13.Future<_i9.NutritionProgress>.value(
-              _FakeNutritionProgress_7(
-                this,
-                Invocation.method(#getNutritionProgress, [], {#date: date}),
-              ),
-            ),
-          )
-          as _i13.Future<_i9.NutritionProgress>);
+        Invocation.method(
+          #getNutritionProgress,
+          [],
+          {#date: date},
+        ),
+        returnValue:
+            _i13.Future<_i9.NutritionProgress>.value(_FakeNutritionProgress_7(
+          this,
+          Invocation.method(
+            #getNutritionProgress,
+            [],
+            {#date: date},
+          ),
+        )),
+      ) as _i13.Future<_i9.NutritionProgress>);
 
   @override
-  _i13.Future<void> deleteNutritionGoal(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#deleteNutritionGoal, [id]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+  _i13.Future<void> deleteNutritionGoal(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteNutritionGoal,
+          [id],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
   _i13.Future<List<_i9.DailySummary>> getDailySummary({
@@ -689,15 +901,17 @@ class MockNutritionRepository extends _i1.Mock
     DateTime? endDate,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#getDailySummary, [], {
-              #startDate: startDate,
-              #endDate: endDate,
-            }),
-            returnValue: _i13.Future<List<_i9.DailySummary>>.value(
-              <_i9.DailySummary>[],
-            ),
-          )
-          as _i13.Future<List<_i9.DailySummary>>);
+        Invocation.method(
+          #getDailySummary,
+          [],
+          {
+            #startDate: startDate,
+            #endDate: endDate,
+          },
+        ),
+        returnValue:
+            _i13.Future<List<_i9.DailySummary>>.value(<_i9.DailySummary>[]),
+      ) as _i13.Future<List<_i9.DailySummary>>);
 
   @override
   _i13.Future<_i9.MacroBreakdown> getMacroBreakdown({
@@ -705,41 +919,54 @@ class MockNutritionRepository extends _i1.Mock
     DateTime? endDate,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#getMacroBreakdown, [], {
+        Invocation.method(
+          #getMacroBreakdown,
+          [],
+          {
+            #startDate: startDate,
+            #endDate: endDate,
+          },
+        ),
+        returnValue:
+            _i13.Future<_i9.MacroBreakdown>.value(_FakeMacroBreakdown_8(
+          this,
+          Invocation.method(
+            #getMacroBreakdown,
+            [],
+            {
               #startDate: startDate,
               #endDate: endDate,
-            }),
-            returnValue: _i13.Future<_i9.MacroBreakdown>.value(
-              _FakeMacroBreakdown_8(
-                this,
-                Invocation.method(#getMacroBreakdown, [], {
-                  #startDate: startDate,
-                  #endDate: endDate,
-                }),
-              ),
-            ),
-          )
-          as _i13.Future<_i9.MacroBreakdown>);
+            },
+          ),
+        )),
+      ) as _i13.Future<_i9.MacroBreakdown>);
 
   @override
   _i13.Future<List<_i9.CalorieTrendPoint>> getCalorieTrend({int? days = 30}) =>
       (super.noSuchMethod(
-            Invocation.method(#getCalorieTrend, [], {#days: days}),
-            returnValue: _i13.Future<List<_i9.CalorieTrendPoint>>.value(
-              <_i9.CalorieTrendPoint>[],
-            ),
-          )
-          as _i13.Future<List<_i9.CalorieTrendPoint>>);
+        Invocation.method(
+          #getCalorieTrend,
+          [],
+          {#days: days},
+        ),
+        returnValue: _i13.Future<List<_i9.CalorieTrendPoint>>.value(
+            <_i9.CalorieTrendPoint>[]),
+      ) as _i13.Future<List<_i9.CalorieTrendPoint>>);
 
   @override
-  _i13.Future<_i9.StreakInfo> getStreak() =>
-      (super.noSuchMethod(
-            Invocation.method(#getStreak, []),
-            returnValue: _i13.Future<_i9.StreakInfo>.value(
-              _FakeStreakInfo_9(this, Invocation.method(#getStreak, [])),
-            ),
-          )
-          as _i13.Future<_i9.StreakInfo>);
+  _i13.Future<_i9.StreakInfo> getStreak() => (super.noSuchMethod(
+        Invocation.method(
+          #getStreak,
+          [],
+        ),
+        returnValue: _i13.Future<_i9.StreakInfo>.value(_FakeStreakInfo_9(
+          this,
+          Invocation.method(
+            #getStreak,
+            [],
+          ),
+        )),
+      ) as _i13.Future<_i9.StreakInfo>);
 
   @override
   _i13.Future<List<_i9.FrequentFood>> getFrequentFoods({
@@ -747,15 +974,17 @@ class MockNutritionRepository extends _i1.Mock
     int? days = 30,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#getFrequentFoods, [], {
-              #limit: limit,
-              #days: days,
-            }),
-            returnValue: _i13.Future<List<_i9.FrequentFood>>.value(
-              <_i9.FrequentFood>[],
-            ),
-          )
-          as _i13.Future<List<_i9.FrequentFood>>);
+        Invocation.method(
+          #getFrequentFoods,
+          [],
+          {
+            #limit: limit,
+            #days: days,
+          },
+        ),
+        returnValue:
+            _i13.Future<List<_i9.FrequentFood>>.value(<_i9.FrequentFood>[]),
+      ) as _i13.Future<List<_i9.FrequentFood>>);
 
   @override
   _i13.Future<List<_i14.FoodAlternative>> getFoodAlternatives({
@@ -766,18 +995,20 @@ class MockNutritionRepository extends _i1.Mock
     required double? fat,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#getFoodAlternatives, [], {
-              #foodName: foodName,
-              #calories: calories,
-              #protein: protein,
-              #carbohydrates: carbohydrates,
-              #fat: fat,
-            }),
-            returnValue: _i13.Future<List<_i14.FoodAlternative>>.value(
-              <_i14.FoodAlternative>[],
-            ),
-          )
-          as _i13.Future<List<_i14.FoodAlternative>>);
+        Invocation.method(
+          #getFoodAlternatives,
+          [],
+          {
+            #foodName: foodName,
+            #calories: calories,
+            #protein: protein,
+            #carbohydrates: carbohydrates,
+            #fat: fat,
+          },
+        ),
+        returnValue: _i13.Future<List<_i14.FoodAlternative>>.value(
+            <_i14.FoodAlternative>[]),
+      ) as _i13.Future<List<_i14.FoodAlternative>>);
 }
 
 /// A class which mocks [ProgramsRepository].
@@ -792,90 +1023,117 @@ class MockProgramsRepository extends _i1.Mock
   @override
   _i13.Future<List<_i10.Program>> getPrograms({bool? isActive}) =>
       (super.noSuchMethod(
-            Invocation.method(#getPrograms, [], {#isActive: isActive}),
-            returnValue: _i13.Future<List<_i10.Program>>.value(
-              <_i10.Program>[],
-            ),
-          )
-          as _i13.Future<List<_i10.Program>>);
+        Invocation.method(
+          #getPrograms,
+          [],
+          {#isActive: isActive},
+        ),
+        returnValue: _i13.Future<List<_i10.Program>>.value(<_i10.Program>[]),
+      ) as _i13.Future<List<_i10.Program>>);
 
   @override
-  _i13.Future<_i10.Program> getProgramById(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#getProgramById, [id]),
-            returnValue: _i13.Future<_i10.Program>.value(
-              _FakeProgram_10(this, Invocation.method(#getProgramById, [id])),
-            ),
-          )
-          as _i13.Future<_i10.Program>);
+  _i13.Future<_i10.Program> getProgramById(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #getProgramById,
+          [id],
+        ),
+        returnValue: _i13.Future<_i10.Program>.value(_FakeProgram_10(
+          this,
+          Invocation.method(
+            #getProgramById,
+            [id],
+          ),
+        )),
+      ) as _i13.Future<_i10.Program>);
 
   @override
   _i13.Future<_i10.Program> createProgram(_i10.Program? program) =>
       (super.noSuchMethod(
-            Invocation.method(#createProgram, [program]),
-            returnValue: _i13.Future<_i10.Program>.value(
-              _FakeProgram_10(
-                this,
-                Invocation.method(#createProgram, [program]),
-              ),
-            ),
-          )
-          as _i13.Future<_i10.Program>);
+        Invocation.method(
+          #createProgram,
+          [program],
+        ),
+        returnValue: _i13.Future<_i10.Program>.value(_FakeProgram_10(
+          this,
+          Invocation.method(
+            #createProgram,
+            [program],
+          ),
+        )),
+      ) as _i13.Future<_i10.Program>);
 
   @override
-  _i13.Future<void> updateProgram(int? id, _i10.Program? program) =>
+  _i13.Future<void> updateProgram(
+    int? id,
+    _i10.Program? program,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#updateProgram, [id, program]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #updateProgram,
+          [
+            id,
+            program,
+          ],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
   _i13.Future<Map<String, int>> getDeletionImpact(int? id) =>
       (super.noSuchMethod(
-            Invocation.method(#getDeletionImpact, [id]),
-            returnValue: _i13.Future<Map<String, int>>.value(<String, int>{}),
-          )
-          as _i13.Future<Map<String, int>>);
+        Invocation.method(
+          #getDeletionImpact,
+          [id],
+        ),
+        returnValue: _i13.Future<Map<String, int>>.value(<String, int>{}),
+      ) as _i13.Future<Map<String, int>>);
 
   @override
-  _i13.Future<void> deleteProgram(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#deleteProgram, [id]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+  _i13.Future<void> deleteProgram(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteProgram,
+          [id],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<void> completeProgram(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#completeProgram, [id]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+  _i13.Future<void> completeProgram(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #completeProgram,
+          [id],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
   _i13.Future<Map<String, dynamic>> recalibrateProgram(int? id) =>
       (super.noSuchMethod(
-            Invocation.method(#recalibrateProgram, [id]),
-            returnValue: _i13.Future<Map<String, dynamic>>.value(
-              <String, dynamic>{},
-            ),
-          )
-          as _i13.Future<Map<String, dynamic>>);
+        Invocation.method(
+          #recalibrateProgram,
+          [id],
+        ),
+        returnValue:
+            _i13.Future<Map<String, dynamic>>.value(<String, dynamic>{}),
+      ) as _i13.Future<Map<String, dynamic>>);
 
   @override
-  _i13.Future<_i10.Program> advanceProgram(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#advanceProgram, [id]),
-            returnValue: _i13.Future<_i10.Program>.value(
-              _FakeProgram_10(this, Invocation.method(#advanceProgram, [id])),
-            ),
-          )
-          as _i13.Future<_i10.Program>);
+  _i13.Future<_i10.Program> advanceProgram(int? id) => (super.noSuchMethod(
+        Invocation.method(
+          #advanceProgram,
+          [id],
+        ),
+        returnValue: _i13.Future<_i10.Program>.value(_FakeProgram_10(
+          this,
+          Invocation.method(
+            #advanceProgram,
+            [id],
+          ),
+        )),
+      ) as _i13.Future<_i10.Program>);
 
   @override
   _i13.Future<List<_i11.ProgramWorkout>> getWeekWorkouts(
@@ -883,25 +1141,33 @@ class MockProgramsRepository extends _i1.Mock
     int? weekNumber,
   ) =>
       (super.noSuchMethod(
-            Invocation.method(#getWeekWorkouts, [programId, weekNumber]),
-            returnValue: _i13.Future<List<_i11.ProgramWorkout>>.value(
-              <_i11.ProgramWorkout>[],
-            ),
-          )
-          as _i13.Future<List<_i11.ProgramWorkout>>);
+        Invocation.method(
+          #getWeekWorkouts,
+          [
+            programId,
+            weekNumber,
+          ],
+        ),
+        returnValue: _i13.Future<List<_i11.ProgramWorkout>>.value(
+            <_i11.ProgramWorkout>[]),
+      ) as _i13.Future<List<_i11.ProgramWorkout>>);
 
   @override
   _i13.Future<_i11.ProgramWorkout> getTodaysWorkout(int? programId) =>
       (super.noSuchMethod(
-            Invocation.method(#getTodaysWorkout, [programId]),
-            returnValue: _i13.Future<_i11.ProgramWorkout>.value(
-              _FakeProgramWorkout_11(
-                this,
-                Invocation.method(#getTodaysWorkout, [programId]),
-              ),
-            ),
-          )
-          as _i13.Future<_i11.ProgramWorkout>);
+        Invocation.method(
+          #getTodaysWorkout,
+          [programId],
+        ),
+        returnValue:
+            _i13.Future<_i11.ProgramWorkout>.value(_FakeProgramWorkout_11(
+          this,
+          Invocation.method(
+            #getTodaysWorkout,
+            [programId],
+          ),
+        )),
+      ) as _i13.Future<_i11.ProgramWorkout>);
 
   @override
   _i13.Future<_i11.ProgramWorkout> addWorkout(
@@ -909,15 +1175,25 @@ class MockProgramsRepository extends _i1.Mock
     _i11.ProgramWorkout? workout,
   ) =>
       (super.noSuchMethod(
-            Invocation.method(#addWorkout, [programId, workout]),
-            returnValue: _i13.Future<_i11.ProgramWorkout>.value(
-              _FakeProgramWorkout_11(
-                this,
-                Invocation.method(#addWorkout, [programId, workout]),
-              ),
-            ),
-          )
-          as _i13.Future<_i11.ProgramWorkout>);
+        Invocation.method(
+          #addWorkout,
+          [
+            programId,
+            workout,
+          ],
+        ),
+        returnValue:
+            _i13.Future<_i11.ProgramWorkout>.value(_FakeProgramWorkout_11(
+          this,
+          Invocation.method(
+            #addWorkout,
+            [
+              programId,
+              workout,
+            ],
+          ),
+        )),
+      ) as _i13.Future<_i11.ProgramWorkout>);
 
   @override
   _i13.Future<void> updateWorkout(
@@ -925,38 +1201,58 @@ class MockProgramsRepository extends _i1.Mock
     _i11.ProgramWorkout? workout,
   ) =>
       (super.noSuchMethod(
-            Invocation.method(#updateWorkout, [workoutId, workout]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #updateWorkout,
+          [
+            workoutId,
+            workout,
+          ],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<void> swapWorkouts(int? workout1Id, int? workout2Id) =>
+  _i13.Future<void> swapWorkouts(
+    int? workout1Id,
+    int? workout2Id,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#swapWorkouts, [workout1Id, workout2Id]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #swapWorkouts,
+          [
+            workout1Id,
+            workout2Id,
+          ],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<void> completeWorkout(int? workoutId, {String? notes}) =>
+  _i13.Future<void> completeWorkout(
+    int? workoutId, {
+    String? notes,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#completeWorkout, [workoutId], {#notes: notes}),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #completeWorkout,
+          [workoutId],
+          {#notes: notes},
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<void> deleteWorkout(int? workoutId) =>
-      (super.noSuchMethod(
-            Invocation.method(#deleteWorkout, [workoutId]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+  _i13.Future<void> deleteWorkout(int? workoutId) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteWorkout,
+          [workoutId],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 }
 
 /// A class which mocks [AuthService].
@@ -975,99 +1271,113 @@ class MockAuthService extends _i1.Mock implements _i16.AuthService {
     required String? email,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#saveToken, [], {
-              #token: token,
-              #userId: userId,
-              #name: name,
-              #email: email,
-            }),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #saveToken,
+          [],
+          {
+            #token: token,
+            #userId: userId,
+            #name: name,
+            #email: email,
+          },
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<String?> getToken() =>
-      (super.noSuchMethod(
-            Invocation.method(#getToken, []),
-            returnValue: _i13.Future<String?>.value(),
-          )
-          as _i13.Future<String?>);
+  _i13.Future<String?> getToken() => (super.noSuchMethod(
+        Invocation.method(
+          #getToken,
+          [],
+        ),
+        returnValue: _i13.Future<String?>.value(),
+      ) as _i13.Future<String?>);
 
   @override
-  _i13.Future<int?> getUserId() =>
-      (super.noSuchMethod(
-            Invocation.method(#getUserId, []),
-            returnValue: _i13.Future<int?>.value(),
-          )
-          as _i13.Future<int?>);
+  _i13.Future<int?> getUserId() => (super.noSuchMethod(
+        Invocation.method(
+          #getUserId,
+          [],
+        ),
+        returnValue: _i13.Future<int?>.value(),
+      ) as _i13.Future<int?>);
 
   @override
-  _i13.Future<String?> getUserName() =>
-      (super.noSuchMethod(
-            Invocation.method(#getUserName, []),
-            returnValue: _i13.Future<String?>.value(),
-          )
-          as _i13.Future<String?>);
+  _i13.Future<String?> getUserName() => (super.noSuchMethod(
+        Invocation.method(
+          #getUserName,
+          [],
+        ),
+        returnValue: _i13.Future<String?>.value(),
+      ) as _i13.Future<String?>);
 
   @override
-  _i13.Future<String?> getUserEmail() =>
-      (super.noSuchMethod(
-            Invocation.method(#getUserEmail, []),
-            returnValue: _i13.Future<String?>.value(),
-          )
-          as _i13.Future<String?>);
+  _i13.Future<String?> getUserEmail() => (super.noSuchMethod(
+        Invocation.method(
+          #getUserEmail,
+          [],
+        ),
+        returnValue: _i13.Future<String?>.value(),
+      ) as _i13.Future<String?>);
 
   @override
-  _i13.Future<bool> isAuthenticated() =>
-      (super.noSuchMethod(
-            Invocation.method(#isAuthenticated, []),
-            returnValue: _i13.Future<bool>.value(false),
-          )
-          as _i13.Future<bool>);
+  _i13.Future<bool> isAuthenticated() => (super.noSuchMethod(
+        Invocation.method(
+          #isAuthenticated,
+          [],
+        ),
+        returnValue: _i13.Future<bool>.value(false),
+      ) as _i13.Future<bool>);
 
   @override
-  _i13.Future<void> clearToken() =>
-      (super.noSuchMethod(
-            Invocation.method(#clearToken, []),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+  _i13.Future<void> clearToken() => (super.noSuchMethod(
+        Invocation.method(
+          #clearToken,
+          [],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<void> saveThemePreference(String? theme) =>
-      (super.noSuchMethod(
-            Invocation.method(#saveThemePreference, [theme]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+  _i13.Future<void> saveThemePreference(String? theme) => (super.noSuchMethod(
+        Invocation.method(
+          #saveThemePreference,
+          [theme],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<String?> getThemePreference() =>
-      (super.noSuchMethod(
-            Invocation.method(#getThemePreference, []),
-            returnValue: _i13.Future<String?>.value(),
-          )
-          as _i13.Future<String?>);
+  _i13.Future<String?> getThemePreference() => (super.noSuchMethod(
+        Invocation.method(
+          #getThemePreference,
+          [],
+        ),
+        returnValue: _i13.Future<String?>.value(),
+      ) as _i13.Future<String?>);
 
   @override
   _i13.Future<void> saveCachedProfile(String? profileJson) =>
       (super.noSuchMethod(
-            Invocation.method(#saveCachedProfile, [profileJson]),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
+        Invocation.method(
+          #saveCachedProfile,
+          [profileJson],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
 
   @override
-  _i13.Future<String?> getCachedProfile() =>
-      (super.noSuchMethod(
-            Invocation.method(#getCachedProfile, []),
-            returnValue: _i13.Future<String?>.value(),
-          )
-          as _i13.Future<String?>);
+  _i13.Future<String?> getCachedProfile() => (super.noSuchMethod(
+        Invocation.method(
+          #getCachedProfile,
+          [],
+        ),
+        returnValue: _i13.Future<String?>.value(),
+      ) as _i13.Future<String?>);
 }
 
 /// A class which mocks [ConnectivityService].
@@ -1080,76 +1390,93 @@ class MockConnectivityService extends _i1.Mock
   }
 
   @override
-  bool get isOnline =>
-      (super.noSuchMethod(Invocation.getter(#isOnline), returnValue: false)
-          as bool);
+  bool get isOnline => (super.noSuchMethod(
+        Invocation.getter(#isOnline),
+        returnValue: false,
+      ) as bool);
 
   @override
-  bool get isOffline =>
-      (super.noSuchMethod(Invocation.getter(#isOffline), returnValue: false)
-          as bool);
+  bool get isOffline => (super.noSuchMethod(
+        Invocation.getter(#isOffline),
+        returnValue: false,
+      ) as bool);
 
   @override
-  _i13.Stream<bool> get connectivityStream =>
+  _i13.Stream<bool> get connectivityStream => (super.noSuchMethod(
+        Invocation.getter(#connectivityStream),
+        returnValue: _i13.Stream<bool>.empty(),
+      ) as _i13.Stream<bool>);
+
+  @override
+  bool get hasListeners => (super.noSuchMethod(
+        Invocation.getter(#hasListeners),
+        returnValue: false,
+      ) as bool);
+
+  @override
+  _i13.Future<void> initialize() => (super.noSuchMethod(
+        Invocation.method(
+          #initialize,
+          [],
+        ),
+        returnValue: _i13.Future<void>.value(),
+        returnValueForMissingStub: _i13.Future<void>.value(),
+      ) as _i13.Future<void>);
+
+  @override
+  _i13.Future<bool> waitForConnection(
+          {Duration? timeout = const Duration(seconds: 30)}) =>
       (super.noSuchMethod(
-            Invocation.getter(#connectivityStream),
-            returnValue: _i13.Stream<bool>.empty(),
-          )
-          as _i13.Stream<bool>);
+        Invocation.method(
+          #waitForConnection,
+          [],
+          {#timeout: timeout},
+        ),
+        returnValue: _i13.Future<bool>.value(false),
+      ) as _i13.Future<bool>);
 
   @override
-  bool get hasListeners =>
-      (super.noSuchMethod(Invocation.getter(#hasListeners), returnValue: false)
-          as bool);
-
-  @override
-  _i13.Future<void> initialize() =>
-      (super.noSuchMethod(
-            Invocation.method(#initialize, []),
-            returnValue: _i13.Future<void>.value(),
-            returnValueForMissingStub: _i13.Future<void>.value(),
-          )
-          as _i13.Future<void>);
-
-  @override
-  _i13.Future<bool> waitForConnection({
-    Duration? timeout = const Duration(seconds: 30),
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#waitForConnection, [], {#timeout: timeout}),
-            returnValue: _i13.Future<bool>.value(false),
-          )
-          as _i13.Future<bool>);
-
-  @override
-  _i13.Future<bool> checkConnectivity() =>
-      (super.noSuchMethod(
-            Invocation.method(#checkConnectivity, []),
-            returnValue: _i13.Future<bool>.value(false),
-          )
-          as _i13.Future<bool>);
+  _i13.Future<bool> checkConnectivity() => (super.noSuchMethod(
+        Invocation.method(
+          #checkConnectivity,
+          [],
+        ),
+        returnValue: _i13.Future<bool>.value(false),
+      ) as _i13.Future<bool>);
 
   @override
   void dispose() => super.noSuchMethod(
-    Invocation.method(#dispose, []),
-    returnValueForMissingStub: null,
-  );
+        Invocation.method(
+          #dispose,
+          [],
+        ),
+        returnValueForMissingStub: null,
+      );
 
   @override
   void addListener(_i18.VoidCallback? listener) => super.noSuchMethod(
-    Invocation.method(#addListener, [listener]),
-    returnValueForMissingStub: null,
-  );
+        Invocation.method(
+          #addListener,
+          [listener],
+        ),
+        returnValueForMissingStub: null,
+      );
 
   @override
   void removeListener(_i18.VoidCallback? listener) => super.noSuchMethod(
-    Invocation.method(#removeListener, [listener]),
-    returnValueForMissingStub: null,
-  );
+        Invocation.method(
+          #removeListener,
+          [listener],
+        ),
+        returnValueForMissingStub: null,
+      );
 
   @override
   void notifyListeners() => super.noSuchMethod(
-    Invocation.method(#notifyListeners, []),
-    returnValueForMissingStub: null,
-  );
+        Invocation.method(
+          #notifyListeners,
+          [],
+        ),
+        returnValueForMissingStub: null,
+      );
 }

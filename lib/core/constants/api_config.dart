@@ -80,6 +80,32 @@ class ApiConfig {
   static const String nutritionAnalytics = 'nutritionanalytics';
   static const String mealPlans = 'mealplans';
 
+  // Friends endpoints
+  static const String friends = 'friends';
+  static const String friendsRequestsIncoming = 'friends/requests/incoming';
+  static const String friendsRequestsOutgoing = 'friends/requests/outgoing';
+  static String sendFriendRequest(int userId) => 'friends/request/$userId';
+  static String acceptFriendRequest(int friendshipId) =>
+      'friends/accept/$friendshipId';
+  static String declineFriendRequest(int friendshipId) =>
+      'friends/decline/$friendshipId';
+  static String removeFriend(int friendId) => 'friends/$friendId';
+  static String cancelFriendRequest(int friendshipId) =>
+      'friends/request/$friendshipId';
+  static String friendshipStatus(int targetUserId) =>
+      'friends/status/$targetUserId';
+
+  // Direct Messages endpoints
+  static const String dmConversations = 'dm/conversations';
+  static String dmMessages(int friendId) =>
+      'dm/conversations/$friendId/messages';
+  static String dmMarkAsRead(int friendId) => 'dm/conversations/$friendId/read';
+  static const String dmUnreadCount = 'dm/unread-count';
+
+  // User search endpoints
+  static String searchUsers(String query) => 'users/search?username=$query';
+  static String publicProfile(int userId) => 'users/$userId/public-profile';
+
   /// Helper methods for building endpoint URLs
   static String userById(int id) => '$users/$id';
   static String sessionById(int id) => '$sessions/$id';

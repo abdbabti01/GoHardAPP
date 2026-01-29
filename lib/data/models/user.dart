@@ -7,6 +7,7 @@ part 'user.g.dart';
 class User {
   final int id;
   final String name;
+  final String username;
   final String email;
   final DateTime dateCreated;
 
@@ -46,6 +47,7 @@ class User {
   User({
     required this.id,
     required this.name,
+    this.username = '',
     required this.email,
     required this.dateCreated,
     this.height,

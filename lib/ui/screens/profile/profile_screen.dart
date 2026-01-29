@@ -7,6 +7,8 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/active_workout_provider.dart';
 import '../../../providers/chat_provider.dart';
+import '../../../providers/friends_provider.dart';
+import '../../../providers/messages_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../../core/constants/api_config.dart';
 import '../../widgets/common/animations.dart';
@@ -31,6 +33,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Load user profile on first build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ProfileProvider>().loadUserProfile();
+      // Load friends data for badge counts
+      context.read<FriendsProvider>().loadIncomingRequests();
+      context.read<MessagesProvider>().loadUnreadCount();
     });
   }
 
@@ -440,7 +445,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildMenuSection(BuildContext context) {
+    final friendsProvider = context.watch<FriendsProvider>();
+    final messagesProvider = context.watch<MessagesProvider>();
+
     final menuItems = [
+      _MenuItem(
+        icon: Icons.people_alt_rounded,
+        label: 'Friends',
+        subtitle: 'Manage friends & requests',
+        color: AppColors.goHardBlue,
+        badge: friendsProvider.pendingRequestCount,
+        onTap: () => Navigator.pushNamed(context, RouteNames.friends),
+      ),
+      _MenuItem(
+        icon: Icons.message_rounded,
+        label: 'Messages',
+        subtitle: 'Direct messages',
+        color: AppColors.goHardGreen,
+        badge: messagesProvider.totalUnreadCount,
+        onTap: () => Navigator.pushNamed(context, RouteNames.messages),
+      ),
       _MenuItem(
         icon: Icons.monitor_weight_rounded,
         label: 'Body Metrics',
@@ -460,7 +484,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onTap: () => Navigator.pushNamed(context, RouteNames.templates),
       ),
       _MenuItem(
-        icon: Icons.people_rounded,
+        icon: Icons.groups_rounded,
         label: 'Community',
         subtitle: 'Discover shared workouts',
         color: AppColors.goHardOrange,
@@ -499,14 +523,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: item.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(item.icon, color: item.color, size: 22),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: item.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(item.icon, color: item.color, size: 22),
+                  ),
+                  if (item.badge > 0)
+                    Positioned(
+                      right: -6,
+                      top: -6,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppColors.errorRed,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: context.surface, width: 2),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 20,
+                          minHeight: 20,
+                        ),
+                        child: Text(
+                          item.badge > 99 ? '99+' : '${item.badge}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -639,6 +694,7 @@ class _MenuItem {
   final String subtitle;
   final Color color;
   final VoidCallback onTap;
+  final int badge;
 
   const _MenuItem({
     required this.icon,
@@ -646,5 +702,6 @@ class _MenuItem {
     required this.subtitle,
     required this.color,
     required this.onTap,
+    this.badge = 0,
   });
 }

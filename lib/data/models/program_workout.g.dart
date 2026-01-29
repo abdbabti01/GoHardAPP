@@ -21,16 +21,14 @@ ProgramWorkout _$ProgramWorkoutFromJson(Map<String, dynamic> json) =>
       warmUp: json['warmUp'] as String?,
       coolDown: json['coolDown'] as String?,
       isCompleted: json['isCompleted'] as bool,
-      completedAt:
-          json['completedAt'] == null
-              ? null
-              : DateTime.parse(json['completedAt'] as String),
+      completedAt: json['completedAt'] == null
+          ? null
+          : DateTime.parse(json['completedAt'] as String),
       completionNotes: json['completionNotes'] as String?,
       orderIndex: (json['orderIndex'] as num).toInt(),
-      scheduledDate:
-          json['scheduledDate'] == null
-              ? null
-              : DateTime.parse(json['scheduledDate'] as String),
+      scheduledDate: json['scheduledDate'] == null
+          ? null
+          : DateTime.parse(json['scheduledDate'] as String),
     );
 
 Map<String, dynamic> _$ProgramWorkoutToJson(ProgramWorkout instance) {

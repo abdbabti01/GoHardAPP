@@ -72,6 +72,14 @@ class RouteNames {
   static const String nutritionFoodSearch = '/nutrition/food-search';
   static const String nutritionGoals = '/nutrition/goals';
 
+  // Friends routes
+  static const String friends = '/friends';
+  static const String friendProfile = '/friend-profile';
+
+  // Messages routes
+  static const String messages = '/messages';
+  static const String conversation = '/conversation';
+
   // Initial route (shown when app starts)
   static const String initial = login;
 }

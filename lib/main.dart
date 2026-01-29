@@ -48,7 +48,11 @@ import 'providers/achievements_provider.dart';
 import 'providers/running_provider.dart';
 import 'providers/nutrition_provider.dart';
 import 'data/repositories/achievement_repository.dart';
+import 'data/repositories/friends_repository.dart';
+import 'data/repositories/direct_messages_repository.dart';
 import 'core/services/health_service.dart';
+import 'providers/friends_provider.dart';
+import 'providers/messages_provider.dart';
 
 void main() async {
   // Ensure Flutter bindings are initialized for async operations
@@ -247,6 +251,20 @@ void main() async {
           update:
               (_, apiService, connectivity, __) =>
                   NutritionRepository(apiService, connectivity),
+        ),
+        ProxyProvider2<ApiService, ConnectivityService, FriendsRepository>(
+          update:
+              (_, apiService, connectivity, __) =>
+                  FriendsRepository(apiService, connectivity),
+        ),
+        ProxyProvider2<
+          ApiService,
+          ConnectivityService,
+          DirectMessagesRepository
+        >(
+          update:
+              (_, apiService, connectivity, __) =>
+                  DirectMessagesRepository(apiService, connectivity),
         ),
 
         // Sync Service
@@ -534,6 +552,25 @@ void main() async {
           update:
               (_, achievementRepo, previous) =>
                   previous ?? AchievementsProvider(achievementRepo),
+        ),
+
+        // Friends provider
+        ChangeNotifierProxyProvider<FriendsRepository, FriendsProvider>(
+          create:
+              (context) => FriendsProvider(context.read<FriendsRepository>()),
+          update:
+              (_, friendsRepo, previous) =>
+                  previous ?? FriendsProvider(friendsRepo),
+        ),
+
+        // Messages provider
+        ChangeNotifierProxyProvider<DirectMessagesRepository, MessagesProvider>(
+          create:
+              (context) =>
+                  MessagesProvider(context.read<DirectMessagesRepository>()),
+          update:
+              (_, messagesRepo, previous) =>
+                  previous ?? MessagesProvider(messagesRepo),
         ),
       ],
       child: const SyncServiceInitializer(child: MyApp()),

@@ -19,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
 
   // Signup fields
   String _signupName = '';
+  String _signupUsername = '';
   String _signupEmail = '';
   String _signupPassword = '';
   String _signupConfirmPassword = '';
@@ -42,6 +43,7 @@ class AuthProvider extends ChangeNotifier {
   String get email => _email;
   String get password => _password;
   String get signupName => _signupName;
+  String get signupUsername => _signupUsername;
   String get signupEmail => _signupEmail;
   String get signupPassword => _signupPassword;
   String get signupConfirmPassword => _signupConfirmPassword;
@@ -66,6 +68,11 @@ class AuthProvider extends ChangeNotifier {
 
   void setSignupName(String value) {
     _signupName = value;
+    notifyListeners();
+  }
+
+  void setSignupUsername(String value) {
+    _signupUsername = value;
     notifyListeners();
   }
 
@@ -161,6 +168,18 @@ class AuthProvider extends ChangeNotifier {
       return false;
     }
 
+    if (_signupUsername.trim().isEmpty) {
+      _errorMessage = 'Please enter a username';
+      notifyListeners();
+      return false;
+    }
+
+    if (_signupUsername.trim().length < 3) {
+      _errorMessage = 'Username must be at least 3 characters';
+      notifyListeners();
+      return false;
+    }
+
     if (_signupEmail.trim().isEmpty) {
       _errorMessage = 'Please enter your email';
       notifyListeners();
@@ -186,6 +205,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       final request = SignupRequest(
         name: _signupName.trim(),
+        username: _signupUsername.trim(),
         email: _signupEmail.trim(),
         password: _signupPassword,
       );
@@ -258,6 +278,7 @@ class AuthProvider extends ChangeNotifier {
     _email = '';
     _password = '';
     _signupName = '';
+    _signupUsername = '';
     _signupEmail = '';
     _signupPassword = '';
     _signupConfirmPassword = '';

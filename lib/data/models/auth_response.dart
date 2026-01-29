@@ -7,12 +7,14 @@ class AuthResponse {
   final String token;
   final int userId;
   final String name;
+  final String username;
   final String email;
 
   AuthResponse({
     required this.token,
     required this.userId,
     required this.name,
+    this.username = '',
     required this.email,
   });
 
