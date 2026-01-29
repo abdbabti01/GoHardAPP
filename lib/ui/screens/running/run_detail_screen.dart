@@ -50,13 +50,14 @@ class _RunDetailScreenState extends State<RunDetailScreen> {
   }
 
   Future<void> _showShareDialog(BuildContext context, RunSession run) async {
+    final messenger = ScaffoldMessenger.of(context);
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => ShareRunDialog(run: run),
     );
 
     if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Run shared with friends!'),
           behavior: SnackBarBehavior.floating,

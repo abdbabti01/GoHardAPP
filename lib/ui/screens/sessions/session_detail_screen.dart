@@ -75,13 +75,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   Future<void> _showShareDialog(BuildContext context) async {
     if (_session == null) return;
 
+    final messenger = ScaffoldMessenger.of(context);
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => ShareWorkoutDialog(session: _session!),
     );
 
     if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Workout shared with friends!'),
           behavior: SnackBarBehavior.floating,
