@@ -33,14 +33,21 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     // Listen for connectivity changes and refresh session when going online
+    // BUT NOT for in_progress sessions - their timestamps are authoritative in memory
     _connectivitySubscription = _connectivity?.connectivityStream.listen((
       isOnline,
     ) {
-      if (isOnline && _currentSession != null) {
+      if (isOnline &&
+          _currentSession != null &&
+          _currentSession!.status != 'in_progress') {
         debugPrint(
-          '📡 Connection restored - refreshing active workout (ID: ${_currentSession!.id})',
+          '📡 Connection restored - refreshing workout (ID: ${_currentSession!.id})',
         );
         loadSession(_currentSession!.id, showLoading: false);
+      } else if (isOnline && _currentSession?.status == 'in_progress') {
+        debugPrint(
+          '📡 Connection restored - in_progress session, keeping local timestamps',
+        );
       }
     });
   }
@@ -54,13 +61,19 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
       // Recalculate elapsed time immediately for responsive UI
       _recalculateElapsedTime();
 
-      // Also reload session from DB to catch any changes
-      // (sync updates, app kill/restore, multi-device scenarios)
-      if (_currentSession != null) {
+      // CRITICAL FIX: For in-progress sessions, DON'T reload from DB!
+      // The in-memory state has correct UTC timestamps. Reloading from DB
+      // could load corrupted timestamps (from before the UTC fix was deployed).
+      // Only reload for non-active sessions (draft, completed, etc.)
+      if (_currentSession != null && _currentSession!.status != 'in_progress') {
         debugPrint(
-          '🔄 Reloading session ${_currentSession!.id} from DB after resume',
+          '🔄 Reloading session ${_currentSession!.id} from DB after resume (not in_progress)',
         );
         loadSession(_currentSession!.id, showLoading: false);
+      } else if (_currentSession != null) {
+        debugPrint(
+          '🏋️ In-progress session - keeping in-memory timestamps (startedAt: ${_currentSession!.startedAt})',
+        );
       }
     }
   }
