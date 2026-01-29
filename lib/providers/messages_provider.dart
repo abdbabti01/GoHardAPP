@@ -21,7 +21,15 @@ class MessagesProvider extends ChangeNotifier {
   Timer? _conversationPollingTimer;
   Timer? _unreadCountPollingTimer;
 
-  MessagesProvider(this._repository);
+  MessagesProvider(this._repository) {
+    // Load initial unread count and start polling
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await loadUnreadCount();
+    startUnreadCountPolling();
+  }
 
   // Getters
   List<DMConversation> get conversations => _conversations;
