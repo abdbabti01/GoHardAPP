@@ -194,7 +194,11 @@ class MessagesProvider extends ChangeNotifier {
     _activeConversationFriendId = friendId;
     stopConversationPolling();
 
-    _conversationPollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    // Poll immediately first
+    _pollForNewMessages(friendId);
+
+    // Then poll every 2 seconds for real-time feel
+    _conversationPollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (_activeConversationFriendId == friendId) {
         _pollForNewMessages(friendId);
       }

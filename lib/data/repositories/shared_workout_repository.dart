@@ -339,8 +339,26 @@ class SharedWorkoutRepository {
               )
               .toList();
 
-      // Update cache
+      // Get IDs from server response
+      final serverIds = workouts.map((w) => w.id).toSet();
+
+      // Update cache - clear stale data and add fresh data
       await db.writeTxn(() async {
+        // Get all cached shared workouts (excluding saved by current user)
+        final cached =
+            await db.sharedWorkouts
+                .filter()
+                .isSavedByCurrentUserEqualTo(false)
+                .findAll();
+
+        // Remove workouts that are no longer on server
+        for (final cachedWorkout in cached) {
+          if (!serverIds.contains(cachedWorkout.id)) {
+            await db.sharedWorkouts.delete(cachedWorkout.id);
+          }
+        }
+
+        // Add/update workouts from server
         for (final workout in workouts) {
           await db.sharedWorkouts.put(workout);
         }
