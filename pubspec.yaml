@@ -88,7 +88,7 @@ dependencies:
   # Local Notifications
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
-  flutter_timezone: ^1.0.2
+  flutter_timezone: ^3.0.1
 
   # Health / Fitness Data Integration (Apple Health / Google Fit)
   health: ^11.0.0
@@ -103,7 +103,7 @@ dependencies:
   flutter_polyline_points: ^2.0.0
 
   # Background task scheduling for smart notifications
-  workmanager: ^0.5.2
+  workmanager: ^0.6.0
 
   # Shared preferences for background service
   shared_preferences: ^2.2.2
