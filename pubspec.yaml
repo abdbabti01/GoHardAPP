@@ -90,6 +90,10 @@ dependencies:
   timezone: ^0.9.4
   flutter_timezone: ^3.0.1
 
+  # Firebase Push Notifications
+  firebase_core: ^3.8.1
+  firebase_messaging: ^15.1.6
+
   # Health / Fitness Data Integration (Apple Health / Google Fit)
   health: ^11.0.0
 

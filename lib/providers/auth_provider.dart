@@ -5,6 +5,7 @@ import '../data/repositories/auth_repository.dart';
 import '../data/services/auth_service.dart';
 import '../data/local/services/local_database_service.dart';
 import '../core/services/background_service.dart';
+import '../core/services/push_notification_service.dart';
 
 /// Provider for authentication state management
 /// Combines LoginViewModel and SignupViewModel from MAUI app
@@ -251,6 +252,13 @@ class AuthProvider extends ChangeNotifier {
 
   /// Logout user
   Future<void> logout() async {
+    // Unregister FCM token from server (non-blocking)
+    try {
+      await PushNotificationService().unregisterToken();
+    } catch (e) {
+      debugPrint('⚠️ Failed to unregister FCM token: $e');
+    }
+
     // Clear authentication token
     await _authService.clearToken();
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'app.dart';
 import 'data/services/auth_service.dart';
@@ -24,6 +25,7 @@ import 'core/services/connectivity_service.dart';
 import 'core/services/sync_service.dart';
 import 'core/services/sync_service_initializer.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/push_notification_service.dart';
 import 'core/services/background_service.dart';
 import 'core/services/tab_navigation_service.dart';
 import 'core/utils/database_cleanup.dart';
@@ -57,6 +59,10 @@ import 'providers/messages_provider.dart';
 void main() async {
   // Ensure Flutter bindings are initialized for async operations
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
+  await Firebase.initializeApp();
+  debugPrint('🔥 Firebase initialized');
 
   // Initialize local database before app starts
   final localDb = LocalDatabaseService.instance;

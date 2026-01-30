@@ -5,7 +5,9 @@ import 'train/train_screen.dart';
 import 'nutrition/nutrition_dashboard_screen.dart';
 import 'me/me_screen.dart';
 import '../../core/services/tab_navigation_service.dart';
+import '../../core/services/push_notification_service.dart';
 import '../../core/theme/theme_colors.dart';
+import '../../data/services/api_service.dart';
 import '../../providers/sessions_provider.dart';
 import '../../providers/messages_provider.dart';
 import '../../routes/route_names.dart';
@@ -40,12 +42,48 @@ class _MainScreenState extends State<MainScreen> {
       });
     }
 
+    // Initialize push notifications after frame is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializePushNotifications();
+    });
+
     _screens = [
       const TodayScreen(),
       TrainScreen(initialTab: widget.initialSubTab),
       const NutritionDashboardScreen(),
       const MeScreen(),
     ];
+  }
+
+  /// Initialize FCM push notifications
+  Future<void> _initializePushNotifications() async {
+    try {
+      final apiService = context.read<ApiService>();
+      await PushNotificationService().initialize(apiService);
+
+      // Set up notification tap handler to navigate to messages
+      PushNotificationService().onNotificationTapped = (data) {
+        if (data['type'] == 'message' && data['senderId'] != null) {
+          final senderId = int.tryParse(data['senderId'].toString());
+          if (senderId != null && mounted) {
+            Navigator.pushNamed(
+              context,
+              '/dm-conversation',
+              arguments: {'friendId': senderId},
+            );
+          }
+        }
+      };
+
+      // Set up foreground message handler to refresh unread count
+      PushNotificationService().onMessageReceived = (message) {
+        if (mounted) {
+          context.read<MessagesProvider>().loadUnreadCount();
+        }
+      };
+    } catch (e) {
+      debugPrint('Error initializing push notifications: $e');
+    }
   }
 
   void _onFabPressed(BuildContext context) {
