@@ -95,7 +95,7 @@ class SessionRepository {
       if (newStatus != null) {
         localSession.status = newStatus;
       }
-      localSession.lastModifiedLocal = DateTime.now();
+      localSession.lastModifiedLocal = DateTime.now().toUtc();
       localSession.isSynced = false;
       if (localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';
@@ -555,7 +555,7 @@ class SessionRepository {
             type: '',
             name: '',
             status: '',
-            lastModifiedLocal: DateTime.now(),
+            lastModifiedLocal: DateTime.now().toUtc(),
           ), // Dummy session
     );
 
@@ -577,7 +577,7 @@ class SessionRepository {
             type: '',
             name: '',
             status: '',
-            lastModifiedLocal: DateTime.now(),
+            lastModifiedLocal: DateTime.now().toUtc(),
           ),
     );
 
@@ -771,7 +771,7 @@ class SessionRepository {
         programWorkoutId: session.programWorkoutId,
         isSynced: false,
         syncStatus: 'pending_create',
-        lastModifiedLocal: DateTime.now(),
+        lastModifiedLocal: DateTime.now().toUtc(),
       );
 
       sessionLocalId = await db.localSessions.put(localSession);
@@ -877,7 +877,7 @@ class SessionRepository {
       programWorkoutId: session.programWorkoutId,
       isSynced: !isPending,
       syncStatus: isPending ? 'pending_create' : 'synced',
-      lastModifiedLocal: DateTime.now(),
+      lastModifiedLocal: DateTime.now().toUtc(),
     );
 
     await db.writeTxn(() => db.localSessions.put(localSession));
@@ -1169,7 +1169,7 @@ class SessionRepository {
           if (goal.serverId != null) {
             goal.syncStatus = 'pending_update';
           }
-          goal.lastModifiedLocal = DateTime.now();
+          goal.lastModifiedLocal = DateTime.now().toUtc();
 
           await db.localGoals.put(goal);
         }
@@ -1195,7 +1195,7 @@ class SessionRepository {
     // ALWAYS update locally first for instant response
     await db.writeTxn(() async {
       localSession.pausedAt = pausedAt; // Use provided timestamp (already UTC)
-      localSession.lastModifiedLocal = DateTime.now();
+      localSession.lastModifiedLocal = DateTime.now().toUtc();
       localSession.isSynced = false;
       if (localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';
@@ -1232,7 +1232,7 @@ class SessionRepository {
       // Use the adjusted startedAt provided by provider (already calculated)
       localSession.startedAt = newStartedAt;
       localSession.pausedAt = null;
-      localSession.lastModifiedLocal = DateTime.now();
+      localSession.lastModifiedLocal = DateTime.now().toUtc();
       localSession.isSynced = false;
       if (localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';
@@ -1325,7 +1325,7 @@ class SessionRepository {
       await db.writeTxn(() async {
         localSession.isSynced = false;
         localSession.syncStatus = 'pending_delete';
-        localSession.lastModifiedLocal = DateTime.now();
+        localSession.lastModifiedLocal = DateTime.now().toUtc();
         await db.localSessions.put(localSession);
       });
     }
@@ -1374,7 +1374,7 @@ class SessionRepository {
     // ALWAYS update locally first for instant response
     await db.writeTxn(() async {
       localSession.name = name;
-      localSession.lastModifiedLocal = DateTime.now();
+      localSession.lastModifiedLocal = DateTime.now().toUtc();
       localSession.isSynced = false;
       if (localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';
@@ -1411,7 +1411,7 @@ class SessionRepository {
       // Convert to date-only (no time component)
       final dateOnly = DateTime(newDate.year, newDate.month, newDate.day);
       localSession.date = dateOnly;
-      localSession.lastModifiedLocal = DateTime.now();
+      localSession.lastModifiedLocal = DateTime.now().toUtc();
       localSession.isSynced = false;
       if (localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';

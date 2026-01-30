@@ -404,7 +404,7 @@ class ExerciseRepository {
     await db.writeTxn(() async {
       localSet!.isCompleted = true;
       localSet.completedAt = DateTime.now().toUtc();
-      localSet.lastModifiedLocal = DateTime.now();
+      localSet.lastModifiedLocal = DateTime.now().toUtc();
       if (!_connectivity.isOnline || localSet.serverId == null) {
         localSet.isSynced = false;
         if (localSet.serverId != null) {
@@ -461,7 +461,7 @@ class ExerciseRepository {
       await db.writeTxn(() async {
         localSet!.isSynced = false;
         localSet.syncStatus = 'pending_delete';
-        localSet.lastModifiedLocal = DateTime.now();
+        localSet.lastModifiedLocal = DateTime.now().toUtc();
         await db.localExerciseSets.put(localSet);
       });
       debugPrint('✅ Set marked for deletion, will sync when online');

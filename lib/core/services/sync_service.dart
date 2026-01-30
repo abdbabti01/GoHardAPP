@@ -229,12 +229,12 @@ class SyncService {
         localSession.serverId = response['id'] as int;
         localSession.isSynced = true;
         localSession.syncStatus = 'synced';
-        localSession.lastModifiedServer = DateTime.parse(
-          response['date'] as String,
-        );
+        // Parse server timestamp as UTC for consistent comparisons
+        localSession.lastModifiedServer =
+            DateTime.parse(response['date'] as String).toUtc();
         localSession.syncRetryCount = 0;
         localSession.syncError = null;
-        localSession.lastSyncAttempt = DateTime.now();
+        localSession.lastSyncAttempt = DateTime.now().toUtc();
         await db.localSessions.put(localSession);
       });
 
@@ -270,7 +270,9 @@ class SyncService {
         ApiConfig.sessionById(localSession.serverId!),
       );
 
-      final serverModified = DateTime.parse(serverData['date'] as String);
+      // Parse server timestamp as UTC for consistent comparisons
+      final serverModified =
+          DateTime.parse(serverData['date'] as String).toUtc();
 
       // Server-wins conflict resolution
       if (localSession.lastModifiedServer != null &&
@@ -292,18 +294,18 @@ class SyncService {
                   : null;
           localSession.completedAt =
               serverData['completedAt'] != null
-                  ? DateTime.parse(serverData['completedAt'] as String)
+                  ? DateTime.parse(serverData['completedAt'] as String).toUtc()
                   : null;
           localSession.pausedAt =
               serverData['pausedAt'] != null
-                  ? DateTime.parse(serverData['pausedAt'] as String)
+                  ? DateTime.parse(serverData['pausedAt'] as String).toUtc()
                   : null;
           localSession.lastModifiedServer = serverModified;
           localSession.isSynced = true;
           localSession.syncStatus = 'synced';
           localSession.syncRetryCount = 0;
           localSession.syncError = null;
-          localSession.lastSyncAttempt = DateTime.now();
+          localSession.lastSyncAttempt = DateTime.now().toUtc();
           await db.localSessions.put(localSession);
         });
 
@@ -333,10 +335,10 @@ class SyncService {
       await db.writeTxn(() async {
         localSession.isSynced = true;
         localSession.syncStatus = 'synced';
-        localSession.lastModifiedServer = DateTime.now();
+        localSession.lastModifiedServer = DateTime.now().toUtc();
         localSession.syncRetryCount = 0;
         localSession.syncError = null;
-        localSession.lastSyncAttempt = DateTime.now();
+        localSession.lastSyncAttempt = DateTime.now().toUtc();
         await db.localSessions.put(localSession);
       });
 
@@ -411,7 +413,7 @@ class SyncService {
     await db.writeTxn(() async {
       session.syncRetryCount += 1;
       session.syncError = error;
-      session.lastSyncAttempt = DateTime.now();
+      session.lastSyncAttempt = DateTime.now().toUtc();
 
       // Don't change syncStatus - keep it as pending_create/update/delete
       // so it can be retried. The syncError and syncRetryCount fields

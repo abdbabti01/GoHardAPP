@@ -103,9 +103,9 @@ class RunningRepository {
 
     final localRun = LocalRunSession.create(
       userId: userId,
-      date: DateTime.now(),
+      date: DateTime.now().toUtc(),
       status: 'draft',
-      lastModifiedLocal: DateTime.now(),
+      lastModifiedLocal: DateTime.now().toUtc(),
     );
 
     await db.writeTxn(() async {
@@ -150,7 +150,7 @@ class RunningRepository {
     }
 
     localRun.pausedAt = pausedAt;
-    localRun.lastModifiedLocal = DateTime.now();
+    localRun.lastModifiedLocal = DateTime.now().toUtc();
     localRun.syncStatus = 'pending_update';
     localRun.isSynced = false;
 
@@ -173,7 +173,7 @@ class RunningRepository {
 
     localRun.startedAt = newStartedAt;
     localRun.pausedAt = null;
-    localRun.lastModifiedLocal = DateTime.now();
+    localRun.lastModifiedLocal = DateTime.now().toUtc();
     localRun.syncStatus = 'pending_update';
     localRun.isSynced = false;
 
@@ -260,7 +260,7 @@ class RunningRepository {
               ),
             )
             .toList();
-    localRun.lastModifiedLocal = DateTime.now();
+    localRun.lastModifiedLocal = DateTime.now().toUtc();
 
     await db.writeTxn(() async {
       await db.localRunSessions.put(localRun);
@@ -275,7 +275,7 @@ class RunningRepository {
     if (localRun == null) return;
 
     localRun.distance = distance;
-    localRun.lastModifiedLocal = DateTime.now();
+    localRun.lastModifiedLocal = DateTime.now().toUtc();
 
     await db.writeTxn(() async {
       await db.localRunSessions.put(localRun);

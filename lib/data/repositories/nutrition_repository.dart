@@ -407,7 +407,7 @@ class NutritionRepository {
     // Update locally first
     await db.writeTxn(() async {
       localLog!.waterIntake = waterIntake;
-      localLog.lastModifiedLocal = DateTime.now();
+      localLog.lastModifiedLocal = DateTime.now().toUtc();
       localLog.isSynced = false;
       if (localLog.serverId != null) {
         localLog.syncStatus = 'pending_update';
@@ -591,7 +591,7 @@ class NutritionRepository {
         localEntry.totalProtein -= localFood.protein;
         localEntry.totalCarbohydrates -= localFood.carbohydrates;
         localEntry.totalFat -= localFood.fat;
-        localEntry.lastModifiedLocal = DateTime.now();
+        localEntry.lastModifiedLocal = DateTime.now().toUtc();
         localEntry.isSynced = false;
         if (localEntry.serverId != null) {
           localEntry.syncStatus = 'pending_update';
@@ -605,7 +605,7 @@ class NutritionRepository {
           localLog.totalProtein -= localFood.protein;
           localLog.totalCarbohydrates -= localFood.carbohydrates;
           localLog.totalFat -= localFood.fat;
-          localLog.lastModifiedLocal = DateTime.now();
+          localLog.lastModifiedLocal = DateTime.now().toUtc();
           localLog.isSynced = false;
           if (localLog.serverId != null) {
             localLog.syncStatus = 'pending_update';
@@ -1058,7 +1058,7 @@ class NutritionRepository {
       localGoal.dailyWater = goal.dailyWater;
       localGoal.name = goal.name;
       localGoal.updatedAt = DateTime.now();
-      localGoal.lastModifiedLocal = DateTime.now();
+      localGoal.lastModifiedLocal = DateTime.now().toUtc();
       localGoal.isSynced = false;
       if (localGoal.serverId != null) {
         localGoal.syncStatus = 'pending_update';
@@ -1300,7 +1300,7 @@ class NutritionRepository {
       localEntry!.isConsumed = isConsumed;
       localEntry.consumedAt =
           isConsumed ? (consumedAt ?? DateTime.now()) : null;
-      localEntry.lastModifiedLocal = DateTime.now();
+      localEntry.lastModifiedLocal = DateTime.now().toUtc();
       localEntry.isSynced = false;
       if (localEntry.serverId != null) {
         localEntry.syncStatus = 'pending_update';
@@ -1356,7 +1356,7 @@ class NutritionRepository {
         entry.totalFat = 0;
         entry.isConsumed = false;
         entry.consumedAt = null;
-        entry.lastModifiedLocal = DateTime.now();
+        entry.lastModifiedLocal = DateTime.now().toUtc();
         entry.isSynced = false;
         if (entry.serverId != null) {
           entry.syncStatus = 'pending_update';
@@ -1369,7 +1369,7 @@ class NutritionRepository {
       localLog.totalProtein = 0;
       localLog.totalCarbohydrates = 0;
       localLog.totalFat = 0;
-      localLog.lastModifiedLocal = DateTime.now();
+      localLog.lastModifiedLocal = DateTime.now().toUtc();
       localLog.isSynced = false;
       if (localLog.serverId != null) {
         localLog.syncStatus = 'pending_update';
@@ -1427,10 +1427,10 @@ class NutritionRepository {
       fiber: foodItem.fiber,
       sugar: foodItem.sugar,
       sodium: foodItem.sodium,
-      createdAt: DateTime.now(),
+      createdAt: DateTime.now().toUtc(),
       isSynced: false,
       syncStatus: 'pending_create',
-      lastModifiedLocal: DateTime.now(),
+      lastModifiedLocal: DateTime.now().toUtc(),
     );
 
     int insertedId = 0;
@@ -1442,7 +1442,7 @@ class NutritionRepository {
       parentEntry.totalProtein += foodItem.protein;
       parentEntry.totalCarbohydrates += foodItem.carbohydrates;
       parentEntry.totalFat += foodItem.fat;
-      parentEntry.lastModifiedLocal = DateTime.now();
+      parentEntry.lastModifiedLocal = DateTime.now().toUtc();
       parentEntry.isSynced = false;
       if (parentEntry.serverId != null) {
         parentEntry.syncStatus = 'pending_update';
@@ -1456,7 +1456,7 @@ class NutritionRepository {
         parentLog.totalProtein += foodItem.protein;
         parentLog.totalCarbohydrates += foodItem.carbohydrates;
         parentLog.totalFat += foodItem.fat;
-        parentLog.lastModifiedLocal = DateTime.now();
+        parentLog.lastModifiedLocal = DateTime.now().toUtc();
         parentLog.isSynced = false;
         if (parentLog.serverId != null) {
           parentLog.syncStatus = 'pending_update';
@@ -1549,7 +1549,7 @@ class NutritionRepository {
       localItem.protein = newProtein;
       localItem.carbohydrates = newCarbs;
       localItem.fat = newFat;
-      localItem.lastModifiedLocal = DateTime.now();
+      localItem.lastModifiedLocal = DateTime.now().toUtc();
       localItem.isSynced = false;
       if (localItem.serverId != null) {
         localItem.syncStatus = 'pending_update';
@@ -1565,7 +1565,7 @@ class NutritionRepository {
         parentEntry.totalProtein += (newProtein - oldProtein);
         parentEntry.totalCarbohydrates += (newCarbs - oldCarbs);
         parentEntry.totalFat += (newFat - oldFat);
-        parentEntry.lastModifiedLocal = DateTime.now();
+        parentEntry.lastModifiedLocal = DateTime.now().toUtc();
         parentEntry.isSynced = false;
         if (parentEntry.serverId != null) {
           parentEntry.syncStatus = 'pending_update';
@@ -1581,7 +1581,7 @@ class NutritionRepository {
           parentLog.totalProtein += (newProtein - oldProtein);
           parentLog.totalCarbohydrates += (newCarbs - oldCarbs);
           parentLog.totalFat += (newFat - oldFat);
-          parentLog.lastModifiedLocal = DateTime.now();
+          parentLog.lastModifiedLocal = DateTime.now().toUtc();
           parentLog.isSynced = false;
           if (parentLog.serverId != null) {
             parentLog.syncStatus = 'pending_update';
