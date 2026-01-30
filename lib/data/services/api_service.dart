@@ -105,9 +105,9 @@ class ApiService {
   }
 
   /// Generic DELETE request
-  Future<bool> delete(String path) async {
+  Future<bool> delete(String path, {dynamic data}) async {
     try {
-      final response = await _dio.delete(path);
+      final response = await _dio.delete(path, data: data);
       return response.statusCode == 200 || response.statusCode == 204;
     } on DioException catch (e) {
       throw _handleError(e);

@@ -367,68 +367,6 @@ class SharedWorkoutRepository {
 
     return results;
   }
-
-  /// Sync shared workouts from server to local cache
-  Future<void> _syncSharedWorkoutsFromServer(
-    Isar db, {
-    String? category,
-    String? difficulty,
-    bool friendsOnly = true,
-    int? limit,
-  }) async {
-    try {
-      var endpoint = ApiConfig.sharedWorkouts;
-      final queryParams = <String>[];
-
-      if (category != null) queryParams.add('category=$category');
-      if (difficulty != null) queryParams.add('difficulty=$difficulty');
-      queryParams.add('friendsOnly=$friendsOnly');
-      if (limit != null) queryParams.add('limit=$limit');
-
-      if (queryParams.isNotEmpty) {
-        endpoint += '?${queryParams.join('&')}';
-      }
-
-      final data = await _apiService.get<List<dynamic>>(endpoint);
-      final workouts =
-          data
-              .map(
-                (json) =>
-                    SharedWorkoutJson.fromJson(json as Map<String, dynamic>),
-              )
-              .toList();
-
-      // Get IDs from server response
-      final serverIds = workouts.map((w) => w.id).toSet();
-
-      // Update cache - clear stale data and add fresh data
-      await db.writeTxn(() async {
-        // Get all cached shared workouts (excluding saved by current user)
-        final cached =
-            await db.sharedWorkouts
-                .filter()
-                .isSavedByCurrentUserEqualTo(false)
-                .findAll();
-
-        // Remove workouts that are no longer on server
-        for (final cachedWorkout in cached) {
-          if (!serverIds.contains(cachedWorkout.id)) {
-            await db.sharedWorkouts.delete(cachedWorkout.id);
-          }
-        }
-
-        // Add/update workouts from server
-        for (final workout in workouts) {
-          await db.sharedWorkouts.put(workout);
-        }
-      });
-
-      debugPrint('✅ Synced ${workouts.length} shared workouts from server');
-    } catch (e) {
-      debugPrint('⚠️ Failed to sync shared workouts: $e');
-      rethrow;
-    }
-  }
 }
 
 // Extension for SharedWorkout JSON serialization

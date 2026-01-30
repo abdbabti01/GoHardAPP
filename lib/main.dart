@@ -25,7 +25,6 @@ import 'core/services/connectivity_service.dart';
 import 'core/services/sync_service.dart';
 import 'core/services/sync_service_initializer.dart';
 import 'core/services/notification_service.dart';
-import 'core/services/push_notification_service.dart';
 import 'core/services/background_service.dart';
 import 'core/services/tab_navigation_service.dart';
 import 'core/utils/database_cleanup.dart';

@@ -4,21 +4,24 @@ import 'package:mockito/annotations.dart';
 import 'package:go_hard_app/providers/auth_provider.dart';
 import 'package:go_hard_app/data/repositories/auth_repository.dart';
 import 'package:go_hard_app/data/services/auth_service.dart';
+import 'package:go_hard_app/data/services/api_service.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/models/auth_response.dart';
 
-@GenerateMocks([AuthRepository, AuthService, LocalDatabaseService])
+@GenerateMocks([AuthRepository, AuthService, ApiService, LocalDatabaseService])
 import 'auth_provider_test.mocks.dart';
 
 void main() {
   late AuthProvider authProvider;
   late MockAuthRepository mockAuthRepository;
   late MockAuthService mockAuthService;
+  late MockApiService mockApiService;
   late MockLocalDatabaseService mockLocalDb;
 
   setUp(() {
     mockAuthRepository = MockAuthRepository();
     mockAuthService = MockAuthService();
+    mockApiService = MockApiService();
     mockLocalDb = MockLocalDatabaseService();
 
     // Stub the auth check methods called in constructor
@@ -30,6 +33,7 @@ void main() {
     authProvider = AuthProvider(
       mockAuthRepository,
       mockAuthService,
+      mockApiService,
       mockLocalDb,
     );
   });
