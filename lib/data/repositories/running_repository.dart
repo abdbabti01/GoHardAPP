@@ -1,38 +1,52 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
+import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
 import '../models/run_session.dart';
 import '../models/gps_point.dart';
+import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../local/services/local_database_service.dart';
 import '../local/models/local_run_session.dart';
 
-/// Repository for running session operations with offline-first support
-/// Local-only storage for MVP - server sync can be added later
+/// Repository for running session operations with offline-first support and server sync
 class RunningRepository {
   final LocalDatabaseService _localDb;
-  // ignore: unused_field - Reserved for future sync functionality
   final ConnectivityService _connectivity;
   final AuthService _authService;
+  final ApiService _apiService;
 
-  RunningRepository(this._localDb, this._connectivity, this._authService);
+  RunningRepository(
+    this._localDb,
+    this._connectivity,
+    this._authService,
+    this._apiService,
+  );
 
   /// Get all run sessions for the current user
+  /// Offline-first: returns cached data immediately, syncs in background
   Future<List<RunSession>> getRunSessions() async {
     final Isar db = _localDb.database;
     final userId = await _authService.getUserId();
 
     if (userId == null) {
-      debugPrint('⚠️ No authenticated user, returning empty list');
+      debugPrint('\u26a0\ufe0f No authenticated user, returning empty list');
       return [];
     }
 
+    // Return cached data first
     final localRuns =
         await db.localRunSessions
             .filter()
             .userIdEqualTo(userId)
             .sortByDateDesc()
             .findAll();
+
+    // Background sync if online
+    if (_connectivity.isOnline) {
+      _syncFromServer().catchError((e) => debugPrint('Sync error: $e'));
+    }
 
     return localRuns.map((local) => _localToRunSession(local)).toList();
   }
@@ -43,6 +57,11 @@ class RunningRepository {
     final userId = await _authService.getUserId();
 
     if (userId == null) return [];
+
+    // Try to sync first if online
+    if (_connectivity.isOnline) {
+      await _syncFromServer().catchError((e) => debugPrint('Sync error: $e'));
+    }
 
     final localRuns =
         await db.localRunSessions
@@ -63,7 +82,6 @@ class RunningRepository {
 
     if (userId == null) return [];
 
-    // Use UTC to match stored timestamps (runs are stored with UTC dates)
     final now = DateTime.now().toUtc();
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
     final weekStartDate = DateTime.utc(
@@ -112,7 +130,14 @@ class RunningRepository {
       await db.localRunSessions.put(localRun);
     });
 
-    debugPrint('🏃 Created new run session: ${localRun.localId}');
+    // Try to sync to server immediately if online
+    if (_connectivity.isOnline) {
+      _syncRunToServer(localRun).catchError((e) {
+        debugPrint('Failed to sync new run to server: $e');
+      });
+    }
+
+    debugPrint('\ud83c\udfc3 Created new run session: ${localRun.localId}');
     return _localToRunSession(localRun);
   }
 
@@ -136,7 +161,14 @@ class RunningRepository {
       await db.localRunSessions.put(localRun);
     });
 
-    debugPrint('🏃 Run started: ${localRun.localId}');
+    // Sync to server
+    if (_connectivity.isOnline) {
+      _syncRunToServer(localRun).catchError((e) {
+        debugPrint('Failed to sync run start to server: $e');
+      });
+    }
+
+    debugPrint('\ud83c\udfc3 Run started: ${localRun.localId}');
     return _localToRunSession(localRun);
   }
 
@@ -158,7 +190,7 @@ class RunningRepository {
       await db.localRunSessions.put(localRun);
     });
 
-    debugPrint('⏸️ Run paused: ${localRun.localId}');
+    debugPrint('\u23f8\ufe0f Run paused: ${localRun.localId}');
     return _localToRunSession(localRun);
   }
 
@@ -181,7 +213,7 @@ class RunningRepository {
       await db.localRunSessions.put(localRun);
     });
 
-    debugPrint('▶️ Run resumed: ${localRun.localId}');
+    debugPrint('\u25b6\ufe0f Run resumed: ${localRun.localId}');
     return _localToRunSession(localRun);
   }
 
@@ -234,8 +266,15 @@ class RunningRepository {
       await db.localRunSessions.put(localRun);
     });
 
+    // Sync completed run to server
+    if (_connectivity.isOnline) {
+      _syncRunToServer(localRun).catchError((e) {
+        debugPrint('Failed to sync completed run to server: $e');
+      });
+    }
+
     debugPrint(
-      '🏁 Run completed: ${localRun.localId} - ${distance.toStringAsFixed(2)} km in ${duration}s',
+      '\ud83c\udfc1 Run completed: ${localRun.localId} - ${distance.toStringAsFixed(2)} km in ${duration}s',
     );
     return _localToRunSession(localRun);
   }
@@ -285,12 +324,24 @@ class RunningRepository {
   /// Delete a run session
   Future<bool> deleteRun(int localId) async {
     final Isar db = _localDb.database;
+    final localRun = await db.localRunSessions.get(localId);
+
+    if (localRun != null &&
+        localRun.serverId != null &&
+        _connectivity.isOnline) {
+      // Delete from server first
+      try {
+        await _apiService.delete(ApiConfig.runSessionById(localRun.serverId!));
+      } catch (e) {
+        debugPrint('Failed to delete run from server: $e');
+      }
+    }
 
     await db.writeTxn(() async {
       await db.localRunSessions.delete(localId);
     });
 
-    debugPrint('🗑️ Run deleted: $localId');
+    debugPrint('\ud83d\uddd1\ufe0f Run deleted: $localId');
     return true;
   }
 
@@ -311,6 +362,253 @@ class RunningRepository {
       'totalDistance': totalDistance,
       'totalDuration': totalDuration,
     };
+  }
+
+  /// Sync runs from server to local database
+  Future<void> _syncFromServer() async {
+    final userId = await _authService.getUserId();
+    if (userId == null) return;
+
+    try {
+      final response = await _apiService.get(ApiConfig.runSessions);
+      if (response == null) return;
+
+      final List<dynamic> serverRuns = response as List<dynamic>;
+      final Isar db = _localDb.database;
+
+      for (final serverRunJson in serverRuns) {
+        final serverRun = serverRunJson as Map<String, dynamic>;
+        final serverId = serverRun['id'] as int;
+
+        // Check if we already have this run locally
+        final existingLocal =
+            await db.localRunSessions
+                .filter()
+                .serverIdEqualTo(serverId)
+                .findFirst();
+
+        if (existingLocal != null) {
+          // Update existing local run with server data
+          _updateLocalFromServer(existingLocal, serverRun);
+          await db.writeTxn(() async {
+            await db.localRunSessions.put(existingLocal);
+          });
+        } else {
+          // Create new local run from server data
+          final newLocal = _serverToLocal(serverRun, userId);
+          await db.writeTxn(() async {
+            await db.localRunSessions.put(newLocal);
+          });
+        }
+      }
+
+      debugPrint('\ud83d\udd04 Synced ${serverRuns.length} runs from server');
+    } catch (e) {
+      debugPrint('Error syncing from server: $e');
+    }
+  }
+
+  /// Sync a local run to server
+  Future<void> _syncRunToServer(LocalRunSession localRun) async {
+    try {
+      final routeJson =
+          localRun.route.isNotEmpty
+              ? jsonEncode(
+                localRun.route
+                    .map(
+                      (p) => {
+                        'latitude': p.latitude,
+                        'longitude': p.longitude,
+                        'altitude': p.altitude,
+                        'timestamp': p.timestamp?.toIso8601String(),
+                        'speed': p.speed,
+                        'accuracy': p.accuracy,
+                      },
+                    )
+                    .toList(),
+              )
+              : null;
+
+      final data = {
+        'userId': localRun.userId,
+        'name': localRun.name,
+        'date': localRun.date.toIso8601String(),
+        'distance': localRun.distance,
+        'duration': localRun.duration,
+        'averagePace': localRun.averagePace,
+        'calories': localRun.calories,
+        'status': localRun.status,
+        'startedAt': localRun.startedAt?.toIso8601String(),
+        'completedAt': localRun.completedAt?.toIso8601String(),
+        'pausedAt': localRun.pausedAt?.toIso8601String(),
+        'routeJson': routeJson,
+      };
+
+      if (localRun.serverId == null) {
+        // Create on server
+        final response = await _apiService.post(
+          ApiConfig.runSessions,
+          data: data,
+        );
+        if (response != null) {
+          final Isar db = _localDb.database;
+          localRun.serverId = response['id'] as int;
+          localRun.isSynced = true;
+          localRun.syncStatus = 'synced';
+          await db.writeTxn(() async {
+            await db.localRunSessions.put(localRun);
+          });
+          debugPrint(
+            '\u2705 Run synced to server with id: ${localRun.serverId}',
+          );
+        }
+      } else {
+        // Update on server
+        await _apiService.put(
+          ApiConfig.runSessionById(localRun.serverId!),
+          data: {'id': localRun.serverId, ...data},
+        );
+        final Isar db = _localDb.database;
+        localRun.isSynced = true;
+        localRun.syncStatus = 'synced';
+        await db.writeTxn(() async {
+          await db.localRunSessions.put(localRun);
+        });
+        debugPrint('\u2705 Run updated on server: ${localRun.serverId}');
+      }
+    } catch (e) {
+      debugPrint('Error syncing run to server: $e');
+      rethrow;
+    }
+  }
+
+  /// Convert server JSON to LocalRunSession
+  LocalRunSession _serverToLocal(Map<String, dynamic> json, int userId) {
+    List<LocalGpsPoint> route = [];
+    if (json['routeJson'] != null && json['routeJson'].toString().isNotEmpty) {
+      try {
+        final routeList = jsonDecode(json['routeJson']) as List<dynamic>;
+        route =
+            routeList
+                .map(
+                  (p) => LocalGpsPoint.create(
+                    latitude: (p['latitude'] as num).toDouble(),
+                    longitude: (p['longitude'] as num).toDouble(),
+                    altitude:
+                        p['altitude'] != null
+                            ? (p['altitude'] as num).toDouble()
+                            : null,
+                    timestamp:
+                        p['timestamp'] != null
+                            ? DateTime.parse(p['timestamp'])
+                            : null,
+                    speed:
+                        p['speed'] != null
+                            ? (p['speed'] as num).toDouble()
+                            : null,
+                    accuracy:
+                        p['accuracy'] != null
+                            ? (p['accuracy'] as num).toDouble()
+                            : null,
+                  ),
+                )
+                .toList();
+      } catch (e) {
+        debugPrint('Error parsing route JSON: $e');
+      }
+    }
+
+    return LocalRunSession.create(
+      serverId: json['id'] as int,
+      userId: userId,
+      name: json['name'] as String?,
+      date: DateTime.parse(json['date']),
+      distance:
+          json['distance'] != null
+              ? (json['distance'] as num).toDouble()
+              : null,
+      duration: json['duration'] as int?,
+      averagePace:
+          json['averagePace'] != null
+              ? (json['averagePace'] as num).toDouble()
+              : null,
+      calories: json['calories'] as int?,
+      status: json['status'] as String? ?? 'draft',
+      startedAt:
+          json['startedAt'] != null ? DateTime.parse(json['startedAt']) : null,
+      completedAt:
+          json['completedAt'] != null
+              ? DateTime.parse(json['completedAt'])
+              : null,
+      pausedAt:
+          json['pausedAt'] != null ? DateTime.parse(json['pausedAt']) : null,
+      route: route,
+      isSynced: true,
+      syncStatus: 'synced',
+      lastModifiedLocal: DateTime.now().toUtc(),
+    );
+  }
+
+  /// Update local run from server data
+  void _updateLocalFromServer(
+    LocalRunSession local,
+    Map<String, dynamic> json,
+  ) {
+    // Only update if local is already synced (don't overwrite pending changes)
+    if (local.syncStatus != 'synced') return;
+
+    local.name = json['name'] as String?;
+    local.date = DateTime.parse(json['date']);
+    local.distance =
+        json['distance'] != null ? (json['distance'] as num).toDouble() : null;
+    local.duration = json['duration'] as int?;
+    local.averagePace =
+        json['averagePace'] != null
+            ? (json['averagePace'] as num).toDouble()
+            : null;
+    local.calories = json['calories'] as int?;
+    local.status = json['status'] as String? ?? 'draft';
+    local.startedAt =
+        json['startedAt'] != null ? DateTime.parse(json['startedAt']) : null;
+    local.completedAt =
+        json['completedAt'] != null
+            ? DateTime.parse(json['completedAt'])
+            : null;
+    local.pausedAt =
+        json['pausedAt'] != null ? DateTime.parse(json['pausedAt']) : null;
+
+    if (json['routeJson'] != null && json['routeJson'].toString().isNotEmpty) {
+      try {
+        final routeList = jsonDecode(json['routeJson']) as List<dynamic>;
+        local.route =
+            routeList
+                .map(
+                  (p) => LocalGpsPoint.create(
+                    latitude: (p['latitude'] as num).toDouble(),
+                    longitude: (p['longitude'] as num).toDouble(),
+                    altitude:
+                        p['altitude'] != null
+                            ? (p['altitude'] as num).toDouble()
+                            : null,
+                    timestamp:
+                        p['timestamp'] != null
+                            ? DateTime.parse(p['timestamp'])
+                            : null,
+                    speed:
+                        p['speed'] != null
+                            ? (p['speed'] as num).toDouble()
+                            : null,
+                    accuracy:
+                        p['accuracy'] != null
+                            ? (p['accuracy'] as num).toDouble()
+                            : null,
+                  ),
+                )
+                .toList();
+      } catch (e) {
+        debugPrint('Error parsing route JSON: $e');
+      }
+    }
   }
 
   /// Convert LocalRunSession to RunSession

@@ -242,15 +242,21 @@ void main() async {
                     authService,
                   ),
         ),
-        ProxyProvider3<
+        ProxyProvider4<
+          ApiService,
           LocalDatabaseService,
           ConnectivityService,
           AuthService,
           RunningRepository
         >(
           update:
-              (_, localDb, connectivity, authService, __) =>
-                  RunningRepository(localDb, connectivity, authService),
+              (_, apiService, localDb, connectivity, authService, __) =>
+                  RunningRepository(
+                    localDb,
+                    connectivity,
+                    authService,
+                    apiService,
+                  ),
         ),
         ProxyProvider4<
           ApiService,

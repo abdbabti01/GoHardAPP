@@ -80,6 +80,13 @@ class ApiConfig {
   static const String nutritionAnalytics = 'nutritionanalytics';
   static const String mealPlans = 'mealplans';
 
+  // Run sessions endpoints
+  static const String runSessions = 'runsessions';
+  static String runSessionById(int id) => '$runSessions/$id';
+  static String runSessionStatus(int id) => '$runSessions/$id/status';
+  static const String runSessionsRecent = '$runSessions/recent';
+  static const String runSessionsWeekly = '$runSessions/weekly';
+
   // Friends endpoints
   static const String friends = 'friends';
   static const String friendsRequestsIncoming = 'friends/requests/incoming';

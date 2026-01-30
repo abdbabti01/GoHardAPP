@@ -141,7 +141,8 @@ final runningRepositoryProvider = Provider<RunningRepository>((ref) {
   final localDb = ref.watch(localDatabaseServiceProvider);
   final connectivity = ref.watch(connectivityServiceProvider);
   final authService = ref.watch(authServiceProvider);
-  return RunningRepository(localDb, connectivity, authService);
+  final apiService = ref.watch(apiServiceProvider);
+  return RunningRepository(localDb, connectivity, authService, apiService);
 });
 
 /// Achievement repository provider
