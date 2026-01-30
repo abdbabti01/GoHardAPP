@@ -332,12 +332,15 @@ class NutritionRepository {
     var query = db.localMealLogs.filter().userIdEqualTo(userId);
 
     if (startDate != null) {
-      query = query.dateGreaterThan(
-        startDate.subtract(const Duration(days: 1)),
-      );
+      // Normalize to start of day for inclusive start boundary
+      final startDay = DateTime(startDate.year, startDate.month, startDate.day);
+      query = query.dateGreaterThan(startDay.subtract(const Duration(days: 1)));
     }
     if (endDate != null) {
-      query = query.dateLessThan(endDate.add(const Duration(days: 1)));
+      // Normalize to start of NEXT day for inclusive end boundary
+      // This ensures we include all of endDate but exclude the next day
+      final nextDay = DateTime(endDate.year, endDate.month, endDate.day + 1);
+      query = query.dateLessThan(nextDay);
     }
 
     final localLogs = await query.sortByDateDesc().findAll();
