@@ -303,9 +303,10 @@ void main() async {
         ),
 
         // Providers (state managers - equivalent to ViewModels)
-        ChangeNotifierProxyProvider3<
+        ChangeNotifierProxyProvider4<
           AuthRepository,
           AuthService,
+          ApiService,
           LocalDatabaseService,
           AuthProvider
         >(
@@ -313,11 +314,13 @@ void main() async {
               (context) => AuthProvider(
                 context.read<AuthRepository>(),
                 context.read<AuthService>(),
+                context.read<ApiService>(),
                 context.read<LocalDatabaseService>(),
               ),
           update:
-              (_, authRepo, authService, localDb, previous) =>
-                  previous ?? AuthProvider(authRepo, authService, localDb),
+              (_, authRepo, authService, apiService, localDb, previous) =>
+                  previous ??
+                  AuthProvider(authRepo, authService, apiService, localDb),
         ),
         ChangeNotifierProxyProvider3<
           SessionRepository,

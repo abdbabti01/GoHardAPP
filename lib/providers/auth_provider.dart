@@ -3,6 +3,7 @@ import '../data/models/login_request.dart';
 import '../data/models/signup_request.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/services/auth_service.dart';
+import '../data/services/api_service.dart';
 import '../data/local/services/local_database_service.dart';
 import '../core/services/background_service.dart';
 import '../core/services/push_notification_service.dart';
@@ -12,6 +13,7 @@ import '../core/services/push_notification_service.dart';
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _authRepository;
   final AuthService _authService;
+  final ApiService _apiService;
   final LocalDatabaseService _localDb;
 
   // Login fields
@@ -36,8 +38,57 @@ class AuthProvider extends ChangeNotifier {
   String? _currentUserName;
   String? _currentUserEmail;
 
-  AuthProvider(this._authRepository, this._authService, this._localDb) {
+  AuthProvider(
+    this._authRepository,
+    this._authService,
+    this._apiService,
+    this._localDb,
+  ) {
+    // Set up callback for 401 unauthorized errors
+    _apiService.onUnauthorized = _handleSessionExpired;
     _checkAuthStatus();
+  }
+
+  /// Handle session expired (401 from API)
+  /// Called when any API request returns 401 Unauthorized
+  void _handleSessionExpired() {
+    if (!_isAuthenticated) return; // Already logged out
+
+    debugPrint('⚠️ Session expired - logging out user');
+    // Trigger logout without showing loading state
+    _forceLogout();
+  }
+
+  /// Force logout due to session expiry (silent, no FCM unregister attempt)
+  Future<void> _forceLogout() async {
+    // Clear authentication token
+    await _authService.clearToken();
+
+    // Clear background service (non-blocking)
+    try {
+      await BackgroundService.clearAuthToken();
+      await BackgroundService.cancelNutritionCheck();
+    } catch (e) {
+      debugPrint('⚠️ Failed to clear background service: $e');
+    }
+
+    // Clear all local database data for privacy/security
+    try {
+      await _localDb.clearAll();
+      debugPrint('✅ Local database cleared on session expiry');
+    } catch (e) {
+      debugPrint('⚠️ Failed to clear local database: $e');
+    }
+
+    // Clear local state
+    _isAuthenticated = false;
+    _currentUserId = null;
+    _currentUserName = null;
+    _currentUserEmail = null;
+    _email = '';
+    _password = '';
+    _errorMessage = 'Session expired - please login again';
+    notifyListeners();
   }
 
   // Getters
@@ -137,6 +188,9 @@ class AuthProvider extends ChangeNotifier {
       _currentUserId = response.userId;
       _currentUserName = response.name;
       _currentUserEmail = response.email;
+
+      // Reset the unauthorized flag for fresh session
+      _apiService.resetUnauthorizedFlag();
 
       // Save token for background service (non-blocking)
       try {

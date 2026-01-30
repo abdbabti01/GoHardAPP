@@ -63,9 +63,10 @@ class RunningRepository {
 
     if (userId == null) return [];
 
-    final now = DateTime.now();
+    // Use UTC to match stored timestamps (runs are stored with UTC dates)
+    final now = DateTime.now().toUtc();
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
-    final weekStartDate = DateTime(
+    final weekStartDate = DateTime.utc(
       weekStart.year,
       weekStart.month,
       weekStart.day,

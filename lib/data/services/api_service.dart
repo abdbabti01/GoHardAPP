@@ -8,6 +8,13 @@ class ApiService {
   late final Dio _dio;
   final AuthService _authService;
 
+  /// Callback for handling 401 Unauthorized errors
+  /// Set this to trigger proper logout flow through AuthProvider
+  void Function()? onUnauthorized;
+
+  /// Track if we've already triggered unauthorized to prevent multiple calls
+  bool _unauthorizedTriggered = false;
+
   ApiService(this._authService) {
     _dio = Dio(
       BaseOptions(
@@ -33,14 +40,21 @@ class ApiService {
           return handler.next(options);
         },
         onError: (error, handler) {
-          // Handle 401 Unauthorized - clear token and redirect to login
-          if (error.response?.statusCode == 401) {
-            _authService.clearToken();
+          // Handle 401 Unauthorized - notify app to trigger proper logout
+          if (error.response?.statusCode == 401 && !_unauthorizedTriggered) {
+            _unauthorizedTriggered = true;
+            // Call the callback if set (triggers AuthProvider.logout)
+            onUnauthorized?.call();
           }
           return handler.next(error);
         },
       ),
     );
+  }
+
+  /// Reset the unauthorized flag (call after successful login)
+  void resetUnauthorizedFlag() {
+    _unauthorizedTriggered = false;
   }
 
   /// Generic GET request
