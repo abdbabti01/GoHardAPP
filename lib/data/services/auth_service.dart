@@ -3,7 +3,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// Service for managing authentication tokens and user data in secure storage
 /// Matches the AuthService.cs from MAUI app
 class AuthService {
-  static const _storage = FlutterSecureStorage();
+  // iOS: Use first_unlock to persist across app restarts/background termination
+  // Android: Use encryptedSharedPreferences for better compatibility
+  static const _storage = FlutterSecureStorage(
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
 
   static const String _tokenKey = 'jwt_token';
   static const String _userIdKey = 'user_id';
