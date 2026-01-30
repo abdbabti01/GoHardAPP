@@ -295,9 +295,7 @@ class SharedWorkoutRepository {
 
     final data = await _apiService.get<List<dynamic>>(endpoint);
     return data
-        .map(
-          (json) => SharedWorkoutJson.fromJson(json as Map<String, dynamic>),
-        )
+        .map((json) => SharedWorkoutJson.fromJson(json as Map<String, dynamic>))
         .toList();
   }
 
