@@ -82,11 +82,17 @@ class SessionsProvider extends ChangeNotifier {
       _sessionsStreamSubscription?.cancel();
       _sessionsStreamSubscription = _sessionRepository
           .watchSessions(userId)
-          .listen((updatedSessions) {
-            _sessions = updatedSessions;
-            notifyListeners();
-            debugPrint('🔄 Sessions auto-updated from background sync');
-          });
+          .listen(
+            (updatedSessions) {
+              _sessions = updatedSessions;
+              notifyListeners();
+              debugPrint('🔄 Sessions auto-updated from background sync');
+            },
+            onError: (error) {
+              debugPrint('⚠️ Sessions stream error: $error');
+              // Don't update state on error - keep existing sessions
+            },
+          );
     } catch (e) {
       _errorMessage =
           'Failed to load sessions: ${e.toString().replaceAll('Exception: ', '')}';
@@ -550,6 +556,9 @@ class SessionsProvider extends ChangeNotifier {
 
   /// Clear all sessions data (called on logout)
   void clear() {
+    // Cancel stream subscription to prevent receiving old user's data
+    _sessionsStreamSubscription?.cancel();
+    _sessionsStreamSubscription = null;
     _sessions = [];
     _errorMessage = null;
     _isLoading = false;
