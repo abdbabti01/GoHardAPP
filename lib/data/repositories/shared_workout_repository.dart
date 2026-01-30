@@ -22,7 +22,7 @@ class SharedWorkoutRepository {
   );
 
   /// Get all shared workouts from community (friends only by default)
-  /// Online: fetches fresh data from server
+  /// Online: fetches fresh data from server directly
   /// Offline: returns cached data
   Future<List<SharedWorkout>> getSharedWorkouts({
     String? category,
@@ -32,22 +32,28 @@ class SharedWorkoutRepository {
   }) async {
     final Isar db = _localDb.database;
 
-    // If online, fetch fresh data from server
+    // If online, fetch fresh data from server and return it directly
     if (_connectivity.isOnline) {
       try {
-        await _syncSharedWorkoutsFromServer(
-          db,
+        final workouts = await _fetchSharedWorkoutsFromServer(
           category: category,
           difficulty: difficulty,
           friendsOnly: friendsOnly,
           limit: limit,
         );
+
+        // Update cache in background (don't block)
+        _updateCache(db, workouts).catchError((e) {
+          debugPrint('⚠️ Cache update failed: $e');
+        });
+
+        return workouts;
       } catch (e) {
-        debugPrint('⚠️ Server sync failed, using cache: $e');
+        debugPrint('⚠️ Server fetch failed, using cache: $e');
       }
     }
 
-    // Return from cache (either freshly synced or offline data)
+    // Return from cache when offline or on error
     return await _getLocalSharedWorkouts(
       db,
       category: category,
@@ -267,6 +273,61 @@ class SharedWorkoutRepository {
   }
 
   // === PRIVATE HELPERS ===
+
+  /// Fetch shared workouts directly from server
+  Future<List<SharedWorkout>> _fetchSharedWorkoutsFromServer({
+    String? category,
+    String? difficulty,
+    bool friendsOnly = true,
+    int? limit,
+  }) async {
+    var endpoint = ApiConfig.sharedWorkouts;
+    final queryParams = <String>[];
+
+    if (category != null) queryParams.add('category=$category');
+    if (difficulty != null) queryParams.add('difficulty=$difficulty');
+    queryParams.add('friendsOnly=$friendsOnly');
+    if (limit != null) queryParams.add('limit=$limit');
+
+    if (queryParams.isNotEmpty) {
+      endpoint += '?${queryParams.join('&')}';
+    }
+
+    final data = await _apiService.get<List<dynamic>>(endpoint);
+    return data
+        .map(
+          (json) => SharedWorkoutJson.fromJson(json as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
+  /// Update local cache with server data (runs in background)
+  Future<void> _updateCache(Isar db, List<SharedWorkout> workouts) async {
+    final serverIds = workouts.map((w) => w.id).toSet();
+
+    await db.writeTxn(() async {
+      // Get all cached shared workouts (excluding saved by current user)
+      final cached =
+          await db.sharedWorkouts
+              .filter()
+              .isSavedByCurrentUserEqualTo(false)
+              .findAll();
+
+      // Remove workouts that are no longer on server (deleted)
+      for (final cachedWorkout in cached) {
+        if (!serverIds.contains(cachedWorkout.id)) {
+          await db.sharedWorkouts.delete(cachedWorkout.id);
+        }
+      }
+
+      // Add/update workouts from server
+      for (final workout in workouts) {
+        await db.sharedWorkouts.put(workout);
+      }
+    });
+
+    debugPrint('✅ Cache updated with ${workouts.length} shared workouts');
+  }
 
   /// Get shared workouts from local cache
   Future<List<SharedWorkout>> _getLocalSharedWorkouts(
