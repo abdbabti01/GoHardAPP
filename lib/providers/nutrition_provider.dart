@@ -9,7 +9,12 @@ import '../data/models/nutrition_summary.dart';
 import '../data/repositories/nutrition_repository.dart';
 import '../core/services/connectivity_service.dart';
 
-export '../data/repositories/nutrition_repository.dart' show FoodAlternative;
+export '../data/repositories/nutrition_repository.dart'
+    show
+        FoodAlternative,
+        CalculatedNutrition,
+        UserMetricsSummary,
+        ActivityLevelOption;
 
 /// Provider for nutrition tracking
 class NutritionProvider extends ChangeNotifier {
@@ -699,6 +704,83 @@ class NutritionProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Calculate personalized nutrition targets from user metrics and goal
+  Future<CalculatedNutrition?> calculateNutritionFromMetrics({
+    required String goalType,
+    double? targetWeightChange,
+    int? timeframeWeeks,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _nutritionRepository.calculateNutritionFromMetrics(
+        goalType: goalType,
+        targetWeightChange: targetWeightChange,
+        timeframeWeeks: timeframeWeeks,
+      );
+
+      if (result != null) {
+        debugPrint(
+          '✅ Calculated nutrition: ${result.dailyCalories.toStringAsFixed(0)} cals, ${result.dailyProtein.toStringAsFixed(0)}g protein',
+        );
+      }
+
+      return result;
+    } catch (e) {
+      _errorMessage =
+          'Failed to calculate nutrition: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Calculate nutrition error: $e');
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Calculate and save nutrition targets as active goal
+  Future<CalculatedNutrition?> calculateAndSaveNutrition({
+    required String goalType,
+    double? targetWeightChange,
+    int? timeframeWeeks,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _nutritionRepository.calculateAndSaveNutrition(
+        goalType: goalType,
+        targetWeightChange: targetWeightChange,
+        timeframeWeeks: timeframeWeeks,
+      );
+
+      if (result != null) {
+        // Reload nutrition data to get updated goal
+        await loadTodaysData();
+        debugPrint(
+          '✅ Calculated and saved nutrition: ${result.dailyCalories.toStringAsFixed(0)} cals',
+        );
+      }
+
+      return result;
+    } catch (e) {
+      _errorMessage =
+          'Failed to calculate and save nutrition: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Calculate and save nutrition error: $e');
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Get available activity levels
+  Future<List<ActivityLevelOption>> getActivityLevels() async {
+    return await _nutritionRepository.getActivityLevels();
   }
 
   /// Clear all data (called on logout)

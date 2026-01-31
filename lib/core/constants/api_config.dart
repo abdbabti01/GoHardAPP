@@ -79,6 +79,10 @@ class ApiConfig {
   static const String nutritionGoals = 'nutritiongoals';
   static const String nutritionAnalytics = 'nutritionanalytics';
   static const String mealPlans = 'mealplans';
+  static const String nutritionCalculate = 'nutrition/calculate';
+  static const String nutritionCalculateAndSave =
+      'nutrition/calculate-and-save';
+  static const String activityLevels = 'nutrition/activity-levels';
 
   // Run sessions endpoints
   static const String runSessions = 'runsessions';

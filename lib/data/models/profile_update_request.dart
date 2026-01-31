@@ -14,6 +14,7 @@ class ProfileUpdateRequest {
   final double? bodyFatPercentage;
   final String? experienceLevel;
   final String? primaryGoal;
+  final String? activityLevel;
   final String? goals;
   final String? unitPreference;
   final String? themePreference;
@@ -30,6 +31,7 @@ class ProfileUpdateRequest {
     this.bodyFatPercentage,
     this.experienceLevel,
     this.primaryGoal,
+    this.activityLevel,
     this.goals,
     this.unitPreference,
     this.themePreference,

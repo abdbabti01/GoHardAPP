@@ -34,6 +34,9 @@ class User {
   final String? experienceLevel;
   final String? primaryGoal;
 
+  // Activity Level (for TDEE calculation)
+  final String? activityLevel;
+
   // Preferences
   final String? unitPreference;
   final String? themePreference;
@@ -63,6 +66,7 @@ class User {
     this.bmi,
     this.experienceLevel,
     this.primaryGoal,
+    this.activityLevel,
     this.unitPreference,
     this.themePreference,
     this.favoriteExercises,

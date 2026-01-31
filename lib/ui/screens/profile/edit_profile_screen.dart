@@ -31,6 +31,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Gender? _gender;
   ExperienceLevel? _experienceLevel;
   FitnessGoal? _primaryGoal;
+  ActivityLevel? _activityLevel;
   UnitPreference _unitPreference = UnitPreference.metric;
   String? _themePreference;
   File? _selectedImage;
@@ -66,6 +67,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _gender = Gender.fromString(user?.gender);
     _experienceLevel = ExperienceLevel.fromString(user?.experienceLevel);
     _primaryGoal = FitnessGoal.fromString(user?.primaryGoal);
+    _activityLevel = ActivityLevel.fromString(user?.activityLevel);
     _themePreference = user?.themePreference;
   }
 
@@ -193,6 +195,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
       experienceLevel: _experienceLevel?.serverValue,
       primaryGoal: _primaryGoal?.serverValue,
+      activityLevel: _activityLevel?.serverValue,
       unitPreference: _unitPreference.serverValue,
       themePreference: _themePreference,
       favoriteExercises:
@@ -481,6 +484,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       )
                       .toList(),
               onChanged: (value) => setState(() => _primaryGoal = value),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<ActivityLevel>(
+              value: _activityLevel,
+              decoration: const InputDecoration(
+                labelText: 'Activity Level',
+                prefixIcon: Icon(Icons.directions_run),
+                helperMaxLines: 2,
+              ),
+              items:
+                  ActivityLevel.values
+                      .map(
+                        (level) => DropdownMenuItem(
+                          value: level,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(level.displayName),
+                              Text(
+                                level.description,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+              onChanged: (value) => setState(() => _activityLevel = value),
+              selectedItemBuilder: (context) {
+                return ActivityLevel.values.map((level) {
+                  return Text(level.displayName);
+                }).toList();
+              },
             ),
           ],
         ),

@@ -1605,6 +1605,123 @@ class NutritionRepository {
     }
   }
 
+  // ============ Nutrition Calculator ============
+
+  /// Calculate personalized nutrition targets from user metrics and goal
+  Future<CalculatedNutrition?> calculateNutritionFromMetrics({
+    required String goalType,
+    double? targetWeightChange,
+    int? timeframeWeeks,
+  }) async {
+    if (!_connectivity.isOnline) {
+      return null;
+    }
+
+    try {
+      final response = await _apiService.post<Map<String, dynamic>>(
+        ApiConfig.nutritionCalculate,
+        data: {
+          'goalType': goalType,
+          if (targetWeightChange != null)
+            'targetWeightChange': targetWeightChange,
+          if (timeframeWeeks != null) 'timeframeWeeks': timeframeWeeks,
+        },
+      );
+
+      return CalculatedNutrition.fromJson(response);
+    } catch (e) {
+      debugPrint('Failed to calculate nutrition: $e');
+      return null;
+    }
+  }
+
+  /// Calculate and save nutrition targets as active goal
+  Future<CalculatedNutrition?> calculateAndSaveNutrition({
+    required String goalType,
+    double? targetWeightChange,
+    int? timeframeWeeks,
+  }) async {
+    if (!_connectivity.isOnline) {
+      return null;
+    }
+
+    try {
+      final response = await _apiService.post<Map<String, dynamic>>(
+        ApiConfig.nutritionCalculateAndSave,
+        data: {
+          'goalType': goalType,
+          if (targetWeightChange != null)
+            'targetWeightChange': targetWeightChange,
+          if (timeframeWeeks != null) 'timeframeWeeks': timeframeWeeks,
+        },
+      );
+
+      final result = CalculatedNutrition.fromJson(response);
+
+      // Update local cache with new goal
+      if (result.nutritionGoalId != null) {
+        final db = _localDb.database;
+        final userId = await _authService.getUserId();
+        if (userId != null) {
+          await _syncNutritionGoalFromServer(db, userId);
+        }
+      }
+
+      return result;
+    } catch (e) {
+      debugPrint('Failed to calculate and save nutrition: $e');
+      return null;
+    }
+  }
+
+  /// Get available activity levels
+  Future<List<ActivityLevelOption>> getActivityLevels() async {
+    if (_connectivity.isOnline) {
+      try {
+        final response = await _apiService.get<List<dynamic>>(
+          ApiConfig.activityLevels,
+        );
+        return response
+            .map(
+              (json) =>
+                  ActivityLevelOption.fromJson(json as Map<String, dynamic>),
+            )
+            .toList();
+      } catch (e) {
+        debugPrint('Failed to fetch activity levels: $e');
+      }
+    }
+
+    // Return default activity levels if offline
+    return [
+      ActivityLevelOption(
+        value: 'Sedentary',
+        label: 'Sedentary',
+        description: 'Little or no exercise, desk job',
+      ),
+      ActivityLevelOption(
+        value: 'LightlyActive',
+        label: 'Lightly Active',
+        description: 'Light exercise 1-3 days/week',
+      ),
+      ActivityLevelOption(
+        value: 'ModeratelyActive',
+        label: 'Moderately Active',
+        description: 'Moderate exercise 3-5 days/week',
+      ),
+      ActivityLevelOption(
+        value: 'VeryActive',
+        label: 'Very Active',
+        description: 'Hard exercise 6-7 days/week',
+      ),
+      ActivityLevelOption(
+        value: 'ExtremelyActive',
+        label: 'Extremely Active',
+        description: 'Very hard exercise, physical job',
+      ),
+    ];
+  }
+
   // ============ AI Food Alternatives ============
 
   /// Get AI-powered food alternatives
@@ -1695,4 +1812,112 @@ class FoodAlternative {
     'reason': reason,
     'category': category,
   };
+}
+
+/// Model for calculated nutrition targets
+class CalculatedNutrition {
+  final int? nutritionGoalId;
+  final double dailyCalories;
+  final double dailyProtein;
+  final double dailyCarbohydrates;
+  final double dailyFat;
+  final double dailyFiber;
+  final double dailyWater;
+  final double bmr;
+  final double tdee;
+  final double calorieAdjustment;
+  final double expectedWeeklyWeightChange;
+  final String explanation;
+  final UserMetricsSummary? userMetrics;
+
+  CalculatedNutrition({
+    this.nutritionGoalId,
+    required this.dailyCalories,
+    required this.dailyProtein,
+    required this.dailyCarbohydrates,
+    required this.dailyFat,
+    required this.dailyFiber,
+    required this.dailyWater,
+    required this.bmr,
+    required this.tdee,
+    required this.calorieAdjustment,
+    required this.expectedWeeklyWeightChange,
+    required this.explanation,
+    this.userMetrics,
+  });
+
+  factory CalculatedNutrition.fromJson(Map<String, dynamic> json) {
+    return CalculatedNutrition(
+      nutritionGoalId: json['nutritionGoalId'] as int?,
+      dailyCalories: (json['dailyCalories'] as num).toDouble(),
+      dailyProtein: (json['dailyProtein'] as num).toDouble(),
+      dailyCarbohydrates: (json['dailyCarbohydrates'] as num).toDouble(),
+      dailyFat: (json['dailyFat'] as num).toDouble(),
+      dailyFiber: (json['dailyFiber'] as num?)?.toDouble() ?? 25,
+      dailyWater: (json['dailyWater'] as num?)?.toDouble() ?? 2000,
+      bmr: (json['bmr'] as num).toDouble(),
+      tdee: (json['tdee'] as num).toDouble(),
+      calorieAdjustment: (json['calorieAdjustment'] as num).toDouble(),
+      expectedWeeklyWeightChange:
+          (json['expectedWeeklyWeightChange'] as num).toDouble(),
+      explanation: json['explanation'] as String? ?? '',
+      userMetrics:
+          json['userMetrics'] != null
+              ? UserMetricsSummary.fromJson(
+                json['userMetrics'] as Map<String, dynamic>,
+              )
+              : null,
+    );
+  }
+}
+
+/// Summary of user metrics used in calculation
+class UserMetricsSummary {
+  final double weightKg;
+  final double weightLbs;
+  final double heightCm;
+  final int age;
+  final String gender;
+  final String activityLevel;
+
+  UserMetricsSummary({
+    required this.weightKg,
+    required this.weightLbs,
+    required this.heightCm,
+    required this.age,
+    required this.gender,
+    required this.activityLevel,
+  });
+
+  factory UserMetricsSummary.fromJson(Map<String, dynamic> json) {
+    return UserMetricsSummary(
+      weightKg: (json['weightKg'] as num).toDouble(),
+      weightLbs: (json['weightLbs'] as num).toDouble(),
+      heightCm: (json['heightCm'] as num).toDouble(),
+      age: json['age'] as int,
+      gender: json['gender'] as String? ?? '',
+      activityLevel: json['activityLevel'] as String? ?? '',
+    );
+  }
+}
+
+/// Activity level option for dropdown
+class ActivityLevelOption {
+  final String value;
+  final String label;
+  final String description;
+
+  ActivityLevelOption({
+    required this.value,
+    required this.label,
+    required this.description,
+  });
+
+  factory ActivityLevelOption.fromJson(Map<String, dynamic> json) {
+    return ActivityLevelOption(
+      value: json['value'] as String,
+      label: json['label'] as String,
+      description: json['description'] as String? ?? '',
+    );
+  }
 }

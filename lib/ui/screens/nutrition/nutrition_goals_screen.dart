@@ -22,6 +22,9 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
   late TextEditingController _waterController;
 
   bool _isInitialized = false;
+  bool _isCalculating = false;
+  String? _calculationExplanation;
+  String _selectedGoalType = 'Maintenance';
 
   @override
   void initState() {
@@ -72,6 +75,53 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
     _fiberController.dispose();
     _waterController.dispose();
     super.dispose();
+  }
+
+  Future<void> _calculateFromMetrics() async {
+    setState(() {
+      _isCalculating = true;
+      _calculationExplanation = null;
+    });
+
+    final provider = context.read<NutritionProvider>();
+    final result = await provider.calculateNutritionFromMetrics(
+      goalType: _selectedGoalType,
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _caloriesController.text = result.dailyCalories.toStringAsFixed(0);
+        _proteinController.text = result.dailyProtein.toStringAsFixed(0);
+        _carbsController.text = result.dailyCarbohydrates.toStringAsFixed(0);
+        _fatController.text = result.dailyFat.toStringAsFixed(0);
+        _fiberController.text = result.dailyFiber.toStringAsFixed(0);
+        _waterController.text = result.dailyWater.toStringAsFixed(0);
+        _calculationExplanation = result.explanation;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nutrition calculated from your profile!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            provider.errorMessage ??
+                'Failed to calculate. Make sure your weight and height are set in your profile.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _isCalculating = false;
+      });
+    }
   }
 
   Future<void> _saveGoals() async {
@@ -167,7 +217,7 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Info card
+              // Calculate from metrics card
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -177,22 +227,149 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
                     color: context.accent.withValues(alpha: 0.3),
                   ),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline, color: context.accent),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Set your daily nutrition targets based on your fitness goals.',
-                        style: TextStyle(
-                          color: context.textSecondary,
-                          fontSize: 14,
+                    Row(
+                      children: [
+                        Icon(Icons.calculate, color: context.accent),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Calculate from your body metrics',
+                            style: TextStyle(
+                              color: context.textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Auto-calculate based on your weight, height, age, and activity level.',
+                      style: TextStyle(
+                        color: context.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Goal type selector
+                    Row(
+                      children: [
+                        Text(
+                          'Goal: ',
+                          style: TextStyle(
+                            color: context.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: context.surface,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: context.border),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedGoalType,
+                                isExpanded: true,
+                                dropdownColor: context.surface,
+                                style: TextStyle(color: context.textPrimary),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'WeightLoss',
+                                    child: Text('Weight Loss'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'Maintenance',
+                                    child: Text('Maintenance'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'MuscleGain',
+                                    child: Text('Muscle Gain'),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _selectedGoalType = value;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed:
+                            _isCalculating ? null : _calculateFromMetrics,
+                        icon:
+                            _isCalculating
+                                ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                : const Icon(Icons.auto_fix_high),
+                        label: Text(
+                          _isCalculating ? 'Calculating...' : 'Calculate',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.accent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
+              if (_calculationExplanation != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.green.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.lightbulb_outline,
+                        color: Colors.green,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _calculationExplanation!,
+                          style: TextStyle(
+                            color: context.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
 
               // Calories section

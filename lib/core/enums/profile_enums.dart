@@ -156,6 +156,78 @@ enum FitnessGoal {
   }
 }
 
+enum ActivityLevel {
+  sedentary,
+  lightlyActive,
+  moderatelyActive,
+  veryActive,
+  extremelyActive;
+
+  String get displayName {
+    switch (this) {
+      case ActivityLevel.sedentary:
+        return 'Sedentary';
+      case ActivityLevel.lightlyActive:
+        return 'Lightly Active';
+      case ActivityLevel.moderatelyActive:
+        return 'Moderately Active';
+      case ActivityLevel.veryActive:
+        return 'Very Active';
+      case ActivityLevel.extremelyActive:
+        return 'Extremely Active';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case ActivityLevel.sedentary:
+        return 'Little or no exercise, desk job';
+      case ActivityLevel.lightlyActive:
+        return 'Light exercise 1-3 days/week';
+      case ActivityLevel.moderatelyActive:
+        return 'Moderate exercise 3-5 days/week';
+      case ActivityLevel.veryActive:
+        return 'Hard exercise 6-7 days/week';
+      case ActivityLevel.extremelyActive:
+        return 'Very hard exercise, physical job';
+    }
+  }
+
+  String get serverValue {
+    switch (this) {
+      case ActivityLevel.sedentary:
+        return 'Sedentary';
+      case ActivityLevel.lightlyActive:
+        return 'LightlyActive';
+      case ActivityLevel.moderatelyActive:
+        return 'ModeratelyActive';
+      case ActivityLevel.veryActive:
+        return 'VeryActive';
+      case ActivityLevel.extremelyActive:
+        return 'ExtremelyActive';
+    }
+  }
+
+  static ActivityLevel? fromString(String? value) {
+    if (value == null || value.isEmpty) return null;
+    final normalized = value.trim().toLowerCase().replaceAll(' ', '');
+    switch (normalized) {
+      case 'sedentary':
+        return ActivityLevel.sedentary;
+      case 'lightlyactive':
+        return ActivityLevel.lightlyActive;
+      case 'moderatelyactive':
+        return ActivityLevel.moderatelyActive;
+      case 'veryactive':
+        return ActivityLevel.veryActive;
+      case 'extremelyactive':
+        return ActivityLevel.extremelyActive;
+      default:
+        return null;
+    }
+  }
+}
+
 enum UnitPreference {
   metric,
   imperial;
