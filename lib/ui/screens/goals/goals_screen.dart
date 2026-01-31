@@ -745,9 +745,10 @@ class _GoalsScreenState extends State<GoalsScreen>
   Widget _buildCaloriePreview(Goal goal) {
     String recommendation = '';
     final change = (goal.targetValue - goal.currentValue).abs();
-    final weeks = goal.targetDate != null
-        ? goal.targetDate!.difference(DateTime.now()).inDays / 7
-        : 12;
+    final weeks =
+        goal.targetDate != null
+            ? goal.targetDate!.difference(DateTime.now()).inDays / 7
+            : 12;
 
     if (goal.isDecreaseGoal) {
       // Weight loss: calculate weekly rate and suggest deficit
@@ -774,10 +775,7 @@ class _GoalsScreenState extends State<GoalsScreen>
           Expanded(
             child: Text(
               recommendation,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.green.shade700,
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.green.shade700),
             ),
           ),
         ],
@@ -788,54 +786,49 @@ class _GoalsScreenState extends State<GoalsScreen>
   void _showMealPlanDialog(BuildContext context, Goal goal) {
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              Icons.restaurant_menu,
-              color: Colors.green.shade600,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.restaurant_menu, color: Colors.green.shade600),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Generate Meal Plan?')),
+              ],
             ),
-            const SizedBox(width: 12),
-            const Expanded(child: Text('Generate Meal Plan?')),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Would you like AI to create a personalized meal plan to help you reach this goal?',
-              style: TextStyle(fontSize: 15),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Would you like AI to create a personalized meal plan to help you reach this goal?',
+                  style: TextStyle(fontSize: 15),
+                ),
+                const SizedBox(height: 16),
+                _buildCaloriePreview(goal),
+              ],
             ),
-            const SizedBox(height: 16),
-            _buildCaloriePreview(goal),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Maybe Later'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Maybe Later'),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade600,
+                ),
+                onPressed: () async {
+                  Navigator.pop(dialogContext);
+                  await _navigateToMealPlanChat(context, goal);
+                },
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: const Text('Generate Plan'),
+              ),
+            ],
           ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green.shade600,
-            ),
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              await _navigateToMealPlanChat(context, goal);
-            },
-            icon: const Icon(Icons.auto_awesome, size: 18),
-            label: const Text('Generate Plan'),
-          ),
-        ],
-      ),
     );
   }
 
-  Future<void> _navigateToMealPlanChat(
-    BuildContext context,
-    Goal goal,
-  ) async {
+  Future<void> _navigateToMealPlanChat(BuildContext context, Goal goal) async {
     try {
       final chatProvider = context.read<ChatProvider>();
 
@@ -889,16 +882,18 @@ class _GoalsScreenState extends State<GoalsScreen>
   String _generateMealPlanPrompt(Goal goal) {
     final change = (goal.targetValue - goal.currentValue).abs();
     final unit = goal.unit ?? 'lbs';
-    final weeks = goal.targetDate != null
-        ? goal.targetDate!.difference(DateTime.now()).inDays ~/ 7
-        : 12;
+    final weeks =
+        goal.targetDate != null
+            ? goal.targetDate!.difference(DateTime.now()).inDays ~/ 7
+            : 12;
 
     String prompt;
 
     if (goal.isDecreaseGoal) {
       final weeklyLoss = weeks > 0 ? change / weeks : 1.0;
       final dailyDeficit = (weeklyLoss * 500).round().clamp(500, 1000);
-      prompt = '''Create a personalized meal plan to help me lose ${change.toStringAsFixed(0)} $unit in $weeks weeks.
+      prompt =
+          '''Create a personalized meal plan to help me lose ${change.toStringAsFixed(0)} $unit in $weeks weeks.
 
 Target: ${goal.currentValue.toStringAsFixed(0)} $unit → ${goal.targetValue.toStringAsFixed(0)} $unit
 Weekly goal: ${weeklyLoss.toStringAsFixed(1)} $unit/week
@@ -911,7 +906,8 @@ Please include:
 - Easy meal prep ideas
 - Grocery shopping list''';
     } else {
-      prompt = '''Create a personalized meal plan to help me gain ${change.toStringAsFixed(0)} $unit of muscle in $weeks weeks.
+      prompt =
+          '''Create a personalized meal plan to help me gain ${change.toStringAsFixed(0)} $unit of muscle in $weeks weeks.
 
 Target: ${goal.currentValue.toStringAsFixed(0)} $unit → ${goal.targetValue.toStringAsFixed(0)} $unit
 
@@ -1183,8 +1179,8 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
       }
     } else if (type.contains('fat')) {
       if (latest.bodyFatPercentage != null) {
-        _currentValueController.text =
-            latest.bodyFatPercentage!.toStringAsFixed(1);
+        _currentValueController.text = latest.bodyFatPercentage!
+            .toStringAsFixed(1);
         _autoPopulatedFrom = 'bodyFat';
         _autoPopulatedDate = latest.recordedAt;
       }
