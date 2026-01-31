@@ -8,6 +8,7 @@ class BodyMetric {
   final int userId;
   final DateTime recordedAt;
   final double? weight;
+  final double? height;
   final double? bodyFatPercentage;
   final double? chestCircumference;
   final double? waistCircumference;
@@ -24,6 +25,7 @@ class BodyMetric {
     required this.userId,
     required this.recordedAt,
     this.weight,
+    this.height,
     this.bodyFatPercentage,
     this.chestCircumference,
     this.waistCircumference,
@@ -50,6 +52,7 @@ class BodyMetric {
       userId: metric.userId,
       recordedAt: _toUtc(metric.recordedAt),
       weight: metric.weight,
+      height: metric.height,
       bodyFatPercentage: metric.bodyFatPercentage,
       chestCircumference: metric.chestCircumference,
       waistCircumference: metric.waistCircumference,
@@ -70,6 +73,7 @@ class BodyMetric {
     int? userId,
     DateTime? recordedAt,
     double? weight,
+    double? height,
     double? bodyFatPercentage,
     double? chestCircumference,
     double? waistCircumference,
@@ -86,6 +90,7 @@ class BodyMetric {
       userId: userId ?? this.userId,
       recordedAt: recordedAt ?? this.recordedAt,
       weight: weight ?? this.weight,
+      height: height ?? this.height,
       bodyFatPercentage: bodyFatPercentage ?? this.bodyFatPercentage,
       chestCircumference: chestCircumference ?? this.chestCircumference,
       waistCircumference: waistCircumference ?? this.waistCircumference,

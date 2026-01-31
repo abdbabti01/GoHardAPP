@@ -7,6 +7,7 @@ import '../../../providers/goals_provider.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/chat_provider.dart';
+import '../../../providers/body_metrics_provider.dart';
 import '../../../data/models/goal.dart';
 import '../../../data/models/goal_progress.dart';
 import '../../../core/services/notification_service.dart';
@@ -251,6 +252,16 @@ class _GoalsScreenState extends State<GoalsScreen>
     // If goal was created, ask if user wants to generate workout plan
     if (createdGoal != null && context.mounted) {
       _showWorkoutPlanDialog(context, createdGoal);
+
+      // Also show meal plan dialog for nutrition-related goals
+      if (_isNutritionRelatedGoal(createdGoal)) {
+        // Small delay so dialogs don't overlap
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (context.mounted) {
+            _showMealPlanDialog(context, createdGoal);
+          }
+        });
+      }
     }
   }
 
@@ -720,6 +731,203 @@ class _GoalsScreenState extends State<GoalsScreen>
     );
   }
 
+  /// Check if goal is nutrition-related (weight loss, muscle gain, body fat)
+  bool _isNutritionRelatedGoal(Goal goal) {
+    final type = goal.goalType.toLowerCase();
+    return type.contains('weight') ||
+        type.contains('muscle') ||
+        type.contains('fat') ||
+        type.contains('loss') ||
+        type.contains('gain');
+  }
+
+  /// Build calorie preview widget for meal plan dialog
+  Widget _buildCaloriePreview(Goal goal) {
+    String recommendation = '';
+    final change = (goal.targetValue - goal.currentValue).abs();
+    final weeks = goal.targetDate != null
+        ? goal.targetDate!.difference(DateTime.now()).inDays / 7
+        : 12;
+
+    if (goal.isDecreaseGoal) {
+      // Weight loss: calculate weekly rate and suggest deficit
+      final weeklyLoss = weeks > 0 ? change / weeks : 1.0;
+      final dailyDeficit = (weeklyLoss * 500).round().clamp(500, 1000);
+      recommendation =
+          'Recommended: ~$dailyDeficit cal/day deficit\n(${weeklyLoss.toStringAsFixed(1)} ${goal.unit ?? 'lbs'}/week)';
+    } else {
+      recommendation =
+          'Recommended: ~300-500 cal/day surplus\nHigh protein for muscle growth';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.restaurant_menu, color: Colors.green.shade600, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              recommendation,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.green.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMealPlanDialog(BuildContext context, Goal goal) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.restaurant_menu,
+              color: Colors.green.shade600,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Generate Meal Plan?')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Would you like AI to create a personalized meal plan to help you reach this goal?',
+              style: TextStyle(fontSize: 15),
+            ),
+            const SizedBox(height: 16),
+            _buildCaloriePreview(goal),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Maybe Later'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade600,
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await _navigateToMealPlanChat(context, goal);
+            },
+            icon: const Icon(Icons.auto_awesome, size: 18),
+            label: const Text('Generate Plan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _navigateToMealPlanChat(
+    BuildContext context,
+    Goal goal,
+  ) async {
+    try {
+      final chatProvider = context.read<ChatProvider>();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Creating meal plan chat...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      final prompt = _generateMealPlanPrompt(goal);
+
+      final conversation = await chatProvider.createConversation(
+        title: 'Meal Plan: ${goal.goalType}',
+        type: 'meal_plan',
+      );
+
+      if (conversation != null && context.mounted) {
+        await Navigator.pushNamed(
+          context,
+          RouteNames.chatConversation,
+          arguments: {
+            'conversationId': conversation.id,
+            'initialMessage': prompt,
+            'goalId': goal.id,
+          },
+        );
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                chatProvider.errorMessage ?? 'Failed to create conversation',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  String _generateMealPlanPrompt(Goal goal) {
+    final change = (goal.targetValue - goal.currentValue).abs();
+    final unit = goal.unit ?? 'lbs';
+    final weeks = goal.targetDate != null
+        ? goal.targetDate!.difference(DateTime.now()).inDays ~/ 7
+        : 12;
+
+    String prompt;
+
+    if (goal.isDecreaseGoal) {
+      final weeklyLoss = weeks > 0 ? change / weeks : 1.0;
+      final dailyDeficit = (weeklyLoss * 500).round().clamp(500, 1000);
+      prompt = '''Create a personalized meal plan to help me lose ${change.toStringAsFixed(0)} $unit in $weeks weeks.
+
+Target: ${goal.currentValue.toStringAsFixed(0)} $unit → ${goal.targetValue.toStringAsFixed(0)} $unit
+Weekly goal: ${weeklyLoss.toStringAsFixed(1)} $unit/week
+Suggested daily deficit: ~$dailyDeficit calories
+
+Please include:
+- Daily calorie target and macro breakdown (protein, carbs, fat)
+- Sample meal plan for a week (breakfast, lunch, dinner, snacks)
+- High-protein options to preserve muscle during weight loss
+- Easy meal prep ideas
+- Grocery shopping list''';
+    } else {
+      prompt = '''Create a personalized meal plan to help me gain ${change.toStringAsFixed(0)} $unit of muscle in $weeks weeks.
+
+Target: ${goal.currentValue.toStringAsFixed(0)} $unit → ${goal.targetValue.toStringAsFixed(0)} $unit
+
+Please include:
+- Daily calorie target with 300-500 calorie surplus
+- High protein intake (1g per lb body weight)
+- Macro breakdown (protein, carbs, fat)
+- Sample meal plan for a week (breakfast, lunch, dinner, snacks)
+- Pre and post workout nutrition
+- Easy meal prep ideas
+- Grocery shopping list''';
+    }
+
+    return prompt;
+  }
+
   Future<void> _navigateToWorkoutPlanChat(
     BuildContext context,
     Goal goal,
@@ -826,6 +1034,10 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
   DateTime? _targetDate;
   DateTime? _aiSuggestedDate;
   bool _isCreating = false;
+
+  // Auto-populate tracking
+  String? _autoPopulatedFrom;
+  DateTime? _autoPopulatedDate;
 
   // Common fitness goal types
   final List<String> _goalTypes = [
@@ -942,6 +1154,41 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
     // Listen to value changes to recalculate AI suggestion
     _targetValueController.addListener(_calculateAISuggestedDate);
     _currentValueController.addListener(_calculateAISuggestedDate);
+
+    // Load latest body metric for auto-population
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BodyMetricsProvider>().loadLatestMetric();
+    });
+  }
+
+  /// Auto-populate current value from latest body metric based on goal type
+  void _autoPopulateFromMetrics(String goalType) {
+    final bodyMetricsProvider = context.read<BodyMetricsProvider>();
+    final latest = bodyMetricsProvider.latestMetric;
+
+    if (latest == null) return;
+
+    final type = goalType.toLowerCase();
+
+    if (type.contains('weight') || type.contains('muscle')) {
+      if (latest.weight != null) {
+        // Convert kg to lbs if unit is lb
+        double value = latest.weight!;
+        if (_selectedUnit == 'lb') {
+          value = value * 2.20462; // kg to lbs
+        }
+        _currentValueController.text = value.toStringAsFixed(1);
+        _autoPopulatedFrom = 'weight';
+        _autoPopulatedDate = latest.recordedAt;
+      }
+    } else if (type.contains('fat')) {
+      if (latest.bodyFatPercentage != null) {
+        _currentValueController.text =
+            latest.bodyFatPercentage!.toStringAsFixed(1);
+        _autoPopulatedFrom = 'bodyFat';
+        _autoPopulatedDate = latest.recordedAt;
+      }
+    }
   }
 
   Future<void> _selectTargetDate() async {
@@ -1043,6 +1290,10 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                     // Reset unit to first available option when goal type changes
                     if (value != null) {
                       _selectedUnit = _availableUnits.first;
+                      // Auto-populate from body metrics
+                      _autoPopulatedFrom = null;
+                      _autoPopulatedDate = null;
+                      _autoPopulateFromMetrics(value);
                       _calculateAISuggestedDate();
                     }
                   });
@@ -1067,6 +1318,15 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                onChanged: (_) {
+                  // Clear auto-populated indicator when user manually edits
+                  if (_autoPopulatedFrom != null) {
+                    setState(() {
+                      _autoPopulatedFrom = null;
+                      _autoPopulatedDate = null;
+                    });
+                  }
+                },
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return _isWeightGoal()
@@ -1079,6 +1339,33 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                   return null;
                 },
               ),
+              // Show auto-populated indicator
+              if (_autoPopulatedFrom != null) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const SizedBox(width: 40),
+                    Icon(
+                      Icons.auto_awesome,
+                      size: 14,
+                      color: Colors.green.shade600,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _autoPopulatedDate != null
+                            ? 'Auto-filled from body metrics (${DateFormat('MMM d').format(_autoPopulatedDate!)})'
+                            : 'Auto-filled from latest body metric',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
               // Target Weight/Value field - shown SECOND
               TextFormField(
