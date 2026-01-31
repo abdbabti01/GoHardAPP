@@ -135,6 +135,11 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
                     'Weight',
                     '${metric.weight!.toStringAsFixed(1)} kg',
                   ),
+                if (metric.height != null)
+                  _buildMetricChip(
+                    'Height',
+                    '${metric.height!.toStringAsFixed(1)} cm',
+                  ),
                 if (metric.bodyFatPercentage != null)
                   _buildMetricChip(
                     'Body Fat',
@@ -313,6 +318,11 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
                       'Weight',
                       '${metric.weight!.toStringAsFixed(1)} kg',
                     ),
+                  if (metric.height != null)
+                    _buildDetailRow(
+                      'Height',
+                      '${metric.height!.toStringAsFixed(1)} cm',
+                    ),
                   if (metric.bodyFatPercentage != null)
                     _buildDetailRow(
                       'Body Fat',
@@ -395,6 +405,7 @@ class AddBodyMetricDialog extends StatefulWidget {
 class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
   final _formKey = GlobalKey<FormState>();
   final _weightController = TextEditingController();
+  final _heightController = TextEditingController();
   final _bodyFatController = TextEditingController();
   final _chestController = TextEditingController();
   final _waistController = TextEditingController();
@@ -409,6 +420,7 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
   @override
   void dispose() {
     _weightController.dispose();
+    _heightController.dispose();
     _bodyFatController.dispose();
     _chestController.dispose();
     _waistController.dispose();
@@ -427,6 +439,7 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
 
     // Check if at least one measurement is provided
     if (_weightController.text.isEmpty &&
+        _heightController.text.isEmpty &&
         _bodyFatController.text.isEmpty &&
         _chestController.text.isEmpty &&
         _waistController.text.isEmpty &&
@@ -453,6 +466,10 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
           _weightController.text.isEmpty
               ? null
               : double.parse(_weightController.text),
+      height:
+          _heightController.text.isEmpty
+              ? null
+              : double.parse(_heightController.text),
       bodyFatPercentage:
           _bodyFatController.text.isEmpty
               ? null
@@ -531,6 +548,26 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
                   labelText: 'Weight',
                   suffixText: 'kg',
                   prefixIcon: Icon(Icons.monitor_weight),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    if (double.tryParse(value) == null) {
+                      return 'Please enter a valid number';
+                    }
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _heightController,
+                decoration: const InputDecoration(
+                  labelText: 'Height',
+                  suffixText: 'cm',
+                  prefixIcon: Icon(Icons.height),
                 ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
