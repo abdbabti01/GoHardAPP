@@ -120,12 +120,12 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
             _buildQuickStats(context),
             const SizedBox(height: 20),
 
-            // Running widget
-            const RunningWidget(),
-            const SizedBox(height: 20),
-
             // Today's workouts
             _buildTodaysWorkouts(context),
+            const SizedBox(height: 20),
+
+            // Running widget
+            const RunningWidget(),
             const SizedBox(height: 20),
 
             // Nutrition summary
