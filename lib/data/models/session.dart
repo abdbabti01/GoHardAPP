@@ -1,5 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'exercise.dart';
+import '../../core/utils/datetime_helper.dart';
 
 part 'session.g.dart';
 
@@ -40,60 +41,62 @@ class Session {
   });
 
   factory Session.fromJson(Map<String, dynamic> json) {
-    // Parse the session using generated code
-    final session = _$SessionFromJson(json);
-
-    // Normalize date to local midnight (fixes timezone issue where UTC midnight becomes yesterday)
-    final normalizedDate = DateTime(
-      session.date.year,
-      session.date.month,
-      session.date.day,
-    );
-
-    // CRITICAL FIX: Convert timestamp fields to UTC properly
-    // The API returns timestamps in UTC, but if the 'Z' suffix is missing,
-    // Dart's DateTime.parse() creates a LOCAL DateTime with the raw values.
-    // Calling .toUtc() on a local DateTime SHIFTS the time by timezone offset (BUG!).
-    // Instead, we must reconstruct the DateTime as UTC from the raw components.
-    // This treats the raw values AS UTC, which is correct since the API sends UTC.
-    DateTime? toUtcTimestamp(DateTime? dt) {
-      if (dt == null) return null;
-      // If already UTC, return as-is
-      if (dt.isUtc) return dt;
-      // Construct UTC DateTime from the raw components (NOT using toUtc which would shift the time)
-      return DateTime.utc(
-        dt.year,
-        dt.month,
-        dt.day,
-        dt.hour,
-        dt.minute,
-        dt.second,
-        dt.millisecond,
-        dt.microsecond,
-      );
-    }
+    // Parse exercises manually to handle the list
+    final exercisesList =
+        (json['exercises'] as List<dynamic>?)
+            ?.map((e) => Exercise.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [];
 
     return Session(
-      id: session.id,
-      userId: session.userId,
-      date:
-          normalizedDate, // Normalize to local midnight (fixes timezone issue)
-      duration: session.duration,
-      notes: session.notes,
-      type: session.type,
-      name: session.name, // Preserve workout name
-      status: session.status,
-      startedAt: toUtcTimestamp(session.startedAt), // Properly treat as UTC
-      completedAt: toUtcTimestamp(session.completedAt), // Properly treat as UTC
-      pausedAt: toUtcTimestamp(session.pausedAt), // Properly treat as UTC
-      exercises: session.exercises,
-      programId: session.programId,
-      programWorkoutId: session.programWorkoutId,
-      version: session.version,
+      id: json['id'] as int,
+      userId: json['userId'] as int,
+      // Date-only field: API returns "yyyy-MM-dd", parse as local date
+      date: DateTimeHelper.parseDateFromJson(json['date']),
+      duration: json['duration'] as int?,
+      notes: json['notes'] as String?,
+      type: json['type'] as String?,
+      name: json['name'] as String?,
+      status: json['status'] as String? ?? 'draft',
+      // Timestamp fields: API returns with 'Z' suffix, parse as UTC
+      startedAt: DateTimeHelper.parseTimestampOrNullFromJson(json['startedAt']),
+      completedAt: DateTimeHelper.parseTimestampOrNullFromJson(
+        json['completedAt'],
+      ),
+      pausedAt: DateTimeHelper.parseTimestampOrNullFromJson(json['pausedAt']),
+      exercises: exercisesList,
+      programId: json['programId'] as int?,
+      programWorkoutId: json['programWorkoutId'] as int?,
+      version: json['version'] as int? ?? 1,
     );
   }
 
-  Map<String, dynamic> toJson() => _$SessionToJson(this);
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'userId': userId,
+      // Date-only field: format as "yyyy-MM-dd"
+      'date': DateTimeHelper.formatDate(date),
+      'duration': duration,
+      'notes': notes,
+      'type': type,
+      'name': name,
+      'status': status,
+      // Timestamp fields: format as UTC ISO 8601
+      'startedAt':
+          startedAt != null ? DateTimeHelper.formatTimestamp(startedAt!) : null,
+      'completedAt':
+          completedAt != null
+              ? DateTimeHelper.formatTimestamp(completedAt!)
+              : null,
+      'pausedAt':
+          pausedAt != null ? DateTimeHelper.formatTimestamp(pausedAt!) : null,
+      'exercises': exercises.map((e) => e.toJson()).toList(),
+      'programId': programId,
+      'programWorkoutId': programWorkoutId,
+      'version': version,
+    };
+  }
 
   /// Check if session is from a program
   bool get isFromProgram => programId != null && programId! > 0;

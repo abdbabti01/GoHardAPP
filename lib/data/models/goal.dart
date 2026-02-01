@@ -1,5 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'goal_progress.dart';
+import '../../core/utils/datetime_helper.dart';
 
 part 'goal.g.dart';
 
@@ -37,30 +38,32 @@ class Goal {
     this.progressHistory,
   });
 
-  // Helper method to ensure datetime is in UTC
-  static DateTime _toUtc(DateTime dt) {
-    if (dt.isUtc) return dt;
-    return dt.toUtc();
-  }
-
   factory Goal.fromJson(Map<String, dynamic> json) {
-    final goal = _$GoalFromJson(json);
+    // Parse progress history list
+    final progressList =
+        (json['progressHistory'] as List<dynamic>?)
+            ?.map((e) => GoalProgress.fromJson(e as Map<String, dynamic>))
+            .toList();
 
     return Goal(
-      id: goal.id,
-      userId: goal.userId,
-      goalType: goal.goalType,
-      targetValue: goal.targetValue,
-      currentValue: goal.currentValue,
-      unit: goal.unit,
-      timeFrame: goal.timeFrame,
-      startDate: _toUtc(goal.startDate),
-      targetDate: goal.targetDate != null ? _toUtc(goal.targetDate!) : null,
-      isActive: goal.isActive,
-      isCompleted: goal.isCompleted,
-      completedAt: goal.completedAt != null ? _toUtc(goal.completedAt!) : null,
-      createdAt: _toUtc(goal.createdAt),
-      progressHistory: goal.progressHistory,
+      id: json['id'] as int,
+      userId: json['userId'] as int,
+      goalType: json['goalType'] as String,
+      targetValue: (json['targetValue'] as num).toDouble(),
+      currentValue: (json['currentValue'] as num).toDouble(),
+      unit: json['unit'] as String?,
+      timeFrame: json['timeFrame'] as String?,
+      // Date-only fields: parse as local date
+      startDate: DateTimeHelper.parseDateFromJson(json['startDate']),
+      targetDate: DateTimeHelper.parseDateOrNullFromJson(json['targetDate']),
+      isActive: json['isActive'] as bool,
+      isCompleted: json['isCompleted'] as bool,
+      // Timestamp fields: parse as UTC
+      completedAt: DateTimeHelper.parseTimestampOrNullFromJson(
+        json['completedAt'],
+      ),
+      createdAt: DateTimeHelper.parseTimestampFromJson(json['createdAt']),
+      progressHistory: progressList,
     );
   }
 

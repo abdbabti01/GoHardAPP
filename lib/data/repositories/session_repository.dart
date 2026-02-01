@@ -402,6 +402,7 @@ class SessionRepository {
         debugPrint('   Parsed pausedAt.isUtc: ${apiSession.pausedAt?.isUtc}');
 
         // Update local cache (session AND exercises)
+        // Note: The API now returns date-only fields as "yyyy-MM-dd" without timezone issues
         await db.writeTxn(() async {
           final existingLocal =
               await db.localSessions

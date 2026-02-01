@@ -1,6 +1,7 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'program_workout.dart';
 import 'goal.dart';
+import '../../core/utils/datetime_helper.dart';
 
 part 'program.g.dart';
 
@@ -44,39 +45,39 @@ class Program {
     this.goal,
   });
 
-  // Helper method to ensure datetime is in UTC
-  static DateTime _toUtc(DateTime dt) {
-    if (dt.isUtc) return dt;
-    return dt.toUtc();
-  }
-
-  static DateTime? _toUtcNullable(DateTime? dt) {
-    if (dt == null) return null;
-    if (dt.isUtc) return dt;
-    return dt.toUtc();
-  }
-
   factory Program.fromJson(Map<String, dynamic> json) {
-    final program = _$ProgramFromJson(json);
+    // Parse workouts list
+    final workoutsList =
+        (json['workouts'] as List<dynamic>?)
+            ?.map((e) => ProgramWorkout.fromJson(e as Map<String, dynamic>))
+            .toList();
+
+    // Parse goal if present
+    final goalJson = json['goal'] as Map<String, dynamic>?;
+    final goal = goalJson != null ? Goal.fromJson(goalJson) : null;
 
     return Program(
-      id: program.id,
-      userId: program.userId,
-      title: program.title,
-      description: program.description,
-      goalId: program.goalId,
-      totalWeeks: program.totalWeeks,
-      currentWeek: program.currentWeek,
-      currentDay: program.currentDay,
-      startDate: _toUtc(program.startDate),
-      endDate: _toUtcNullable(program.endDate),
-      isActive: program.isActive,
-      isCompleted: program.isCompleted,
-      completedAt: _toUtcNullable(program.completedAt),
-      createdAt: _toUtc(program.createdAt),
-      programStructure: program.programStructure,
-      workouts: program.workouts,
-      goal: program.goal,
+      id: json['id'] as int,
+      userId: json['userId'] as int,
+      title: json['title'] as String,
+      description: json['description'] as String?,
+      goalId: json['goalId'] as int?,
+      totalWeeks: json['totalWeeks'] as int,
+      currentWeek: json['currentWeek'] as int,
+      currentDay: json['currentDay'] as int,
+      // Date-only fields: parse as local date
+      startDate: DateTimeHelper.parseDateFromJson(json['startDate']),
+      endDate: DateTimeHelper.parseDateOrNullFromJson(json['endDate']),
+      isActive: json['isActive'] as bool,
+      isCompleted: json['isCompleted'] as bool,
+      // Timestamp fields: parse as UTC
+      completedAt: DateTimeHelper.parseTimestampOrNullFromJson(
+        json['completedAt'],
+      ),
+      createdAt: DateTimeHelper.parseTimestampFromJson(json['createdAt']),
+      programStructure: json['programStructure'] as String?,
+      workouts: workoutsList,
+      goal: goal,
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'dart:convert';
+import '../../core/utils/datetime_helper.dart';
 
 part 'program_workout.g.dart';
 
@@ -46,41 +47,31 @@ class ProgramWorkout {
     this.scheduledDate,
   });
 
-  // Helper method to ensure datetime is in UTC
-  static DateTime? _toUtcNullable(DateTime? dt) {
-    if (dt == null) return null;
-    if (dt.isUtc) return dt;
-    return dt.toUtc();
-  }
-
   factory ProgramWorkout.fromJson(Map<String, dynamic> json) {
-    final workout = _$ProgramWorkoutFromJson(json);
-
-    // Normalize scheduledDate to local date (date-only, no time component issues)
-    DateTime? normalizedScheduledDate;
-    if (workout.scheduledDate != null) {
-      final sd = workout.scheduledDate!;
-      normalizedScheduledDate = DateTime(sd.year, sd.month, sd.day);
-    }
-
     return ProgramWorkout(
-      id: workout.id,
-      programId: workout.programId,
-      weekNumber: workout.weekNumber,
-      dayNumber: workout.dayNumber,
-      dayName: workout.dayName,
-      workoutName: workout.workoutName,
-      workoutType: workout.workoutType,
-      description: workout.description,
-      estimatedDuration: workout.estimatedDuration,
-      exercisesJson: workout.exercisesJson,
-      warmUp: workout.warmUp,
-      coolDown: workout.coolDown,
-      isCompleted: workout.isCompleted,
-      completedAt: _toUtcNullable(workout.completedAt),
-      completionNotes: workout.completionNotes,
-      orderIndex: workout.orderIndex,
-      scheduledDate: normalizedScheduledDate,
+      id: json['id'] as int,
+      programId: json['programId'] as int,
+      weekNumber: json['weekNumber'] as int,
+      dayNumber: json['dayNumber'] as int,
+      dayName: json['dayName'] as String?,
+      workoutName: json['workoutName'] as String,
+      workoutType: json['workoutType'] as String?,
+      description: json['description'] as String?,
+      estimatedDuration: json['estimatedDuration'] as int?,
+      exercisesJson: json['exercisesJson'] as String,
+      warmUp: json['warmUp'] as String?,
+      coolDown: json['coolDown'] as String?,
+      isCompleted: json['isCompleted'] as bool,
+      // Timestamp field: parse as UTC
+      completedAt: DateTimeHelper.parseTimestampOrNullFromJson(
+        json['completedAt'],
+      ),
+      completionNotes: json['completionNotes'] as String?,
+      orderIndex: json['orderIndex'] as int,
+      // Date-only field: parse as local date
+      scheduledDate: DateTimeHelper.parseDateOrNullFromJson(
+        json['scheduledDate'],
+      ),
     );
   }
 
