@@ -8,6 +8,7 @@ import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../providers/body_metrics_provider.dart';
+import '../../../providers/nutrition_provider.dart';
 import '../../../data/models/goal.dart';
 import '../../../data/models/goal_progress.dart';
 import '../../../core/services/notification_service.dart';
@@ -249,18 +250,54 @@ class _GoalsScreenState extends State<GoalsScreen>
       builder: (context) => const CreateGoalDialog(),
     );
 
-    // If goal was created, ask if user wants to generate workout plan
+    // If goal was created, calculate nutrition and show summary dialog
     if (createdGoal != null && context.mounted) {
-      _showWorkoutPlanDialog(context, createdGoal);
+      // Calculate nutrition based on goal
+      final nutritionProvider = context.read<NutritionProvider>();
 
-      // Also show meal plan dialog for nutrition-related goals
-      if (_isNutritionRelatedGoal(createdGoal)) {
-        // Small delay so dialogs don't overlap
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (context.mounted) {
-            _showMealPlanDialog(context, createdGoal);
-          }
-        });
+      // Determine goal type for nutrition calculation
+      String nutritionGoalType = 'Maintenance';
+      double? targetWeightChange;
+      int? timeframeWeeks;
+
+      final goalType = createdGoal.goalType.toLowerCase();
+      if (goalType.contains('loss')) {
+        nutritionGoalType = 'WeightLoss';
+        targetWeightChange =
+            (createdGoal.currentValue - createdGoal.targetValue).abs();
+      } else if (goalType.contains('gain') || goalType.contains('muscle')) {
+        nutritionGoalType = 'MuscleGain';
+        targetWeightChange =
+            (createdGoal.targetValue - createdGoal.currentValue).abs();
+      }
+
+      if (createdGoal.targetDate != null) {
+        timeframeWeeks =
+            createdGoal.targetDate!.difference(DateTime.now()).inDays ~/ 7;
+        if (timeframeWeeks < 1) timeframeWeeks = 1;
+      }
+
+      // Calculate nutrition from user metrics
+      final nutrition = await nutritionProvider.calculateAndSaveNutrition(
+        goalType: nutritionGoalType,
+        targetWeightChange: targetWeightChange,
+        timeframeWeeks: timeframeWeeks,
+      );
+
+      if (context.mounted) {
+        // Show summary dialog with nutrition + action buttons
+        showDialog(
+          context: context,
+          builder:
+              (context) => GoalCreatedSummaryDialog(
+                goal: createdGoal,
+                nutrition: nutrition,
+                onGenerateWorkoutPlan:
+                    () => _navigateToWorkoutPlanChat(context, createdGoal),
+                onGenerateMealPlan:
+                    () => _navigateToMealPlanChat(context, createdGoal),
+              ),
+        );
       }
     }
   }
@@ -1030,6 +1067,12 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
   DateTime? _targetDate;
   DateTime? _aiSuggestedDate;
   bool _isCreating = false;
+  bool _metricsLoaded = false;
+
+  // Body metrics for validation
+  double? _currentWeight;
+  double? _currentHeight;
+  String? _currentActivityLevel;
 
   // Auto-populate tracking
   String? _autoPopulatedFrom;
@@ -1153,8 +1196,45 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
 
     // Load latest body metric for auto-population
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<BodyMetricsProvider>().loadLatestMetric();
+      _loadBodyMetrics();
     });
+  }
+
+  Future<void> _loadBodyMetrics() async {
+    final provider = context.read<BodyMetricsProvider>();
+    await provider.loadLatestMetric();
+
+    final latest = provider.latestMetric;
+    if (mounted) {
+      setState(() {
+        _currentWeight = latest?.weight;
+        _currentHeight = latest?.height;
+        _currentActivityLevel = latest?.activityLevel;
+        _metricsLoaded = true;
+      });
+    }
+  }
+
+  bool get _hasAllRequiredMetrics =>
+      _currentWeight != null &&
+      _currentHeight != null &&
+      _currentActivityLevel != null;
+
+  String _formatActivityLevelDisplay(String level) {
+    switch (level) {
+      case 'Sedentary':
+        return 'Sedentary';
+      case 'LightlyActive':
+        return 'Lightly Active';
+      case 'ModeratelyActive':
+        return 'Moderately Active';
+      case 'VeryActive':
+        return 'Very Active';
+      case 'ExtremelyActive':
+        return 'Extremely Active';
+      default:
+        return level;
+    }
   }
 
   /// Auto-populate current value from latest body metric based on goal type
@@ -1260,6 +1340,147 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
     }
   }
 
+  Widget _buildMissingMetricsWarning() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.warning_amber,
+                color: Colors.orange.shade700,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Complete your body metrics first',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange.shade800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildMetricStatus(
+            'Weight',
+            _currentWeight != null,
+            _currentWeight != null
+                ? '${_currentWeight!.toStringAsFixed(1)} kg'
+                : null,
+          ),
+          _buildMetricStatus(
+            'Height',
+            _currentHeight != null,
+            _currentHeight != null
+                ? '${_currentHeight!.toStringAsFixed(1)} cm'
+                : null,
+          ),
+          _buildMetricStatus(
+            'Activity Level',
+            _currentActivityLevel != null,
+            _currentActivityLevel != null
+                ? _formatActivityLevelDisplay(_currentActivityLevel!)
+                : null,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, RouteNames.bodyMetrics);
+              },
+              icon: const Icon(Icons.edit, size: 18),
+              label: const Text('Go to Body Metrics'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricStatus(String label, bool hasValue, String? value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(
+            hasValue ? Icons.check_circle : Icons.cancel,
+            color: hasValue ? Colors.green : Colors.red,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text('$label: '),
+          Text(
+            hasValue ? value! : 'Missing',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: hasValue ? Colors.green.shade700 : Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentStatsCard() {
+    if (!_hasAllRequiredMetrics) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.person, color: Colors.green.shade700, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Your Current Stats',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green.shade800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Weight: ${_currentWeight!.toStringAsFixed(1)} kg (${(_currentWeight! * 2.205).toStringAsFixed(1)} lbs)',
+            style: const TextStyle(fontSize: 13),
+          ),
+          Text(
+            'Height: ${_currentHeight!.toStringAsFixed(1)} cm',
+            style: const TextStyle(fontSize: 13),
+          ),
+          Text(
+            'Activity: ${_formatActivityLevelDisplay(_currentActivityLevel!)}',
+            style: const TextStyle(fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -1270,6 +1491,14 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Show metrics warning if any are missing
+              if (_metricsLoaded && !_hasAllRequiredMetrics)
+                _buildMissingMetricsWarning(),
+
+              // Show current stats if all metrics available
+              if (_metricsLoaded && _hasAllRequiredMetrics)
+                _buildCurrentStatsCard(),
+
               DropdownButtonFormField<String>(
                 value: _selectedGoalType,
                 decoration: const InputDecoration(
@@ -1456,7 +1685,8 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: _isCreating ? null : _createGoal,
+          onPressed:
+              (_isCreating || !_hasAllRequiredMetrics) ? null : _createGoal,
           child:
               _isCreating
                   ? SizedBox(
@@ -1470,6 +1700,233 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
                   : const Text('Create'),
         ),
       ],
+    );
+  }
+}
+
+/// Dialog shown after goal creation with nutrition summary and action buttons
+class GoalCreatedSummaryDialog extends StatelessWidget {
+  final Goal goal;
+  final CalculatedNutrition? nutrition;
+  final VoidCallback onGenerateWorkoutPlan;
+  final VoidCallback onGenerateMealPlan;
+
+  const GoalCreatedSummaryDialog({
+    super.key,
+    required this.goal,
+    this.nutrition,
+    required this.onGenerateWorkoutPlan,
+    required this.onGenerateMealPlan,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.check_circle, color: Colors.green.shade600, size: 28),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('Goal Created!')),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Goal summary
+            _buildGoalSummary(context),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+
+            // Nutrition targets
+            if (nutrition != null) ...[
+              Text(
+                'Recommended Nutrition',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildNutritionCard(context),
+              const SizedBox(height: 16),
+            ],
+
+            // Action buttons
+            Text(
+              'Next Steps',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: context.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildActionButton(
+              context,
+              icon: Icons.fitness_center,
+              label: 'Generate Workout Plan',
+              color: Colors.blue,
+              onTap: () {
+                Navigator.pop(context);
+                onGenerateWorkoutPlan();
+              },
+            ),
+            const SizedBox(height: 8),
+            _buildActionButton(
+              context,
+              icon: Icons.restaurant_menu,
+              label: 'Generate Meal Plan',
+              color: Colors.green,
+              onTap: () {
+                Navigator.pop(context);
+                onGenerateMealPlan();
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGoalSummary(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            goal.goalType,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            goal.getProgressDescription(),
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+          ),
+          if (goal.targetDate != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Target: ${DateFormat('MMM d, y').format(goal.targetDate!)}',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNutritionCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Column(
+        children: [
+          _buildNutritionRow(
+            'Daily Calories',
+            '${nutrition!.dailyCalories.round()} cal',
+          ),
+          _buildNutritionRow('Protein', '${nutrition!.dailyProtein.round()}g'),
+          _buildNutritionRow(
+            'Carbs',
+            '${nutrition!.dailyCarbohydrates.round()}g',
+          ),
+          _buildNutritionRow('Fat', '${nutrition!.dailyFat.round()}g'),
+          if (nutrition!.expectedWeeklyWeightChange != 0) ...[
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            _buildNutritionRow(
+              'Expected Weekly Change',
+              '${nutrition!.expectedWeeklyWeightChange > 0 ? '+' : ''}${nutrition!.expectedWeeklyWeightChange.toStringAsFixed(1)} lbs',
+            ),
+          ],
+          if (nutrition!.explanation.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            Text(
+              nutrition!.explanation,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNutritionRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 14)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, color: color, size: 16),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

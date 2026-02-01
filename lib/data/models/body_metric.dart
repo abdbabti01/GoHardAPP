@@ -18,6 +18,7 @@ class BodyMetric {
   final double? calfCircumference;
   final String? notes;
   final String? photoUrl;
+  final String? activityLevel;
   final DateTime createdAt;
 
   BodyMetric({
@@ -35,6 +36,7 @@ class BodyMetric {
     this.calfCircumference,
     this.notes,
     this.photoUrl,
+    this.activityLevel,
     required this.createdAt,
   });
 
@@ -62,6 +64,7 @@ class BodyMetric {
       calfCircumference: metric.calfCircumference,
       notes: metric.notes,
       photoUrl: metric.photoUrl,
+      activityLevel: metric.activityLevel,
       createdAt: _toUtc(metric.createdAt),
     );
   }
@@ -83,6 +86,7 @@ class BodyMetric {
     double? calfCircumference,
     String? notes,
     String? photoUrl,
+    String? activityLevel,
     DateTime? createdAt,
   }) {
     return BodyMetric(
@@ -100,6 +104,7 @@ class BodyMetric {
       calfCircumference: calfCircumference ?? this.calfCircumference,
       notes: notes ?? this.notes,
       photoUrl: photoUrl ?? this.photoUrl,
+      activityLevel: activityLevel ?? this.activityLevel,
       createdAt: createdAt ?? this.createdAt,
     );
   }

@@ -160,6 +160,11 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
                     'Arm',
                     '${metric.armCircumference!.toStringAsFixed(1)} cm',
                   ),
+                if (metric.activityLevel != null)
+                  _buildMetricChip(
+                    'Activity',
+                    _formatActivityLevel(metric.activityLevel!),
+                  ),
               ],
             ),
           ],
@@ -182,6 +187,23 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
         ],
       ),
     );
+  }
+
+  String _formatActivityLevel(String level) {
+    switch (level) {
+      case 'Sedentary':
+        return 'Sedentary';
+      case 'LightlyActive':
+        return 'Lightly Active';
+      case 'ModeratelyActive':
+        return 'Moderately Active';
+      case 'VeryActive':
+        return 'Very Active';
+      case 'ExtremelyActive':
+        return 'Extremely Active';
+      default:
+        return level;
+    }
   }
 
   Widget _buildMetricsList(List<BodyMetric> metrics) {
@@ -358,6 +380,11 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
                       'Calf',
                       '${metric.calfCircumference!.toStringAsFixed(1)} cm',
                     ),
+                  if (metric.activityLevel != null)
+                    _buildDetailRow(
+                      'Activity Level',
+                      _formatActivityLevel(metric.activityLevel!),
+                    ),
                   if (metric.notes != null && metric.notes!.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     const Text(
@@ -406,6 +433,7 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
   final _formKey = GlobalKey<FormState>();
   final _weightController = TextEditingController();
   final _heightController = TextEditingController();
+  String? _selectedActivityLevel;
   final _bodyFatController = TextEditingController();
   final _chestController = TextEditingController();
   final _waistController = TextEditingController();
@@ -470,6 +498,7 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
           _heightController.text.isEmpty
               ? null
               : double.parse(_heightController.text),
+      activityLevel: _selectedActivityLevel,
       bodyFatPercentage:
           _bodyFatController.text.isEmpty
               ? null
@@ -580,6 +609,38 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
                   }
                   return null;
                 },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _selectedActivityLevel,
+                decoration: const InputDecoration(
+                  labelText: 'Activity Level',
+                  prefixIcon: Icon(Icons.directions_run),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'Sedentary',
+                    child: Text('Sedentary - Little or no exercise'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'LightlyActive',
+                    child: Text('Lightly Active - 1-3 days/week'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'ModeratelyActive',
+                    child: Text('Moderately Active - 3-5 days/week'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'VeryActive',
+                    child: Text('Very Active - 6-7 days/week'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'ExtremelyActive',
+                    child: Text('Extremely Active - 2x/day'),
+                  ),
+                ],
+                onChanged:
+                    (value) => setState(() => _selectedActivityLevel = value),
               ),
               const SizedBox(height: 12),
               TextFormField(
