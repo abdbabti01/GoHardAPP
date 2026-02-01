@@ -251,51 +251,87 @@ class _GoalsScreenState extends State<GoalsScreen>
     );
 
     // If goal was created, calculate nutrition and show summary dialog
-    if (createdGoal != null && context.mounted) {
-      // Calculate nutrition based on goal
-      final nutritionProvider = context.read<NutritionProvider>();
+    if (createdGoal != null && mounted) {
+      // Show loading dialog while calculating nutrition
+      PremiumLoadingDialog.show(context, message: 'Calculating nutrition...');
 
-      // Determine goal type for nutrition calculation
-      String nutritionGoalType = 'Maintenance';
-      double? targetWeightChange;
-      int? timeframeWeeks;
+      try {
+        // Calculate nutrition based on goal
+        final nutritionProvider = context.read<NutritionProvider>();
 
-      final goalType = createdGoal.goalType.toLowerCase();
-      if (goalType.contains('loss')) {
-        nutritionGoalType = 'WeightLoss';
-        targetWeightChange =
-            (createdGoal.currentValue - createdGoal.targetValue).abs();
-      } else if (goalType.contains('gain') || goalType.contains('muscle')) {
-        nutritionGoalType = 'MuscleGain';
-        targetWeightChange =
-            (createdGoal.targetValue - createdGoal.currentValue).abs();
-      }
+        // Determine goal type for nutrition calculation
+        String nutritionGoalType = 'Maintenance';
+        double? targetWeightChange;
+        int? timeframeWeeks;
 
-      if (createdGoal.targetDate != null) {
-        timeframeWeeks =
-            createdGoal.targetDate!.difference(DateTime.now()).inDays ~/ 7;
-        if (timeframeWeeks < 1) timeframeWeeks = 1;
-      }
+        final goalType = createdGoal.goalType.toLowerCase();
+        if (goalType.contains('loss')) {
+          nutritionGoalType = 'WeightLoss';
+          targetWeightChange =
+              (createdGoal.currentValue - createdGoal.targetValue).abs();
+        } else if (goalType.contains('gain') || goalType.contains('muscle')) {
+          nutritionGoalType = 'MuscleGain';
+          targetWeightChange =
+              (createdGoal.targetValue - createdGoal.currentValue).abs();
+        }
 
-      // Calculate nutrition from user metrics
-      final nutrition = await nutritionProvider.calculateAndSaveNutrition(
-        goalType: nutritionGoalType,
-        targetWeightChange: targetWeightChange,
-        timeframeWeeks: timeframeWeeks,
-      );
+        if (createdGoal.targetDate != null) {
+          timeframeWeeks =
+              createdGoal.targetDate!.difference(DateTime.now()).inDays ~/ 7;
+          if (timeframeWeeks < 1) timeframeWeeks = 1;
+        }
 
-      if (context.mounted) {
+        // Calculate nutrition from user metrics
+        final nutrition = await nutritionProvider.calculateAndSaveNutrition(
+          goalType: nutritionGoalType,
+          targetWeightChange: targetWeightChange,
+          timeframeWeeks: timeframeWeeks,
+        );
+
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading dialog
+
         // Show summary dialog with nutrition + action buttons
+        // Note: The dialog's action buttons already call Navigator.pop internally
         showDialog(
           context: context,
           builder:
-              (context) => GoalCreatedSummaryDialog(
+              (_) => GoalCreatedSummaryDialog(
                 goal: createdGoal,
                 nutrition: nutrition,
-                onGenerateWorkoutPlan:
-                    () => _navigateToWorkoutPlanChat(context, createdGoal),
-                onGenerateMealPlan:
-                    () => _navigateToMealPlanChat(context, createdGoal),
+                onGenerateWorkoutPlan: () {
+                  _navigateToWorkoutPlanChat(context, createdGoal);
+                },
+                onGenerateMealPlan: () {
+                  _navigateToMealPlanChat(context, createdGoal);
+                },
+              ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading dialog
+
+        // Show error but still show summary without nutrition
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not calculate nutrition: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        // Show summary dialog without nutrition data
+        showDialog(
+          context: context,
+          builder:
+              (_) => GoalCreatedSummaryDialog(
+                goal: createdGoal,
+                nutrition: null,
+                onGenerateWorkoutPlan: () {
+                  _navigateToWorkoutPlanChat(context, createdGoal);
+                },
+                onGenerateMealPlan: () {
+                  _navigateToMealPlanChat(context, createdGoal);
+                },
               ),
         );
       }
