@@ -674,9 +674,11 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                       ),
                                     ),
                                   // Show "Create Program" button if AI message contains workout
+                                  // Works for workout_plan and combined_plan types
                                   if (!isUser &&
                                       _detectWorkoutPattern(message.content) &&
-                                      conversation.type != 'meal_plan')
+                                      (conversation.type == 'workout_plan' ||
+                                          conversation.type == 'combined_plan'))
                                     Padding(
                                       padding: const EdgeInsets.only(top: 12),
                                       child: ElevatedButton.icon(
@@ -697,9 +699,11 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                         ),
                                       ),
                                     ),
-                                  // Show "Apply to Today" button for meal plan conversations
+                                  // Show "Apply Meal Plan" button for meal_plan and combined_plan types
                                   if (!isUser &&
-                                      conversation.type == 'meal_plan' &&
+                                      (conversation.type == 'meal_plan' ||
+                                          conversation.type ==
+                                              'combined_plan') &&
                                       index == conversation.messages.length - 1)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 12),
@@ -710,7 +714,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                           Icons.restaurant_menu,
                                           size: 18,
                                         ),
-                                        label: const Text('Apply to Today'),
+                                        label: const Text('Apply Meal Plan'),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.green,
                                           foregroundColor: Colors.white,

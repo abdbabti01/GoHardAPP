@@ -4,23 +4,46 @@ import '../../../../core/theme/theme_colors.dart';
 import '../../../../data/models/goal.dart';
 import '../../../../data/repositories/nutrition_repository.dart';
 
+/// Result from the goal created dialog indicating which plans to generate
+class GoalDialogResult {
+  final bool generateWorkoutPlan;
+  final bool generateMealPlan;
+
+  const GoalDialogResult({
+    required this.generateWorkoutPlan,
+    required this.generateMealPlan,
+  });
+
+  bool get hasSelection => generateWorkoutPlan || generateMealPlan;
+}
+
 /// Dialog shown after goal creation with nutrition summary and action buttons
-class GoalCreatedSummaryDialog extends StatelessWidget {
+class GoalCreatedSummaryDialog extends StatefulWidget {
   final Goal goal;
   final CalculatedNutrition? nutrition;
-  final VoidCallback onGenerateWorkoutPlan;
-  final VoidCallback onGenerateMealPlan;
 
   const GoalCreatedSummaryDialog({
     super.key,
     required this.goal,
     this.nutrition,
-    required this.onGenerateWorkoutPlan,
-    required this.onGenerateMealPlan,
   });
 
   @override
+  State<GoalCreatedSummaryDialog> createState() =>
+      _GoalCreatedSummaryDialogState();
+}
+
+class _GoalCreatedSummaryDialogState extends State<GoalCreatedSummaryDialog> {
+  bool _generateWorkoutPlan = false;
+  bool _generateMealPlan = false;
+
+  Goal get goal => widget.goal;
+  CalculatedNutrition? get nutrition => widget.nutrition;
+
+  @override
   Widget build(BuildContext context) {
+    final hasSelection = _generateWorkoutPlan || _generateMealPlan;
+
     return AlertDialog(
       title: Row(
         children: [
@@ -58,46 +81,81 @@ class GoalCreatedSummaryDialog extends StatelessWidget {
               const SizedBox(height: 16),
             ],
 
-            // Action buttons
+            // Generation options with checkboxes
             Text(
-              'Next Steps',
+              'Generate Plans (Optional)',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
                 color: context.textPrimary,
               ),
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Select one or both to have AI create personalized plans:',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
             const SizedBox(height: 12),
-            _buildActionButton(
+            _buildCheckboxOption(
               context,
               icon: Icons.fitness_center,
-              label: 'Generate Workout Plan',
+              label: 'Workout Plan',
               description: 'AI creates a personalized program',
               color: Colors.blue,
-              onTap: () {
-                Navigator.pop(context);
-                onGenerateWorkoutPlan();
+              value: _generateWorkoutPlan,
+              onChanged: (value) {
+                setState(() => _generateWorkoutPlan = value ?? false);
               },
             ),
             const SizedBox(height: 8),
-            _buildActionButton(
+            _buildCheckboxOption(
               context,
               icon: Icons.restaurant_menu,
-              label: 'Generate Meal Plan',
+              label: 'Meal Plan',
               description: 'AI creates meals matching your macros',
               color: Colors.green,
-              onTap: () {
-                Navigator.pop(context);
-                onGenerateMealPlan();
+              value: _generateMealPlan,
+              onChanged: (value) {
+                setState(() => _generateMealPlan = value ?? false);
               },
             ),
+            if (hasSelection) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(
+                      context,
+                      GoalDialogResult(
+                        generateWorkoutPlan: _generateWorkoutPlan,
+                        generateMealPlan: _generateMealPlan,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.auto_awesome),
+                  label: Text(
+                    _generateWorkoutPlan && _generateMealPlan
+                        ? 'Generate Both Plans'
+                        : _generateWorkoutPlan
+                        ? 'Generate Workout Plan'
+                        : 'Generate Meal Plan',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Done'),
+          child: Text(hasSelection ? 'Skip' : 'Done'),
         ),
       ],
     );
@@ -319,32 +377,49 @@ class GoalCreatedSummaryDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(
+  Widget _buildCheckboxOption(
     BuildContext context, {
     required IconData icon,
     required String label,
     required String description,
     required Color color,
-    required VoidCallback onTap,
+    required bool value,
+    required ValueChanged<bool?> onChanged,
   }) {
     return Material(
-      color: color.withValues(alpha: 0.1),
+      color:
+          value ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.05),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
-        onTap: onTap,
+        onTap: () => onChanged(!value),
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: value ? color : Colors.grey.shade300,
+              width: value ? 2 : 1,
+            ),
+          ),
           child: Row(
             children: [
+              Checkbox(
+                value: value,
+                onChanged: onChanged,
+                activeColor: color,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 8),
               Container(
-                width: 40,
-                height: 40,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: color, size: 22),
+                child: Icon(icon, color: color, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -354,9 +429,9 @@ class GoalCreatedSummaryDialog extends StatelessWidget {
                     Text(
                       label,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: color,
+                        color: value ? color : context.textPrimary,
                       ),
                     ),
                     Text(
@@ -369,7 +444,6 @@ class GoalCreatedSummaryDialog extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios, color: color, size: 16),
             ],
           ),
         ),

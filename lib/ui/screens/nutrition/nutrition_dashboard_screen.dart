@@ -185,7 +185,7 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     final goal = provider.activeGoal?.dailyCalories ?? 2000;
     final planned = mealLog?.plannedCalories ?? 0;
     final consumed = mealLog?.consumedCalories ?? 0;
-    final remaining = goal - planned;
+    final remaining = goal - consumed;
     final isOverBudget = planned > goal;
     final isOverConsumed = consumed > goal;
 

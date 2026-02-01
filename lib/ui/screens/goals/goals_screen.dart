@@ -297,24 +297,9 @@ class _GoalsScreenState extends State<GoalsScreen>
         if (!mounted) return;
         navigator.pop(); // Close loading dialog
 
-        // Show summary dialog with nutrition + action buttons
-        // Note: The dialog's action buttons already call Navigator.pop internally
+        // Show summary dialog and handle result
         if (!mounted) return;
-        showDialog(
-          // ignore: use_build_context_synchronously
-          context: context,
-          builder:
-              (_) => GoalCreatedSummaryDialog(
-                goal: createdGoal,
-                nutrition: nutrition,
-                onGenerateWorkoutPlan: () {
-                  _navigateToWorkoutPlanChat(context, createdGoal, nutrition);
-                },
-                onGenerateMealPlan: () {
-                  _navigateToMealPlanChat(context, createdGoal, nutrition);
-                },
-              ),
-        );
+        await _showGoalSummaryAndHandleResult(createdGoal, nutrition);
       } catch (e) {
         if (!mounted) return;
         navigator.pop(); // Close loading dialog
@@ -329,22 +314,40 @@ class _GoalsScreenState extends State<GoalsScreen>
 
         // Show summary dialog without nutrition data
         if (!mounted) return;
-        showDialog(
-          // ignore: use_build_context_synchronously
-          context: context,
-          builder:
-              (_) => GoalCreatedSummaryDialog(
-                goal: createdGoal,
-                nutrition: null,
-                onGenerateWorkoutPlan: () {
-                  _navigateToWorkoutPlanChat(context, createdGoal, null);
-                },
-                onGenerateMealPlan: () {
-                  _navigateToMealPlanChat(context, createdGoal, null);
-                },
-              ),
-        );
+        await _showGoalSummaryAndHandleResult(createdGoal, null);
       }
+    }
+  }
+
+  /// Shows the goal summary dialog and handles generating plans based on user selection
+  Future<void> _showGoalSummaryAndHandleResult(
+    Goal goal,
+    CalculatedNutrition? nutrition,
+  ) async {
+    if (!mounted) return;
+
+    final result = await showDialog<GoalDialogResult>(
+      context: context,
+      builder:
+          (_) => GoalCreatedSummaryDialog(goal: goal, nutrition: nutrition),
+    );
+
+    if (result == null || !result.hasSelection || !mounted) return;
+
+    // If both selected, use combined chat for better UX
+    if (result.generateWorkoutPlan && result.generateMealPlan) {
+      if (!mounted) return;
+      await _navigateToCombinedPlanChat(goal, nutrition);
+      return;
+    }
+
+    // Handle single selection
+    if (result.generateWorkoutPlan) {
+      if (!mounted) return;
+      await _navigateToWorkoutPlanChat(goal, nutrition);
+    } else if (result.generateMealPlan) {
+      if (!mounted) return;
+      await _navigateToMealPlanChat(goal, nutrition);
     }
   }
 
@@ -743,21 +746,20 @@ class _GoalsScreenState extends State<GoalsScreen>
   }
 
   Future<void> _navigateToMealPlanChat(
-    BuildContext context,
     Goal goal,
     CalculatedNutrition? nutrition,
   ) async {
+    if (!mounted) return;
+
     try {
       final chatProvider = context.read<ChatProvider>();
 
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Creating meal plan chat...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Creating meal plan chat...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
 
       final prompt = _generateMealPlanPrompt(goal, nutrition);
 
@@ -766,7 +768,7 @@ class _GoalsScreenState extends State<GoalsScreen>
         type: 'meal_plan',
       );
 
-      if (conversation != null && context.mounted) {
+      if (conversation != null && mounted) {
         // Calculate weeks from goal target date
         final weeks =
             goal.targetDate != null
@@ -784,25 +786,168 @@ class _GoalsScreenState extends State<GoalsScreen>
             'suggestedDaysPerWeek': _suggestDaysPerWeek(goal, nutrition),
           },
         );
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                chatProvider.errorMessage ?? 'Failed to create conversation',
-              ),
-              backgroundColor: Colors.red,
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              chatProvider.errorMessage ?? 'Failed to create conversation',
             ),
-          );
-        }
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
+  }
+
+  /// Navigate to a combined chat that generates both workout and meal plans
+  Future<void> _navigateToCombinedPlanChat(
+    Goal goal,
+    CalculatedNutrition? nutrition,
+  ) async {
+    if (!mounted) return;
+
+    try {
+      final chatProvider = context.read<ChatProvider>();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Creating your personalized fitness plan...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      final prompt = _generateCombinedPlanPrompt(goal, nutrition);
+
+      final conversation = await chatProvider.createConversation(
+        title: 'Complete Plan: ${goal.goalType}',
+        type: 'combined_plan',
+      );
+
+      if (conversation != null && mounted) {
+        final weeks =
+            goal.targetDate != null
+                ? goal.targetDate!.difference(DateTime.now()).inDays ~/ 7
+                : 12;
+
+        await Navigator.pushNamed(
+          context,
+          RouteNames.chatConversation,
+          arguments: {
+            'conversationId': conversation.id,
+            'initialMessage': prompt,
+            'goalId': goal.id,
+            'suggestedWeeks': weeks.clamp(4, 20),
+            'suggestedDaysPerWeek': _suggestDaysPerWeek(goal, nutrition),
+          },
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              chatProvider.errorMessage ?? 'Failed to create conversation',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// Generate a combined prompt for both workout and meal plan
+  String _generateCombinedPlanPrompt(
+    Goal goal,
+    CalculatedNutrition? nutrition,
+  ) {
+    final change = (goal.targetValue - goal.currentValue).abs();
+    final unit = goal.unit ?? 'lbs';
+    final weeks =
+        goal.targetDate != null
+            ? goal.targetDate!.difference(DateTime.now()).inDays ~/ 7
+            : 12;
+
+    final dailyCalories = nutrition?.dailyCalories.round() ?? 2000;
+    final dailyProtein = nutrition?.dailyProtein.round() ?? 150;
+    final dailyCarbs = nutrition?.dailyCarbohydrates.round() ?? 200;
+    final dailyFat = nutrition?.dailyFat.round() ?? 65;
+    final weeklyChange = nutrition?.expectedWeeklyWeightChange ?? 1.0;
+    final isDeficit = (nutrition?.calorieAdjustment ?? 0) < 0;
+
+    String nutritionContext = '';
+    if (nutrition != null) {
+      nutritionContext = '''
+**My Nutrition Targets:**
+- Daily Calories: $dailyCalories kcal ${isDeficit ? '(deficit)' : '(surplus)'}
+- Protein: ${dailyProtein}g
+- Carbohydrates: ${dailyCarbs}g
+- Fat: ${dailyFat}g
+- Expected weekly ${goal.isDecreaseGoal ? 'loss' : 'gain'}: ${weeklyChange.abs().toStringAsFixed(1)} lbs
+''';
+      if (nutrition.userMetrics != null) {
+        nutritionContext += '''
+**My Stats:**
+- Weight: ${nutrition.userMetrics!.weightLbs.toStringAsFixed(0)} lbs
+- Activity Level: ${nutrition.userMetrics!.activityLevel}
+''';
+      }
+    }
+
+    final goalDescription =
+        goal.isDecreaseGoal
+            ? 'lose ${change.toStringAsFixed(0)} $unit (${goal.currentValue.toStringAsFixed(0)} → ${goal.targetValue.toStringAsFixed(0)} $unit)'
+            : 'gain ${change.toStringAsFixed(0)} $unit of muscle (${goal.currentValue.toStringAsFixed(0)} → ${goal.targetValue.toStringAsFixed(0)} $unit)';
+
+    final trainingDays = _suggestDaysPerWeek(goal, nutrition);
+
+    return '''Create a complete $weeks-week fitness plan to help me $goalDescription.
+
+$nutritionContext
+---
+
+## PART 1: WORKOUT PROGRAM
+
+Please provide a $weeks-week workout program with:
+1. $trainingDays training days per week
+2. Each workout day with:
+   - Workout name (e.g., "Day 1: Push", "Day 2: Pull")
+   - 5-8 exercises per workout
+   - Sets and reps (e.g., "4 sets x 8-10 reps")
+   - Rest periods between sets
+3. Progressive overload strategy over the $weeks weeks
+4. Warm-up and cool-down routines
+
+Format exercises clearly:
+- Exercise Name: Sets x Reps (Rest: Xs)
+
+---
+
+## PART 2: MEAL PLAN
+
+Please provide a 7-day meal plan with:
+1. Exactly $dailyCalories calories per day
+2. At least ${dailyProtein}g protein daily
+3. ${dailyCarbs}g carbs and ${dailyFat}g fat
+4. Breakfast, lunch, dinner, and 2 snacks per day
+5. **IMPORTANT: Only 1-2 food items per meal (max 3) - keep it simple!**
+6. ${goal.isDecreaseGoal ? '' : 'Pre and post workout nutrition recommendations\n7. '}Easy meal prep ideas
+${goal.isDecreaseGoal ? '7' : '8'}. Grocery shopping list
+
+Format each meal with: Name, Calories, Protein, Carbs, Fat
+
+---
+
+Please generate both plans in full detail so I can start immediately!''';
   }
 
   String _generateMealPlanPrompt(Goal goal, CalculatedNutrition? nutrition) {
@@ -853,8 +998,9 @@ $nutritionContext
 2. Provides at least ${dailyProtein}g protein daily (to preserve muscle)
 3. Includes ${dailyCarbs}g carbs and ${dailyFat}g fat
 4. Has a sample 7-day meal plan (breakfast, lunch, dinner, 2 snacks)
-5. Lists easy meal prep ideas
-6. Includes a grocery shopping list
+5. **IMPORTANT: For each meal, suggest only 1-2 simple food options (max 3)**
+6. Lists easy meal prep ideas
+7. Includes a grocery shopping list
 
 Format each meal with: Name, Calories, Protein, Carbs, Fat''';
     } else {
@@ -869,9 +1015,10 @@ $nutritionContext
 2. Provides at least ${dailyProtein}g protein daily (for muscle growth)
 3. Includes ${dailyCarbs}g carbs and ${dailyFat}g fat
 4. Has a sample 7-day meal plan (breakfast, lunch, dinner, 2 snacks)
-5. Includes pre and post workout nutrition recommendations
-6. Lists easy meal prep ideas
-7. Includes a grocery shopping list
+5. **IMPORTANT: For each meal, suggest only 1-2 simple food options (max 3)**
+6. Includes pre and post workout nutrition recommendations
+7. Lists easy meal prep ideas
+8. Includes a grocery shopping list
 
 Format each meal with: Name, Calories, Protein, Carbs, Fat''';
     }
@@ -880,21 +1027,20 @@ Format each meal with: Name, Calories, Protein, Carbs, Fat''';
   }
 
   Future<void> _navigateToWorkoutPlanChat(
-    BuildContext context,
     Goal goal,
     CalculatedNutrition? nutrition,
   ) async {
+    if (!mounted) return;
+
     try {
       final chatProvider = context.read<ChatProvider>();
 
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Creating workout plan chat...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Creating workout plan chat...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
 
       final prompt = _generateWorkoutPlanPrompt(goal, nutrition);
 
@@ -903,7 +1049,7 @@ Format each meal with: Name, Calories, Protein, Carbs, Fat''';
         type: 'workout_plan',
       );
 
-      if (conversation != null && context.mounted) {
+      if (conversation != null && mounted) {
         // Calculate weeks from goal target date
         final weeks =
             goal.targetDate != null
@@ -921,20 +1067,18 @@ Format each meal with: Name, Calories, Protein, Carbs, Fat''';
             'suggestedDaysPerWeek': _suggestDaysPerWeek(goal, nutrition),
           },
         );
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                chatProvider.errorMessage ?? 'Failed to create conversation',
-              ),
-              backgroundColor: Colors.red,
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              chatProvider.errorMessage ?? 'Failed to create conversation',
             ),
-          );
-        }
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
