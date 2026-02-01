@@ -213,6 +213,9 @@ class AppRouter {
         String? initialMessage;
         int? goalId;
 
+        int? suggestedWeeks;
+        int? suggestedDaysPerWeek;
+
         if (args is int) {
           // Direct int argument (existing usage)
           conversationId = args;
@@ -221,6 +224,8 @@ class AppRouter {
           conversationId = args['conversationId'] as int?;
           initialMessage = args['initialMessage'] as String?;
           goalId = args['goalId'] as int?;
+          suggestedWeeks = args['suggestedWeeks'] as int?;
+          suggestedDaysPerWeek = args['suggestedDaysPerWeek'] as int?;
         }
 
         if (conversationId == null) {
@@ -235,6 +240,8 @@ class AppRouter {
                 conversationId: conversationId!, // Safe after null check
                 initialMessage: initialMessage,
                 goalId: goalId,
+                suggestedWeeks: suggestedWeeks,
+                suggestedDaysPerWeek: suggestedDaysPerWeek,
               ),
           settings: settings,
         );

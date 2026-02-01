@@ -300,10 +300,10 @@ class _GoalsScreenState extends State<GoalsScreen>
                 goal: createdGoal,
                 nutrition: nutrition,
                 onGenerateWorkoutPlan: () {
-                  _navigateToWorkoutPlanChat(context, createdGoal);
+                  _navigateToWorkoutPlanChat(context, createdGoal, nutrition);
                 },
                 onGenerateMealPlan: () {
-                  _navigateToMealPlanChat(context, createdGoal);
+                  _navigateToMealPlanChat(context, createdGoal, nutrition);
                 },
               ),
         );
@@ -327,10 +327,10 @@ class _GoalsScreenState extends State<GoalsScreen>
                 goal: createdGoal,
                 nutrition: null,
                 onGenerateWorkoutPlan: () {
-                  _navigateToWorkoutPlanChat(context, createdGoal);
+                  _navigateToWorkoutPlanChat(context, createdGoal, null);
                 },
                 onGenerateMealPlan: () {
-                  _navigateToMealPlanChat(context, createdGoal);
+                  _navigateToMealPlanChat(context, createdGoal, null);
                 },
               ),
         );
@@ -901,7 +901,11 @@ class _GoalsScreenState extends State<GoalsScreen>
     );
   }
 
-  Future<void> _navigateToMealPlanChat(BuildContext context, Goal goal) async {
+  Future<void> _navigateToMealPlanChat(
+    BuildContext context,
+    Goal goal,
+    CalculatedNutrition? nutrition,
+  ) async {
     try {
       final chatProvider = context.read<ChatProvider>();
 
@@ -914,7 +918,7 @@ class _GoalsScreenState extends State<GoalsScreen>
         );
       }
 
-      final prompt = _generateMealPlanPrompt(goal);
+      final prompt = _generateMealPlanPrompt(goal, nutrition);
 
       final conversation = await chatProvider.createConversation(
         title: 'Meal Plan: ${goal.goalType}',
@@ -922,6 +926,12 @@ class _GoalsScreenState extends State<GoalsScreen>
       );
 
       if (conversation != null && context.mounted) {
+        // Calculate weeks from goal target date
+        final weeks =
+            goal.targetDate != null
+                ? goal.targetDate!.difference(DateTime.now()).inDays ~/ 7
+                : 12;
+
         await Navigator.pushNamed(
           context,
           RouteNames.chatConversation,
@@ -929,6 +939,8 @@ class _GoalsScreenState extends State<GoalsScreen>
             'conversationId': conversation.id,
             'initialMessage': prompt,
             'goalId': goal.id,
+            'suggestedWeeks': weeks.clamp(4, 20), // Pass to program dialog
+            'suggestedDaysPerWeek': _suggestDaysPerWeek(goal, nutrition),
           },
         );
       } else {
@@ -952,7 +964,7 @@ class _GoalsScreenState extends State<GoalsScreen>
     }
   }
 
-  String _generateMealPlanPrompt(Goal goal) {
+  String _generateMealPlanPrompt(Goal goal, CalculatedNutrition? nutrition) {
     final change = (goal.targetValue - goal.currentValue).abs();
     final unit = goal.unit ?? 'lbs';
     final weeks =
@@ -960,38 +972,67 @@ class _GoalsScreenState extends State<GoalsScreen>
             ? goal.targetDate!.difference(DateTime.now()).inDays ~/ 7
             : 12;
 
+    // Use calculated nutrition if available, otherwise estimate
+    final dailyCalories = nutrition?.dailyCalories.round() ?? 2000;
+    final dailyProtein = nutrition?.dailyProtein.round() ?? 150;
+    final dailyCarbs = nutrition?.dailyCarbohydrates.round() ?? 200;
+    final dailyFat = nutrition?.dailyFat.round() ?? 65;
+    final weeklyChange = nutrition?.expectedWeeklyWeightChange ?? 1.0;
+
+    String nutritionContext = '';
+    if (nutrition != null) {
+      nutritionContext = '''
+**My Calculated Nutrition Targets (use these exact values):**
+- Daily Calories: $dailyCalories kcal
+- Protein: ${dailyProtein}g
+- Carbohydrates: ${dailyCarbs}g
+- Fat: ${dailyFat}g
+- Expected weekly ${goal.isDecreaseGoal ? 'loss' : 'gain'}: ${weeklyChange.abs().toStringAsFixed(1)} lbs
+''';
+      if (nutrition.userMetrics != null) {
+        nutritionContext += '''
+**My Stats:**
+- Weight: ${nutrition.userMetrics!.weightLbs.toStringAsFixed(0)} lbs (${nutrition.userMetrics!.weightKg.toStringAsFixed(1)} kg)
+- Activity Level: ${nutrition.userMetrics!.activityLevel}
+''';
+      }
+    }
+
     String prompt;
 
     if (goal.isDecreaseGoal) {
-      final weeklyLoss = weeks > 0 ? change / weeks : 1.0;
-      final dailyDeficit = (weeklyLoss * 500).round().clamp(500, 1000);
       prompt =
           '''Create a personalized meal plan to help me lose ${change.toStringAsFixed(0)} $unit in $weeks weeks.
 
-Target: ${goal.currentValue.toStringAsFixed(0)} $unit → ${goal.targetValue.toStringAsFixed(0)} $unit
-Weekly goal: ${weeklyLoss.toStringAsFixed(1)} $unit/week
-Suggested daily deficit: ~$dailyDeficit calories
+**Goal:** ${goal.currentValue.toStringAsFixed(0)} $unit → ${goal.targetValue.toStringAsFixed(0)} $unit
 
-Please include:
-- Daily calorie target and macro breakdown (protein, carbs, fat)
-- Sample meal plan for a week (breakfast, lunch, dinner, snacks)
-- High-protein options to preserve muscle during weight loss
-- Easy meal prep ideas
-- Grocery shopping list''';
+$nutritionContext
+**Please create a meal plan that:**
+1. Hits exactly $dailyCalories calories per day
+2. Provides at least ${dailyProtein}g protein daily (to preserve muscle)
+3. Includes ${dailyCarbs}g carbs and ${dailyFat}g fat
+4. Has a sample 7-day meal plan (breakfast, lunch, dinner, 2 snacks)
+5. Lists easy meal prep ideas
+6. Includes a grocery shopping list
+
+Format each meal with: Name, Calories, Protein, Carbs, Fat''';
     } else {
       prompt =
           '''Create a personalized meal plan to help me gain ${change.toStringAsFixed(0)} $unit of muscle in $weeks weeks.
 
-Target: ${goal.currentValue.toStringAsFixed(0)} $unit → ${goal.targetValue.toStringAsFixed(0)} $unit
+**Goal:** ${goal.currentValue.toStringAsFixed(0)} $unit → ${goal.targetValue.toStringAsFixed(0)} $unit
 
-Please include:
-- Daily calorie target with 300-500 calorie surplus
-- High protein intake (1g per lb body weight)
-- Macro breakdown (protein, carbs, fat)
-- Sample meal plan for a week (breakfast, lunch, dinner, snacks)
-- Pre and post workout nutrition
-- Easy meal prep ideas
-- Grocery shopping list''';
+$nutritionContext
+**Please create a meal plan that:**
+1. Hits exactly $dailyCalories calories per day (caloric surplus for muscle gain)
+2. Provides at least ${dailyProtein}g protein daily (for muscle growth)
+3. Includes ${dailyCarbs}g carbs and ${dailyFat}g fat
+4. Has a sample 7-day meal plan (breakfast, lunch, dinner, 2 snacks)
+5. Includes pre and post workout nutrition recommendations
+6. Lists easy meal prep ideas
+7. Includes a grocery shopping list
+
+Format each meal with: Name, Calories, Protein, Carbs, Fat''';
     }
 
     return prompt;
@@ -1000,6 +1041,7 @@ Please include:
   Future<void> _navigateToWorkoutPlanChat(
     BuildContext context,
     Goal goal,
+    CalculatedNutrition? nutrition,
   ) async {
     try {
       final chatProvider = context.read<ChatProvider>();
@@ -1013,7 +1055,7 @@ Please include:
         );
       }
 
-      final prompt = _generateWorkoutPlanPrompt(goal);
+      final prompt = _generateWorkoutPlanPrompt(goal, nutrition);
 
       final conversation = await chatProvider.createConversation(
         title: 'Workout Plan: ${goal.goalType}',
@@ -1021,13 +1063,21 @@ Please include:
       );
 
       if (conversation != null && context.mounted) {
+        // Calculate weeks from goal target date
+        final weeks =
+            goal.targetDate != null
+                ? goal.targetDate!.difference(DateTime.now()).inDays ~/ 7
+                : 12;
+
         await Navigator.pushNamed(
           context,
           RouteNames.chatConversation,
           arguments: {
             'conversationId': conversation.id,
             'initialMessage': prompt,
-            'goalId': goal.id, // Pass goalId to chat
+            'goalId': goal.id,
+            'suggestedWeeks': weeks.clamp(4, 20), // Pass to program dialog
+            'suggestedDaysPerWeek': _suggestDaysPerWeek(goal, nutrition),
           },
         );
       } else {
@@ -1051,35 +1101,87 @@ Please include:
     }
   }
 
-  String _generateWorkoutPlanPrompt(Goal goal) {
-    String prompt;
+  String _generateWorkoutPlanPrompt(Goal goal, CalculatedNutrition? nutrition) {
+    final change = (goal.targetValue - goal.currentValue).abs();
+    final unit = goal.unit ?? 'lbs';
+    final weeks =
+        goal.targetDate != null
+            ? goal.targetDate!.difference(DateTime.now()).inDays ~/ 7
+            : 12;
 
+    // Build nutrition context if available
+    String nutritionContext = '';
+    if (nutrition != null) {
+      final isDeficit = nutrition.calorieAdjustment < 0;
+      nutritionContext = '''
+**My Nutrition Plan:**
+- Daily Calories: ${nutrition.dailyCalories.round()} kcal ${isDeficit ? '(deficit)' : '(surplus)'}
+- Daily Protein: ${nutrition.dailyProtein.round()}g
+- Activity Level: ${nutrition.userMetrics?.activityLevel ?? 'Moderate'}
+
+*Note: Design workout intensity to match my ${isDeficit ? 'caloric deficit - focus on muscle preservation' : 'caloric surplus - focus on progressive overload for muscle growth'}*
+''';
+    }
+
+    String goalContext;
     if (goal.goalType.toLowerCase().contains('loss')) {
-      final totalToLose = goal.currentValue - goal.targetValue;
-      prompt =
-          'Create a comprehensive workout plan to help me lose ${totalToLose.toStringAsFixed(0)} ${goal.unit ?? ''} (from ${goal.currentValue.toStringAsFixed(0)} to ${goal.targetValue.toStringAsFixed(0)} ${goal.unit ?? ''})';
+      goalContext = '''**Goal:** Lose ${change.toStringAsFixed(0)} $unit
+**Current:** ${goal.currentValue.toStringAsFixed(0)} $unit → **Target:** ${goal.targetValue.toStringAsFixed(0)} $unit
+**Timeframe:** $weeks weeks''';
     } else if (goal.goalType.toLowerCase().contains('muscle') ||
         goal.goalType.toLowerCase().contains('gain')) {
-      final totalToGain = goal.targetValue - goal.currentValue;
-      prompt =
-          'Create a comprehensive workout plan to help me gain ${totalToGain.toStringAsFixed(0)} ${goal.unit ?? ''} of muscle (from ${goal.currentValue.toStringAsFixed(0)} to ${goal.targetValue.toStringAsFixed(0)} ${goal.unit ?? ''})';
+      goalContext =
+          '''**Goal:** Gain ${change.toStringAsFixed(0)} $unit of muscle
+**Current:** ${goal.currentValue.toStringAsFixed(0)} $unit → **Target:** ${goal.targetValue.toStringAsFixed(0)} $unit
+**Timeframe:** $weeks weeks''';
     } else {
-      prompt =
-          'Create a comprehensive workout plan to help me achieve my ${goal.goalType} goal (target: ${goal.targetValue.toStringAsFixed(0)} ${goal.unit ?? ''})';
+      goalContext = '''**Goal:** ${goal.goalType}
+**Target:** ${goal.targetValue.toStringAsFixed(0)} ${goal.unit ?? ''}
+**Timeframe:** $weeks weeks''';
     }
 
-    if (goal.targetDate != null) {
-      final months = goal.targetDate!.difference(DateTime.now()).inDays ~/ 30;
-      if (months > 0) {
-        prompt +=
-            ' within the next $months ${months == 1 ? 'month' : 'months'}';
-      }
-    }
+    final prompt = '''Create a comprehensive $weeks-week workout program for me.
 
-    prompt +=
-        '.\n\nPlease include:\n- Weekly workout schedule\n- Specific exercises with sets and reps\n- Progressive overload strategy\n- Rest and recovery recommendations';
+$goalContext
+
+$nutritionContext
+**Please provide:**
+1. A $weeks-week program structure (not just 1 week repeated)
+2. ${_suggestDaysPerWeek(goal, nutrition)} training days per week
+3. Each workout day with:
+   - Workout name (e.g., "Day 1: Push", "Day 2: Pull")
+   - 5-8 exercises per workout
+   - Sets and reps for each exercise (e.g., "4 sets x 8-10 reps")
+   - Rest periods between sets
+4. Progressive overload strategy (how to increase weight/reps over the $weeks weeks)
+5. Rest and recovery recommendations
+6. Warm-up and cool-down routines
+
+Format exercises clearly so I can track them:
+- Exercise Name: Sets x Reps (Rest: Xs)''';
 
     return prompt;
+  }
+
+  /// Suggest days per week based on goal and activity level
+  int _suggestDaysPerWeek(Goal goal, CalculatedNutrition? nutrition) {
+    final activityLevel =
+        nutrition?.userMetrics?.activityLevel ?? 'ModeratelyActive';
+
+    // Base on activity level
+    switch (activityLevel) {
+      case 'Sedentary':
+      case 'LightlyActive':
+        return 3;
+      case 'ModeratelyActive':
+        return 4;
+      case 'VeryActive':
+        return 5;
+      case 'ExtremelyActive':
+        return 6;
+      default:
+        return 4;
+    }
   }
 }
 

@@ -17,12 +17,17 @@ class ChatConversationScreen extends StatefulWidget {
   final int conversationId;
   final String? initialMessage; // Optional pre-filled message
   final int? goalId; // Optional goal to link program to
+  final int? suggestedWeeks; // Suggested program duration from goal
+  final int?
+  suggestedDaysPerWeek; // Suggested days per week based on activity level
 
   const ChatConversationScreen({
     super.key,
     required this.conversationId,
     this.initialMessage,
     this.goalId,
+    this.suggestedWeeks,
+    this.suggestedDaysPerWeek,
   });
 
   @override
@@ -204,8 +209,9 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
               now.month,
               now.day,
             ).add(Duration(days: daysUntilMonday));
-    int totalWeeks = 8;
-    int daysPerWeek = 4;
+    // Use suggested values from goal, fallback to defaults
+    int totalWeeks = widget.suggestedWeeks ?? 8;
+    int daysPerWeek = widget.suggestedDaysPerWeek ?? 4;
     int? selectedGoalId =
         widget.goalId; // Pre-select goal if passed from navigation
 
