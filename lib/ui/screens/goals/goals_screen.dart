@@ -245,6 +245,11 @@ class _GoalsScreenState extends State<GoalsScreen>
   }
 
   void _showCreateGoalDialog(BuildContext context) async {
+    // Capture references before async gap
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final nutritionProvider = context.read<NutritionProvider>();
+
     final createdGoal = await showDialog<Goal>(
       context: context,
       builder: (context) => const CreateGoalDialog(),
@@ -253,12 +258,13 @@ class _GoalsScreenState extends State<GoalsScreen>
     // If goal was created, calculate nutrition and show summary dialog
     if (createdGoal != null && mounted) {
       // Show loading dialog while calculating nutrition
-      PremiumLoadingDialog.show(context, message: 'Calculating nutrition...');
+      PremiumLoadingDialog.show(
+        // ignore: use_build_context_synchronously
+        context,
+        message: 'Calculating nutrition...',
+      );
 
       try {
-        // Calculate nutrition based on goal
-        final nutritionProvider = context.read<NutritionProvider>();
-
         // Determine goal type for nutrition calculation
         String nutritionGoalType = 'Maintenance';
         double? targetWeightChange;
@@ -289,11 +295,13 @@ class _GoalsScreenState extends State<GoalsScreen>
         );
 
         if (!mounted) return;
-        Navigator.pop(context); // Close loading dialog
+        navigator.pop(); // Close loading dialog
 
         // Show summary dialog with nutrition + action buttons
         // Note: The dialog's action buttons already call Navigator.pop internally
+        if (!mounted) return;
         showDialog(
+          // ignore: use_build_context_synchronously
           context: context,
           builder:
               (_) => GoalCreatedSummaryDialog(
@@ -309,10 +317,10 @@ class _GoalsScreenState extends State<GoalsScreen>
         );
       } catch (e) {
         if (!mounted) return;
-        Navigator.pop(context); // Close loading dialog
+        navigator.pop(); // Close loading dialog
 
         // Show error but still show summary without nutrition
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Could not calculate nutrition: $e'),
             backgroundColor: Colors.orange,
@@ -320,7 +328,9 @@ class _GoalsScreenState extends State<GoalsScreen>
         );
 
         // Show summary dialog without nutrition data
+        if (!mounted) return;
         showDialog(
+          // ignore: use_build_context_synchronously
           context: context,
           builder:
               (_) => GoalCreatedSummaryDialog(

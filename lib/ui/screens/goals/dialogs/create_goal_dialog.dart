@@ -314,8 +314,13 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
       return;
     }
 
+    // Capture references before any async gap
+    final provider = context.read<GoalsProvider>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
     if (_selectedGoalType == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Please select a goal type'),
           backgroundColor: Colors.red,
@@ -329,7 +334,7 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
       final proceed = await showDialog<bool>(
         context: context,
         builder:
-            (context) => AlertDialog(
+            (dialogContext) => AlertDialog(
               title: const Row(
                 children: [
                   Icon(Icons.warning_amber, color: Colors.orange),
@@ -342,11 +347,11 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context, false),
+                  onPressed: () => Navigator.pop(dialogContext, false),
                   child: const Text('Edit Goal'),
                 ),
                 ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
+                  onPressed: () => Navigator.pop(dialogContext, true),
                   child: const Text('Create Anyway'),
                 ),
               ],
@@ -373,19 +378,18 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
       createdAt: DateTime.now(),
     );
 
-    final provider = context.read<GoalsProvider>();
     final createdGoal = await provider.createGoal(goal);
 
     if (mounted) {
       setState(() => _isCreating = false);
 
       if (createdGoal != null) {
-        Navigator.pop(context, createdGoal);
-        ScaffoldMessenger.of(context).showSnackBar(
+        navigator.pop(createdGoal);
+        messenger.showSnackBar(
           const SnackBar(content: Text('Goal created successfully')),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text(provider.errorMessage ?? 'Failed to create goal'),
             backgroundColor: Colors.red,
