@@ -31,33 +31,18 @@ import 'package:mockito/src/dummies.dart' as _i10;
 // ignore_for_file: subtype_of_sealed_class
 
 class _FakeAuthResponse_0 extends _i1.SmartFake implements _i2.AuthResponse {
-  _FakeAuthResponse_0(
-    Object parent,
-    Invocation parentInvocation,
-  ) : super(
-          parent,
-          parentInvocation,
-        );
+  _FakeAuthResponse_0(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
 }
 
 class _FakeFuture_1<T1> extends _i1.SmartFake implements _i3.Future<T1> {
-  _FakeFuture_1(
-    Object parent,
-    Invocation parentInvocation,
-  ) : super(
-          parent,
-          parentInvocation,
-        );
+  _FakeFuture_1(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
 }
 
 class _FakeIsar_2 extends _i1.SmartFake implements _i4.Isar {
-  _FakeIsar_2(
-    Object parent,
-    Invocation parentInvocation,
-  ) : super(
-          parent,
-          parentInvocation,
-        );
+  _FakeIsar_2(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
 }
 
 /// A class which mocks [AuthRepository].
@@ -71,34 +56,22 @@ class MockAuthRepository extends _i1.Mock implements _i5.AuthRepository {
   @override
   _i3.Future<_i2.AuthResponse> login(_i6.LoginRequest? request) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #login,
-          [request],
-        ),
-        returnValue: _i3.Future<_i2.AuthResponse>.value(_FakeAuthResponse_0(
-          this,
-          Invocation.method(
-            #login,
-            [request],
-          ),
-        )),
-      ) as _i3.Future<_i2.AuthResponse>);
+            Invocation.method(#login, [request]),
+            returnValue: _i3.Future<_i2.AuthResponse>.value(
+              _FakeAuthResponse_0(this, Invocation.method(#login, [request])),
+            ),
+          )
+          as _i3.Future<_i2.AuthResponse>);
 
   @override
   _i3.Future<_i2.AuthResponse> signup(_i7.SignupRequest? request) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #signup,
-          [request],
-        ),
-        returnValue: _i3.Future<_i2.AuthResponse>.value(_FakeAuthResponse_0(
-          this,
-          Invocation.method(
-            #signup,
-            [request],
-          ),
-        )),
-      ) as _i3.Future<_i2.AuthResponse>);
+            Invocation.method(#signup, [request]),
+            returnValue: _i3.Future<_i2.AuthResponse>.value(
+              _FakeAuthResponse_0(this, Invocation.method(#signup, [request])),
+            ),
+          )
+          as _i3.Future<_i2.AuthResponse>);
 }
 
 /// A class which mocks [AuthService].
@@ -117,113 +90,99 @@ class MockAuthService extends _i1.Mock implements _i8.AuthService {
     required String? email,
   }) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #saveToken,
-          [],
-          {
-            #token: token,
-            #userId: userId,
-            #name: name,
-            #email: email,
-          },
-        ),
-        returnValue: _i3.Future<void>.value(),
-        returnValueForMissingStub: _i3.Future<void>.value(),
-      ) as _i3.Future<void>);
+            Invocation.method(#saveToken, [], {
+              #token: token,
+              #userId: userId,
+              #name: name,
+              #email: email,
+            }),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
 
   @override
-  _i3.Future<String?> getToken() => (super.noSuchMethod(
-        Invocation.method(
-          #getToken,
-          [],
-        ),
-        returnValue: _i3.Future<String?>.value(),
-      ) as _i3.Future<String?>);
+  _i3.Future<String?> getToken() =>
+      (super.noSuchMethod(
+            Invocation.method(#getToken, []),
+            returnValue: _i3.Future<String?>.value(),
+          )
+          as _i3.Future<String?>);
 
   @override
-  _i3.Future<int?> getUserId() => (super.noSuchMethod(
-        Invocation.method(
-          #getUserId,
-          [],
-        ),
-        returnValue: _i3.Future<int?>.value(),
-      ) as _i3.Future<int?>);
+  _i3.Future<int?> getUserId() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUserId, []),
+            returnValue: _i3.Future<int?>.value(),
+          )
+          as _i3.Future<int?>);
 
   @override
-  _i3.Future<String?> getUserName() => (super.noSuchMethod(
-        Invocation.method(
-          #getUserName,
-          [],
-        ),
-        returnValue: _i3.Future<String?>.value(),
-      ) as _i3.Future<String?>);
+  _i3.Future<String?> getUserName() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUserName, []),
+            returnValue: _i3.Future<String?>.value(),
+          )
+          as _i3.Future<String?>);
 
   @override
-  _i3.Future<String?> getUserEmail() => (super.noSuchMethod(
-        Invocation.method(
-          #getUserEmail,
-          [],
-        ),
-        returnValue: _i3.Future<String?>.value(),
-      ) as _i3.Future<String?>);
+  _i3.Future<String?> getUserEmail() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUserEmail, []),
+            returnValue: _i3.Future<String?>.value(),
+          )
+          as _i3.Future<String?>);
 
   @override
-  _i3.Future<bool> isAuthenticated() => (super.noSuchMethod(
-        Invocation.method(
-          #isAuthenticated,
-          [],
-        ),
-        returnValue: _i3.Future<bool>.value(false),
-      ) as _i3.Future<bool>);
+  _i3.Future<bool> isAuthenticated() =>
+      (super.noSuchMethod(
+            Invocation.method(#isAuthenticated, []),
+            returnValue: _i3.Future<bool>.value(false),
+          )
+          as _i3.Future<bool>);
 
   @override
-  _i3.Future<void> clearToken() => (super.noSuchMethod(
-        Invocation.method(
-          #clearToken,
-          [],
-        ),
-        returnValue: _i3.Future<void>.value(),
-        returnValueForMissingStub: _i3.Future<void>.value(),
-      ) as _i3.Future<void>);
+  _i3.Future<void> clearToken() =>
+      (super.noSuchMethod(
+            Invocation.method(#clearToken, []),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
 
   @override
-  _i3.Future<void> saveThemePreference(String? theme) => (super.noSuchMethod(
-        Invocation.method(
-          #saveThemePreference,
-          [theme],
-        ),
-        returnValue: _i3.Future<void>.value(),
-        returnValueForMissingStub: _i3.Future<void>.value(),
-      ) as _i3.Future<void>);
+  _i3.Future<void> saveThemePreference(String? theme) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveThemePreference, [theme]),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
 
   @override
-  _i3.Future<String?> getThemePreference() => (super.noSuchMethod(
-        Invocation.method(
-          #getThemePreference,
-          [],
-        ),
-        returnValue: _i3.Future<String?>.value(),
-      ) as _i3.Future<String?>);
+  _i3.Future<String?> getThemePreference() =>
+      (super.noSuchMethod(
+            Invocation.method(#getThemePreference, []),
+            returnValue: _i3.Future<String?>.value(),
+          )
+          as _i3.Future<String?>);
 
   @override
   _i3.Future<void> saveCachedProfile(String? profileJson) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #saveCachedProfile,
-          [profileJson],
-        ),
-        returnValue: _i3.Future<void>.value(),
-        returnValueForMissingStub: _i3.Future<void>.value(),
-      ) as _i3.Future<void>);
+            Invocation.method(#saveCachedProfile, [profileJson]),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
 
   @override
-  _i3.Future<String?> getCachedProfile() => (super.noSuchMethod(
-        Invocation.method(
-          #getCachedProfile,
-          [],
-        ),
-        returnValue: _i3.Future<String?>.value(),
-      ) as _i3.Future<String?>);
+  _i3.Future<String?> getCachedProfile() =>
+      (super.noSuchMethod(
+            Invocation.method(#getCachedProfile, []),
+            returnValue: _i3.Future<String?>.value(),
+          )
+          as _i3.Future<String?>);
 }
 
 /// A class which mocks [ApiService].
@@ -236,145 +195,100 @@ class MockApiService extends _i1.Mock implements _i9.ApiService {
 
   @override
   set onUnauthorized(void Function()? _onUnauthorized) => super.noSuchMethod(
-        Invocation.setter(
-          #onUnauthorized,
-          _onUnauthorized,
-        ),
-        returnValueForMissingStub: null,
-      );
+    Invocation.setter(#onUnauthorized, _onUnauthorized),
+    returnValueForMissingStub: null,
+  );
 
   @override
   void resetUnauthorizedFlag() => super.noSuchMethod(
-        Invocation.method(
-          #resetUnauthorizedFlag,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
+    Invocation.method(#resetUnauthorizedFlag, []),
+    returnValueForMissingStub: null,
+  );
 
   @override
-  _i3.Future<T> get<T>(
-    String? path, {
-    Map<String, dynamic>? queryParameters,
-  }) =>
+  _i3.Future<T> get<T>(String? path, {Map<String, dynamic>? queryParameters}) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #get,
-          [path],
-          {#queryParameters: queryParameters},
-        ),
-        returnValue: _i10.ifNotNull(
-              _i10.dummyValueOrNull<T>(
-                this,
-                Invocation.method(
-                  #get,
-                  [path],
-                  {#queryParameters: queryParameters},
-                ),
-              ),
-              (T v) => _i3.Future<T>.value(v),
-            ) ??
-            _FakeFuture_1<T>(
-              this,
-              Invocation.method(
-                #get,
-                [path],
-                {#queryParameters: queryParameters},
-              ),
+            Invocation.method(
+              #get,
+              [path],
+              {#queryParameters: queryParameters},
             ),
-      ) as _i3.Future<T>);
-
-  @override
-  _i3.Future<T> post<T>(
-    String? path, {
-    dynamic data,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #post,
-          [path],
-          {#data: data},
-        ),
-        returnValue: _i10.ifNotNull(
-              _i10.dummyValueOrNull<T>(
-                this,
-                Invocation.method(
-                  #post,
-                  [path],
-                  {#data: data},
+            returnValue:
+                _i10.ifNotNull(
+                  _i10.dummyValueOrNull<T>(
+                    this,
+                    Invocation.method(
+                      #get,
+                      [path],
+                      {#queryParameters: queryParameters},
+                    ),
+                  ),
+                  (T v) => _i3.Future<T>.value(v),
+                ) ??
+                _FakeFuture_1<T>(
+                  this,
+                  Invocation.method(
+                    #get,
+                    [path],
+                    {#queryParameters: queryParameters},
+                  ),
                 ),
-              ),
-              (T v) => _i3.Future<T>.value(v),
-            ) ??
-            _FakeFuture_1<T>(
-              this,
-              Invocation.method(
-                #post,
-                [path],
-                {#data: data},
-              ),
-            ),
-      ) as _i3.Future<T>);
+          )
+          as _i3.Future<T>);
 
   @override
-  _i3.Future<T> put<T>(
-    String? path, {
-    dynamic data,
-  }) =>
+  _i3.Future<T> post<T>(String? path, {dynamic data}) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #put,
-          [path],
-          {#data: data},
-        ),
-        returnValue: _i10.ifNotNull(
-              _i10.dummyValueOrNull<T>(
-                this,
-                Invocation.method(
-                  #put,
-                  [path],
-                  {#data: data},
+            Invocation.method(#post, [path], {#data: data}),
+            returnValue:
+                _i10.ifNotNull(
+                  _i10.dummyValueOrNull<T>(
+                    this,
+                    Invocation.method(#post, [path], {#data: data}),
+                  ),
+                  (T v) => _i3.Future<T>.value(v),
+                ) ??
+                _FakeFuture_1<T>(
+                  this,
+                  Invocation.method(#post, [path], {#data: data}),
                 ),
-              ),
-              (T v) => _i3.Future<T>.value(v),
-            ) ??
-            _FakeFuture_1<T>(
-              this,
-              Invocation.method(
-                #put,
-                [path],
-                {#data: data},
-              ),
-            ),
-      ) as _i3.Future<T>);
+          )
+          as _i3.Future<T>);
 
   @override
-  _i3.Future<T?> patch<T>(
-    String? path, {
-    dynamic data,
-  }) =>
+  _i3.Future<T> put<T>(String? path, {dynamic data}) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #patch,
-          [path],
-          {#data: data},
-        ),
-        returnValue: _i3.Future<T?>.value(),
-      ) as _i3.Future<T?>);
+            Invocation.method(#put, [path], {#data: data}),
+            returnValue:
+                _i10.ifNotNull(
+                  _i10.dummyValueOrNull<T>(
+                    this,
+                    Invocation.method(#put, [path], {#data: data}),
+                  ),
+                  (T v) => _i3.Future<T>.value(v),
+                ) ??
+                _FakeFuture_1<T>(
+                  this,
+                  Invocation.method(#put, [path], {#data: data}),
+                ),
+          )
+          as _i3.Future<T>);
 
   @override
-  _i3.Future<bool> delete(
-    String? path, {
-    dynamic data,
-  }) =>
+  _i3.Future<T?> patch<T>(String? path, {dynamic data}) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #delete,
-          [path],
-          {#data: data},
-        ),
-        returnValue: _i3.Future<bool>.value(false),
-      ) as _i3.Future<bool>);
+            Invocation.method(#patch, [path], {#data: data}),
+            returnValue: _i3.Future<T?>.value(),
+          )
+          as _i3.Future<T?>);
+
+  @override
+  _i3.Future<bool> delete(String? path, {dynamic data}) =>
+      (super.noSuchMethod(
+            Invocation.method(#delete, [path], {#data: data}),
+            returnValue: _i3.Future<bool>.value(false),
+          )
+          as _i3.Future<bool>);
 }
 
 /// A class which mocks [LocalDatabaseService].
@@ -387,80 +301,67 @@ class MockLocalDatabaseService extends _i1.Mock
   }
 
   @override
-  _i4.Isar get database => (super.noSuchMethod(
-        Invocation.getter(#database),
-        returnValue: _FakeIsar_2(
-          this,
-          Invocation.getter(#database),
-        ),
-      ) as _i4.Isar);
+  _i4.Isar get database =>
+      (super.noSuchMethod(
+            Invocation.getter(#database),
+            returnValue: _FakeIsar_2(this, Invocation.getter(#database)),
+          )
+          as _i4.Isar);
 
   @override
-  bool get isInitialized => (super.noSuchMethod(
-        Invocation.getter(#isInitialized),
-        returnValue: false,
-      ) as bool);
+  bool get isInitialized =>
+      (super.noSuchMethod(Invocation.getter(#isInitialized), returnValue: false)
+          as bool);
 
   @override
-  _i3.Future<_i4.Isar> initialize() => (super.noSuchMethod(
-        Invocation.method(
-          #initialize,
-          [],
-        ),
-        returnValue: _i3.Future<_i4.Isar>.value(_FakeIsar_2(
-          this,
-          Invocation.method(
-            #initialize,
-            [],
-          ),
-        )),
-      ) as _i3.Future<_i4.Isar>);
+  _i3.Future<_i4.Isar> initialize() =>
+      (super.noSuchMethod(
+            Invocation.method(#initialize, []),
+            returnValue: _i3.Future<_i4.Isar>.value(
+              _FakeIsar_2(this, Invocation.method(#initialize, [])),
+            ),
+          )
+          as _i3.Future<_i4.Isar>);
 
   @override
-  _i3.Future<void> close() => (super.noSuchMethod(
-        Invocation.method(
-          #close,
-          [],
-        ),
-        returnValue: _i3.Future<void>.value(),
-        returnValueForMissingStub: _i3.Future<void>.value(),
-      ) as _i3.Future<void>);
+  _i3.Future<void> close() =>
+      (super.noSuchMethod(
+            Invocation.method(#close, []),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
 
   @override
-  _i3.Future<void> clearAll() => (super.noSuchMethod(
-        Invocation.method(
-          #clearAll,
-          [],
-        ),
-        returnValue: _i3.Future<void>.value(),
-        returnValueForMissingStub: _i3.Future<void>.value(),
-      ) as _i3.Future<void>);
+  _i3.Future<void> clearAll() =>
+      (super.noSuchMethod(
+            Invocation.method(#clearAll, []),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
 
   @override
-  _i3.Future<int> getPendingSyncCount() => (super.noSuchMethod(
-        Invocation.method(
-          #getPendingSyncCount,
-          [],
-        ),
-        returnValue: _i3.Future<int>.value(0),
-      ) as _i3.Future<int>);
+  _i3.Future<int> getPendingSyncCount() =>
+      (super.noSuchMethod(
+            Invocation.method(#getPendingSyncCount, []),
+            returnValue: _i3.Future<int>.value(0),
+          )
+          as _i3.Future<int>);
 
   @override
-  _i3.Future<DateTime?> getLastSyncTime() => (super.noSuchMethod(
-        Invocation.method(
-          #getLastSyncTime,
-          [],
-        ),
-        returnValue: _i3.Future<DateTime?>.value(),
-      ) as _i3.Future<DateTime?>);
+  _i3.Future<DateTime?> getLastSyncTime() =>
+      (super.noSuchMethod(
+            Invocation.method(#getLastSyncTime, []),
+            returnValue: _i3.Future<DateTime?>.value(),
+          )
+          as _i3.Future<DateTime?>);
 
   @override
-  _i3.Future<int> cleanupOldData({int? daysOld = 30}) => (super.noSuchMethod(
-        Invocation.method(
-          #cleanupOldData,
-          [],
-          {#daysOld: daysOld},
-        ),
-        returnValue: _i3.Future<int>.value(0),
-      ) as _i3.Future<int>);
+  _i3.Future<int> cleanupOldData({int? daysOld = 30}) =>
+      (super.noSuchMethod(
+            Invocation.method(#cleanupOldData, [], {#daysOld: daysOld}),
+            returnValue: _i3.Future<int>.value(0),
+          )
+          as _i3.Future<int>);
 }
