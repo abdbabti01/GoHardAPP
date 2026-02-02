@@ -574,19 +574,48 @@ class ChatRepository {
     }
   }
 
-  /// Apply meal plan from a conversation to today's meal log
+  /// Preview all 7 days of a meal plan for user selection
   /// Requires online connection
-  Future<ApplyMealPlanResult> applyMealPlanToToday(int conversationId) async {
+  Future<MealPlanPreview> previewMealPlan(int conversationId) async {
+    if (!_connectivity.isOnline) {
+      throw Exception('Cannot preview meal plan offline');
+    }
+
+    try {
+      final response = await _apiService.get<Map<String, dynamic>>(
+        ApiConfig.chatPreviewMealPlan(conversationId),
+      );
+
+      debugPrint(
+        '✅ Previewed meal plan: ${response['days']?.length ?? 0} days',
+      );
+
+      return MealPlanPreview.fromJson(response);
+    } catch (e) {
+      debugPrint('❌ Error previewing meal plan: $e');
+      rethrow;
+    }
+  }
+
+  /// Apply meal plan from a conversation to today's meal log
+  /// [day] specifies which day (1-7) of the meal plan to apply
+  /// Requires online connection
+  Future<ApplyMealPlanResult> applyMealPlanToToday(
+    int conversationId, {
+    int day = 1,
+  }) async {
     if (!_connectivity.isOnline) {
       throw Exception('Cannot apply meal plan offline');
     }
 
     try {
       final response = await _apiService.post<Map<String, dynamic>>(
-        ApiConfig.chatApplyMealPlan(conversationId),
+        ApiConfig.chatApplyMealPlan(conversationId, day: day),
       );
 
-      debugPrint('✅ Applied meal plan: ${response['foodsAdded']} foods added');
+      debugPrint(
+        '✅ Applied meal plan day $day: ${response['foodsAdded']} foods added',
+      );
 
       return ApplyMealPlanResult.fromJson(response);
     } catch (e) {
@@ -722,6 +751,101 @@ class ApplyMealPlanResult {
       totalProteinAdded: (json['totalProteinAdded'] as num?)?.toDouble() ?? 0,
       totalCarbsAdded: (json['totalCarbsAdded'] as num?)?.toDouble() ?? 0,
       totalFatAdded: (json['totalFatAdded'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+/// Preview of a 7-day meal plan for user selection
+class MealPlanPreview {
+  final bool success;
+  final String? message;
+  final double targetCalories;
+  final List<MealPlanDayPreview> days;
+
+  MealPlanPreview({
+    required this.success,
+    this.message,
+    required this.targetCalories,
+    required this.days,
+  });
+
+  factory MealPlanPreview.fromJson(Map<String, dynamic> json) {
+    return MealPlanPreview(
+      success: json['success'] as bool? ?? false,
+      message: json['message'] as String?,
+      targetCalories: (json['targetCalories'] as num?)?.toDouble() ?? 2000,
+      days:
+          (json['days'] as List<dynamic>?)
+              ?.map(
+                (d) => MealPlanDayPreview.fromJson(d as Map<String, dynamic>),
+              )
+              .toList() ??
+          [],
+    );
+  }
+}
+
+/// Preview of a single day in the meal plan
+class MealPlanDayPreview {
+  final int day;
+  final String summary;
+  final double totalCalories;
+  final double totalProtein;
+  final double totalCarbs;
+  final double totalFat;
+  final bool isWithinTarget;
+  final List<MealPreview> meals;
+
+  MealPlanDayPreview({
+    required this.day,
+    required this.summary,
+    required this.totalCalories,
+    required this.totalProtein,
+    required this.totalCarbs,
+    required this.totalFat,
+    required this.isWithinTarget,
+    required this.meals,
+  });
+
+  factory MealPlanDayPreview.fromJson(Map<String, dynamic> json) {
+    return MealPlanDayPreview(
+      day: json['day'] as int? ?? 1,
+      summary: json['summary'] as String? ?? '',
+      totalCalories: (json['totalCalories'] as num?)?.toDouble() ?? 0,
+      totalProtein: (json['totalProtein'] as num?)?.toDouble() ?? 0,
+      totalCarbs: (json['totalCarbs'] as num?)?.toDouble() ?? 0,
+      totalFat: (json['totalFat'] as num?)?.toDouble() ?? 0,
+      isWithinTarget: json['isWithinTarget'] as bool? ?? false,
+      meals:
+          (json['meals'] as List<dynamic>?)
+              ?.map((m) => MealPreview.fromJson(m as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
+}
+
+/// Preview of a single meal
+class MealPreview {
+  final String mealType;
+  final List<String> foods;
+  final double calories;
+
+  MealPreview({
+    required this.mealType,
+    required this.foods,
+    required this.calories,
+  });
+
+  factory MealPreview.fromJson(Map<String, dynamic> json) {
+    return MealPreview(
+      mealType: json['mealType'] as String? ?? '',
+      foods:
+          (json['foods'] as List<dynamic>?)
+              ?.map((f) => f.toString())
+              .toList() ??
+          [],
+      calories: (json['calories'] as num?)?.toDouble() ?? 0,
     );
   }
 }

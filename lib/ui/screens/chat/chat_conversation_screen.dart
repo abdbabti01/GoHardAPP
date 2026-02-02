@@ -3,7 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
-import '../../../providers/chat_provider.dart';
+import '../../../providers/chat_provider.dart'
+    show ChatProvider, MealPlanPreview;
 import '../../../providers/programs_provider.dart';
 import '../../../providers/goals_provider.dart';
 import '../../../providers/nutrition_provider.dart';
@@ -364,10 +365,48 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     final conversationId = chatProvider.currentConversation?.id;
     if (conversationId == null) return;
 
-    // Show loading
-    PremiumLoadingDialog.show(context, message: 'Applying meal plan...');
+    // First, preview the meal plan to get all 7 days
+    PremiumLoadingDialog.show(context, message: 'Loading meal plan...');
 
-    final result = await chatProvider.applyMealPlanToToday(conversationId);
+    final preview = await chatProvider.previewMealPlan(conversationId);
+
+    if (!mounted) return;
+    navigator.pop(); // Close loading
+
+    if (preview == null || !preview.success) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            chatProvider.errorMessage ?? 'Failed to load meal plan',
+          ),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+
+    if (preview.days.isEmpty) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('No meal plan days found'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+
+    // Show day selection dialog
+    final selectedDay = await _showMealPlanDayPicker(preview);
+
+    if (selectedDay == null || !mounted) return;
+
+    // Apply the selected day
+    PremiumLoadingDialog.show(context, message: 'Applying Day $selectedDay...');
+
+    final result = await chatProvider.applyMealPlanToToday(
+      conversationId,
+      day: selectedDay,
+    );
 
     if (!mounted) return;
     navigator.pop(); // Close loading
@@ -395,7 +434,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Goals updated & ${result.foodsAdded} foods logged:'),
+                    Text('Day $selectedDay foods logged:'),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -405,6 +444,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                       ),
                       child: Column(
                         children: [
+                          _buildStatRow('Foods Added', '${result.foodsAdded}'),
                           _buildStatRow(
                             'Calories',
                             '${result.totalCaloriesAdded.toStringAsFixed(0)} kcal',
@@ -457,6 +497,259 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         ),
       );
     }
+  }
+
+  /// Show day picker dialog for 7-day meal plan
+  Future<int?> _showMealPlanDayPicker(MealPlanPreview preview) async {
+    return showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder:
+          (context) => DraggableScrollableSheet(
+            initialChildSize: 0.7,
+            minChildSize: 0.5,
+            maxChildSize: 0.9,
+            expand: false,
+            builder:
+                (context, scrollController) => Column(
+                  children: [
+                    // Handle bar
+                    Container(
+                      margin: const EdgeInsets.only(top: 12),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: context.textTertiary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Select Day to Apply',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: context.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Target: ${preview.targetCalories.toStringAsFixed(0)} kcal',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: context.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    // Days list
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        itemCount: preview.days.length,
+                        itemBuilder: (context, index) {
+                          final day = preview.days[index];
+                          final isWithinTarget = day.isWithinTarget;
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            color: context.surfaceElevated,
+                            child: InkWell(
+                              onTap: () => Navigator.pop(context, day.day),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Day header
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                isWithinTarget
+                                                    ? Colors.green.withValues(
+                                                      alpha: 0.2,
+                                                    )
+                                                    : Colors.orange.withValues(
+                                                      alpha: 0.2,
+                                                    ),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Day ${day.day}',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color:
+                                                  isWithinTarget
+                                                      ? Colors.green
+                                                      : Colors.orange,
+                                            ),
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          '${day.totalCalories.toStringAsFixed(0)} kcal',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color:
+                                                isWithinTarget
+                                                    ? Colors.green
+                                                    : Colors.orange,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (day.summary.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        day.summary,
+                                        style: TextStyle(
+                                          color: context.textSecondary,
+                                          fontSize: 13,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                    const SizedBox(height: 12),
+                                    // Macros row
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceAround,
+                                      children: [
+                                        _buildMacroPill(
+                                          'P',
+                                          '${day.totalProtein.toStringAsFixed(0)}g',
+                                          Colors.blue,
+                                        ),
+                                        _buildMacroPill(
+                                          'C',
+                                          '${day.totalCarbs.toStringAsFixed(0)}g',
+                                          Colors.amber,
+                                        ),
+                                        _buildMacroPill(
+                                          'F',
+                                          '${day.totalFat.toStringAsFixed(0)}g',
+                                          Colors.red,
+                                        ),
+                                      ],
+                                    ),
+                                    // Meals preview
+                                    if (day.meals.isNotEmpty) ...[
+                                      const SizedBox(height: 12),
+                                      const Divider(height: 1),
+                                      const SizedBox(height: 12),
+                                      ...day.meals
+                                          .take(4)
+                                          .map(
+                                            (meal) => Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 4,
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    _getMealIcon(meal.mealType),
+                                                    size: 16,
+                                                    color:
+                                                        context.textSecondary,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Text(
+                                                      meal.mealType,
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color:
+                                                            context
+                                                                .textSecondary,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    '${meal.calories.toStringAsFixed(0)} kcal',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color:
+                                                          context.textTertiary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
+  Widget _buildMacroPill(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(value, style: TextStyle(fontSize: 12, color: color)),
+        ],
+      ),
+    );
+  }
+
+  IconData _getMealIcon(String mealType) {
+    final type = mealType.toLowerCase();
+    if (type.contains('breakfast')) return Icons.wb_sunny_outlined;
+    if (type.contains('lunch')) return Icons.restaurant;
+    if (type.contains('dinner')) return Icons.dinner_dining;
+    if (type.contains('snack')) return Icons.cookie_outlined;
+    return Icons.restaurant_menu;
   }
 
   Widget _buildStatRow(String label, String value) {

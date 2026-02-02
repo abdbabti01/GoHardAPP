@@ -5,7 +5,8 @@ import '../data/models/chat_message.dart';
 import '../data/repositories/chat_repository.dart';
 import '../core/services/connectivity_service.dart';
 
-export '../data/repositories/chat_repository.dart' show ApplyMealPlanResult;
+export '../data/repositories/chat_repository.dart'
+    show ApplyMealPlanResult, MealPlanPreview, MealPlanDayPreview, MealPreview;
 
 /// Provider for AI chat management
 class ChatProvider extends ChangeNotifier {
@@ -383,8 +384,38 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  /// Preview all 7 days of a meal plan for user selection
+  Future<MealPlanPreview?> previewMealPlan(int conversationId) async {
+    if (isOffline) {
+      _errorMessage = 'Cannot preview meal plan offline';
+      notifyListeners();
+      return null;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _chatRepository.previewMealPlan(conversationId);
+      return result;
+    } catch (e) {
+      _errorMessage =
+          'Failed to preview meal plan: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Preview meal plan error: $e');
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Apply meal plan from a conversation to today's meal log
-  Future<ApplyMealPlanResult?> applyMealPlanToToday(int conversationId) async {
+  /// [day] specifies which day (1-7) of the meal plan to apply
+  Future<ApplyMealPlanResult?> applyMealPlanToToday(
+    int conversationId, {
+    int day = 1,
+  }) async {
     if (isOffline) {
       _errorMessage = 'Cannot apply meal plan offline';
       notifyListeners();
@@ -396,7 +427,10 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _chatRepository.applyMealPlanToToday(conversationId);
+      final result = await _chatRepository.applyMealPlanToToday(
+        conversationId,
+        day: day,
+      );
       return result;
     } catch (e) {
       _errorMessage =
