@@ -774,14 +774,19 @@ class ApplyMealPlanResult {
   final double totalProteinAdded;
   final double totalCarbsAdded;
   final double totalFatAdded;
+
   /// Whether the nutrition goal was updated
   final bool goalUpdated;
+
   /// New daily calorie goal (if updated)
   final double? newDailyCalorieGoal;
+
   /// New daily protein goal (if updated)
   final double? newDailyProteinGoal;
+
   /// New daily carbs goal (if updated)
   final double? newDailyCarbsGoal;
+
   /// New daily fat goal (if updated)
   final double? newDailyFatGoal;
 
