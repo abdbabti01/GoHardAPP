@@ -514,7 +514,8 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
-    if (_currentConversation!.type != 'workout_plan') {
+    if (_currentConversation!.type != 'workout_plan' &&
+        _currentConversation!.type != 'combined_plan') {
       _errorMessage = 'This conversation is not a workout plan';
       notifyListeners();
       return null;
@@ -557,7 +558,8 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
-    if (_currentConversation!.type != 'workout_plan') {
+    if (_currentConversation!.type != 'workout_plan' &&
+        _currentConversation!.type != 'combined_plan') {
       _errorMessage = 'This conversation is not a workout plan';
       notifyListeners();
       return null;
@@ -606,7 +608,8 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
-    if (_currentConversation!.type != 'workout_plan') {
+    if (_currentConversation!.type != 'workout_plan' &&
+        _currentConversation!.type != 'combined_plan') {
       _errorMessage = 'This conversation is not a workout plan';
       notifyListeners();
       return null;
