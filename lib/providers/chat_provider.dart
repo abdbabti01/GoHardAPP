@@ -6,7 +6,13 @@ import '../data/repositories/chat_repository.dart';
 import '../core/services/connectivity_service.dart';
 
 export '../data/repositories/chat_repository.dart'
-    show ApplyMealPlanResult, MealPlanPreview, MealPlanDayPreview, MealPreview;
+    show
+        ApplyMealPlanResult,
+        ApplyMealPlanWeekResult,
+        DayApplyResult,
+        MealPlanPreview,
+        MealPlanDayPreview,
+        MealPreview;
 
 /// Provider for AI chat management
 class ChatProvider extends ChangeNotifier {
@@ -436,6 +442,48 @@ class ChatProvider extends ChangeNotifier {
       _errorMessage =
           'Failed to apply meal plan: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Apply meal plan error: $e');
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Apply multiple days of a meal plan
+  /// [applyAllDays] - if true, applies all 7 days
+  /// [days] - specific days to apply (1-7), ignored if applyAllDays is true
+  /// [startDate] - the date to start applying from (defaults to today)
+  /// [overwriteExisting] - if true, replaces existing meal entries
+  Future<ApplyMealPlanWeekResult?> applyMealPlanWeek(
+    int conversationId, {
+    bool applyAllDays = false,
+    List<int>? days,
+    DateTime? startDate,
+    bool overwriteExisting = true,
+  }) async {
+    if (isOffline) {
+      _errorMessage = 'Cannot apply meal plan offline';
+      notifyListeners();
+      return null;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _chatRepository.applyMealPlanWeek(
+        conversationId,
+        applyAllDays: applyAllDays,
+        days: days,
+        startDate: startDate,
+        overwriteExisting: overwriteExisting,
+      );
+      return result;
+    } catch (e) {
+      _errorMessage =
+          'Failed to apply meal plan: ${e.toString().replaceAll('Exception: ', '')}';
+      debugPrint('Apply meal plan week error: $e');
       return null;
     } finally {
       _isLoading = false;

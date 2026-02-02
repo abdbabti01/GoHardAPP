@@ -624,6 +624,49 @@ class ChatRepository {
     }
   }
 
+  /// Apply multiple days of a meal plan
+  /// [applyAllDays] - if true, applies all 7 days
+  /// [days] - specific days to apply (1-7), ignored if applyAllDays is true
+  /// [startDate] - the date to start applying from (defaults to today)
+  /// [overwriteExisting] - if true, replaces existing meal entries
+  /// Requires online connection
+  Future<ApplyMealPlanWeekResult> applyMealPlanWeek(
+    int conversationId, {
+    bool applyAllDays = false,
+    List<int>? days,
+    DateTime? startDate,
+    bool overwriteExisting = true,
+  }) async {
+    if (!_connectivity.isOnline) {
+      throw Exception('Cannot apply meal plan offline');
+    }
+
+    try {
+      final data = <String, dynamic>{
+        'applyAllDays': applyAllDays,
+        'overwriteExisting': overwriteExisting,
+      };
+      if (days != null && !applyAllDays) {
+        data['days'] = days;
+      }
+      if (startDate != null) {
+        data['startDate'] = startDate.toIso8601String();
+      }
+
+      final response = await _apiService.post<Map<String, dynamic>>(
+        ApiConfig.chatApplyMealPlanWeek(conversationId),
+        data: data,
+      );
+
+      debugPrint('✅ Applied ${response['daysApplied']} days of meal plan');
+
+      return ApplyMealPlanWeekResult.fromJson(response);
+    } catch (e) {
+      debugPrint('❌ Error applying meal plan week: $e');
+      rethrow;
+    }
+  }
+
   /// Preview workout sessions from an AI-generated workout plan (without creating)
   /// Requires online connection
   Future<Map<String, dynamic>> previewSessionsFromPlan({
@@ -846,6 +889,82 @@ class MealPreview {
               .toList() ??
           [],
       calories: (json['calories'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+/// Result of applying multiple days of a meal plan
+class ApplyMealPlanWeekResult {
+  final bool success;
+  final String message;
+  final int daysApplied;
+  final int totalFoodsAdded;
+  final double totalCalories;
+  final double totalProtein;
+  final double totalCarbs;
+  final double totalFat;
+  final List<DayApplyResult> dayResults;
+
+  ApplyMealPlanWeekResult({
+    required this.success,
+    required this.message,
+    required this.daysApplied,
+    required this.totalFoodsAdded,
+    required this.totalCalories,
+    required this.totalProtein,
+    required this.totalCarbs,
+    required this.totalFat,
+    required this.dayResults,
+  });
+
+  factory ApplyMealPlanWeekResult.fromJson(Map<String, dynamic> json) {
+    return ApplyMealPlanWeekResult(
+      success: json['success'] as bool? ?? false,
+      message: json['message'] as String? ?? '',
+      daysApplied: json['daysApplied'] as int? ?? 0,
+      totalFoodsAdded: json['totalFoodsAdded'] as int? ?? 0,
+      totalCalories: (json['totalCalories'] as num?)?.toDouble() ?? 0,
+      totalProtein: (json['totalProtein'] as num?)?.toDouble() ?? 0,
+      totalCarbs: (json['totalCarbs'] as num?)?.toDouble() ?? 0,
+      totalFat: (json['totalFat'] as num?)?.toDouble() ?? 0,
+      dayResults:
+          (json['dayResults'] as List<dynamic>?)
+              ?.map((d) => DayApplyResult.fromJson(d as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
+}
+
+/// Result for each day applied in a multi-day meal plan application
+class DayApplyResult {
+  final int day;
+  final DateTime date;
+  final int foodsAdded;
+  final double calories;
+  final double protein;
+  final double carbs;
+  final double fat;
+
+  DayApplyResult({
+    required this.day,
+    required this.date,
+    required this.foodsAdded,
+    required this.calories,
+    required this.protein,
+    required this.carbs,
+    required this.fat,
+  });
+
+  factory DayApplyResult.fromJson(Map<String, dynamic> json) {
+    return DayApplyResult(
+      day: json['day'] as int? ?? 0,
+      date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+      foodsAdded: json['foodsAdded'] as int? ?? 0,
+      calories: (json['calories'] as num?)?.toDouble() ?? 0,
+      protein: (json['protein'] as num?)?.toDouble() ?? 0,
+      carbs: (json['carbs'] as num?)?.toDouble() ?? 0,
+      fat: (json['fat'] as num?)?.toDouble() ?? 0,
     );
   }
 }

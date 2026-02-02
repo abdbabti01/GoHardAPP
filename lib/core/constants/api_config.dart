@@ -67,6 +67,8 @@ class ApiConfig {
       'chat/conversations/$conversationId/preview-meal-plan';
   static String chatApplyMealPlan(int conversationId, {int day = 1}) =>
       'chat/conversations/$conversationId/apply-meal-plan?day=$day';
+  static String chatApplyMealPlanWeek(int conversationId) =>
+      'chat/conversations/$conversationId/apply-meal-plan-week';
   static const String sharedWorkouts = 'sharedworkouts';
   static const String workoutTemplates = 'workouttemplates';
   static const String goals = 'goals';
