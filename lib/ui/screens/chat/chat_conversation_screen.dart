@@ -500,7 +500,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       navigator.pop(); // Close loading
 
       if (result != null && result.success) {
-        // Refresh nutrition data
+        // Refresh nutrition data (includes updated goal)
         if (mounted) {
           await context.read<NutritionProvider>().loadTodaysData();
         }
@@ -522,6 +522,32 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (result.goalUpdated) ...[
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.flag, color: Colors.blue, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Daily goal updated to ${result.newDailyCalorieGoal?.toStringAsFixed(0) ?? "?"} kcal',
+                                  style: TextStyle(
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       Text('Day $selectedDay foods logged:'),
                       const SizedBox(height: 12),
                       Container(

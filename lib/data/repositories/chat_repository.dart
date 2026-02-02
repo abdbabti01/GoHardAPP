@@ -774,6 +774,16 @@ class ApplyMealPlanResult {
   final double totalProteinAdded;
   final double totalCarbsAdded;
   final double totalFatAdded;
+  /// Whether the nutrition goal was updated
+  final bool goalUpdated;
+  /// New daily calorie goal (if updated)
+  final double? newDailyCalorieGoal;
+  /// New daily protein goal (if updated)
+  final double? newDailyProteinGoal;
+  /// New daily carbs goal (if updated)
+  final double? newDailyCarbsGoal;
+  /// New daily fat goal (if updated)
+  final double? newDailyFatGoal;
 
   ApplyMealPlanResult({
     required this.success,
@@ -783,6 +793,11 @@ class ApplyMealPlanResult {
     required this.totalProteinAdded,
     required this.totalCarbsAdded,
     required this.totalFatAdded,
+    this.goalUpdated = false,
+    this.newDailyCalorieGoal,
+    this.newDailyProteinGoal,
+    this.newDailyCarbsGoal,
+    this.newDailyFatGoal,
   });
 
   factory ApplyMealPlanResult.fromJson(Map<String, dynamic> json) {
@@ -794,6 +809,11 @@ class ApplyMealPlanResult {
       totalProteinAdded: (json['totalProteinAdded'] as num?)?.toDouble() ?? 0,
       totalCarbsAdded: (json['totalCarbsAdded'] as num?)?.toDouble() ?? 0,
       totalFatAdded: (json['totalFatAdded'] as num?)?.toDouble() ?? 0,
+      goalUpdated: json['goalUpdated'] as bool? ?? false,
+      newDailyCalorieGoal: (json['newDailyCalorieGoal'] as num?)?.toDouble(),
+      newDailyProteinGoal: (json['newDailyProteinGoal'] as num?)?.toDouble(),
+      newDailyCarbsGoal: (json['newDailyCarbsGoal'] as num?)?.toDouble(),
+      newDailyFatGoal: (json['newDailyFatGoal'] as num?)?.toDouble(),
     );
   }
 }
