@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -6,8 +7,6 @@ import '../../../providers/nutrition_provider.dart';
 import '../../../data/models/meal_entry.dart';
 import '../../../data/models/meal_log.dart';
 import '../../../data/models/food_item.dart';
-import '../../widgets/nutrition/calorie_ring_widget.dart';
-import '../../widgets/nutrition/macro_progress_bar.dart';
 import '../../widgets/nutrition/meal_card_widget.dart';
 import 'food_search_screen.dart';
 
@@ -204,8 +203,13 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
         children: [
           Row(
             children: [
-              // Calorie ring - shows planned vs goal
-              CalorieRingWidget(consumed: planned, goal: goal, size: 120),
+              // Dual calorie ring - consumed (inner) + planned (outer track)
+              _buildDualCalorieRing(
+                context,
+                consumed: consumed,
+                planned: planned,
+                goal: goal,
+              ),
               const SizedBox(width: 24),
               // Stats
               Expanded(
@@ -231,18 +235,18 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                     const SizedBox(height: 8),
                     _buildCalorieRow(
                       context,
-                      'Planned',
-                      planned.toStringAsFixed(0),
-                      Icons.calendar_today,
-                      isOverBudget ? Colors.red : Colors.orange,
-                    ),
-                    const SizedBox(height: 8),
-                    _buildCalorieRow(
-                      context,
                       'Consumed',
                       consumed.toStringAsFixed(0),
                       Icons.local_fire_department,
                       isOverConsumed ? Colors.red : Colors.green,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCalorieRow(
+                      context,
+                      'Planned',
+                      planned.toStringAsFixed(0),
+                      Icons.calendar_today,
+                      isOverBudget ? Colors.red : Colors.orange.shade300,
                     ),
                     const SizedBox(height: 8),
                     _buildCalorieRow(
@@ -349,11 +353,88 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     );
   }
 
+  /// Dual ring showing consumed (solid) and planned (dashed/lighter)
+  Widget _buildDualCalorieRing(
+    BuildContext context, {
+    required double consumed,
+    required double planned,
+    required double goal,
+  }) {
+    final consumedPercent = goal > 0 ? (consumed / goal).clamp(0.0, 1.0) : 0.0;
+    final plannedPercent = goal > 0 ? (planned / goal).clamp(0.0, 1.0) : 0.0;
+    final isOverConsumed = consumed > goal;
+    final isOverPlanned = planned > goal;
+
+    return SizedBox(
+      width: 120,
+      height: 120,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Background ring
+          CustomPaint(
+            size: const Size(120, 120),
+            painter: _RingPainter(
+              progress: 1.0,
+              color: context.border,
+              strokeWidth: 12,
+            ),
+          ),
+          // Planned ring (outer, lighter) - shows what's scheduled
+          if (planned > 0)
+            CustomPaint(
+              size: const Size(120, 120),
+              painter: _RingPainter(
+                progress: plannedPercent,
+                color:
+                    isOverPlanned
+                        ? Colors.red.withValues(alpha: 0.3)
+                        : Colors.orange.withValues(alpha: 0.4),
+                strokeWidth: 12,
+              ),
+            ),
+          // Consumed ring (inner, solid) - shows what's eaten
+          if (consumed > 0)
+            CustomPaint(
+              size: const Size(108, 108),
+              painter: _RingPainter(
+                progress: consumedPercent,
+                color: isOverConsumed ? Colors.red : Colors.green,
+                strokeWidth: 8,
+              ),
+            ),
+          // Center text - show consumed
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                consumed.toStringAsFixed(0),
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: context.textPrimary,
+                ),
+              ),
+              Text(
+                'eaten',
+                style: TextStyle(fontSize: 11, color: context.textSecondary),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMacroProgress(BuildContext context, NutritionProvider provider) {
     final mealLog = provider.todaysMealLog;
     final goal = provider.activeGoal;
 
-    // Use planned values (all meals) for macro tracking
+    // Get both consumed and planned values
+    final consumedProtein = mealLog?.consumedProtein ?? 0;
+    final consumedCarbs = mealLog?.consumedCarbohydrates ?? 0;
+    final consumedFat = mealLog?.consumedFat ?? 0;
+
     final plannedProtein = mealLog?.plannedProtein ?? 0;
     final plannedCarbs = mealLog?.plannedCarbohydrates ?? 0;
     final plannedFat = mealLog?.plannedFat ?? 0;
@@ -383,39 +464,168 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                 ),
               ),
               const Spacer(),
-              Text(
-                'Planned',
-                style: TextStyle(fontSize: 12, color: context.textSecondary),
+              // Legend
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Eaten',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: context.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Planned',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: context.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 16),
-          MacroProgressBar(
+          _buildDualMacroBar(
+            context,
             label: 'Protein',
-            current: plannedProtein,
+            consumed: consumedProtein,
+            planned: plannedProtein,
             goal: goalProtein,
-            color:
-                plannedProtein > goalProtein ? Colors.red : Colors.red.shade400,
-            unit: 'g',
+            consumedColor: Colors.green,
+            plannedColor: Colors.red.shade200,
           ),
           const SizedBox(height: 12),
-          MacroProgressBar(
+          _buildDualMacroBar(
+            context,
             label: 'Carbs',
-            current: plannedCarbs,
+            consumed: consumedCarbs,
+            planned: plannedCarbs,
             goal: goalCarbs,
-            color: plannedCarbs > goalCarbs ? Colors.red : Colors.blue,
-            unit: 'g',
+            consumedColor: Colors.green,
+            plannedColor: Colors.blue.shade200,
           ),
           const SizedBox(height: 12),
-          MacroProgressBar(
+          _buildDualMacroBar(
+            context,
             label: 'Fat',
-            current: plannedFat,
+            consumed: consumedFat,
+            planned: plannedFat,
             goal: goalFat,
-            color: plannedFat > goalFat ? Colors.red : Colors.amber,
-            unit: 'g',
+            consumedColor: Colors.green,
+            plannedColor: Colors.amber.shade200,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDualMacroBar(
+    BuildContext context, {
+    required String label,
+    required double consumed,
+    required double planned,
+    required double goal,
+    required Color consumedColor,
+    required Color plannedColor,
+  }) {
+    final consumedPercent = goal > 0 ? (consumed / goal).clamp(0.0, 1.0) : 0.0;
+    final plannedPercent = goal > 0 ? (planned / goal).clamp(0.0, 1.0) : 0.0;
+    final isOverPlanned = planned > goal;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: context.textPrimary,
+              ),
+            ),
+            Text(
+              '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} g',
+              style: TextStyle(fontSize: 12, color: context.textSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Stack(
+          children: [
+            // Background
+            Container(
+              height: 8,
+              decoration: BoxDecoration(
+                color: context.border,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            // Planned bar (lighter, behind)
+            if (planned > 0)
+              FractionallySizedBox(
+                widthFactor: plannedPercent,
+                child: Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color:
+                        isOverPlanned
+                            ? Colors.red.withValues(alpha: 0.3)
+                            : plannedColor.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            // Consumed bar (solid, on top)
+            if (consumed > 0)
+              FractionallySizedBox(
+                widthFactor: consumedPercent,
+                child: Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: consumedColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        // Show planned amount if different from consumed
+        if (planned > 0 && planned != consumed)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '(${planned.toStringAsFixed(0)}g planned)',
+              style: TextStyle(
+                fontSize: 10,
+                color: context.textTertiary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -1201,5 +1411,47 @@ class _FoodAlternativesSheetState extends State<_FoodAlternativesSheet> {
         ),
       ),
     );
+  }
+}
+
+/// Custom painter for drawing progress rings
+class _RingPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final double strokeWidth;
+
+  _RingPainter({
+    required this.progress,
+    required this.color,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+
+    final paint =
+        Paint()
+          ..color = color
+          ..strokeWidth = strokeWidth
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round;
+
+    final startAngle = -math.pi / 2; // Start from top
+    final sweepAngle = 2 * math.pi * progress;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      sweepAngle,
+      false,
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }
