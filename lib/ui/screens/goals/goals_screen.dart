@@ -756,16 +756,23 @@ class _GoalsScreenState extends State<GoalsScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Creating meal plan chat...'),
+          content: Text('Generating meal plan...'),
           duration: Duration(seconds: 2),
         ),
       );
 
-      final prompt = _generateMealPlanPrompt(goal, nutrition);
+      // Build macros string if nutrition data available
+      String? macros;
+      if (nutrition != null) {
+        macros =
+            '${nutrition.dailyProtein.round()}g protein, ${nutrition.dailyCarbohydrates.round()}g carbs, ${nutrition.dailyFat.round()}g fat';
+      }
 
-      final conversation = await chatProvider.createConversation(
-        title: 'Meal Plan: ${goal.goalType}',
-        type: 'meal_plan',
+      // Use generateMealPlan which calls the proper API endpoint with scaling
+      final conversation = await chatProvider.generateMealPlan(
+        dietaryGoal: goal.goalType,
+        targetCalories: nutrition?.dailyCalories.round(),
+        macros: macros,
       );
 
       if (conversation != null && mounted) {
@@ -780,7 +787,6 @@ class _GoalsScreenState extends State<GoalsScreen>
           RouteNames.chatConversation,
           arguments: {
             'conversationId': conversation.id,
-            'initialMessage': prompt,
             'goalId': goal.id,
             'suggestedWeeks': weeks.clamp(4, 20), // Pass to program dialog
             'suggestedDaysPerWeek': _suggestDaysPerWeek(goal, nutrition),
@@ -790,7 +796,7 @@ class _GoalsScreenState extends State<GoalsScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              chatProvider.errorMessage ?? 'Failed to create conversation',
+              chatProvider.errorMessage ?? 'Failed to generate meal plan',
             ),
             backgroundColor: Colors.red,
           ),
