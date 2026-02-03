@@ -2,10 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/theme_colors.dart';
+import '../../../../core/services/goal_validation_service.dart';
 import '../../../../providers/goals_provider.dart';
 import '../../../../providers/body_metrics_provider.dart';
 import '../../../../data/models/goal.dart';
 import '../../../../routes/route_names.dart';
+
+/// Quick goal template for one-tap creation
+class GoalTemplate {
+  final String name;
+  final String goalType;
+  final double targetChange;
+  final String unit;
+  final IconData icon;
+  final Color color;
+
+  const GoalTemplate({
+    required this.name,
+    required this.goalType,
+    required this.targetChange,
+    required this.unit,
+    required this.icon,
+    required this.color,
+  });
+}
 
 /// Dialog for creating a new fitness goal with validation
 class CreateGoalDialog extends StatefulWidget {
@@ -27,6 +47,7 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
   DateTime? _aiSuggestedDate;
   bool _isCreating = false;
   bool _metricsLoaded = false;
+  bool _showAdvancedForm = false;
 
   // Body metrics for validation
   double? _currentWeight;
@@ -40,6 +61,42 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
 
   // Validation warnings
   String? _goalWarning;
+
+  // Quick goal templates
+  static const List<GoalTemplate> _templates = [
+    GoalTemplate(
+      name: 'Lose 10 lbs',
+      goalType: 'Weight Loss',
+      targetChange: -10,
+      unit: 'lb',
+      icon: Icons.trending_down,
+      color: Colors.orange,
+    ),
+    GoalTemplate(
+      name: 'Lose 20 lbs',
+      goalType: 'Weight Loss',
+      targetChange: -20,
+      unit: 'lb',
+      icon: Icons.trending_down,
+      color: Colors.deepOrange,
+    ),
+    GoalTemplate(
+      name: 'Gain 5 lbs muscle',
+      goalType: 'Muscle Gain',
+      targetChange: 5,
+      unit: 'lb',
+      icon: Icons.fitness_center,
+      color: Colors.blue,
+    ),
+    GoalTemplate(
+      name: 'Gain 10 lbs muscle',
+      goalType: 'Muscle Gain',
+      targetChange: 10,
+      unit: 'lb',
+      icon: Icons.fitness_center,
+      color: Colors.indigo,
+    ),
+  ];
 
   // Common fitness goal types
   final List<String> _goalTypes = [
@@ -104,7 +161,7 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
     _validateGoalRealism();
   }
 
-  /// Validate if the goal is realistic
+  /// Validate if the goal is realistic using shared service
   void _validateGoalRealism() {
     if (_selectedGoalType == null) {
       setState(() => _goalWarning = null);
@@ -119,55 +176,14 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
       return;
     }
 
-    final change = (targetValue - currentValue).abs();
-    final weeks =
-        _targetDate != null
-            ? _targetDate!.difference(DateTime.now()).inDays / 7
-            : 12;
+    final result = GoalValidationService.instance.validateGoalRealism(
+      goalType: _selectedGoalType!,
+      currentValue: currentValue,
+      targetValue: targetValue,
+      targetDate: _targetDate,
+    );
 
-    String? warning;
-
-    switch (_selectedGoalType!) {
-      case 'Weight Loss':
-        final weeklyLoss = weeks > 0 ? change / weeks : change;
-        if (weeklyLoss > 2.5) {
-          warning =
-              'Losing more than 2 lbs/week is unhealthy. '
-              'Your goal requires ${weeklyLoss.toStringAsFixed(1)} lbs/week.';
-        } else if (targetValue >= currentValue) {
-          warning =
-              'Target weight should be less than current weight for weight loss.';
-        }
-        break;
-
-      case 'Muscle Gain':
-        final weeklyGain = weeks > 0 ? change / weeks : change;
-        if (weeklyGain > 1.0) {
-          warning =
-              'Gaining more than 1 lb/week of muscle is unrealistic. '
-              'Your goal requires ${weeklyGain.toStringAsFixed(1)} lbs/week.';
-        } else if (targetValue <= currentValue) {
-          warning =
-              'Target should be greater than current value for muscle gain.';
-        }
-        break;
-
-      case 'Body Fat':
-        final monthlyLoss = weeks > 0 ? change / (weeks / 4) : change;
-        if (monthlyLoss > 1.5) {
-          warning =
-              'Losing more than 1% body fat/month is difficult. '
-              'Your goal requires ${monthlyLoss.toStringAsFixed(1)}%/month.';
-        }
-        break;
-    }
-
-    // Check if target equals current
-    if (targetValue == currentValue && warning == null) {
-      warning = 'Target value is the same as current value.';
-    }
-
-    setState(() => _goalWarning = warning);
+    setState(() => _goalWarning = result.warning);
   }
 
   void _calculateAISuggestedDate() {
@@ -178,40 +194,15 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
 
     if (targetValue == null || currentValue == 0) return;
 
-    final difference = (targetValue - currentValue).abs();
-    int daysToComplete = 90;
-
-    switch (_selectedGoalType!) {
-      case 'Weight Loss':
-        final weeksNeeded = difference / 1.5;
-        daysToComplete = (weeksNeeded * 7).ceil();
-        break;
-      case 'Muscle Gain':
-        final weeksNeeded = difference / 0.75;
-        daysToComplete = (weeksNeeded * 7).ceil();
-        break;
-      case 'Body Fat':
-        final monthsNeeded = difference / 0.75;
-        daysToComplete = (monthsNeeded * 30).ceil();
-        break;
-      case 'Workout Frequency':
-        daysToComplete = 60;
-        break;
-      case 'Strength (Total Volume)':
-        daysToComplete = 180;
-        break;
-      case 'Cardiovascular Endurance':
-        daysToComplete = 90;
-        break;
-      case 'Flexibility':
-        daysToComplete = 120;
-        break;
-    }
-
-    daysToComplete = daysToComplete.clamp(14, 365);
+    final suggestedDate = GoalValidationService.instance
+        .calculateAISuggestedDate(
+          goalType: _selectedGoalType!,
+          currentValue: currentValue,
+          targetValue: targetValue,
+        );
 
     setState(() {
-      _aiSuggestedDate = DateTime.now().add(Duration(days: daysToComplete));
+      _aiSuggestedDate = suggestedDate;
       _targetDate ??= _aiSuggestedDate;
     });
   }
@@ -290,6 +281,27 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
     }
   }
 
+  /// Apply a quick template
+  void _applyTemplate(GoalTemplate template) {
+    if (_currentWeight == null) return;
+
+    final currentWeightLbs = _currentWeight! * 2.20462;
+    final targetValue = currentWeightLbs + template.targetChange;
+
+    setState(() {
+      _selectedGoalType = template.goalType;
+      _selectedUnit = template.unit;
+      _currentValueController.text = currentWeightLbs.toStringAsFixed(1);
+      _targetValueController.text = targetValue.toStringAsFixed(1);
+      _autoPopulatedFrom = 'weight';
+      _autoPopulatedDate = _metricsRecordedAt;
+      _showAdvancedForm = true;
+    });
+
+    _calculateAISuggestedDate();
+    _validateGoalRealism();
+  }
+
   Future<void> _selectTargetDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -307,6 +319,39 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
       });
       _validateGoalRealism();
     }
+  }
+
+  /// Get goal preview text
+  String? _getGoalPreview() {
+    if (_selectedGoalType == null) return null;
+
+    final currentValue = double.tryParse(_currentValueController.text);
+    final targetValue = double.tryParse(_targetValueController.text);
+
+    if (currentValue == null || targetValue == null) return null;
+
+    final change = (targetValue - currentValue).abs();
+    final unit = _selectedUnit;
+    final isDecrease = targetValue < currentValue;
+
+    String action;
+    if (_selectedGoalType == 'Weight Loss') {
+      action = 'Lose';
+    } else if (_selectedGoalType == 'Muscle Gain') {
+      action = 'Gain';
+    } else if (_selectedGoalType == 'Body Fat') {
+      action = isDecrease ? 'Reduce' : 'Increase';
+    } else {
+      action = isDecrease ? 'Decrease' : 'Increase';
+    }
+
+    String dateText = '';
+    if (_targetDate != null) {
+      final weeksLeft = _targetDate!.difference(DateTime.now()).inDays ~/ 7;
+      dateText = ' in $weeksLeft weeks';
+    }
+
+    return '$action ${change.toStringAsFixed(1)} $unit$dateText';
   }
 
   Future<void> _createGoal() async {
@@ -385,9 +430,6 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
 
       if (createdGoal != null) {
         navigator.pop(createdGoal);
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Goal created successfully')),
-        );
       } else {
         messenger.showSnackBar(
           SnackBar(
@@ -397,6 +439,116 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
         );
       }
     }
+  }
+
+  Widget _buildQuickTemplates() {
+    if (!_hasAllRequiredMetrics) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.flash_on, size: 16, color: Colors.amber.shade700),
+            const SizedBox(width: 4),
+            Text(
+              'Quick Start',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children:
+              _templates.map((template) {
+                return ActionChip(
+                  avatar: Icon(template.icon, size: 18, color: template.color),
+                  label: Text(template.name),
+                  backgroundColor: template.color.withValues(alpha: 0.1),
+                  side: BorderSide(
+                    color: template.color.withValues(alpha: 0.3),
+                  ),
+                  onPressed: () => _applyTemplate(template),
+                );
+              }).toList(),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: TextButton(
+            onPressed: () => setState(() => _showAdvancedForm = true),
+            child: const Text('Or create custom goal...'),
+          ),
+        ),
+        const Divider(),
+      ],
+    );
+  }
+
+  Widget _buildGoalPreview() {
+    final preview = _getGoalPreview();
+    if (preview == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+            Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.preview,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Your Goal',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            preview,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          if (_targetDate != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Target: ${DateFormat('MMM d, yyyy').format(_targetDate!)}',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildMissingMetricsWarning() {
@@ -598,6 +750,173 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
     );
   }
 
+  Widget _buildAdvancedForm() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DropdownButtonFormField<String>(
+          value: _selectedGoalType,
+          decoration: const InputDecoration(
+            labelText: 'Goal Type',
+            prefixIcon: Icon(Icons.flag),
+          ),
+          items:
+              _goalTypes.map((type) {
+                return DropdownMenuItem(value: type, child: Text(type));
+              }).toList(),
+          onChanged: (value) {
+            setState(() {
+              _selectedGoalType = value;
+              if (value != null) {
+                _selectedUnit = _availableUnits.first;
+                _autoPopulatedFrom = null;
+                _autoPopulatedDate = null;
+                _autoPopulateFromMetrics(value);
+                _calculateAISuggestedDate();
+              }
+            });
+          },
+          validator: (value) {
+            if (value == null) {
+              return 'Please select a goal type';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _currentValueController,
+          decoration: InputDecoration(
+            labelText: _isWeightGoal() ? 'Current Weight' : 'Current Value',
+            prefixIcon: const Icon(Icons.trending_up),
+            helperText: 'Your starting point',
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onChanged: (_) {
+            if (_autoPopulatedFrom != null) {
+              setState(() {
+                _autoPopulatedFrom = null;
+                _autoPopulatedDate = null;
+              });
+            }
+          },
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return _isWeightGoal()
+                  ? 'Please enter current weight'
+                  : 'Please enter current value';
+            }
+            if (double.tryParse(value) == null) {
+              return 'Please enter a valid number';
+            }
+            return null;
+          },
+        ),
+        if (_autoPopulatedFrom != null) ...[
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const SizedBox(width: 40),
+              Icon(Icons.auto_awesome, size: 14, color: Colors.green.shade600),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _autoPopulatedDate != null
+                      ? 'Auto-filled from body metrics (${DateFormat('MMM d').format(_autoPopulatedDate!)})'
+                      : 'Auto-filled from latest body metric',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.green.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _targetValueController,
+          decoration: InputDecoration(
+            labelText: _isWeightGoal() ? 'Target Weight' : 'Target Value',
+            prefixIcon: const Icon(Icons.track_changes),
+            helperText: 'Your goal',
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return _isWeightGoal()
+                  ? 'Please enter target weight'
+                  : 'Please enter target value';
+            }
+            if (double.tryParse(value) == null) {
+              return 'Please enter a valid number';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          value: _selectedUnit,
+          decoration: const InputDecoration(
+            labelText: 'Unit',
+            prefixIcon: Icon(Icons.straighten),
+          ),
+          items:
+              _availableUnits.map((unit) {
+                return DropdownMenuItem(value: unit, child: Text(unit));
+              }).toList(),
+          onChanged: (value) {
+            if (value != null) {
+              setState(() => _selectedUnit = value);
+            }
+          },
+        ),
+        const SizedBox(height: 16),
+        InkWell(
+          onTap: _selectTargetDate,
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Target Date',
+              prefixIcon: Icon(Icons.event),
+            ),
+            child: Text(
+              _targetDate != null
+                  ? DateFormat('MMM d, y').format(_targetDate!)
+                  : 'Select target date',
+              style: TextStyle(color: _targetDate != null ? null : Colors.grey),
+            ),
+          ),
+        ),
+        if (_aiSuggestedDate != null) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const SizedBox(width: 40),
+              Icon(
+                Icons.lightbulb_outline,
+                size: 16,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'AI suggests: ${DateFormat('MMM d, y').format(_aiSuggestedDate!)} based on healthy progress rates',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        _buildGoalWarning(),
+        _buildGoalPreview(),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -620,175 +939,15 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
               if (_metricsLoaded && _hasAllRequiredMetrics && !_areMetricsStale)
                 _buildCurrentStatsCard(),
 
-              DropdownButtonFormField<String>(
-                value: _selectedGoalType,
-                decoration: const InputDecoration(
-                  labelText: 'Goal Type',
-                  prefixIcon: Icon(Icons.flag),
-                ),
-                items:
-                    _goalTypes.map((type) {
-                      return DropdownMenuItem(value: type, child: Text(type));
-                    }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedGoalType = value;
-                    if (value != null) {
-                      _selectedUnit = _availableUnits.first;
-                      _autoPopulatedFrom = null;
-                      _autoPopulatedDate = null;
-                      _autoPopulateFromMetrics(value);
-                      _calculateAISuggestedDate();
-                    }
-                  });
-                },
-                validator: (value) {
-                  if (value == null) {
-                    return 'Please select a goal type';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _currentValueController,
-                decoration: InputDecoration(
-                  labelText:
-                      _isWeightGoal() ? 'Current Weight' : 'Current Value',
-                  prefixIcon: const Icon(Icons.trending_up),
-                  helperText: 'Your starting point',
-                ),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                onChanged: (_) {
-                  if (_autoPopulatedFrom != null) {
-                    setState(() {
-                      _autoPopulatedFrom = null;
-                      _autoPopulatedDate = null;
-                    });
-                  }
-                },
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return _isWeightGoal()
-                        ? 'Please enter current weight'
-                        : 'Please enter current value';
-                  }
-                  if (double.tryParse(value) == null) {
-                    return 'Please enter a valid number';
-                  }
-                  return null;
-                },
-              ),
-              if (_autoPopulatedFrom != null) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const SizedBox(width: 40),
-                    Icon(
-                      Icons.auto_awesome,
-                      size: 14,
-                      color: Colors.green.shade600,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        _autoPopulatedDate != null
-                            ? 'Auto-filled from body metrics (${DateFormat('MMM d').format(_autoPopulatedDate!)})'
-                            : 'Auto-filled from latest body metric',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.green.shade600,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _targetValueController,
-                decoration: InputDecoration(
-                  labelText: _isWeightGoal() ? 'Target Weight' : 'Target Value',
-                  prefixIcon: const Icon(Icons.track_changes),
-                  helperText: 'Your goal',
-                ),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return _isWeightGoal()
-                        ? 'Please enter target weight'
-                        : 'Please enter target value';
-                  }
-                  if (double.tryParse(value) == null) {
-                    return 'Please enter a valid number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedUnit,
-                decoration: const InputDecoration(
-                  labelText: 'Unit',
-                  prefixIcon: Icon(Icons.straighten),
-                ),
-                items:
-                    _availableUnits.map((unit) {
-                      return DropdownMenuItem(value: unit, child: Text(unit));
-                    }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedUnit = value);
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              InkWell(
-                onTap: _selectTargetDate,
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Target Date',
-                    prefixIcon: Icon(Icons.event),
-                  ),
-                  child: Text(
-                    _targetDate != null
-                        ? DateFormat('MMM d, y').format(_targetDate!)
-                        : 'Select target date',
-                    style: TextStyle(
-                      color: _targetDate != null ? null : Colors.grey,
-                    ),
-                  ),
-                ),
-              ),
-              if (_aiSuggestedDate != null) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const SizedBox(width: 40),
-                    Icon(
-                      Icons.lightbulb_outline,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'AI suggests: ${DateFormat('MMM d, y').format(_aiSuggestedDate!)} based on healthy progress rates',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              _buildGoalWarning(),
+              // Quick templates (only if metrics available and not showing form)
+              if (_metricsLoaded &&
+                  _hasAllRequiredMetrics &&
+                  !_showAdvancedForm)
+                _buildQuickTemplates(),
+
+              // Advanced form
+              if (_showAdvancedForm || !_hasAllRequiredMetrics)
+                _buildAdvancedForm(),
             ],
           ),
         ),
@@ -798,21 +957,22 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
           onPressed: _isCreating ? null : () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        ElevatedButton(
-          onPressed:
-              (_isCreating || !_hasAllRequiredMetrics) ? null : _createGoal,
-          child:
-              _isCreating
-                  ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: context.accent,
-                    ),
-                  )
-                  : const Text('Create'),
-        ),
+        if (_showAdvancedForm || !_hasAllRequiredMetrics)
+          ElevatedButton(
+            onPressed:
+                (_isCreating || !_hasAllRequiredMetrics) ? null : _createGoal,
+            child:
+                _isCreating
+                    ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: context.accent,
+                      ),
+                    )
+                    : const Text('Create'),
+          ),
       ],
     );
   }

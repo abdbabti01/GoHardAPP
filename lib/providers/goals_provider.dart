@@ -11,11 +11,7 @@ class GoalsProvider extends ChangeNotifier {
   final ConnectivityService? _connectivity;
 
   List<Goal> _goals = [];
-  List<Goal> _activeGoals = [];
-  List<Goal> _completedGoals = [];
   bool _isLoading = false;
-  bool _isCreating = false;
-  bool _isUpdating = false;
   String? _errorMessage;
 
   StreamSubscription<bool>? _connectivitySubscription;
@@ -32,14 +28,19 @@ class GoalsProvider extends ChangeNotifier {
     });
   }
 
-  // Getters
+  // Getters - derive filtered lists from single source of truth
   List<Goal> get goals => _goals;
-  List<Goal> get activeGoals => _activeGoals;
-  List<Goal> get completedGoals => _completedGoals;
+  List<Goal> get activeGoals =>
+      _goals.where((g) => g.isActive && !g.isCompleted).toList();
+  List<Goal> get completedGoals => _goals.where((g) => g.isCompleted).toList();
   bool get isLoading => _isLoading;
-  bool get isCreating => _isCreating;
-  bool get isUpdating => _isUpdating;
   String? get errorMessage => _errorMessage;
+
+  // Legacy getters for backwards compatibility (deprecated)
+  @Deprecated('Use isLoading instead')
+  bool get isCreating => _isLoading;
+  @Deprecated('Use isLoading instead')
+  bool get isUpdating => _isLoading;
 
   /// Load all goals for the current user
   Future<void> loadGoals({bool? isActive}) async {
@@ -50,12 +51,8 @@ class GoalsProvider extends ChangeNotifier {
     try {
       _goals = await _goalsRepository.getGoals(isActive: isActive);
 
-      // Split into active and completed
-      _activeGoals = _goals.where((g) => g.isActive).toList();
-      _completedGoals = _goals.where((g) => g.isCompleted).toList();
-
       debugPrint(
-        '✅ Loaded ${_goals.length} goals (${_activeGoals.length} active, ${_completedGoals.length} completed)',
+        '✅ Loaded ${_goals.length} goals (${activeGoals.length} active, ${completedGoals.length} completed)',
       );
     } catch (e) {
       _errorMessage =
@@ -80,57 +77,80 @@ class GoalsProvider extends ChangeNotifier {
     }
   }
 
-  /// Create a new goal
+  /// Create a new goal with optimistic update
   Future<Goal?> createGoal(Goal goal) async {
-    _isCreating = true;
     _errorMessage = null;
+
+    // 1. Create optimistic goal with temporary ID
+    final optimisticGoal = goal.copyWith(
+      id: -1, // Temporary ID to identify optimistic update
+      createdAt: DateTime.now(),
+    );
+
+    // 2. Add to list immediately (optimistic update)
+    _goals.add(optimisticGoal);
     notifyListeners();
 
+    debugPrint('📝 Optimistically added goal: ${optimisticGoal.goalType}');
+
     try {
+      // 3. Make API call
       final newGoal = await _goalsRepository.createGoal(goal);
-      _goals.add(newGoal);
-      _activeGoals.add(newGoal);
+
+      // 4. Replace optimistic goal with real goal
+      final index = _goals.indexWhere((g) => g.id == -1);
+      if (index != -1) {
+        _goals[index] = newGoal;
+      }
 
       debugPrint('✅ Created goal: ${newGoal.goalType} (ID: ${newGoal.id})');
-      _isCreating = false;
       notifyListeners();
       return newGoal;
     } catch (e) {
+      // 5. Remove optimistic goal on failure
+      _goals.removeWhere((g) => g.id == -1);
+
       _errorMessage =
           'Failed to create goal: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Create goal error: $e');
-      _isCreating = false;
       notifyListeners();
       return null;
     }
   }
 
-  /// Update an existing goal
+  /// Update an existing goal with optimistic update
   Future<bool> updateGoal(int id, Goal goal) async {
-    _isUpdating = true;
     _errorMessage = null;
+
+    // 1. Store original goal for rollback
+    final originalIndex = _goals.indexWhere((g) => g.id == id);
+    final originalGoal = originalIndex != -1 ? _goals[originalIndex] : null;
+
+    if (originalGoal == null) {
+      _errorMessage = 'Goal not found';
+      notifyListeners();
+      return false;
+    }
+
+    // 2. Apply optimistic update
+    _goals[originalIndex] = goal;
     notifyListeners();
 
+    debugPrint('📝 Optimistically updated goal: $id');
+
     try {
+      // 3. Make API call
       await _goalsRepository.updateGoal(id, goal);
 
-      // Update local list
-      final index = _goals.indexWhere((g) => g.id == id);
-      if (index != -1) {
-        _goals[index] = goal;
-        _activeGoals = _goals.where((g) => g.isActive).toList();
-        _completedGoals = _goals.where((g) => g.isCompleted).toList();
-      }
-
       debugPrint('✅ Updated goal: $id');
-      _isUpdating = false;
-      notifyListeners();
       return true;
     } catch (e) {
+      // 4. Rollback on failure
+      _goals[originalIndex] = originalGoal;
+
       _errorMessage =
           'Failed to update goal: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Update goal error: $e');
-      _isUpdating = false;
       notifyListeners();
       return false;
     }
@@ -146,22 +166,37 @@ class GoalsProvider extends ChangeNotifier {
     }
   }
 
-  /// Delete a goal
+  /// Delete a goal with optimistic update
   Future<bool> deleteGoal(int id) async {
     _errorMessage = null;
+
+    // 1. Store original goal for rollback
+    final originalIndex = _goals.indexWhere((g) => g.id == id);
+    if (originalIndex == -1) {
+      return true; // Already deleted
+    }
+    final originalGoal = _goals[originalIndex];
+
+    // 2. Optimistically remove
+    _goals.removeAt(originalIndex);
     notifyListeners();
 
+    debugPrint('📝 Optimistically deleted goal: $id');
+
     try {
+      // 3. Make API call
       await _goalsRepository.deleteGoal(id);
 
-      _goals.removeWhere((g) => g.id == id);
-      _activeGoals.removeWhere((g) => g.id == id);
-      _completedGoals.removeWhere((g) => g.id == id);
-
       debugPrint('✅ Deleted goal: $id');
-      notifyListeners();
       return true;
     } catch (e) {
+      // 4. Rollback on failure - re-add the goal
+      if (originalIndex < _goals.length) {
+        _goals.insert(originalIndex, originalGoal);
+      } else {
+        _goals.add(originalGoal);
+      }
+
       _errorMessage =
           'Failed to delete goal: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Delete goal error: $e');
@@ -170,20 +205,39 @@ class GoalsProvider extends ChangeNotifier {
     }
   }
 
-  /// Mark a goal as completed
+  /// Mark a goal as completed with optimistic update
   Future<bool> completeGoal(int id) async {
     _errorMessage = null;
+
+    // 1. Store original for rollback
+    final originalIndex = _goals.indexWhere((g) => g.id == id);
+    if (originalIndex == -1) {
+      _errorMessage = 'Goal not found';
+      notifyListeners();
+      return false;
+    }
+    final originalGoal = _goals[originalIndex];
+
+    // 2. Optimistically mark as completed
+    _goals[originalIndex] = originalGoal.copyWith(
+      isCompleted: true,
+      isActive: false,
+      completedAt: DateTime.now(),
+    );
     notifyListeners();
 
-    try {
-      await _goalsRepository.completeGoal(id);
+    debugPrint('📝 Optimistically completed goal: $id');
 
-      // Reload to get updated goal
-      await loadGoals();
+    try {
+      // 3. Make API call
+      await _goalsRepository.completeGoal(id);
 
       debugPrint('✅ Completed goal: $id');
       return true;
     } catch (e) {
+      // 4. Rollback on failure
+      _goals[originalIndex] = originalGoal;
+
       _errorMessage =
           'Failed to complete goal: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Complete goal error: $e');
@@ -236,12 +290,8 @@ class GoalsProvider extends ChangeNotifier {
   /// Clear all goals data (called on logout)
   void clear() {
     _goals = [];
-    _activeGoals = [];
-    _completedGoals = [];
     _errorMessage = null;
     _isLoading = false;
-    _isCreating = false;
-    _isUpdating = false;
     notifyListeners();
     debugPrint('🧹 GoalsProvider cleared');
   }

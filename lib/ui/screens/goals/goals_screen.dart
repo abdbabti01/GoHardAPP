@@ -245,8 +245,6 @@ class _GoalsScreenState extends State<GoalsScreen>
   }
 
   void _showCreateGoalDialog(BuildContext context) async {
-    // Capture references before async gap
-    final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final nutritionProvider = context.read<NutritionProvider>();
 
@@ -255,76 +253,102 @@ class _GoalsScreenState extends State<GoalsScreen>
       builder: (context) => const CreateGoalDialog(),
     );
 
-    // If goal was created, calculate nutrition and show summary dialog
+    // If goal was created, show success snackbar and trigger background nutrition calculation
     if (createdGoal != null && mounted) {
-      // Show loading dialog while calculating nutrition
-      PremiumLoadingDialog.show(
-        // ignore: use_build_context_synchronously
-        context,
-        message: 'Calculating nutrition...',
+      // Show success snackbar immediately
+      messenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Goal "${createdGoal.goalType}" created!')),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'View Details',
+            textColor: Colors.white,
+            onPressed: () {
+              _showGoalSummaryDialog(createdGoal);
+            },
+          ),
+        ),
       );
 
-      try {
-        // Determine goal type for nutrition calculation
-        String nutritionGoalType = 'Maintenance';
-        double? targetWeightChange;
-        int? timeframeWeeks;
-
-        final goalType = createdGoal.goalType.toLowerCase();
-        if (goalType.contains('loss')) {
-          nutritionGoalType = 'WeightLoss';
-          targetWeightChange =
-              (createdGoal.currentValue - createdGoal.targetValue).abs();
-        } else if (goalType.contains('gain') || goalType.contains('muscle')) {
-          nutritionGoalType = 'MuscleGain';
-          targetWeightChange =
-              (createdGoal.targetValue - createdGoal.currentValue).abs();
-        }
-
-        if (createdGoal.targetDate != null) {
-          timeframeWeeks =
-              createdGoal.targetDate!.difference(DateTime.now()).inDays ~/ 7;
-          if (timeframeWeeks < 1) timeframeWeeks = 1;
-        }
-
-        // Calculate nutrition from user metrics
-        final nutrition = await nutritionProvider.calculateAndSaveNutrition(
-          goalType: nutritionGoalType,
-          targetWeightChange: targetWeightChange,
-          timeframeWeeks: timeframeWeeks,
-        );
-
-        if (!mounted) return;
-        navigator.pop(); // Close loading dialog
-
-        // Show summary dialog and handle result
-        if (!mounted) return;
-        await _showGoalSummaryAndHandleResult(createdGoal, nutrition);
-      } catch (e) {
-        if (!mounted) return;
-        navigator.pop(); // Close loading dialog
-
-        // Show error but still show summary without nutrition
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Could not calculate nutrition: $e'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-
-        // Show summary dialog without nutrition data
-        if (!mounted) return;
-        await _showGoalSummaryAndHandleResult(createdGoal, null);
-      }
+      // Trigger nutrition calculation in background (non-blocking)
+      _calculateNutritionInBackground(createdGoal, nutritionProvider);
     }
   }
 
-  /// Shows the goal summary dialog and handles generating plans based on user selection
-  Future<void> _showGoalSummaryAndHandleResult(
+  /// Calculate nutrition in background without blocking UI
+  void _calculateNutritionInBackground(
     Goal goal,
-    CalculatedNutrition? nutrition,
-  ) async {
+    NutritionProvider nutritionProvider,
+  ) {
+    // Determine goal type for nutrition calculation
+    String nutritionGoalType = 'Maintenance';
+    double? targetWeightChange;
+    int? timeframeWeeks;
+
+    final goalType = goal.goalType.toLowerCase();
+    if (goalType.contains('loss')) {
+      nutritionGoalType = 'WeightLoss';
+      targetWeightChange = (goal.currentValue - goal.targetValue).abs();
+    } else if (goalType.contains('gain') || goalType.contains('muscle')) {
+      nutritionGoalType = 'MuscleGain';
+      targetWeightChange = (goal.targetValue - goal.currentValue).abs();
+    }
+
+    if (goal.targetDate != null) {
+      timeframeWeeks = goal.targetDate!.difference(DateTime.now()).inDays ~/ 7;
+      if (timeframeWeeks < 1) timeframeWeeks = 1;
+    }
+
+    // Fire and forget - calculate in background
+    nutritionProvider
+        .calculateAndSaveNutrition(
+          goalType: nutritionGoalType,
+          targetWeightChange: targetWeightChange,
+          timeframeWeeks: timeframeWeeks,
+        )
+        .then((nutrition) {
+          if (nutrition != null) {
+            debugPrint(
+              '✅ Background nutrition calculation completed: ${nutrition.dailyCalories.toStringAsFixed(0)} cals',
+            );
+          }
+        })
+        .catchError((e) {
+          debugPrint('⚠️ Background nutrition calculation failed: $e');
+        });
+  }
+
+  /// Show goal summary dialog on demand (e.g., from snackbar action)
+  Future<void> _showGoalSummaryDialog(Goal goal) async {
     if (!mounted) return;
+
+    final nutritionProvider = context.read<NutritionProvider>();
+
+    // Try to get nutrition from the active goal
+    CalculatedNutrition? nutrition;
+    if (nutritionProvider.activeGoal != null) {
+      nutrition = CalculatedNutrition(
+        dailyCalories: nutritionProvider.activeGoal!.dailyCalories,
+        dailyProtein: nutritionProvider.activeGoal!.dailyProtein,
+        dailyCarbohydrates: nutritionProvider.activeGoal!.dailyCarbohydrates,
+        dailyFat: nutritionProvider.activeGoal!.dailyFat,
+        dailyFiber: nutritionProvider.activeGoal!.dailyFiber ?? 25,
+        dailyWater: (nutritionProvider.activeGoal!.dailyWater ?? 2000) / 1000,
+        bmr: 0,
+        tdee: 0,
+        calorieAdjustment: 0,
+        expectedWeeklyWeightChange: 0,
+        explanation: '',
+      );
+    }
 
     final result = await showDialog<GoalDialogResult>(
       context: context,
@@ -334,19 +358,12 @@ class _GoalsScreenState extends State<GoalsScreen>
 
     if (result == null || !result.hasSelection || !mounted) return;
 
-    // If both selected, use combined chat for better UX
+    // Handle plan generation selections
     if (result.generateWorkoutPlan && result.generateMealPlan) {
-      if (!mounted) return;
       await _navigateToCombinedPlanChat(goal, nutrition);
-      return;
-    }
-
-    // Handle single selection
-    if (result.generateWorkoutPlan) {
-      if (!mounted) return;
+    } else if (result.generateWorkoutPlan) {
       await _navigateToWorkoutPlanChat(goal, nutrition);
     } else if (result.generateMealPlan) {
-      if (!mounted) return;
       await _navigateToMealPlanChat(goal, nutrition);
     }
   }
