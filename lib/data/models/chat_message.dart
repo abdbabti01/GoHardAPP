@@ -13,6 +13,14 @@ class ChatMessage {
   final int? outputTokens;
   final String? model;
 
+  /// Type of structured content: 'text', 'workout_plan', 'meal_plan', 'progress_analysis'
+  /// Used for rendering rich preview cards
+  final String contentType;
+
+  /// Parsed structured data for rich preview cards (workout sessions, meal plan days, etc.)
+  /// Null for regular text messages
+  final Map<String, dynamic>? structuredData;
+
   ChatMessage({
     required this.id,
     required this.conversationId,
@@ -22,7 +30,21 @@ class ChatMessage {
     this.inputTokens,
     this.outputTokens,
     this.model,
+    this.contentType = 'text',
+    this.structuredData,
   });
+
+  /// Whether this message has structured data for rich rendering
+  bool get hasStructuredData => structuredData != null && contentType != 'text';
+
+  /// Whether this is a workout plan message
+  bool get isWorkoutPlan => contentType == 'workout_plan';
+
+  /// Whether this is a meal plan message
+  bool get isMealPlan => contentType == 'meal_plan';
+
+  /// Whether this is a progress analysis message
+  bool get isProgressAnalysis => contentType == 'progress_analysis';
 
   // Helper method to ensure datetime is in UTC
   static DateTime _toUtc(DateTime dt) {
@@ -42,6 +64,8 @@ class ChatMessage {
       inputTokens: message.inputTokens,
       outputTokens: message.outputTokens,
       model: message.model,
+      contentType: message.contentType,
+      structuredData: message.structuredData,
     );
   }
 
@@ -56,6 +80,8 @@ class ChatMessage {
     int? inputTokens,
     int? outputTokens,
     String? model,
+    String? contentType,
+    Map<String, dynamic>? structuredData,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -66,6 +92,8 @@ class ChatMessage {
       inputTokens: inputTokens ?? this.inputTokens,
       outputTokens: outputTokens ?? this.outputTokens,
       model: model ?? this.model,
+      contentType: contentType ?? this.contentType,
+      structuredData: structuredData ?? this.structuredData,
     );
   }
 }

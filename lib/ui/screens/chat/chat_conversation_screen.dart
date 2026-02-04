@@ -16,6 +16,8 @@ import '../../../routes/route_names.dart';
 import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/premium_bottom_sheet.dart';
 import '../../widgets/common/loading_indicator.dart';
+import '../../widgets/chat/workout_plan_preview_card.dart';
+import '../../widgets/chat/meal_plan_preview_card.dart';
 
 /// Chat conversation screen showing messages and input
 class ChatConversationScreen extends StatefulWidget {
@@ -397,6 +399,98 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       caseSensitive: false,
     ).hasMatch(message);
     return hasSetPattern || hasRepPattern;
+  }
+
+  /// Apply a specific day from the meal plan
+  Future<void> _applyMealPlanDay(int dayNumber) async {
+    final chatProvider = context.read<ChatProvider>();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final conversationId = chatProvider.currentConversation?.id;
+    if (conversationId == null) return;
+
+    // Apply single day
+    PremiumLoadingDialog.show(context, message: 'Applying Day $dayNumber...');
+
+    final result = await chatProvider.applyMealPlanToToday(
+      conversationId,
+      day: dayNumber,
+    );
+
+    if (!mounted) return;
+    navigator.pop(); // Close loading
+
+    if (result != null && result.success) {
+      // Refresh nutrition data
+      if (mounted) {
+        await context.read<NutritionProvider>().loadTodaysData();
+      }
+
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Day $dayNumber applied to today\'s nutrition'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            chatProvider.errorMessage ?? 'Failed to apply meal plan day',
+          ),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+    }
+  }
+
+  /// Regenerate the current plan (workout or meal)
+  Future<void> _regeneratePlan(String planType) async {
+    final chatProvider = context.read<ChatProvider>();
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    // Confirm regeneration
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Regenerate Plan?'),
+            content: Text(
+              'This will create a new ${planType == 'workout' ? 'workout' : 'meal'} plan. '
+              'The current plan will be replaced.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Regenerate'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // Send a message to regenerate
+    final regenerateMessage =
+        planType == 'workout'
+            ? 'Please regenerate the workout plan with different exercises or variations.'
+            : 'Please regenerate the meal plan with different foods or recipes.';
+
+    await chatProvider.sendMessage(regenerateMessage);
+
+    if (mounted) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('Regenerating plan...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   /// Apply meal plan to nutrition log (supports single day or multiple days)
@@ -948,6 +1042,26 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                         fontSize: 16,
                                       ),
                                     )
+                                  // Check for structured data preview cards
+                                  else if (message.isWorkoutPlan &&
+                                      message.structuredData != null)
+                                    WorkoutPlanPreviewCard(
+                                      planData: message.structuredData!,
+                                      onCreateProgram: _saveProgramPlan,
+                                      onRegenerate:
+                                          () => _regeneratePlan('workout'),
+                                    )
+                                  else if (message.isMealPlan &&
+                                      message.structuredData != null)
+                                    MealPlanPreviewCard(
+                                      planData: message.structuredData!,
+                                      onApply: _applyMealPlanToToday,
+                                      onApplyDay:
+                                          (day) => _applyMealPlanDay(day),
+                                      onRegenerate:
+                                          () => _regeneratePlan('meal'),
+                                    )
+                                  // Fallback to markdown for text messages
                                   else
                                     MarkdownBody(
                                       data: message.content,
@@ -970,9 +1084,10 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                         ),
                                       ),
                                     ),
-                                  // Show "Create Program" button if AI message contains workout
-                                  // Works for workout_plan and combined_plan types
+                                  // Legacy: Show "Create Program" button if AI message contains workout pattern
+                                  // but no structured data (backward compatibility)
                                   if (!isUser &&
+                                      !message.hasStructuredData &&
                                       _detectWorkoutPattern(message.content) &&
                                       (conversation.type == 'workout_plan' ||
                                           conversation.type == 'combined_plan'))
@@ -996,8 +1111,10 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                         ),
                                       ),
                                     ),
-                                  // Show "Apply Meal Plan" button for meal_plan and combined_plan types
+                                  // Legacy: Show "Apply Meal Plan" button for meal_plan types
+                                  // without structured data (backward compatibility)
                                   if (!isUser &&
+                                      !message.hasStructuredData &&
                                       (conversation.type == 'meal_plan' ||
                                           conversation.type ==
                                               'combined_plan') &&

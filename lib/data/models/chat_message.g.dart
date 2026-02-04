@@ -15,6 +15,8 @@ ChatMessage _$ChatMessageFromJson(Map<String, dynamic> json) => ChatMessage(
   inputTokens: (json['inputTokens'] as num?)?.toInt(),
   outputTokens: (json['outputTokens'] as num?)?.toInt(),
   model: json['model'] as String?,
+  contentType: json['contentType'] as String? ?? 'text',
+  structuredData: json['structuredData'] as Map<String, dynamic>?,
 );
 
 Map<String, dynamic> _$ChatMessageToJson(ChatMessage instance) =>
@@ -27,4 +29,6 @@ Map<String, dynamic> _$ChatMessageToJson(ChatMessage instance) =>
       'inputTokens': instance.inputTokens,
       'outputTokens': instance.outputTokens,
       'model': instance.model,
+      'contentType': instance.contentType,
+      'structuredData': instance.structuredData,
     };

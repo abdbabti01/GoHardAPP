@@ -11,6 +11,7 @@ import '../../../data/models/goal.dart';
 import '../../../data/models/goal_progress.dart';
 import 'dialogs/create_goal_dialog.dart';
 import 'dialogs/goal_created_summary_dialog.dart';
+import 'dialogs/smart_goal_dialog.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/goal_reminder_preferences.dart';
 import '../../../routes/route_names.dart';
@@ -245,6 +246,28 @@ class _GoalsScreenState extends State<GoalsScreen>
   }
 
   void _showCreateGoalDialog(BuildContext context) async {
+    // Use the new unified SmartGoalDialog
+    final result = await showDialog<SmartGoalDialogResult>(
+      context: context,
+      barrierDismissible: false, // Prevent accidental close during loading
+      builder: (context) => const SmartGoalDialog(),
+    );
+
+    if (result == null || !mounted) return;
+
+    // Handle plan generation based on user selection
+    if (result.generateWorkoutPlan && result.generateMealPlan) {
+      await _navigateToCombinedPlanChat(result.goal, result.nutrition);
+    } else if (result.generateWorkoutPlan) {
+      await _navigateToWorkoutPlanChat(result.goal, result.nutrition);
+    } else if (result.generateMealPlan) {
+      await _navigateToMealPlanChat(result.goal, result.nutrition);
+    }
+  }
+
+  /// Legacy method - kept for backwards compatibility
+  void _showCreateGoalDialogLegacy(BuildContext context) async {
+    final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final nutritionProvider = context.read<NutritionProvider>();
 
@@ -253,42 +276,46 @@ class _GoalsScreenState extends State<GoalsScreen>
       builder: (context) => const CreateGoalDialog(),
     );
 
-    // If goal was created, show success snackbar and trigger background nutrition calculation
+    // If goal was created, calculate nutrition and show summary for plan generation
     if (createdGoal != null && mounted) {
-      // Show success snackbar immediately
-      messenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Goal "${createdGoal.goalType}" created!')),
-            ],
-          ),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
-          action: SnackBarAction(
-            label: 'View Details',
-            textColor: Colors.white,
-            onPressed: () {
-              _showGoalSummaryDialog(createdGoal);
-            },
-          ),
-        ),
+      // Show loading dialog while calculating nutrition
+      PremiumLoadingDialog.show(
+        // ignore: use_build_context_synchronously
+        context,
+        message: 'Calculating your nutrition plan...',
       );
 
-      // Trigger nutrition calculation in background (non-blocking)
-      _calculateNutritionInBackground(createdGoal, nutritionProvider);
+      CalculatedNutrition? nutrition;
+
+      try {
+        // Calculate nutrition for the goal
+        nutrition = await _calculateNutritionForGoal(
+          createdGoal,
+          nutritionProvider,
+        );
+      } catch (e) {
+        debugPrint('Nutrition calculation failed: $e');
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Could not calculate nutrition: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      if (!mounted) return;
+      navigator.pop(); // Close loading dialog
+
+      // Show summary dialog for workout/meal plan generation
+      await _showGoalSummaryAndGeneratePlans(createdGoal, nutrition);
     }
   }
 
-  /// Calculate nutrition in background without blocking UI
-  void _calculateNutritionInBackground(
+  /// Calculate nutrition for the created goal
+  Future<CalculatedNutrition?> _calculateNutritionForGoal(
     Goal goal,
     NutritionProvider nutritionProvider,
-  ) {
-    // Determine goal type for nutrition calculation
+  ) async {
     String nutritionGoalType = 'Maintenance';
     double? targetWeightChange;
     int? timeframeWeeks;
@@ -307,26 +334,39 @@ class _GoalsScreenState extends State<GoalsScreen>
       if (timeframeWeeks < 1) timeframeWeeks = 1;
     }
 
-    // Fire and forget - calculate in background
-    nutritionProvider
-        .calculateAndSaveNutrition(
-          goalType: nutritionGoalType,
-          targetWeightChange: targetWeightChange,
-          timeframeWeeks: timeframeWeeks,
-        )
-        .then((nutrition) {
-          if (nutrition != null) {
-            debugPrint(
-              '✅ Background nutrition calculation completed: ${nutrition.dailyCalories.toStringAsFixed(0)} cals',
-            );
-          }
-        })
-        .catchError((e) {
-          debugPrint('⚠️ Background nutrition calculation failed: $e');
-        });
+    return await nutritionProvider.calculateAndSaveNutrition(
+      goalType: nutritionGoalType,
+      targetWeightChange: targetWeightChange,
+      timeframeWeeks: timeframeWeeks,
+    );
   }
 
-  /// Show goal summary dialog on demand (e.g., from snackbar action)
+  /// Show goal summary dialog and handle plan generation
+  Future<void> _showGoalSummaryAndGeneratePlans(
+    Goal goal,
+    CalculatedNutrition? nutrition,
+  ) async {
+    if (!mounted) return;
+
+    final result = await showDialog<GoalDialogResult>(
+      context: context,
+      builder:
+          (_) => GoalCreatedSummaryDialog(goal: goal, nutrition: nutrition),
+    );
+
+    if (result == null || !result.hasSelection || !mounted) return;
+
+    // Generate plans based on user selection
+    if (result.generateWorkoutPlan && result.generateMealPlan) {
+      await _navigateToCombinedPlanChat(goal, nutrition);
+    } else if (result.generateWorkoutPlan) {
+      await _navigateToWorkoutPlanChat(goal, nutrition);
+    } else if (result.generateMealPlan) {
+      await _navigateToMealPlanChat(goal, nutrition);
+    }
+  }
+
+  /// Show goal summary dialog on demand (kept for other uses)
   Future<void> _showGoalSummaryDialog(Goal goal) async {
     if (!mounted) return;
 
