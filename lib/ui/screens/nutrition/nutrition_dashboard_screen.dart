@@ -934,19 +934,19 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
             children: [
               _buildQuickStat(
                 'BMR',
-                '${goal.bmr?.toStringAsFixed(0) ?? '—'}',
+                goal.bmr?.toStringAsFixed(0) ?? '—',
                 'cal',
               ),
               const SizedBox(width: 16),
               _buildQuickStat(
                 'TDEE',
-                '${goal.tdee?.toStringAsFixed(0) ?? '—'}',
+                goal.tdee?.toStringAsFixed(0) ?? '—',
                 'cal',
               ),
               const SizedBox(width: 16),
               _buildQuickStat(
                 isDeficit ? 'Deficit' : 'Surplus',
-                '${goal.calorieAdjustment?.abs().toStringAsFixed(0) ?? '—'}',
+                goal.calorieAdjustment?.abs().toStringAsFixed(0) ?? '—',
                 'cal/day',
                 color: isDeficit ? Colors.orange : Colors.green,
               ),
