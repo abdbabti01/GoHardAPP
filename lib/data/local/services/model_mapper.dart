@@ -594,6 +594,10 @@ class ModelMapper {
       isActive: apiGoal.isActive,
       createdAt: apiGoal.createdAt,
       updatedAt: apiGoal.updatedAt,
+      explanation: apiGoal.explanation,
+      bmr: apiGoal.bmr,
+      tdee: apiGoal.tdee,
+      calorieAdjustment: apiGoal.calorieAdjustment,
       isSynced: isSynced,
       syncStatus: syncStatus,
       lastModifiedLocal: DateTime.now(),
@@ -627,6 +631,10 @@ class ModelMapper {
       isActive: localGoal.isActive,
       createdAt: localGoal.createdAt,
       updatedAt: localGoal.updatedAt,
+      explanation: localGoal.explanation,
+      bmr: localGoal.bmr,
+      tdee: localGoal.tdee,
+      calorieAdjustment: localGoal.calorieAdjustment,
     );
   }
 

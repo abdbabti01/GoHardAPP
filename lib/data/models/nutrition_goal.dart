@@ -22,6 +22,18 @@ class NutritionGoal {
   final DateTime createdAt;
   final DateTime? updatedAt;
 
+  /// Explanation of how the nutrition targets were calculated
+  final String? explanation;
+
+  /// BMR used in calculation
+  final double? bmr;
+
+  /// TDEE used in calculation
+  final double? tdee;
+
+  /// Daily calorie adjustment (deficit or surplus)
+  final double? calorieAdjustment;
+
   NutritionGoal({
     required this.id,
     required this.userId,
@@ -40,6 +52,10 @@ class NutritionGoal {
     this.isActive = true,
     required this.createdAt,
     this.updatedAt,
+    this.explanation,
+    this.bmr,
+    this.tdee,
+    this.calorieAdjustment,
   });
 
   factory NutritionGoal.fromJson(Map<String, dynamic> json) =>
@@ -98,6 +114,10 @@ class NutritionGoal {
     bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? explanation,
+    double? bmr,
+    double? tdee,
+    double? calorieAdjustment,
   }) {
     return NutritionGoal(
       id: id ?? this.id,
@@ -118,6 +138,10 @@ class NutritionGoal {
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      explanation: explanation ?? this.explanation,
+      bmr: bmr ?? this.bmr,
+      tdee: tdee ?? this.tdee,
+      calorieAdjustment: calorieAdjustment ?? this.calorieAdjustment,
     );
   }
 }

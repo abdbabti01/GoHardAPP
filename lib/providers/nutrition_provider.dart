@@ -14,7 +14,9 @@ export '../data/repositories/nutrition_repository.dart'
         FoodAlternative,
         CalculatedNutrition,
         UserMetricsSummary,
-        ActivityLevelOption;
+        ActivityLevelOption,
+        OfflineNutritionException,
+        MissingMetricsException;
 
 /// Provider for nutrition tracking
 class NutritionProvider extends ChangeNotifier {
@@ -742,6 +744,7 @@ class NutritionProvider extends ChangeNotifier {
   }
 
   /// Calculate and save nutrition targets as active goal
+  /// Throws [OfflineNutritionException] if offline
   Future<CalculatedNutrition?> calculateAndSaveNutrition({
     required String goalType,
     double? targetWeightChange,
@@ -767,6 +770,12 @@ class NutritionProvider extends ChangeNotifier {
       }
 
       return result;
+    } on OfflineNutritionException {
+      // Re-throw offline exception so caller can handle it specifically
+      rethrow;
+    } on MissingMetricsException {
+      // Re-throw missing metrics exception so caller can guide user
+      rethrow;
     } catch (e) {
       _errorMessage =
           'Failed to calculate and save nutrition: ${e.toString().replaceAll('Exception: ', '')}';

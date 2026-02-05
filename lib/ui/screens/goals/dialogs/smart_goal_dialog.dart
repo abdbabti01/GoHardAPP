@@ -50,6 +50,7 @@ enum SmartGoalDialogState {
   form, // Goal creation form
   loading, // Creating goal + calculating nutrition
   summary, // Results + plan generation options
+  error, // Error occurred during creation
 }
 
 /// Unified smart dialog for goal creation with nutrition calculation and plan generation
@@ -64,6 +65,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
   // Dialog state
   SmartGoalDialogState _state = SmartGoalDialogState.form;
   String? _loadingMessage;
+  String? _errorMessage;
 
   // Created goal and nutrition
   Goal? _createdGoal;
@@ -98,6 +100,9 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
 
   // Validation warnings
   String? _goalWarning;
+
+  // Nutrition calculation status
+  String? _nutritionWarning;
 
   // Quick goal templates
   static const List<GoalTemplate> _templates = [
@@ -461,15 +466,10 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     if (createdGoal == null) {
       if (mounted) {
         setState(() {
-          _state = SmartGoalDialogState.form;
+          _state = SmartGoalDialogState.error;
+          _errorMessage = provider.errorMessage ?? 'Failed to create goal';
           _isCreating = false;
         });
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(provider.errorMessage ?? 'Failed to create goal'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
       return;
     }
@@ -486,8 +486,19 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
         createdGoal,
         nutritionProvider,
       );
+    } on OfflineNutritionException catch (e) {
+      debugPrint('Nutrition calculation offline: $e');
+      _nutritionWarning = e.message;
+      // Continue without nutrition - goal was saved, nutrition will sync later
+    } on MissingMetricsException catch (e) {
+      debugPrint('Missing metrics for nutrition calculation: $e');
+      _nutritionWarning =
+          '${e.message}\n\nGo to Body Metrics to add your ${e.missingFields.join(" and ")}.';
+      // Continue without nutrition - user needs to add metrics first
     } catch (e) {
       debugPrint('Nutrition calculation failed: $e');
+      _nutritionWarning =
+          'Nutrition calculation failed. You can set targets manually in the Nutrition tab.';
       // Continue without nutrition - it's optional
     }
 
@@ -515,6 +526,11 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     } else if (goalType.contains('gain') || goalType.contains('muscle')) {
       nutritionGoalType = 'MuscleGain';
       targetWeightChange = (goal.targetValue - goal.currentValue).abs();
+    }
+
+    // Convert to lbs if user entered in kg (API uses 3500 cal = 1 lb formula)
+    if (targetWeightChange != null && goal.unit?.toLowerCase() == 'kg') {
+      targetWeightChange = targetWeightChange * 2.20462;
     }
 
     if (goal.targetDate != null) {
@@ -579,6 +595,14 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
             const Expanded(child: Text('Goal Created!')),
           ],
         );
+      case SmartGoalDialogState.error:
+        return Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade600, size: 28),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Error')),
+          ],
+        );
     }
   }
 
@@ -590,6 +614,8 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
         return _buildLoadingContent();
       case SmartGoalDialogState.summary:
         return _buildSummaryContent();
+      case SmartGoalDialogState.error:
+        return _buildErrorContent();
     }
   }
 
@@ -641,6 +667,18 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
                     : 'Generate Meal Plan',
               ),
             ),
+        ];
+      case SmartGoalDialogState.error:
+        return [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: _retryFromError,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Try Again'),
+          ),
         ];
     }
   }
@@ -1159,6 +1197,58 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     );
   }
 
+  // ==================== ERROR CONTENT ====================
+
+  Widget _buildErrorContent() {
+    return SizedBox(
+      height: 200,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline,
+                size: 48,
+                color: Colors.red.shade400,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Failed to create goal',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.red.shade700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                _errorMessage ?? 'An unexpected error occurred',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _retryFromError() {
+    setState(() {
+      _state = SmartGoalDialogState.form;
+      _errorMessage = null;
+    });
+  }
+
   // ==================== SUMMARY CONTENT ====================
 
   Widget _buildSummaryContent() {
@@ -1182,6 +1272,10 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
             ),
             const SizedBox(height: 12),
             _buildNutritionCard(),
+            if (_nutrition!.hasWarning) ...[
+              const SizedBox(height: 12),
+              _buildAggressiveDeficitWarning(),
+            ],
             const SizedBox(height: 16),
           ] else ...[
             _buildNoNutritionWarning(),
@@ -1364,6 +1458,78 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     );
   }
 
+  Widget _buildAggressiveDeficitWarning() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.warning_amber,
+                color: Colors.orange.shade700,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Aggressive Plan Warning',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange.shade800,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _nutrition!.warning!,
+            style: TextStyle(fontSize: 13, color: Colors.orange.shade900),
+          ),
+          if (_nutrition!.recommendation != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.lightbulb_outline,
+                    color: Colors.green.shade700,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _nutrition!.recommendation!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildMacroCircle(
     String label,
     String value,
@@ -1404,21 +1570,32 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
   }
 
   Widget _buildNoNutritionWarning() {
+    final isOffline =
+        _nutritionWarning?.contains('internet') == true ||
+        _nutritionWarning?.contains('offline') == true;
+    final warningColor = isOffline ? Colors.orange : Colors.yellow;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.yellow.shade50,
+        color: warningColor.shade50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.yellow.shade700),
+        border: Border.all(color: warningColor.shade700),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, color: Colors.yellow.shade800, size: 20),
+          Icon(
+            isOffline ? Icons.wifi_off : Icons.info_outline,
+            color: warningColor.shade800,
+            size: 20,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Nutrition calculation unavailable. You can still generate plans.',
-              style: TextStyle(fontSize: 12, color: Colors.yellow.shade900),
+              _nutritionWarning ??
+                  'Nutrition calculation unavailable. You can set targets manually in the Nutrition tab.',
+              style: TextStyle(fontSize: 12, color: warningColor.shade900),
             ),
           ),
         ],

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import '../../core/constants/api_config.dart';
@@ -1636,13 +1637,17 @@ class NutritionRepository {
   }
 
   /// Calculate and save nutrition targets as active goal
+  /// Throws [OfflineException] if not connected to internet
   Future<CalculatedNutrition?> calculateAndSaveNutrition({
     required String goalType,
     double? targetWeightChange,
     int? timeframeWeeks,
   }) async {
     if (!_connectivity.isOnline) {
-      return null;
+      throw OfflineNutritionException(
+        'Nutrition calculation requires an internet connection. '
+        'Your goal has been saved and nutrition targets will be calculated when you\'re back online.',
+      );
     }
 
     try {
@@ -1668,6 +1673,18 @@ class NutritionRepository {
       }
 
       return result;
+    } on DioException catch (e) {
+      // Check for missing metrics error (400 with specific code)
+      if (e.response?.statusCode == 400) {
+        final data = e.response?.data;
+        if (data is Map<String, dynamic> &&
+            (data['code'] == 'MISSING_WEIGHT' ||
+                data['code'] == 'MISSING_HEIGHT')) {
+          throw MissingMetricsException.fromJson(data);
+        }
+      }
+      debugPrint('Failed to calculate and save nutrition: $e');
+      return null;
     } catch (e) {
       debugPrint('Failed to calculate and save nutrition: $e');
       return null;
@@ -1828,6 +1845,8 @@ class CalculatedNutrition {
   final double calorieAdjustment;
   final double expectedWeeklyWeightChange;
   final String explanation;
+  final String? warning;
+  final String? recommendation;
   final UserMetricsSummary? userMetrics;
 
   CalculatedNutrition({
@@ -1843,8 +1862,13 @@ class CalculatedNutrition {
     required this.calorieAdjustment,
     required this.expectedWeeklyWeightChange,
     required this.explanation,
+    this.warning,
+    this.recommendation,
     this.userMetrics,
   });
+
+  /// Returns true if there's a warning about aggressive targets
+  bool get hasWarning => warning != null && warning!.isNotEmpty;
 
   factory CalculatedNutrition.fromJson(Map<String, dynamic> json) {
     return CalculatedNutrition(
@@ -1861,6 +1885,8 @@ class CalculatedNutrition {
       expectedWeeklyWeightChange:
           (json['expectedWeeklyWeightChange'] as num).toDouble(),
       explanation: json['explanation'] as String? ?? '',
+      warning: json['warning'] as String?,
+      recommendation: json['recommendation'] as String?,
       userMetrics:
           json['userMetrics'] != null
               ? UserMetricsSummary.fromJson(
@@ -1918,6 +1944,47 @@ class ActivityLevelOption {
       value: json['value'] as String,
       label: json['label'] as String,
       description: json['description'] as String? ?? '',
+    );
+  }
+}
+
+/// Exception thrown when nutrition calculation is attempted offline
+class OfflineNutritionException implements Exception {
+  final String message;
+
+  OfflineNutritionException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Exception thrown when required body metrics are missing
+class MissingMetricsException implements Exception {
+  final String message;
+  final String code;
+  final String action;
+  final List<String> missingFields;
+
+  MissingMetricsException({
+    required this.message,
+    required this.code,
+    this.action = 'GO_TO_BODY_METRICS',
+    this.missingFields = const [],
+  });
+
+  @override
+  String toString() => message;
+
+  factory MissingMetricsException.fromJson(Map<String, dynamic> json) {
+    return MissingMetricsException(
+      message: json['message'] as String? ?? 'Missing required body metrics',
+      code: json['code'] as String? ?? 'MISSING_METRICS',
+      action: json['action'] as String? ?? 'GO_TO_BODY_METRICS',
+      missingFields:
+          (json['missingFields'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
     );
   }
 }

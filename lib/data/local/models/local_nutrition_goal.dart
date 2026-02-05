@@ -63,6 +63,18 @@ class LocalNutritionGoal {
   /// Timestamp when goal was last updated
   DateTime? updatedAt;
 
+  /// Explanation of how the nutrition targets were calculated
+  String? explanation;
+
+  /// BMR (Basal Metabolic Rate) used in calculation
+  double? bmr;
+
+  /// TDEE (Total Daily Energy Expenditure) used in calculation
+  double? tdee;
+
+  /// Daily calorie adjustment (deficit or surplus)
+  double? calorieAdjustment;
+
   // ========== Sync Tracking Fields ==========
 
   /// Whether entity is in sync with server
@@ -107,6 +119,10 @@ class LocalNutritionGoal {
     this.isActive = true,
     required this.createdAt,
     this.updatedAt,
+    this.explanation,
+    this.bmr,
+    this.tdee,
+    this.calorieAdjustment,
     this.isSynced = false,
     this.syncStatus = 'pending_create',
     required this.lastModifiedLocal,

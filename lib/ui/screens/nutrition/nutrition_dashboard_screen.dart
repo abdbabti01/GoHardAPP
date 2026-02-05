@@ -93,7 +93,13 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
 
                 // Macro progress bars
                 _buildMacroProgress(context, provider),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+
+                // Explanation card (if available)
+                if (provider.activeGoal?.explanation != null &&
+                    provider.activeGoal!.explanation!.isNotEmpty)
+                  _buildExplanationCard(context, provider),
+                const SizedBox(height: 16),
 
                 // Water intake
                 _buildWaterSection(context, provider),
@@ -181,12 +187,21 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     NutritionProvider provider,
   ) {
     final mealLog = provider.todaysMealLog;
-    final goal = provider.activeGoal?.dailyCalories ?? 2000;
+    final activeGoal = provider.activeGoal;
+    final goal = activeGoal?.dailyCalories ?? 2000;
     final planned = mealLog?.plannedCalories ?? 0;
     final consumed = mealLog?.consumedCalories ?? 0;
     final remaining = goal - consumed;
     final isOverBudget = planned > goal;
     final isOverConsumed = consumed > goal;
+
+    // Check if using default/uncalculated goal (no explanation means not personalized)
+    final isDefaultGoal = activeGoal == null || activeGoal.explanation == null;
+
+    // Show setup prompt if using default goal
+    if (isDefaultGoal) {
+      return _buildSetupPromptCard(context, consumed, planned);
+    }
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -320,6 +335,170 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSetupPromptCard(
+    BuildContext context,
+    double consumed,
+    double planned,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.blue.withValues(alpha: 0.1),
+            Colors.purple.withValues(alpha: 0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.track_changes,
+                  color: Colors.blue,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Set Your Nutrition Goals',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Get personalized calorie and macro targets based on your body and goals',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Current tracking info
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: context.surface,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                Column(
+                  children: [
+                    Text(
+                      consumed.toStringAsFixed(0),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Eaten',
+                      style: TextStyle(fontSize: 11, color: context.textSecondary),
+                    ),
+                  ],
+                ),
+                Container(
+                  width: 1,
+                  height: 30,
+                  color: context.border,
+                ),
+                Column(
+                  children: [
+                    Text(
+                      planned.toStringAsFixed(0),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Planned',
+                      style: TextStyle(fontSize: 11, color: context.textSecondary),
+                    ),
+                  ],
+                ),
+                Container(
+                  width: 1,
+                  height: 30,
+                  color: context.border,
+                ),
+                Column(
+                  children: [
+                    Text(
+                      '2000',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: context.textTertiary,
+                      ),
+                    ),
+                    Text(
+                      'Default',
+                      style: TextStyle(fontSize: 11, color: context.textTertiary),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, '/body-metrics'),
+                  icon: const Icon(Icons.straighten, size: 18),
+                  label: const Text('Add Metrics'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, '/goals'),
+                  icon: const Icon(Icons.flag, size: 18),
+                  label: const Text('Set Goal'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -697,6 +876,150 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
       onPressed: () => provider.addWater(amount),
       style: OutlinedButton.styleFrom(side: BorderSide(color: context.border)),
       child: Text(label),
+    );
+  }
+
+  Widget _buildExplanationCard(
+    BuildContext context,
+    NutritionProvider provider,
+  ) {
+    final goal = provider.activeGoal!;
+    final isDeficit = (goal.calorieAdjustment ?? 0) < 0;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.blue.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.lightbulb_outline,
+                color: Colors.blue.shade600,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'How we calculated your targets',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: Colors.blue.shade700,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => _showFullExplanation(context, goal.explanation!),
+                child: Text(
+                  'Details',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.blue.shade600,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Quick stats row
+          Row(
+            children: [
+              _buildQuickStat(
+                'BMR',
+                '${goal.bmr?.toStringAsFixed(0) ?? '—'}',
+                'cal',
+              ),
+              const SizedBox(width: 16),
+              _buildQuickStat(
+                'TDEE',
+                '${goal.tdee?.toStringAsFixed(0) ?? '—'}',
+                'cal',
+              ),
+              const SizedBox(width: 16),
+              _buildQuickStat(
+                isDeficit ? 'Deficit' : 'Surplus',
+                '${goal.calorieAdjustment?.abs().toStringAsFixed(0) ?? '—'}',
+                'cal/day',
+                color: isDeficit ? Colors.orange : Colors.green,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickStat(
+    String label,
+    String value,
+    String unit, {
+    Color? color,
+  }) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: context.textTertiary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: color ?? context.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Text(
+                unit,
+                style: TextStyle(fontSize: 10, color: context.textSecondary),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFullExplanation(BuildContext context, String explanation) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue.shade600),
+            const SizedBox(width: 8),
+            const Text('Nutrition Calculation'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            explanation,
+            style: const TextStyle(fontSize: 14, height: 1.5),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
     );
   }
 
