@@ -424,15 +424,14 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                     ),
                     Text(
                       'Eaten',
-                      style: TextStyle(fontSize: 11, color: context.textSecondary),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.textSecondary,
+                      ),
                     ),
                   ],
                 ),
-                Container(
-                  width: 1,
-                  height: 30,
-                  color: context.border,
-                ),
+                Container(width: 1, height: 30, color: context.border),
                 Column(
                   children: [
                     Text(
@@ -445,15 +444,14 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                     ),
                     Text(
                       'Planned',
-                      style: TextStyle(fontSize: 11, color: context.textSecondary),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.textSecondary,
+                      ),
                     ),
                   ],
                 ),
-                Container(
-                  width: 1,
-                  height: 30,
-                  color: context.border,
-                ),
+                Container(width: 1, height: 30, color: context.border),
                 Column(
                   children: [
                     Text(
@@ -466,7 +464,10 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                     ),
                     Text(
                       'Default',
-                      style: TextStyle(fontSize: 11, color: context.textTertiary),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.textTertiary,
+                      ),
                     ),
                   ],
                 ),
@@ -478,7 +479,8 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.pushNamed(context, '/body-metrics'),
+                  onPressed:
+                      () => Navigator.pushNamed(context, '/body-metrics'),
                   icon: const Icon(Icons.straighten, size: 18),
                   label: const Text('Add Metrics'),
                   style: OutlinedButton.styleFrom(
@@ -999,27 +1001,28 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
   void _showFullExplanation(BuildContext context, String explanation) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.info_outline, color: Colors.blue.shade600),
-            const SizedBox(width: 8),
-            const Text('Nutrition Calculation'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Text(
-            explanation,
-            style: const TextStyle(fontSize: 14, height: 1.5),
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade600),
+                const SizedBox(width: 8),
+                const Text('Nutrition Calculation'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Text(
+                explanation,
+                style: const TextStyle(fontSize: 14, height: 1.5),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Got it'),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
     );
   }
 
