@@ -9,6 +9,7 @@ import '../models/meal_entry.dart';
 import '../models/food_item.dart';
 import '../models/nutrition_goal.dart';
 import '../models/nutrition_summary.dart';
+import '../models/daily_nutrition_progress.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../local/services/local_database_service.dart';
@@ -1262,6 +1263,128 @@ class NutritionRepository {
     );
   }
 
+  /// Get nutrition dashboard data (goal + progress for a date)
+  /// This is the primary method for dashboard display
+  Future<NutritionDashboardData> getNutritionDashboard({DateTime? date}) async {
+    final db = _localDb.database;
+    final userId = await _authService.getUserId();
+
+    if (userId == null) {
+      throw Exception('User not authenticated');
+    }
+
+    if (_connectivity.isOnline) {
+      try {
+        final queryParams = date != null
+            ? {'date': date.toIso8601String().split('T')[0]}
+            : null;
+
+        final data = await _apiService.get<Map<String, dynamic>>(
+          ApiConfig.nutritionGoalDashboard,
+          queryParameters: queryParams,
+        );
+
+        final goal = data['goal'] != null
+            ? NutritionGoal.fromJson(data['goal'] as Map<String, dynamic>)
+            : null;
+
+        final progress = DailyNutritionProgress.fromJson(
+          data['progress'] as Map<String, dynamic>,
+        );
+
+        debugPrint(
+          '✅ Fetched nutrition dashboard - planned: ${progress.plannedCalories}, consumed: ${progress.consumedCalories}',
+        );
+
+        return NutritionDashboardData(
+          date: date ?? DateTime.now(),
+          goal: goal,
+          progress: progress,
+        );
+      } catch (e) {
+        debugPrint('⚠️ Failed to fetch nutrition dashboard: $e');
+        // Fall through to offline calculation
+      }
+    }
+
+    // Offline: calculate from local data
+    final targetDate = date ?? DateTime.now();
+    final normalizedDate = DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+    );
+
+    final localGoal = await db.localNutritionGoals
+        .filter()
+        .userIdEqualTo(userId)
+        .isActiveEqualTo(true)
+        .findFirst();
+
+    final goal = localGoal != null
+        ? ModelMapper.localToNutritionGoal(localGoal)
+        : NutritionGoal.defaultGoal(userId);
+
+    // Get meal log for the date to calculate planned/consumed
+    final localLog = await db.localMealLogs
+        .filter()
+        .userIdEqualTo(userId)
+        .dateEqualTo(normalizedDate)
+        .findFirst();
+
+    double plannedCalories = 0;
+    double plannedProtein = 0;
+    double plannedCarbs = 0;
+    double plannedFat = 0;
+    double consumedCalories = 0;
+    double consumedProtein = 0;
+    double consumedCarbs = 0;
+    double consumedFat = 0;
+
+    if (localLog != null) {
+      final entries = await db.localMealEntrys
+          .filter()
+          .mealLogLocalIdEqualTo(localLog.localId)
+          .findAll();
+
+      for (final entry in entries) {
+        plannedCalories += entry.totalCalories;
+        plannedProtein += entry.totalProtein;
+        plannedCarbs += entry.totalCarbohydrates;
+        plannedFat += entry.totalFat;
+
+        if (entry.isConsumed) {
+          consumedCalories += entry.totalCalories;
+          consumedProtein += entry.totalProtein;
+          consumedCarbs += entry.totalCarbohydrates;
+          consumedFat += entry.totalFat;
+        }
+      }
+    }
+
+    final progress = DailyNutritionProgress(
+      id: 0,
+      userId: userId,
+      date: normalizedDate,
+      nutritionGoalId: goal.id,
+      plannedCalories: plannedCalories,
+      plannedProtein: plannedProtein,
+      plannedCarbohydrates: plannedCarbs,
+      plannedFat: plannedFat,
+      consumedCalories: consumedCalories,
+      consumedProtein: consumedProtein,
+      consumedCarbohydrates: consumedCarbs,
+      consumedFat: consumedFat,
+      createdAt: DateTime.now(),
+    );
+
+    return NutritionDashboardData(
+      date: normalizedDate,
+      goal: goal,
+      progress: progress,
+    );
+  }
+
   /// Get streak info
   Future<StreakInfo> getStreak() async {
     if (_connectivity.isOnline) {
@@ -1987,4 +2110,17 @@ class MissingMetricsException implements Exception {
           [],
     );
   }
+}
+
+/// Combined dashboard data with goal and progress
+class NutritionDashboardData {
+  final DateTime date;
+  final NutritionGoal? goal;
+  final DailyNutritionProgress progress;
+
+  NutritionDashboardData({
+    required this.date,
+    this.goal,
+    required this.progress,
+  });
 }

@@ -6,6 +6,7 @@ import '../data/models/meal_entry.dart';
 import '../data/models/food_item.dart';
 import '../data/models/nutrition_goal.dart';
 import '../data/models/nutrition_summary.dart';
+import '../data/models/daily_nutrition_progress.dart';
 import '../data/repositories/nutrition_repository.dart';
 import '../core/services/connectivity_service.dart';
 
@@ -16,7 +17,8 @@ export '../data/repositories/nutrition_repository.dart'
         UserMetricsSummary,
         ActivityLevelOption,
         OfflineNutritionException,
-        MissingMetricsException;
+        MissingMetricsException,
+        NutritionDashboardData;
 
 /// Provider for nutrition tracking
 class NutritionProvider extends ChangeNotifier {
@@ -27,6 +29,7 @@ class NutritionProvider extends ChangeNotifier {
   MealLog? _todaysMealLog;
   NutritionGoal? _activeGoal;
   NutritionProgress? _todaysProgress;
+  DailyNutritionProgress? _dailyProgress;
   List<FoodTemplate> _recentFoods = [];
   List<FoodTemplate> _searchResults = [];
   List<String> _categories = [];
@@ -62,6 +65,7 @@ class NutritionProvider extends ChangeNotifier {
   MealLog? get todaysMealLog => _todaysMealLog;
   NutritionGoal? get activeGoal => _activeGoal;
   NutritionProgress? get todaysProgress => _todaysProgress;
+  DailyNutritionProgress? get dailyProgress => _dailyProgress;
   List<FoodTemplate> get recentFoods => _recentFoods;
   List<FoodTemplate> get searchResults => _searchResults;
   List<String> get categories => _categories;
@@ -84,21 +88,21 @@ class NutritionProvider extends ChangeNotifier {
       // Load in parallel
       final results = await Future.wait([
         _nutritionRepository.getTodaysMealLog(),
-        _nutritionRepository.getActiveNutritionGoal(),
-        _nutritionRepository.getNutritionProgress(),
+        _nutritionRepository.getNutritionDashboard(),
         _nutritionRepository.getStreak(),
       ]);
 
       _todaysMealLog = results[0] as MealLog;
-      _activeGoal = results[1] as NutritionGoal;
-      _todaysProgress = results[2] as NutritionProgress;
-      _streakInfo = results[3] as StreakInfo;
+      final dashboardData = results[1] as NutritionDashboardData;
+      _activeGoal = dashboardData.goal;
+      _dailyProgress = dashboardData.progress;
+      _streakInfo = results[2] as StreakInfo;
 
       // Track when data was loaded for day change detection
       _lastLoadedDate = DateTime.now();
 
       debugPrint(
-        '✅ Loaded nutrition data - ${_todaysMealLog?.totalCalories.toStringAsFixed(0)} cals today',
+        '✅ Loaded nutrition data - planned: ${_dailyProgress?.plannedCalories.toStringAsFixed(0)}, consumed: ${_dailyProgress?.consumedCalories.toStringAsFixed(0)} cals',
       );
     } catch (e) {
       _errorMessage =
@@ -797,6 +801,7 @@ class NutritionProvider extends ChangeNotifier {
     _todaysMealLog = null;
     _activeGoal = null;
     _todaysProgress = null;
+    _dailyProgress = null;
     _recentFoods = [];
     _searchResults = [];
     _categories = [];

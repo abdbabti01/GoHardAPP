@@ -186,11 +186,11 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     BuildContext context,
     NutritionProvider provider,
   ) {
-    final mealLog = provider.todaysMealLog;
+    final progress = provider.dailyProgress;
     final activeGoal = provider.activeGoal;
     final goal = activeGoal?.dailyCalories ?? 2000;
-    final planned = mealLog?.plannedCalories ?? 0;
-    final consumed = mealLog?.consumedCalories ?? 0;
+    final planned = progress?.plannedCalories ?? 0;
+    final consumed = progress?.consumedCalories ?? 0;
     final remaining = goal - consumed;
     final isOverBudget = planned > goal;
     final isOverConsumed = consumed > goal;
@@ -608,17 +608,17 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
   }
 
   Widget _buildMacroProgress(BuildContext context, NutritionProvider provider) {
-    final mealLog = provider.todaysMealLog;
+    final progress = provider.dailyProgress;
     final goal = provider.activeGoal;
 
-    // Get both consumed and planned values
-    final consumedProtein = mealLog?.consumedProtein ?? 0;
-    final consumedCarbs = mealLog?.consumedCarbohydrates ?? 0;
-    final consumedFat = mealLog?.consumedFat ?? 0;
+    // Get both consumed and planned values from DailyNutritionProgress
+    final consumedProtein = progress?.consumedProtein ?? 0;
+    final consumedCarbs = progress?.consumedCarbohydrates ?? 0;
+    final consumedFat = progress?.consumedFat ?? 0;
 
-    final plannedProtein = mealLog?.plannedProtein ?? 0;
-    final plannedCarbs = mealLog?.plannedCarbohydrates ?? 0;
-    final plannedFat = mealLog?.plannedFat ?? 0;
+    final plannedProtein = progress?.plannedProtein ?? 0;
+    final plannedCarbs = progress?.plannedCarbohydrates ?? 0;
+    final plannedFat = progress?.plannedFat ?? 0;
 
     final goalProtein = goal?.dailyProtein ?? 150;
     final goalCarbs = goal?.dailyCarbohydrates ?? 200;

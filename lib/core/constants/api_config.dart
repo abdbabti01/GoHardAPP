@@ -196,6 +196,10 @@ class ApiConfig {
   static String nutritionGoalActive = '$nutritionGoals/active';
   static String nutritionGoalActivate(int id) => '$nutritionGoals/$id/activate';
   static String nutritionGoalProgress = '$nutritionGoals/progress';
+  static String nutritionGoalDashboard = '$nutritionGoals/dashboard';
+  static String nutritionGoalProgressToday = '$nutritionGoals/progress/today';
+  static String nutritionGoalProgressByDate(DateTime date) =>
+      '$nutritionGoals/progress/date/${date.toIso8601String().split('T')[0]}';
   static String nutritionAnalyticsDailySummary =
       '$nutritionAnalytics/summary/daily';
   static String nutritionAnalyticsWeeklySummary =
