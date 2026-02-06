@@ -117,7 +117,8 @@ class DailyNutritionProgress {
       plannedWater: plannedWater ?? this.plannedWater,
       consumedCalories: consumedCalories ?? this.consumedCalories,
       consumedProtein: consumedProtein ?? this.consumedProtein,
-      consumedCarbohydrates: consumedCarbohydrates ?? this.consumedCarbohydrates,
+      consumedCarbohydrates:
+          consumedCarbohydrates ?? this.consumedCarbohydrates,
       consumedFat: consumedFat ?? this.consumedFat,
       consumedFiber: consumedFiber ?? this.consumedFiber,
       consumedWater: consumedWater ?? this.consumedWater,

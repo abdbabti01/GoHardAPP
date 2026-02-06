@@ -1275,18 +1275,20 @@ class NutritionRepository {
 
     if (_connectivity.isOnline) {
       try {
-        final queryParams = date != null
-            ? {'date': date.toIso8601String().split('T')[0]}
-            : null;
+        final queryParams =
+            date != null
+                ? {'date': date.toIso8601String().split('T')[0]}
+                : null;
 
         final data = await _apiService.get<Map<String, dynamic>>(
           ApiConfig.nutritionGoalDashboard,
           queryParameters: queryParams,
         );
 
-        final goal = data['goal'] != null
-            ? NutritionGoal.fromJson(data['goal'] as Map<String, dynamic>)
-            : null;
+        final goal =
+            data['goal'] != null
+                ? NutritionGoal.fromJson(data['goal'] as Map<String, dynamic>)
+                : null;
 
         final progress = DailyNutritionProgress.fromJson(
           data['progress'] as Map<String, dynamic>,
@@ -1315,22 +1317,25 @@ class NutritionRepository {
       targetDate.day,
     );
 
-    final localGoal = await db.localNutritionGoals
-        .filter()
-        .userIdEqualTo(userId)
-        .isActiveEqualTo(true)
-        .findFirst();
+    final localGoal =
+        await db.localNutritionGoals
+            .filter()
+            .userIdEqualTo(userId)
+            .isActiveEqualTo(true)
+            .findFirst();
 
-    final goal = localGoal != null
-        ? ModelMapper.localToNutritionGoal(localGoal)
-        : NutritionGoal.defaultGoal(userId);
+    final goal =
+        localGoal != null
+            ? ModelMapper.localToNutritionGoal(localGoal)
+            : NutritionGoal.defaultGoal(userId);
 
     // Get meal log for the date to calculate planned/consumed
-    final localLog = await db.localMealLogs
-        .filter()
-        .userIdEqualTo(userId)
-        .dateEqualTo(normalizedDate)
-        .findFirst();
+    final localLog =
+        await db.localMealLogs
+            .filter()
+            .userIdEqualTo(userId)
+            .dateEqualTo(normalizedDate)
+            .findFirst();
 
     double plannedCalories = 0;
     double plannedProtein = 0;
@@ -1342,10 +1347,11 @@ class NutritionRepository {
     double consumedFat = 0;
 
     if (localLog != null) {
-      final entries = await db.localMealEntrys
-          .filter()
-          .mealLogLocalIdEqualTo(localLog.localId)
-          .findAll();
+      final entries =
+          await db.localMealEntrys
+              .filter()
+              .mealLogLocalIdEqualTo(localLog.localId)
+              .findAll();
 
       for (final entry in entries) {
         plannedCalories += entry.totalCalories;
