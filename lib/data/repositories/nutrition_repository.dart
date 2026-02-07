@@ -1438,17 +1438,21 @@ class NutritionRepository {
       await db.localMealEntrys.put(localEntry);
     });
 
+    // Sync to API immediately (not background) so dashboard refresh gets updated data
     if (_connectivity.isOnline && localEntry.serverId != null) {
-      _backgroundSync(
-        () => _apiService.put<void>(
-          ApiConfig.mealEntryConsume(localEntry!.serverId!),
+      try {
+        await _apiService.put<void>(
+          ApiConfig.mealEntryConsume(localEntry.serverId!),
           data: {
             'isConsumed': isConsumed,
             if (consumedAt != null) 'consumedAt': consumedAt.toIso8601String(),
           },
-        ),
-        'Synced meal consumed status',
-      );
+        );
+        debugPrint('✅ Synced meal consumed status to API');
+      } catch (e) {
+        debugPrint('⚠️ Failed to sync meal consumed status: $e');
+        // Local change is saved, will sync later
+      }
     }
   }
 
