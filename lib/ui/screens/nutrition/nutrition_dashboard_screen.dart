@@ -189,10 +189,8 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     final progress = provider.dailyProgress;
     final activeGoal = provider.activeGoal;
     final goal = activeGoal?.dailyCalories ?? 2000;
-    final planned = progress?.plannedCalories ?? 0;
     final consumed = progress?.consumedCalories ?? 0;
     final remaining = goal - consumed;
-    final isOverBudget = planned > goal;
     final isOverConsumed = consumed > goal;
 
     // Check if using default/uncalculated goal (no explanation means not personalized)
@@ -200,7 +198,7 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
 
     // Show setup prompt if using default goal
     if (isDefaultGoal) {
-      return _buildSetupPromptCard(context, consumed, planned);
+      return _buildSetupPromptCard(context, consumed);
     }
 
     return Container(
@@ -210,21 +208,18 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color:
-              isOverBudget ? Colors.red.withValues(alpha: 0.5) : context.border,
-          width: isOverBudget ? 2 : 1,
+              isOverConsumed
+                  ? Colors.red.withValues(alpha: 0.5)
+                  : context.border,
+          width: isOverConsumed ? 2 : 1,
         ),
       ),
       child: Column(
         children: [
           Row(
             children: [
-              // Dual calorie ring - consumed (inner) + planned (outer track)
-              _buildDualCalorieRing(
-                context,
-                consumed: consumed,
-                planned: planned,
-                goal: goal,
-              ),
+              // Calorie ring showing consumed progress
+              _buildCalorieRing(context, consumed: consumed, goal: goal),
               const SizedBox(width: 24),
               // Stats
               Expanded(
@@ -258,14 +253,6 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                     const SizedBox(height: 8),
                     _buildCalorieRow(
                       context,
-                      'Planned',
-                      planned.toStringAsFixed(0),
-                      Icons.calendar_today,
-                      isOverBudget ? Colors.red : Colors.orange.shade300,
-                    ),
-                    const SizedBox(height: 8),
-                    _buildCalorieRow(
-                      context,
                       'Remaining',
                       '${remaining >= 0 ? '' : '+'}${remaining.abs().toStringAsFixed(0)}',
                       remaining >= 0
@@ -278,8 +265,8 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
               ),
             ],
           ),
-          // Warning messages
-          if (isOverBudget) ...[
+          // Warning message when over consumed
+          if (isOverConsumed) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -293,39 +280,9 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Over budget by ${(planned - goal).toStringAsFixed(0)} cal',
+                      'Over goal by ${(consumed - goal).toStringAsFixed(0)} cal',
                       style: const TextStyle(
                         color: Colors.red,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (isOverConsumed && !isOverBudget) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline,
-                    color: Colors.orange,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'You\'ve exceeded your goal by ${(consumed - goal).toStringAsFixed(0)} cal',
-                      style: const TextStyle(
-                        color: Colors.orange,
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
@@ -340,11 +297,7 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     );
   }
 
-  Widget _buildSetupPromptCard(
-    BuildContext context,
-    double consumed,
-    double planned,
-  ) {
+  Widget _buildSetupPromptCard(BuildContext context, double consumed) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -435,26 +388,6 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                 Column(
                   children: [
                     Text(
-                      planned.toStringAsFixed(0),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: context.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      'Planned',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: context.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-                Container(width: 1, height: 30, color: context.border),
-                Column(
-                  children: [
-                    Text(
                       '2000',
                       style: TextStyle(
                         fontSize: 18,
@@ -463,7 +396,7 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                       ),
                     ),
                     Text(
-                      'Default',
+                      'Default Goal',
                       style: TextStyle(
                         fontSize: 11,
                         color: context.textTertiary,
@@ -534,17 +467,14 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     );
   }
 
-  /// Dual ring showing consumed (solid) and planned (dashed/lighter)
-  Widget _buildDualCalorieRing(
+  /// Ring showing consumed calories progress
+  Widget _buildCalorieRing(
     BuildContext context, {
     required double consumed,
-    required double planned,
     required double goal,
   }) {
     final consumedPercent = goal > 0 ? (consumed / goal).clamp(0.0, 1.0) : 0.0;
-    final plannedPercent = goal > 0 ? (planned / goal).clamp(0.0, 1.0) : 0.0;
     final isOverConsumed = consumed > goal;
-    final isOverPlanned = planned > goal;
 
     return SizedBox(
       width: 120,
@@ -561,29 +491,15 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
               strokeWidth: 12,
             ),
           ),
-          // Planned ring (outer, lighter) - shows what's scheduled
-          if (planned > 0)
-            CustomPaint(
-              size: const Size(120, 120),
-              painter: _RingPainter(
-                progress: plannedPercent,
-                color:
-                    isOverPlanned
-                        ? Colors.red.withValues(alpha: 0.3)
-                        : Colors.orange.withValues(alpha: 0.4),
-                strokeWidth: 12,
-              ),
+          // Consumed ring - shows what's eaten
+          CustomPaint(
+            size: const Size(120, 120),
+            painter: _RingPainter(
+              progress: consumedPercent,
+              color: isOverConsumed ? Colors.red : Colors.green,
+              strokeWidth: 12,
             ),
-          // Consumed ring (inner, solid) - shows what's eaten
-          if (consumed > 0)
-            CustomPaint(
-              size: const Size(108, 108),
-              painter: _RingPainter(
-                progress: consumedPercent,
-                color: isOverConsumed ? Colors.red : Colors.green,
-                strokeWidth: 8,
-              ),
-            ),
+          ),
           // Center text - show consumed
           Column(
             mainAxisSize: MainAxisSize.min,
@@ -611,14 +527,10 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     final progress = provider.dailyProgress;
     final goal = provider.activeGoal;
 
-    // Get both consumed and planned values from DailyNutritionProgress
+    // Get consumed values from DailyNutritionProgress
     final consumedProtein = progress?.consumedProtein ?? 0;
     final consumedCarbs = progress?.consumedCarbohydrates ?? 0;
     final consumedFat = progress?.consumedFat ?? 0;
-
-    final plannedProtein = progress?.plannedProtein ?? 0;
-    final plannedCarbs = progress?.plannedCarbohydrates ?? 0;
-    final plannedFat = progress?.plannedFat ?? 0;
 
     final goalProtein = goal?.dailyProtein ?? 150;
     final goalCarbs = goal?.dailyCarbohydrates ?? 200;
@@ -634,104 +546,52 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                'Macros',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: context.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              // Legend
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: Colors.green,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Eaten',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: context.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Planned',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: context.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          Text(
+            'Macros',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: context.textPrimary,
+            ),
           ),
           const SizedBox(height: 16),
-          _buildDualMacroBar(
+          _buildMacroBar(
             context,
             label: 'Protein',
             consumed: consumedProtein,
-            planned: plannedProtein,
             goal: goalProtein,
-            consumedColor: Colors.green,
-            plannedColor: Colors.red.shade200,
+            color: Colors.red.shade400,
           ),
           const SizedBox(height: 12),
-          _buildDualMacroBar(
+          _buildMacroBar(
             context,
             label: 'Carbs',
             consumed: consumedCarbs,
-            planned: plannedCarbs,
             goal: goalCarbs,
-            consumedColor: Colors.green,
-            plannedColor: Colors.blue.shade200,
+            color: Colors.blue.shade400,
           ),
           const SizedBox(height: 12),
-          _buildDualMacroBar(
+          _buildMacroBar(
             context,
             label: 'Fat',
             consumed: consumedFat,
-            planned: plannedFat,
             goal: goalFat,
-            consumedColor: Colors.green,
-            plannedColor: Colors.amber.shade200,
+            color: Colors.amber.shade600,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDualMacroBar(
+  Widget _buildMacroBar(
     BuildContext context, {
     required String label,
     required double consumed,
-    required double planned,
     required double goal,
-    required Color consumedColor,
-    required Color plannedColor,
+    required Color color,
   }) {
     final consumedPercent = goal > 0 ? (consumed / goal).clamp(0.0, 1.0) : 0.0;
-    final plannedPercent = goal > 0 ? (planned / goal).clamp(0.0, 1.0) : 0.0;
-    final isOverPlanned = planned > goal;
+    final isOver = consumed > goal;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -749,7 +609,10 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
             ),
             Text(
               '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} g',
-              style: TextStyle(fontSize: 12, color: context.textSecondary),
+              style: TextStyle(
+                fontSize: 12,
+                color: isOver ? Colors.red : context.textSecondary,
+              ),
             ),
           ],
         ),
@@ -764,48 +627,19 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
-            // Planned bar (lighter, behind)
-            if (planned > 0)
-              FractionallySizedBox(
-                widthFactor: plannedPercent,
-                child: Container(
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color:
-                        isOverPlanned
-                            ? Colors.red.withValues(alpha: 0.3)
-                            : plannedColor.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
+            // Consumed bar
+            FractionallySizedBox(
+              widthFactor: consumedPercent,
+              child: Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: isOver ? Colors.red : color,
+                  borderRadius: BorderRadius.circular(4),
                 ),
-              ),
-            // Consumed bar (solid, on top)
-            if (consumed > 0)
-              FractionallySizedBox(
-                widthFactor: consumedPercent,
-                child: Container(
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: consumedColor,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        // Show planned amount if different from consumed
-        if (planned > 0 && planned != consumed)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              '(${planned.toStringAsFixed(0)}g planned)',
-              style: TextStyle(
-                fontSize: 10,
-                color: context.textTertiary,
-                fontStyle: FontStyle.italic,
               ),
             ),
-          ),
+          ],
+        ),
       ],
     );
   }
