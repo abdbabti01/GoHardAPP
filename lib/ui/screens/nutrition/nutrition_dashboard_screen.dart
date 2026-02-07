@@ -189,9 +189,11 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     final progress = provider.dailyProgress;
     final activeGoal = provider.activeGoal;
     final goal = activeGoal?.dailyCalories ?? 2000;
+    final planned = progress?.plannedCalories ?? 0;
     final consumed = progress?.consumedCalories ?? 0;
     final remaining = goal - consumed;
     final isOverConsumed = consumed > goal;
+    final isOverPlanned = planned > goal;
 
     // Check if using default/uncalculated goal (no explanation means not personalized)
     final isDefaultGoal = activeGoal == null || activeGoal.explanation == null;
@@ -249,6 +251,14 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                       consumed.toStringAsFixed(0),
                       Icons.local_fire_department,
                       isOverConsumed ? Colors.red : Colors.green,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildCalorieRow(
+                      context,
+                      'Planned',
+                      planned.toStringAsFixed(0),
+                      Icons.calendar_today,
+                      isOverPlanned ? Colors.red : Colors.orange,
                     ),
                     const SizedBox(height: 8),
                     _buildCalorieRow(
