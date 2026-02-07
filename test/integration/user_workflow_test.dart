@@ -17,6 +17,7 @@ import 'package:go_hard_app/data/models/program_workout.dart';
 import 'package:go_hard_app/data/models/meal_log.dart';
 import 'package:go_hard_app/data/models/nutrition_goal.dart';
 import 'package:go_hard_app/data/models/nutrition_summary.dart';
+import 'package:go_hard_app/data/models/daily_nutrition_progress.dart';
 import 'package:go_hard_app/core/services/connectivity_service.dart';
 
 @GenerateMocks([
@@ -104,6 +105,39 @@ void main() {
         protein: consumedProtein / goal.dailyProtein * 100,
         carbohydrates: consumedCarbs / goal.dailyCarbohydrates * 100,
         fat: consumedFat / goal.dailyFat * 100,
+      ),
+    );
+  }
+
+  // Helper function to create NutritionDashboardData
+  NutritionDashboardData createTestDashboardData({
+    required NutritionGoal goal,
+    double plannedCalories = 0,
+    double plannedProtein = 0,
+    double plannedCarbs = 0,
+    double plannedFat = 0,
+    double consumedCalories = 0,
+    double consumedProtein = 0,
+    double consumedCarbs = 0,
+    double consumedFat = 0,
+  }) {
+    return NutritionDashboardData(
+      date: DateTime.now(),
+      goal: goal,
+      progress: DailyNutritionProgress(
+        id: 1,
+        userId: 1,
+        date: DateTime.now(),
+        nutritionGoalId: goal.id,
+        plannedCalories: plannedCalories,
+        plannedProtein: plannedProtein,
+        plannedCarbohydrates: plannedCarbs,
+        plannedFat: plannedFat,
+        consumedCalories: consumedCalories,
+        consumedProtein: consumedProtein,
+        consumedCarbohydrates: consumedCarbs,
+        consumedFat: consumedFat,
+        createdAt: DateTime.now(),
       ),
     );
   }
@@ -806,7 +840,7 @@ void main() {
       );
 
       final goal = createTestGoal();
-      final progress = createTestProgress(
+      final dashboardData = createTestDashboardData(
         goal: goal,
         consumedCalories: 1500,
         consumedProtein: 100,
@@ -824,11 +858,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => mealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
 
       final provider = NutritionProvider(
@@ -844,7 +875,7 @@ void main() {
       expect(provider.todaysMealLog!.totalCalories, equals(1500));
       expect(provider.activeGoal, isNotNull);
       expect(provider.activeGoal!.dailyCalories, equals(2000));
-      expect(provider.todaysProgress, isNotNull);
+      expect(provider.dailyProgress, isNotNull);
       expect(provider.streakInfo, isNotNull);
       expect(provider.streakInfo!.currentStreak, equals(5));
     });
@@ -863,7 +894,10 @@ void main() {
       );
 
       final goal = createTestGoal(dailyCalories: 2000);
-      final progress = createTestProgress(goal: goal, consumedCalories: 1200);
+      final dashboardData = createTestDashboardData(
+        goal: goal,
+        consumedCalories: 1200,
+      );
 
       final streak = StreakInfo(
         currentStreak: 1,
@@ -875,11 +909,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => mealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
 
       final provider = NutritionProvider(
@@ -908,7 +939,10 @@ void main() {
       );
 
       final goal = createTestGoal();
-      final progress = createTestProgress(goal: goal, consumedCalories: 1000);
+      final dashboardData = createTestDashboardData(
+        goal: goal,
+        consumedCalories: 1000,
+      );
       final streak = StreakInfo(
         currentStreak: 1,
         longestStreak: 1,
@@ -919,11 +953,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => mealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
 
       final provider = NutritionProvider(
@@ -998,11 +1029,8 @@ void main() {
         ),
       );
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => createTestProgress(goal: goal));
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => createTestDashboardData(goal: goal));
       when(mockNutritionRepository.getStreak()).thenAnswer(
         (_) async =>
             StreakInfo(currentStreak: 1, longestStreak: 1, totalDaysLogged: 1),
@@ -1073,7 +1101,7 @@ void main() {
       );
 
       final goal = createTestGoal();
-      final progress = createTestProgress(goal: goal);
+      final dashboardData = createTestDashboardData(goal: goal);
       final streak = StreakInfo(
         currentStreak: 1,
         longestStreak: 1,
@@ -1084,11 +1112,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => mealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
       when(
         mockNutritionRepository.updateWaterIntake(1, 750),
@@ -1409,7 +1434,10 @@ void main() {
       );
 
       final goal = createTestGoal();
-      final progress = createTestProgress(goal: goal, consumedCalories: 1500);
+      final dashboardData = createTestDashboardData(
+        goal: goal,
+        consumedCalories: 1500,
+      );
       final streak = StreakInfo(
         currentStreak: 5,
         longestStreak: 10,
@@ -1420,11 +1448,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => mealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
 
       final provider = NutritionProvider(
@@ -2018,7 +2043,7 @@ void main() {
 
       // Need to stub all dependencies that loadNutritionHistory might trigger
       final goal = createTestGoal();
-      final progress = createTestProgress(goal: goal);
+      final dashboardData = createTestDashboardData(goal: goal);
       final streak = StreakInfo(
         currentStreak: 1,
         longestStreak: 1,
@@ -2045,11 +2070,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => todayMealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
 
       final provider = NutritionProvider(
@@ -2076,7 +2098,10 @@ void main() {
       () async {
         // Arrange
         final goal = createTestGoal();
-        final progress = createTestProgress(goal: goal, consumedCalories: 1500);
+        final dashboardData = createTestDashboardData(
+          goal: goal,
+          consumedCalories: 1500,
+        );
         final streak = StreakInfo(
           currentStreak: 7,
           longestStreak: 14,
@@ -2098,11 +2123,8 @@ void main() {
           mockNutritionRepository.getTodaysMealLog(),
         ).thenAnswer((_) async => mealLog);
         when(
-          mockNutritionRepository.getActiveNutritionGoal(),
-        ).thenAnswer((_) async => goal);
-        when(
-          mockNutritionRepository.getNutritionProgress(),
-        ).thenAnswer((_) async => progress);
+          mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+        ).thenAnswer((_) async => dashboardData);
         when(
           mockNutritionRepository.getStreak(),
         ).thenAnswer((_) async => streak);
@@ -2131,7 +2153,7 @@ void main() {
         dailyFat: 65,
       );
 
-      final progress = createTestProgress(
+      final dashboardData = createTestDashboardData(
         goal: goal,
         consumedCalories: 2000,
         consumedProtein: 150,
@@ -2160,11 +2182,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => mealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
 
       final provider = NutritionProvider(
@@ -2184,7 +2203,10 @@ void main() {
     test('User exceeds calorie goal shows negative remaining', () async {
       // Arrange - User has exceeded their calorie goal
       final goal = createTestGoal(dailyCalories: 2000);
-      final progress = createTestProgress(goal: goal, consumedCalories: 2500);
+      final dashboardData = createTestDashboardData(
+        goal: goal,
+        consumedCalories: 2500,
+      );
 
       final mealLog = MealLog(
         id: 1,
@@ -2207,11 +2229,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => mealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
 
       final provider = NutritionProvider(
@@ -2323,7 +2342,10 @@ void main() {
         totalFat: 40,
       );
 
-      final progress = createTestProgress(goal: goal, consumedCalories: 1000);
+      final dashboardData = createTestDashboardData(
+        goal: goal,
+        consumedCalories: 1000,
+      );
       final streak = StreakInfo(
         currentStreak: 1,
         longestStreak: 1,
@@ -2334,11 +2356,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => cachedMealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
 
       final provider = NutritionProvider(
@@ -2469,7 +2488,7 @@ void main() {
     test('Empty meal log shows full goal remaining', () async {
       // Arrange - Empty meal log with 0 calories
       final goal = createTestGoal();
-      final progress = createTestProgress(goal: goal);
+      final dashboardData = createTestDashboardData(goal: goal);
       final streak = StreakInfo(
         currentStreak: 0,
         longestStreak: 5,
@@ -2491,11 +2510,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => emptyMealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
 
       final provider = NutritionProvider(
@@ -2653,7 +2669,7 @@ void main() {
       () async {
         // Arrange - 8 PM with only 50% of calories
         final goal = createTestGoal(dailyCalories: 2000);
-        final progress = createTestProgress(
+        final dashboardData = createTestDashboardData(
           goal: goal,
           consumedCalories: 1000, // Only 50%
         );
@@ -2679,11 +2695,8 @@ void main() {
           mockNutritionRepository.getTodaysMealLog(),
         ).thenAnswer((_) async => mealLog);
         when(
-          mockNutritionRepository.getActiveNutritionGoal(),
-        ).thenAnswer((_) async => goal);
-        when(
-          mockNutritionRepository.getNutritionProgress(),
-        ).thenAnswer((_) async => progress);
+          mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+        ).thenAnswer((_) async => dashboardData);
         when(
           mockNutritionRepository.getStreak(),
         ).thenAnswer((_) async => streak);
@@ -2705,7 +2718,7 @@ void main() {
     test('High nutrition progress should not trigger reminder', () async {
       // Arrange - 85% of calories consumed
       final goal = createTestGoal(dailyCalories: 2000);
-      final progress = createTestProgress(
+      final dashboardData = createTestDashboardData(
         goal: goal,
         consumedCalories: 1700, // 85%
       );
@@ -2731,11 +2744,8 @@ void main() {
         mockNutritionRepository.getTodaysMealLog(),
       ).thenAnswer((_) async => mealLog);
       when(
-        mockNutritionRepository.getActiveNutritionGoal(),
-      ).thenAnswer((_) async => goal);
-      when(
-        mockNutritionRepository.getNutritionProgress(),
-      ).thenAnswer((_) async => progress);
+        mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboardData);
       when(mockNutritionRepository.getStreak()).thenAnswer((_) async => streak);
 
       final provider = NutritionProvider(

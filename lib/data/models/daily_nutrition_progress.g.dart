@@ -7,35 +7,34 @@ part of 'daily_nutrition_progress.dart';
 // **************************************************************************
 
 DailyNutritionProgress _$DailyNutritionProgressFromJson(
-  Map<String, dynamic> json,
-) => DailyNutritionProgress(
-  id: (json['id'] as num).toInt(),
-  userId: (json['userId'] as num).toInt(),
-  date: DateTime.parse(json['date'] as String),
-  nutritionGoalId: (json['nutritionGoalId'] as num?)?.toInt(),
-  plannedCalories: (json['plannedCalories'] as num?)?.toDouble() ?? 0,
-  plannedProtein: (json['plannedProtein'] as num?)?.toDouble() ?? 0,
-  plannedCarbohydrates: (json['plannedCarbohydrates'] as num?)?.toDouble() ?? 0,
-  plannedFat: (json['plannedFat'] as num?)?.toDouble() ?? 0,
-  plannedFiber: (json['plannedFiber'] as num?)?.toDouble() ?? 0,
-  plannedWater: (json['plannedWater'] as num?)?.toDouble() ?? 0,
-  consumedCalories: (json['consumedCalories'] as num?)?.toDouble() ?? 0,
-  consumedProtein: (json['consumedProtein'] as num?)?.toDouble() ?? 0,
-  consumedCarbohydrates:
-      (json['consumedCarbohydrates'] as num?)?.toDouble() ?? 0,
-  consumedFat: (json['consumedFat'] as num?)?.toDouble() ?? 0,
-  consumedFiber: (json['consumedFiber'] as num?)?.toDouble() ?? 0,
-  consumedWater: (json['consumedWater'] as num?)?.toDouble() ?? 0,
-  createdAt: DateTime.parse(json['createdAt'] as String),
-  updatedAt:
-      json['updatedAt'] == null
+        Map<String, dynamic> json) =>
+    DailyNutritionProgress(
+      id: (json['id'] as num).toInt(),
+      userId: (json['userId'] as num).toInt(),
+      date: DateTime.parse(json['date'] as String),
+      nutritionGoalId: (json['nutritionGoalId'] as num?)?.toInt(),
+      plannedCalories: (json['plannedCalories'] as num?)?.toDouble() ?? 0,
+      plannedProtein: (json['plannedProtein'] as num?)?.toDouble() ?? 0,
+      plannedCarbohydrates:
+          (json['plannedCarbohydrates'] as num?)?.toDouble() ?? 0,
+      plannedFat: (json['plannedFat'] as num?)?.toDouble() ?? 0,
+      plannedFiber: (json['plannedFiber'] as num?)?.toDouble() ?? 0,
+      plannedWater: (json['plannedWater'] as num?)?.toDouble() ?? 0,
+      consumedCalories: (json['consumedCalories'] as num?)?.toDouble() ?? 0,
+      consumedProtein: (json['consumedProtein'] as num?)?.toDouble() ?? 0,
+      consumedCarbohydrates:
+          (json['consumedCarbohydrates'] as num?)?.toDouble() ?? 0,
+      consumedFat: (json['consumedFat'] as num?)?.toDouble() ?? 0,
+      consumedFiber: (json['consumedFiber'] as num?)?.toDouble() ?? 0,
+      consumedWater: (json['consumedWater'] as num?)?.toDouble() ?? 0,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: json['updatedAt'] == null
           ? null
           : DateTime.parse(json['updatedAt'] as String),
-);
+    );
 
 Map<String, dynamic> _$DailyNutritionProgressToJson(
-  DailyNutritionProgress instance,
-) {
+    DailyNutritionProgress instance) {
   final val = <String, dynamic>{
     'id': instance.id,
     'userId': instance.userId,
