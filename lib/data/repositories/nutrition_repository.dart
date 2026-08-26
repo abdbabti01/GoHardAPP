@@ -14,6 +14,7 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../local/services/local_database_service.dart';
 import '../local/services/model_mapper.dart';
+import '../local/services/local_nutrition_totals_calculator.dart';
 import '../local/models/local_meal_log.dart';
 import '../local/models/local_meal_entry.dart';
 import '../local/models/local_food_item.dart';
@@ -44,6 +45,46 @@ class NutritionRepository {
     syncOperation()
         .then((_) => debugPrint('✅ Background sync: $successMessage'))
         .catchError((e) => debugPrint('⚠️ Background sync failed: $e'));
+  }
+
+  /// Recompute and persist [LocalMealLog.totalCalories]/etc. as the
+  /// consumed-only sum of its current [LocalMealEntry] rows.
+  ///
+  /// Must be called after any write that could change what counts as
+  /// "consumed" for this log (food added/edited/deleted on an entry, or a
+  /// consumed-status toggle), from inside the same [Isar.writeTxn] as that
+  /// write so the recompute sees the just-written entry state rather than a
+  /// stale snapshot. Always re-derives from source entries instead of
+  /// applying a delta, so repeated calls (e.g. consume/unconsume toggled
+  /// back and forth) are idempotent by construction.
+  Future<void> _reconcileMealLogConsumedTotals(
+    Isar db,
+    int mealLogLocalId,
+  ) async {
+    final localLog = await db.localMealLogs.get(mealLogLocalId);
+    if (localLog == null) return;
+
+    final entries =
+        await db.localMealEntrys
+            .filter()
+            .mealLogLocalIdEqualTo(mealLogLocalId)
+            .findAll();
+
+    final consumed = LocalNutritionTotalsCalculator.consumed(entries);
+
+    localLog.totalCalories = consumed.calories;
+    localLog.totalProtein = consumed.protein;
+    localLog.totalCarbohydrates = consumed.carbohydrates;
+    localLog.totalFat = consumed.fat;
+    localLog.totalFiber = consumed.fiber;
+    localLog.totalSodium = consumed.sodium;
+    localLog.lastModifiedLocal = DateTime.now().toUtc();
+    localLog.isSynced = false;
+    if (localLog.serverId != null) {
+      localLog.syncStatus = 'pending_update';
+    }
+
+    await db.localMealLogs.put(localLog);
   }
 
   // ============ Meal Logs - Offline First ============
@@ -138,6 +179,27 @@ class NutritionRepository {
               .filter()
               .serverIdEqualTo(mealLog.id)
               .findFirst();
+
+      // Skip caching over a row with pending local changes - a background
+      // refresh (including the one getTodaysMealLog()/getMealLogs() fire
+      // right after a legacy-totals repair) must never silently discard a
+      // local edit that hasn't reached the server yet, otherwise a
+      // pending_update repair could be overwritten back to the pre-repair,
+      // still-polluted server value before the corrective sync push ever
+      // runs. Mirrors the same guard in session_repository.dart. Entries
+      // are protected transitively: every local mutation that flags an
+      // entry pending_update also reconciles and flags its parent log
+      // pending_update, so returning here before the entries loop below
+      // leaves them untouched too.
+      if (existingLog != null &&
+          (existingLog.syncStatus == 'pending_update' ||
+              existingLog.syncStatus == 'pending_delete')) {
+        debugPrint(
+          '⏭️ Skipping meal log cache update for ${mealLog.id} - has '
+          'pending local changes (${existingLog.syncStatus})',
+        );
+        return;
+      }
 
       LocalMealLog savedLog;
       if (existingLog != null) {
@@ -288,7 +350,14 @@ class NutritionRepository {
     );
   }
 
-  /// Convert LocalMealLog to MealLog with entries loaded
+  /// Convert LocalMealLog to MealLog with entries loaded.
+  ///
+  /// Also repairs legacy-polluted `LocalMealLog.total*` rows: consumed
+  /// totals are re-derived from the just-loaded entries (the source of
+  /// truth) on every call, entirely from local data, no network required.
+  /// If the stored value differs from the recomputed one, the correction is
+  /// persisted; either way the returned [MealLog] always carries the
+  /// corrected values immediately, even if the persist step below fails.
   Future<MealLog> _localMealLogToMealLogWithEntries(
     Isar db,
     LocalMealLog localLog,
@@ -315,7 +384,72 @@ class NutritionRepository {
       entries.add(ModelMapper.localToMealEntry(localEntry, foodItems: foods));
     }
 
+    await _repairConsumedTotalsIfStale(db, localLog, localEntries);
+
     return ModelMapper.localToMealLog(localLog, mealEntries: entries);
+  }
+
+  /// Compares [localLog]'s stored consumed totals against a fresh
+  /// recomputation from [localEntries]; corrects the in-memory object
+  /// unconditionally (so the caller's read is always right this frame) and
+  /// persists the correction only when it actually differs and only when
+  /// the write succeeds. A repair-write failure never fails the read - it
+  /// is logged and retried on the next read of this log, matching this
+  /// repository's existing "local write best-effort, log and continue"
+  /// pattern used elsewhere (e.g. background sync failures).
+  Future<void> _repairConsumedTotalsIfStale(
+    Isar db,
+    LocalMealLog localLog,
+    List<LocalMealEntry> localEntries,
+  ) async {
+    const epsilon = 1e-9;
+    bool differs(double a, double b) => (a - b).abs() > epsilon;
+
+    final consumed = LocalNutritionTotalsCalculator.consumed(localEntries);
+
+    final isStale =
+        differs(localLog.totalCalories, consumed.calories) ||
+        differs(localLog.totalProtein, consumed.protein) ||
+        differs(localLog.totalCarbohydrates, consumed.carbohydrates) ||
+        differs(localLog.totalFat, consumed.fat) ||
+        differs(localLog.totalFiber ?? 0, consumed.fiber) ||
+        differs(localLog.totalSodium ?? 0, consumed.sodium);
+
+    if (!isStale) return;
+
+    // Correct the in-memory object immediately, independent of whether the
+    // persist below succeeds.
+    localLog.totalCalories = consumed.calories;
+    localLog.totalProtein = consumed.protein;
+    localLog.totalCarbohydrates = consumed.carbohydrates;
+    localLog.totalFat = consumed.fat;
+    localLog.totalFiber = consumed.fiber;
+    localLog.totalSodium = consumed.sodium;
+    // Mirror every other mutation site in this file: a corrected value is a
+    // local change that hasn't reached the server yet. Without this, a row
+    // that was already synced before this repair ran would never be picked
+    // up by _syncMealLogs (which only selects isSynced == false), so the
+    // server would keep serving the pre-repair, polluted total forever -
+    // and a later server cache-replacement could silently overwrite this
+    // repair with that still-wrong value.
+    localLog.isSynced = false;
+    if (localLog.serverId != null) {
+      localLog.syncStatus = 'pending_update';
+    }
+
+    try {
+      await db.writeTxn(() async {
+        await db.localMealLogs.put(localLog);
+      });
+      debugPrint(
+        '🩹 Repaired stale consumed totals for meal log ${localLog.localId}',
+      );
+    } catch (e) {
+      debugPrint(
+        '⚠️ Failed to persist consumed-totals repair for meal log '
+        '${localLog.localId}: $e',
+      );
+    }
   }
 
   /// Get meal logs for date range - offline-first
@@ -498,7 +632,8 @@ class NutritionRepository {
       await db.localFoodItems.put(localFood);
       savedFood = localFood;
 
-      // Update meal entry totals
+      // Update meal entry totals (status-independent: this entry's own
+      // food sum, regardless of isConsumed)
       entry.totalCalories += localFood.calories;
       entry.totalProtein += localFood.protein;
       entry.totalCarbohydrates += localFood.carbohydrates;
@@ -510,20 +645,10 @@ class NutritionRepository {
       }
       await db.localMealEntrys.put(entry);
 
-      // Update meal log totals
-      final localLog = await db.localMealLogs.get(entry.mealLogLocalId);
-      if (localLog != null) {
-        localLog.totalCalories += localFood.calories;
-        localLog.totalProtein += localFood.protein;
-        localLog.totalCarbohydrates += localFood.carbohydrates;
-        localLog.totalFat += localFood.fat;
-        localLog.lastModifiedLocal = now;
-        localLog.isSynced = false;
-        if (localLog.serverId != null) {
-          localLog.syncStatus = 'pending_update';
-        }
-        await db.localMealLogs.put(localLog);
-      }
+      // Reconcile the parent meal log's consumed-only totals from all
+      // current entries (recompute, not delta) - only includes this food
+      // if the entry is actually consumed.
+      await _reconcileMealLogConsumedTotals(db, entry.mealLogLocalId);
     });
 
     debugPrint('➕ Added food "${foodTemplate.name}" locally');
@@ -599,25 +724,15 @@ class NutritionRepository {
           localEntry.syncStatus = 'pending_update';
         }
         await db.localMealEntrys.put(localEntry);
-
-        // Update meal log totals
-        final localLog = await db.localMealLogs.get(localEntry.mealLogLocalId);
-        if (localLog != null) {
-          localLog.totalCalories -= localFood.calories;
-          localLog.totalProtein -= localFood.protein;
-          localLog.totalCarbohydrates -= localFood.carbohydrates;
-          localLog.totalFat -= localFood.fat;
-          localLog.lastModifiedLocal = DateTime.now().toUtc();
-          localLog.isSynced = false;
-          if (localLog.serverId != null) {
-            localLog.syncStatus = 'pending_update';
-          }
-          await db.localMealLogs.put(localLog);
-        }
       }
 
-      // Delete the food item
       await db.localFoodItems.delete(localFood.localId);
+
+      // Reconcile the parent meal log's consumed-only totals from the
+      // just-updated entry (put() above), not a stale snapshot.
+      if (localEntry != null) {
+        await _reconcileMealLogConsumedTotals(db, localEntry.mealLogLocalId);
+      }
     });
 
     debugPrint('🗑️ Deleted food item locally');
@@ -1218,11 +1333,26 @@ class NutritionRepository {
             ? ModelMapper.localToNutritionGoal(localGoal)
             : NutritionGoal.defaultGoal(userId);
 
+    // Derive consumed totals directly from entries rather than trusting
+    // LocalMealLog.total* - keeps this in lockstep with the same
+    // consumed-only invariant used everywhere else, even if this log's
+    // stored aggregate hasn't been reconciled/repaired yet.
+    final localEntries =
+        localLog != null
+            ? await db.localMealEntrys
+                .filter()
+                .mealLogLocalIdEqualTo(localLog.localId)
+                .findAll()
+            : <LocalMealEntry>[];
+    final consumedTotals = LocalNutritionTotalsCalculator.consumed(
+      localEntries,
+    );
+
     final consumed = NutritionTotals(
-      calories: localLog?.totalCalories ?? 0,
-      protein: localLog?.totalProtein ?? 0,
-      carbohydrates: localLog?.totalCarbohydrates ?? 0,
-      fat: localLog?.totalFat ?? 0,
+      calories: consumedTotals.calories,
+      protein: consumedTotals.protein,
+      carbohydrates: consumedTotals.carbohydrates,
+      fat: consumedTotals.fat,
     );
 
     final remaining = NutritionTotals(
@@ -1436,6 +1566,12 @@ class NutritionRepository {
         localEntry.syncStatus = 'pending_update';
       }
       await db.localMealEntrys.put(localEntry);
+
+      // The entry's inclusion in the meal log's consumed totals just
+      // changed - reconcile from source entries so the full entry total is
+      // included/removed exactly once, regardless of how many times
+      // consumed is toggled.
+      await _reconcileMealLogConsumedTotals(db, localEntry.mealLogLocalId);
     });
 
     // Sync to API immediately (not background) so dashboard refresh gets updated data
@@ -1571,7 +1707,7 @@ class NutritionRepository {
     await db.writeTxn(() async {
       insertedId = await db.localFoodItems.put(localFoodItem);
 
-      // Update entry totals
+      // Update entry totals (status-independent)
       parentEntry!.totalCalories += foodItem.calories;
       parentEntry.totalProtein += foodItem.protein;
       parentEntry.totalCarbohydrates += foodItem.carbohydrates;
@@ -1583,20 +1719,9 @@ class NutritionRepository {
       }
       await db.localMealEntrys.put(parentEntry);
 
-      // Update meal log totals
-      final parentLog = await db.localMealLogs.get(parentEntry.mealLogLocalId);
-      if (parentLog != null) {
-        parentLog.totalCalories += foodItem.calories;
-        parentLog.totalProtein += foodItem.protein;
-        parentLog.totalCarbohydrates += foodItem.carbohydrates;
-        parentLog.totalFat += foodItem.fat;
-        parentLog.lastModifiedLocal = DateTime.now().toUtc();
-        parentLog.isSynced = false;
-        if (parentLog.serverId != null) {
-          parentLog.syncStatus = 'pending_update';
-        }
-        await db.localMealLogs.put(parentLog);
-      }
+      // Reconcile the parent meal log's consumed-only totals from all
+      // current entries.
+      await _reconcileMealLogConsumedTotals(db, parentEntry.mealLogLocalId);
     });
 
     debugPrint('✅ Added food item locally: ${foodItem.name}');
@@ -1690,7 +1815,7 @@ class NutritionRepository {
       }
       await db.localFoodItems.put(localItem);
 
-      // Update entry totals
+      // Update entry totals (status-independent)
       final parentEntry = await db.localMealEntrys.get(
         localItem.mealEntryLocalId,
       );
@@ -1706,22 +1831,9 @@ class NutritionRepository {
         }
         await db.localMealEntrys.put(parentEntry);
 
-        // Update meal log totals
-        final parentLog = await db.localMealLogs.get(
-          parentEntry.mealLogLocalId,
-        );
-        if (parentLog != null) {
-          parentLog.totalCalories += (newCalories - oldCalories);
-          parentLog.totalProtein += (newProtein - oldProtein);
-          parentLog.totalCarbohydrates += (newCarbs - oldCarbs);
-          parentLog.totalFat += (newFat - oldFat);
-          parentLog.lastModifiedLocal = DateTime.now().toUtc();
-          parentLog.isSynced = false;
-          if (parentLog.serverId != null) {
-            parentLog.syncStatus = 'pending_update';
-          }
-          await db.localMealLogs.put(parentLog);
-        }
+        // Reconcile the parent meal log's consumed-only totals from all
+        // current entries.
+        await _reconcileMealLogConsumedTotals(db, parentEntry.mealLogLocalId);
       }
     });
 

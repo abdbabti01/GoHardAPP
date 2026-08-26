@@ -1013,7 +1013,7 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
   ) {
     final goal = provider.activeGoal;
     final goalCalories = goal?.dailyCalories ?? 2000;
-    final progressPercent = (log.totalCalories / goalCalories * 100).clamp(
+    final progressPercent = (log.consumedCalories / goalCalories * 100).clamp(
       0,
       150,
     );
@@ -1068,7 +1068,7 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${log.totalCalories.toStringAsFixed(0)} cal',
+                '${log.consumedCalories.toStringAsFixed(0)} cal',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
@@ -1079,11 +1079,15 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildMiniMacro('P', log.totalProtein, Colors.red.shade400),
+                  _buildMiniMacro(
+                    'P',
+                    log.consumedProtein,
+                    Colors.red.shade400,
+                  ),
                   const SizedBox(width: 8),
-                  _buildMiniMacro('C', log.totalCarbohydrates, Colors.blue),
+                  _buildMiniMacro('C', log.consumedCarbohydrates, Colors.blue),
                   const SizedBox(width: 8),
-                  _buildMiniMacro('F', log.totalFat, Colors.amber),
+                  _buildMiniMacro('F', log.consumedFat, Colors.amber),
                 ],
               ),
             ],
