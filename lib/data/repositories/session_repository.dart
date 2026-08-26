@@ -993,26 +993,13 @@ class SessionRepository {
     int serverId,
     LocalSession localSession,
   ) async {
-    // Helper to convert Isar timestamp to proper UTC ISO8601 string with 'Z' suffix
-    // CRITICAL: Isar loses the isUtc flag, so we must reconstruct UTC DateTime
-    // before serializing to ensure the 'Z' suffix is included
-    String? toUtcIso8601(DateTime? dt) {
-      if (dt == null) return null;
-      // Reconstruct as UTC (Isar stores the raw value, loses isUtc flag)
-      final utc =
-          dt.isUtc
-              ? dt
-              : DateTime.utc(
-                dt.year,
-                dt.month,
-                dt.day,
-                dt.hour,
-                dt.minute,
-                dt.second,
-                dt.millisecond,
-              );
-      return utc.toIso8601String(); // Will include 'Z' suffix
-    }
+    // Helper to convert an Isar timestamp to a UTC ISO8601 string with 'Z'
+    // suffix. Isar returns DateTime fields as local-flagged, but preserves
+    // the absolute instant correctly (verified against a real Isar
+    // instance in model_mapper_isar_roundtrip_test.dart), so a real
+    // .toUtc() call is the correct conversion - it relabels the value as
+    // UTC without shifting the instant.
+    String? toUtcIso8601(DateTime? dt) => dt?.toUtc().toIso8601String();
 
     try {
       // Send status AND timestamps to server (preserves timer state)

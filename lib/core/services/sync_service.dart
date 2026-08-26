@@ -219,20 +219,27 @@ class SyncService {
   Future<void> _syncCreateSession(Isar db, LocalSession localSession) async {
     debugPrint('  Creating session ${localSession.localId} on server...');
 
+    // localSession here is a fresh Isar read, so its DateTime fields are
+    // local-flagged but instant-correct (see
+    // model_mapper_isar_roundtrip_test.dart). Route through the
+    // already-corrected ModelMapper.localToSession() + Session.toJson()
+    // pipeline (which calls .toUtc() via toUtcTimestamp(), and formats
+    // via DateTimeHelper) instead of calling .toIso8601String() directly
+    // on those fields, which would silently drop the 'Z' suffix and the
+    // correct instant. id/exercises/version/programId/programWorkoutId are
+    // stripped to preserve the exact request shape this endpoint expected
+    // before this fix - only the timestamp/date values change.
+    final sessionJson =
+        ModelMapper.localToSession(localSession).toJson()
+          ..remove('id')
+          ..remove('exercises')
+          ..remove('version')
+          ..remove('programId')
+          ..remove('programWorkoutId');
+
     final response = await _apiService.post<Map<String, dynamic>>(
       ApiConfig.sessions,
-      data: {
-        'userId': localSession.userId,
-        'date': localSession.date.toIso8601String(),
-        'duration': localSession.duration,
-        'notes': localSession.notes,
-        'type': localSession.type,
-        'name': localSession.name,
-        'status': localSession.status,
-        'startedAt': localSession.startedAt?.toIso8601String(),
-        'completedAt': localSession.completedAt?.toIso8601String(),
-        'pausedAt': localSession.pausedAt?.toIso8601String(),
-      },
+      data: sessionJson,
     );
     final apiSession = Session.fromJson(response);
 

@@ -103,8 +103,16 @@ void main() {
 
     test('localToSession should convert LocalSession to API Session', () {
       // Arrange
-      // Note: LocalSession stores timestamps as local DateTime (from Isar)
-      // but ModelMapper converts them to UTC for API compatibility
+      // Real Isar returns DateTime fields as local-flagged, but preserving
+      // the correct absolute instant (verified against a real Isar instance
+      // in model_mapper_isar_roundtrip_test.dart) - i.e. equivalent to
+      // calling .toLocal() on the originally-stored UTC value, NOT a local
+      // DateTime that merely repeats the same wall-clock digits. Simulate
+      // that here rather than constructing a plain local DateTime with the
+      // target UTC digits, which does not reflect what Isar actually
+      // returns and would silently mask a mapper regression.
+      final startedAtUtc = DateTime.utc(2024, 1, 15, 10, 0);
+      final completedAtUtc = DateTime.utc(2024, 1, 15, 11, 0);
       final localSession = LocalSession(
         serverId: 123,
         userId: 456,
@@ -113,8 +121,8 @@ void main() {
         notes: 'Test workout',
         type: 'strength',
         status: 'completed',
-        startedAt: DateTime(2024, 1, 15, 10, 0),
-        completedAt: DateTime(2024, 1, 15, 11, 0),
+        startedAt: startedAtUtc.toLocal(),
+        completedAt: completedAtUtc.toLocal(),
         pausedAt: null,
         isSynced: true,
         syncStatus: 'synced',
@@ -132,9 +140,18 @@ void main() {
       expect(apiSession.notes, 'Test workout');
       expect(apiSession.type, 'strength');
       expect(apiSession.status, 'completed');
-      // Timestamps are converted to UTC (Isar stores without timezone, we reconstruct as UTC)
-      expect(apiSession.startedAt, DateTime.utc(2024, 1, 15, 10, 0));
-      expect(apiSession.completedAt, DateTime.utc(2024, 1, 15, 11, 0));
+      // The absolute instant must be preserved - not merely a UTC flag
+      // slapped onto whatever wall-clock digits Isar happened to display.
+      expect(apiSession.startedAt!.isUtc, true);
+      expect(
+        apiSession.startedAt!.microsecondsSinceEpoch,
+        startedAtUtc.microsecondsSinceEpoch,
+      );
+      expect(apiSession.completedAt!.isUtc, true);
+      expect(
+        apiSession.completedAt!.microsecondsSinceEpoch,
+        completedAtUtc.microsecondsSinceEpoch,
+      );
       expect(apiSession.pausedAt, null);
     });
 
