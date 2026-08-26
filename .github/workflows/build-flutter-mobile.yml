@@ -41,8 +41,17 @@ jobs:
     - name: Generate mocks
       run: flutter pub run build_runner build --delete-conflicting-outputs
 
+    # Serialized on purpose: Isar-backed tests call
+    # Isar.initializeIsarCore(download: true) in setUpAll, which downloads
+    # the native libisar library to a path shared by every test-file
+    # process. flutter test's default concurrency runs test files in
+    # parallel processes, so on a cold cache (every CI run) multiple
+    # processes race to write the same file with no locking, corrupting it
+    # and crashing the shell subprocess (TestDeviceException, exit -7) when
+    # a later process tries to load it. Running serialized removes the race:
+    # only one process ever performs the download.
     - name: Run tests
-      run: flutter test
+      run: flutter test --concurrency=1
 
   # Build Android APK
   build-android-apk:

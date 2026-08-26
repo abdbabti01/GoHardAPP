@@ -22,65 +22,81 @@ const LocalSessionSchema = CollectionSchema(
       name: r'completedAt',
       type: IsarType.dateTime,
     ),
-    r'date': PropertySchema(id: 1, name: r'date', type: IsarType.dateTime),
-    r'duration': PropertySchema(id: 2, name: r'duration', type: IsarType.long),
-    r'isSynced': PropertySchema(id: 3, name: r'isSynced', type: IsarType.bool),
+    r'conflictDetectedAt': PropertySchema(
+      id: 1,
+      name: r'conflictDetectedAt',
+      type: IsarType.dateTime,
+    ),
+    r'conflictServerSnapshotJson': PropertySchema(
+      id: 2,
+      name: r'conflictServerSnapshotJson',
+      type: IsarType.string,
+    ),
+    r'conflictServerVersion': PropertySchema(
+      id: 3,
+      name: r'conflictServerVersion',
+      type: IsarType.long,
+    ),
+    r'date': PropertySchema(id: 4, name: r'date', type: IsarType.dateTime),
+    r'duration': PropertySchema(id: 5, name: r'duration', type: IsarType.long),
+    r'isSynced': PropertySchema(id: 6, name: r'isSynced', type: IsarType.bool),
     r'lastModifiedLocal': PropertySchema(
-      id: 4,
+      id: 7,
       name: r'lastModifiedLocal',
       type: IsarType.dateTime,
     ),
     r'lastModifiedServer': PropertySchema(
-      id: 5,
+      id: 8,
       name: r'lastModifiedServer',
       type: IsarType.dateTime,
     ),
     r'lastSyncAttempt': PropertySchema(
-      id: 6,
+      id: 9,
       name: r'lastSyncAttempt',
       type: IsarType.dateTime,
     ),
-    r'name': PropertySchema(id: 7, name: r'name', type: IsarType.string),
-    r'notes': PropertySchema(id: 8, name: r'notes', type: IsarType.string),
+    r'name': PropertySchema(id: 10, name: r'name', type: IsarType.string),
+    r'notes': PropertySchema(id: 11, name: r'notes', type: IsarType.string),
     r'pausedAt': PropertySchema(
-      id: 9,
+      id: 12,
       name: r'pausedAt',
       type: IsarType.dateTime,
     ),
     r'programId': PropertySchema(
-      id: 10,
+      id: 13,
       name: r'programId',
       type: IsarType.long,
     ),
     r'programWorkoutId': PropertySchema(
-      id: 11,
+      id: 14,
       name: r'programWorkoutId',
       type: IsarType.long,
     ),
-    r'serverId': PropertySchema(id: 12, name: r'serverId', type: IsarType.long),
+    r'serverId': PropertySchema(id: 15, name: r'serverId', type: IsarType.long),
     r'startedAt': PropertySchema(
-      id: 13,
+      id: 16,
       name: r'startedAt',
       type: IsarType.dateTime,
     ),
-    r'status': PropertySchema(id: 14, name: r'status', type: IsarType.string),
+    r'status': PropertySchema(id: 17, name: r'status', type: IsarType.string),
     r'syncError': PropertySchema(
-      id: 15,
+      id: 18,
       name: r'syncError',
       type: IsarType.string,
     ),
     r'syncRetryCount': PropertySchema(
-      id: 16,
+      id: 19,
       name: r'syncRetryCount',
       type: IsarType.long,
     ),
     r'syncStatus': PropertySchema(
-      id: 17,
+      id: 20,
       name: r'syncStatus',
       type: IsarType.string,
     ),
-    r'type': PropertySchema(id: 18, name: r'type', type: IsarType.string),
-    r'userId': PropertySchema(id: 19, name: r'userId', type: IsarType.long),
+    r'type': PropertySchema(id: 21, name: r'type', type: IsarType.string),
+    r'userId': PropertySchema(id: 22, name: r'userId', type: IsarType.long),
+    r'version': PropertySchema(id: 23, name: r'version', type: IsarType.long),
   },
   estimateSize: _localSessionEstimateSize,
   serialize: _localSessionSerialize,
@@ -156,6 +172,12 @@ int _localSessionEstimateSize(
 ) {
   var bytesCount = offsets.last;
   {
+    final value = object.conflictServerSnapshotJson;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final value = object.name;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -191,25 +213,29 @@ void _localSessionSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeDateTime(offsets[0], object.completedAt);
-  writer.writeDateTime(offsets[1], object.date);
-  writer.writeLong(offsets[2], object.duration);
-  writer.writeBool(offsets[3], object.isSynced);
-  writer.writeDateTime(offsets[4], object.lastModifiedLocal);
-  writer.writeDateTime(offsets[5], object.lastModifiedServer);
-  writer.writeDateTime(offsets[6], object.lastSyncAttempt);
-  writer.writeString(offsets[7], object.name);
-  writer.writeString(offsets[8], object.notes);
-  writer.writeDateTime(offsets[9], object.pausedAt);
-  writer.writeLong(offsets[10], object.programId);
-  writer.writeLong(offsets[11], object.programWorkoutId);
-  writer.writeLong(offsets[12], object.serverId);
-  writer.writeDateTime(offsets[13], object.startedAt);
-  writer.writeString(offsets[14], object.status);
-  writer.writeString(offsets[15], object.syncError);
-  writer.writeLong(offsets[16], object.syncRetryCount);
-  writer.writeString(offsets[17], object.syncStatus);
-  writer.writeString(offsets[18], object.type);
-  writer.writeLong(offsets[19], object.userId);
+  writer.writeDateTime(offsets[1], object.conflictDetectedAt);
+  writer.writeString(offsets[2], object.conflictServerSnapshotJson);
+  writer.writeLong(offsets[3], object.conflictServerVersion);
+  writer.writeDateTime(offsets[4], object.date);
+  writer.writeLong(offsets[5], object.duration);
+  writer.writeBool(offsets[6], object.isSynced);
+  writer.writeDateTime(offsets[7], object.lastModifiedLocal);
+  writer.writeDateTime(offsets[8], object.lastModifiedServer);
+  writer.writeDateTime(offsets[9], object.lastSyncAttempt);
+  writer.writeString(offsets[10], object.name);
+  writer.writeString(offsets[11], object.notes);
+  writer.writeDateTime(offsets[12], object.pausedAt);
+  writer.writeLong(offsets[13], object.programId);
+  writer.writeLong(offsets[14], object.programWorkoutId);
+  writer.writeLong(offsets[15], object.serverId);
+  writer.writeDateTime(offsets[16], object.startedAt);
+  writer.writeString(offsets[17], object.status);
+  writer.writeString(offsets[18], object.syncError);
+  writer.writeLong(offsets[19], object.syncRetryCount);
+  writer.writeString(offsets[20], object.syncStatus);
+  writer.writeString(offsets[21], object.type);
+  writer.writeLong(offsets[22], object.userId);
+  writer.writeLong(offsets[23], object.version);
 }
 
 LocalSession _localSessionDeserialize(
@@ -220,25 +246,29 @@ LocalSession _localSessionDeserialize(
 ) {
   final object = LocalSession(
     completedAt: reader.readDateTimeOrNull(offsets[0]),
-    date: reader.readDateTime(offsets[1]),
-    duration: reader.readLongOrNull(offsets[2]),
-    isSynced: reader.readBoolOrNull(offsets[3]) ?? false,
-    lastModifiedLocal: reader.readDateTime(offsets[4]),
-    lastModifiedServer: reader.readDateTimeOrNull(offsets[5]),
-    lastSyncAttempt: reader.readDateTimeOrNull(offsets[6]),
-    name: reader.readStringOrNull(offsets[7]),
-    notes: reader.readStringOrNull(offsets[8]),
-    pausedAt: reader.readDateTimeOrNull(offsets[9]),
-    programId: reader.readLongOrNull(offsets[10]),
-    programWorkoutId: reader.readLongOrNull(offsets[11]),
-    serverId: reader.readLongOrNull(offsets[12]),
-    startedAt: reader.readDateTimeOrNull(offsets[13]),
-    status: reader.readStringOrNull(offsets[14]) ?? 'draft',
-    syncError: reader.readStringOrNull(offsets[15]),
-    syncRetryCount: reader.readLongOrNull(offsets[16]) ?? 0,
-    syncStatus: reader.readStringOrNull(offsets[17]) ?? 'pending_create',
-    type: reader.readStringOrNull(offsets[18]),
-    userId: reader.readLong(offsets[19]),
+    conflictDetectedAt: reader.readDateTimeOrNull(offsets[1]),
+    conflictServerSnapshotJson: reader.readStringOrNull(offsets[2]),
+    conflictServerVersion: reader.readLongOrNull(offsets[3]),
+    date: reader.readDateTime(offsets[4]),
+    duration: reader.readLongOrNull(offsets[5]),
+    isSynced: reader.readBoolOrNull(offsets[6]) ?? false,
+    lastModifiedLocal: reader.readDateTime(offsets[7]),
+    lastModifiedServer: reader.readDateTimeOrNull(offsets[8]),
+    lastSyncAttempt: reader.readDateTimeOrNull(offsets[9]),
+    name: reader.readStringOrNull(offsets[10]),
+    notes: reader.readStringOrNull(offsets[11]),
+    pausedAt: reader.readDateTimeOrNull(offsets[12]),
+    programId: reader.readLongOrNull(offsets[13]),
+    programWorkoutId: reader.readLongOrNull(offsets[14]),
+    serverId: reader.readLongOrNull(offsets[15]),
+    startedAt: reader.readDateTimeOrNull(offsets[16]),
+    status: reader.readStringOrNull(offsets[17]) ?? 'draft',
+    syncError: reader.readStringOrNull(offsets[18]),
+    syncRetryCount: reader.readLongOrNull(offsets[19]) ?? 0,
+    syncStatus: reader.readStringOrNull(offsets[20]) ?? 'pending_create',
+    type: reader.readStringOrNull(offsets[21]),
+    userId: reader.readLong(offsets[22]),
+    version: reader.readLongOrNull(offsets[23]),
   );
   object.localId = id;
   return object;
@@ -254,43 +284,51 @@ P _localSessionDeserializeProp<P>(
     case 0:
       return (reader.readDateTimeOrNull(offset)) as P;
     case 1:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 2:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 3:
-      return (reader.readBoolOrNull(offset) ?? false) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 4:
       return (reader.readDateTime(offset)) as P;
     case 5:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 6:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readBoolOrNull(offset) ?? false) as P;
     case 7:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 8:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 9:
       return (reader.readDateTimeOrNull(offset)) as P;
     case 10:
-      return (reader.readLongOrNull(offset)) as P;
-    case 11:
-      return (reader.readLongOrNull(offset)) as P;
-    case 12:
-      return (reader.readLongOrNull(offset)) as P;
-    case 13:
-      return (reader.readDateTimeOrNull(offset)) as P;
-    case 14:
-      return (reader.readStringOrNull(offset) ?? 'draft') as P;
-    case 15:
       return (reader.readStringOrNull(offset)) as P;
+    case 11:
+      return (reader.readStringOrNull(offset)) as P;
+    case 12:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 13:
+      return (reader.readLongOrNull(offset)) as P;
+    case 14:
+      return (reader.readLongOrNull(offset)) as P;
+    case 15:
+      return (reader.readLongOrNull(offset)) as P;
     case 16:
-      return (reader.readLongOrNull(offset) ?? 0) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 17:
-      return (reader.readStringOrNull(offset) ?? 'pending_create') as P;
+      return (reader.readStringOrNull(offset) ?? 'draft') as P;
     case 18:
       return (reader.readStringOrNull(offset)) as P;
     case 19:
+      return (reader.readLongOrNull(offset) ?? 0) as P;
+    case 20:
+      return (reader.readStringOrNull(offset) ?? 'pending_create') as P;
+    case 21:
+      return (reader.readStringOrNull(offset)) as P;
+    case 22:
       return (reader.readLong(offset)) as P;
+    case 23:
+      return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -743,6 +781,337 @@ extension LocalSessionQueryFilter
       return query.addFilterCondition(
         FilterCondition.between(
           property: r'completedAt',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictDetectedAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'conflictDetectedAt'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictDetectedAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'conflictDetectedAt'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictDetectedAtEqualTo(DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'conflictDetectedAt', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictDetectedAtGreaterThan(DateTime? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'conflictDetectedAt',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictDetectedAtLessThan(DateTime? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'conflictDetectedAt',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictDetectedAtBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'conflictDetectedAt',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'conflictServerSnapshotJson'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(
+          property: r'conflictServerSnapshotJson',
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'conflictServerSnapshotJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'conflictServerSnapshotJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'conflictServerSnapshotJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'conflictServerSnapshotJson',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'conflictServerSnapshotJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'conflictServerSnapshotJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonContains(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'conflictServerSnapshotJson',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonMatches(
+    String pattern, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'conflictServerSnapshotJson',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'conflictServerSnapshotJson',
+          value: '',
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerSnapshotJsonIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          property: r'conflictServerSnapshotJson',
+          value: '',
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerVersionIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'conflictServerVersion'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerVersionIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'conflictServerVersion'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerVersionEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'conflictServerVersion',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerVersionGreaterThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'conflictServerVersion',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerVersionLessThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'conflictServerVersion',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  conflictServerVersionBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'conflictServerVersion',
           lower: lower,
           includeLower: includeLower,
           upper: upper,
@@ -2558,6 +2927,79 @@ extension LocalSessionQueryFilter
       );
     });
   }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  versionIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'version'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  versionIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'version'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  versionEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'version', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  versionGreaterThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'version',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  versionLessThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'version',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
+  versionBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'version',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
 }
 
 extension LocalSessionQueryObject
@@ -2578,6 +3020,48 @@ extension LocalSessionQuerySortBy
   sortByCompletedAtDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'completedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  sortByConflictDetectedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictDetectedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  sortByConflictDetectedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictDetectedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  sortByConflictServerSnapshotJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictServerSnapshotJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  sortByConflictServerSnapshotJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictServerSnapshotJson', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  sortByConflictServerVersion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictServerVersion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  sortByConflictServerVersionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictServerVersion', Sort.desc);
     });
   }
 
@@ -2819,6 +3303,18 @@ extension LocalSessionQuerySortBy
       return query.addSortBy(r'userId', Sort.desc);
     });
   }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy> sortByVersion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'version', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy> sortByVersionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'version', Sort.desc);
+    });
+  }
 }
 
 extension LocalSessionQuerySortThenBy
@@ -2833,6 +3329,48 @@ extension LocalSessionQuerySortThenBy
   thenByCompletedAtDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'completedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  thenByConflictDetectedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictDetectedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  thenByConflictDetectedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictDetectedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  thenByConflictServerSnapshotJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictServerSnapshotJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  thenByConflictServerSnapshotJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictServerSnapshotJson', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  thenByConflictServerVersion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictServerVersion', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
+  thenByConflictServerVersionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'conflictServerVersion', Sort.desc);
     });
   }
 
@@ -3086,6 +3624,18 @@ extension LocalSessionQuerySortThenBy
       return query.addSortBy(r'userId', Sort.desc);
     });
   }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy> thenByVersion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'version', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QAfterSortBy> thenByVersionDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'version', Sort.desc);
+    });
+  }
 }
 
 extension LocalSessionQueryWhereDistinct
@@ -3093,6 +3643,30 @@ extension LocalSessionQueryWhereDistinct
   QueryBuilder<LocalSession, LocalSession, QDistinct> distinctByCompletedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'completedAt');
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QDistinct>
+  distinctByConflictDetectedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'conflictDetectedAt');
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QDistinct>
+  distinctByConflictServerSnapshotJson({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(
+        r'conflictServerSnapshotJson',
+        caseSensitive: caseSensitive,
+      );
+    });
+  }
+
+  QueryBuilder<LocalSession, LocalSession, QDistinct>
+  distinctByConflictServerVersion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'conflictServerVersion');
     });
   }
 
@@ -3226,6 +3800,12 @@ extension LocalSessionQueryWhereDistinct
       return query.addDistinctBy(r'userId');
     });
   }
+
+  QueryBuilder<LocalSession, LocalSession, QDistinct> distinctByVersion() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'version');
+    });
+  }
 }
 
 extension LocalSessionQueryProperty
@@ -3240,6 +3820,27 @@ extension LocalSessionQueryProperty
   completedAtProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'completedAt');
+    });
+  }
+
+  QueryBuilder<LocalSession, DateTime?, QQueryOperations>
+  conflictDetectedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'conflictDetectedAt');
+    });
+  }
+
+  QueryBuilder<LocalSession, String?, QQueryOperations>
+  conflictServerSnapshotJsonProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'conflictServerSnapshotJson');
+    });
+  }
+
+  QueryBuilder<LocalSession, int?, QQueryOperations>
+  conflictServerVersionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'conflictServerVersion');
     });
   }
 
@@ -3358,6 +3959,12 @@ extension LocalSessionQueryProperty
   QueryBuilder<LocalSession, int, QQueryOperations> userIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'userId');
+    });
+  }
+
+  QueryBuilder<LocalSession, int?, QQueryOperations> versionProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'version');
     });
   }
 }

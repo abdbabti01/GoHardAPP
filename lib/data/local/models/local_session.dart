@@ -76,6 +76,27 @@ class LocalSession {
   /// Error message from last failed sync
   String? syncError;
 
+  // ========== Version / Conflict Tracking Fields ==========
+
+  /// Server-side optimistic concurrency version. Null for rows created
+  /// before version tracking existed, or before their first successful
+  /// sync - never guess this value when sending an update to the server.
+  int? version;
+
+  /// Serialized server session snapshot captured when a 409 conflict (or a
+  /// version-unknown reconciliation) is detected. Local mutable fields are
+  /// left untouched while this is set; it exists for later manual
+  /// resolution (Mine / Use Server), not automatic overwrite.
+  String? conflictServerSnapshotJson;
+
+  /// The server's version number at the time [conflictServerSnapshotJson]
+  /// was captured.
+  int? conflictServerVersion;
+
+  /// When the conflict represented by [conflictServerSnapshotJson] was
+  /// detected.
+  DateTime? conflictDetectedAt;
+
   /// Constructor
   LocalSession({
     this.serverId,
@@ -98,5 +119,9 @@ class LocalSession {
     this.syncRetryCount = 0,
     this.lastSyncAttempt,
     this.syncError,
+    this.version,
+    this.conflictServerSnapshotJson,
+    this.conflictServerVersion,
+    this.conflictDetectedAt,
   });
 }

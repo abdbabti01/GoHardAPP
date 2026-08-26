@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
-import 'package:dio/dio.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
 import '../models/session.dart';
@@ -8,6 +7,7 @@ import '../models/exercise.dart';
 import '../models/program_workout.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/session_update_sync_helper.dart';
 import '../local/services/local_database_service.dart';
 import '../local/services/model_mapper.dart';
 import '../local/models/local_session.dart';
@@ -85,6 +85,50 @@ class SessionRepository {
         });
   }
 
+  /// True while [localSession] has an unresolved 409 conflict recorded
+  /// (see SessionUpdateSyncHelper). Only an explicit Keep Mine / Use Server
+  /// resolution - not implemented yet - may leave this state; a routine
+  /// local edit must never flip it back to pending_update, clear its
+  /// conflict metadata, or queue it for a background PUT.
+  bool _isConflicted(LocalSession localSession) =>
+      localSession.syncStatus == 'conflict';
+
+  /// Apply the standard local-edit sync-tracking bookkeeping
+  /// (lastModifiedLocal / isSynced / syncStatus) to [localSession],
+  /// preserving the conflict invariant above. Field-specific edits (name,
+  /// date, status, timestamps, ...) are applied by the caller - this only
+  /// manages the fields every edit path shares. [newStatus], if given, is
+  /// applied even for a conflicted row, since a workout status change is
+  /// itself a local mutable-field edit ("mine"), not a sync-status change.
+  void _applyLocalEditBookkeeping(
+    LocalSession localSession, {
+    String? newStatus,
+  }) {
+    if (newStatus != null) {
+      localSession.status = newStatus;
+    }
+    localSession.lastModifiedLocal = DateTime.now().toUtc();
+
+    if (_isConflicted(localSession)) {
+      // Conflict state and its metadata are intentionally left untouched.
+      return;
+    }
+
+    localSession.isSynced = false;
+    if (localSession.serverId != null) {
+      localSession.syncStatus = 'pending_update';
+    }
+  }
+
+  /// Whether a local edit to [localSession] should trigger an immediate
+  /// background push to the server. Conflicted rows are excluded - they
+  /// may only be resolved through an explicit Keep Mine / Use Server
+  /// operation, never by a routine edit or the periodic sync loop.
+  bool _shouldPushAfterEdit(LocalSession localSession) =>
+      !_isConflicted(localSession) &&
+      _connectivity.isOnline &&
+      localSession.serverId != null;
+
   /// Mark a local session as needing sync (pending_update if server ID exists)
   Future<void> _markSessionForSync(
     Isar db,
@@ -92,14 +136,7 @@ class SessionRepository {
     String? newStatus,
   }) async {
     await db.writeTxn(() async {
-      if (newStatus != null) {
-        localSession.status = newStatus;
-      }
-      localSession.lastModifiedLocal = DateTime.now().toUtc();
-      localSession.isSynced = false;
-      if (localSession.serverId != null) {
-        localSession.syncStatus = 'pending_update';
-      }
+      _applyLocalEditBookkeeping(localSession, newStatus: newStatus);
       await db.localSessions.put(localSession);
     });
   }
@@ -207,10 +244,14 @@ class SessionRepository {
                   .serverIdEqualTo(apiSession.id)
                   .findFirst();
 
-          // Skip sessions with pending local changes - don't overwrite with server data
+          // Skip sessions with pending local changes - don't overwrite with
+          // server data. 'conflict' rows are included here: a background
+          // cache refresh must never silently discard the local edit and
+          // conflict metadata a 409 resolution still needs.
           if (existingLocal != null &&
               (existingLocal.syncStatus == 'pending_delete' ||
-                  existingLocal.syncStatus == 'pending_update')) {
+                  existingLocal.syncStatus == 'pending_update' ||
+                  existingLocal.syncStatus == 'conflict')) {
             debugPrint(
               '  ⏭️ Skipping session ${apiSession.id} - has pending local changes (${existingLocal.syncStatus})',
             );
@@ -834,26 +875,24 @@ class SessionRepository {
     Isar db,
     int localId,
   ) async {
-    try {
-      final data = await _apiService.post<Map<String, dynamic>>(
-        ApiConfig.sessions,
-        data: session.toJson(),
-      );
-      final apiSession = Session.fromJson(data);
+    final data = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.sessions,
+      data: session.toJson(),
+    );
+    final apiSession = Session.fromJson(data);
 
-      // Update local session with server ID
-      await db.writeTxn(() async {
-        final localSession = await db.localSessions.get(localId);
-        if (localSession != null) {
-          localSession.serverId = apiSession.id;
-          localSession.isSynced = true;
-          localSession.syncStatus = 'synced';
-          await db.localSessions.put(localSession);
-        }
-      });
-    } catch (e) {
-      rethrow; // Let caller handle error
-    }
+    // Update local session with the full authoritative server response
+    // (including the server-assigned version) rather than inventing one.
+    await db.writeTxn(() async {
+      final existing = await db.localSessions.get(localId);
+      if (existing == null) return;
+      final updated = ModelMapper.sessionToLocal(
+        apiSession,
+        localId: localId,
+        isSynced: true,
+      );
+      await db.localSessions.put(updated);
+    });
   }
 
   /// Create session in local database
@@ -926,8 +965,10 @@ class SessionRepository {
       startedAtUtc: startedAtUtc,
     );
 
-    // Then sync to server in background if online (using helper)
-    if (_connectivity.isOnline && localSession.serverId != null) {
+    // Then sync to server in background if online (using helper), unless
+    // the row has an unresolved conflict - it must not be pushed until
+    // explicitly resolved.
+    if (_shouldPushAfterEdit(localSession)) {
       _backgroundSync(
         () => _syncSessionStatusToServer(
           db,
@@ -936,6 +977,8 @@ class SessionRepository {
         ),
         'Updated session status on server',
       );
+    } else if (_isConflicted(localSession)) {
+      debugPrint('⚠️ Session has an unresolved conflict - skipping sync');
     } else {
       debugPrint('📴 Offline - session status will sync later');
     }
@@ -1041,9 +1084,12 @@ class SessionRepository {
   }) async {
     await db.writeTxn(() async {
       final now = DateTime.now();
+      final conflicted = _isConflicted(localSession);
       localSession.status = status;
       localSession.lastModifiedLocal = now;
-      localSession.isSynced = false;
+      if (!conflicted) {
+        localSession.isSynced = false;
+      }
 
       // Set startedAt when status changes to 'in_progress'
       if (status == 'in_progress' && localSession.startedAt == null) {
@@ -1093,8 +1139,10 @@ class SessionRepository {
       }
 
       // Only mark as pending_update if session already exists on server
-      // If no serverId, keep it as pending_create
-      if (localSession.serverId != null) {
+      // and it isn't already an unresolved conflict - conflicted rows may
+      // only leave that state through an explicit resolution.
+      // If no serverId, keep it as pending_create.
+      if (!conflicted && localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';
       }
       await db.localSessions.put(localSession);
@@ -1196,18 +1244,15 @@ class SessionRepository {
     // ALWAYS update locally first for instant response
     await db.writeTxn(() async {
       localSession.pausedAt = pausedAt; // Use provided timestamp (already UTC)
-      localSession.lastModifiedLocal = DateTime.now().toUtc();
-      localSession.isSynced = false;
-      if (localSession.serverId != null) {
-        localSession.syncStatus = 'pending_update';
-      }
+      _applyLocalEditBookkeeping(localSession);
       await db.localSessions.put(localSession);
     });
 
     debugPrint('⏸️ Session paused locally (pausedAt UTC: $pausedAt)');
 
-    // Then sync to server in background if online (using helper)
-    if (_connectivity.isOnline && localSession.serverId != null) {
+    // Then sync to server in background if online, unless the row has an
+    // unresolved conflict.
+    if (_shouldPushAfterEdit(localSession)) {
       _backgroundSync(
         () => _syncSessionStatusToServer(
           db,
@@ -1233,19 +1278,16 @@ class SessionRepository {
       // Use the adjusted startedAt provided by provider (already calculated)
       localSession.startedAt = newStartedAt;
       localSession.pausedAt = null;
-      localSession.lastModifiedLocal = DateTime.now().toUtc();
-      localSession.isSynced = false;
-      if (localSession.serverId != null) {
-        localSession.syncStatus = 'pending_update';
-      }
+      _applyLocalEditBookkeeping(localSession);
       await db.localSessions.put(localSession);
       debugPrint('▶️ Adjusted startedAt to: $newStartedAt');
     });
 
     debugPrint('▶️ Session resumed locally');
 
-    // Then sync to server in background if online (using helper)
-    if (_connectivity.isOnline && localSession.serverId != null) {
+    // Then sync to server in background if online, unless the row has an
+    // unresolved conflict.
+    if (_shouldPushAfterEdit(localSession)) {
       _backgroundSync(
         () => _syncSessionStatusToServer(
           db,
@@ -1375,22 +1417,22 @@ class SessionRepository {
     // ALWAYS update locally first for instant response
     await db.writeTxn(() async {
       localSession.name = name;
-      localSession.lastModifiedLocal = DateTime.now().toUtc();
-      localSession.isSynced = false;
-      if (localSession.serverId != null) {
-        localSession.syncStatus = 'pending_update';
-      }
+      _applyLocalEditBookkeeping(localSession);
       await db.localSessions.put(localSession);
     });
 
     debugPrint('✏️ Session name updated locally to: $name');
 
-    // Then sync to server in background if online (using helper)
-    if (_connectivity.isOnline && localSession.serverId != null) {
+    // Then sync to server in background if online, unless the row has an
+    // unresolved conflict - it must not be pushed until explicitly
+    // resolved.
+    if (_shouldPushAfterEdit(localSession)) {
       _backgroundSync(
         () => _syncSessionNameToServer(db, localSession.serverId!, name),
         'Updated session name on server',
       );
+    } else if (_isConflicted(localSession)) {
+      debugPrint('⚠️ Session has an unresolved conflict - skipping sync');
     } else {
       debugPrint('📴 Offline - session name will sync later');
     }
@@ -1412,172 +1454,87 @@ class SessionRepository {
       // Convert to date-only (no time component)
       final dateOnly = DateTime(newDate.year, newDate.month, newDate.day);
       localSession.date = dateOnly;
-      localSession.lastModifiedLocal = DateTime.now().toUtc();
-      localSession.isSynced = false;
-      if (localSession.serverId != null) {
-        localSession.syncStatus = 'pending_update';
-      }
+      _applyLocalEditBookkeeping(localSession);
       await db.localSessions.put(localSession);
     });
 
     debugPrint('📅 Workout date updated locally to: $newDate');
 
-    // Then sync to server in background if online (using helper)
-    if (_connectivity.isOnline && localSession.serverId != null) {
+    // Then sync to server in background if online, unless the row has an
+    // unresolved conflict - it must not be pushed until explicitly
+    // resolved.
+    if (_shouldPushAfterEdit(localSession)) {
       _backgroundSync(
         () => _syncSessionDateToServer(db, localSession.serverId!, newDate),
         'Updated workout date on server',
       );
+    } else if (_isConflicted(localSession)) {
+      debugPrint('⚠️ Session has an unresolved conflict - skipping sync');
     } else {
       debugPrint('📴 Offline - workout date will sync later');
     }
   }
 
   /// Background sync: Update workout date on server
+  /// The date is already persisted on the local row before this runs, so
+  /// this just pushes the current local state through the centralized
+  /// update helper.
   Future<void> _syncSessionDateToServer(
     Isar db,
     int serverId,
     DateTime newDate,
   ) async {
-    try {
-      // Fetch the current session to send full data (required by PUT)
-      final session =
-          await db.localSessions.filter().serverIdEqualTo(serverId).findFirst();
+    final session =
+        await db.localSessions.filter().serverIdEqualTo(serverId).findFirst();
+    if (session == null) return;
 
-      if (session == null) return;
-
-      // Convert to API model
-      final apiSession = ModelMapper.localToSession(session);
-      final updateData = apiSession.toJson();
-
-      await _apiService.put<void>(
-        ApiConfig.sessionById(serverId),
-        data: updateData,
-      );
-
-      // Mark as synced
-      await db.writeTxn(() async {
-        final updatedSession =
-            await db.localSessions
-                .filter()
-                .serverIdEqualTo(serverId)
-                .findFirst();
-        if (updatedSession != null) {
-          updatedSession.isSynced = true;
-          updatedSession.syncStatus = 'synced';
-          await db.localSessions.put(updatedSession);
-        }
-      });
-    } on DioException catch (e) {
-      // Handle version conflicts (Issue #13)
-      if (e.response?.statusCode == 409) {
-        debugPrint('⚠️ Conflict detected - server version is newer');
-
-        // Server wins: reload fresh data from server
-        try {
-          final serverSession = await getSession(serverId);
-
-          // Update local cache with server version
-          await db.writeTxn(() async {
-            final localSession =
-                await db.localSessions
-                    .filter()
-                    .serverIdEqualTo(serverId)
-                    .findFirst();
-            if (localSession != null) {
-              final updated = ModelMapper.sessionToLocal(
-                serverSession,
-                localId: localSession.localId,
-                isSynced: true,
-              );
-              await db.localSessions.put(updated);
-            }
-          });
-
-          debugPrint('🔄 Local session updated with server version');
-        } catch (reloadError) {
-          debugPrint('⚠️ Failed to reload server session: $reloadError');
-        }
-      } else {
-        rethrow;
-      }
-    } catch (e) {
-      debugPrint('Error syncing workout date to server: $e');
-      rethrow;
-    }
+    await _pushSessionUpdate(db, session, 'workout date');
   }
 
   /// Background sync: Update session name on server
+  /// The name is already persisted on the local row before this runs, so
+  /// this just pushes the current local state through the centralized
+  /// update helper.
   Future<void> _syncSessionNameToServer(
     Isar db,
     int serverId,
     String name,
   ) async {
-    try {
-      // Fetch the current session to send full data (required by PUT)
-      final session =
-          await db.localSessions.filter().serverIdEqualTo(serverId).findFirst();
+    final session =
+        await db.localSessions.filter().serverIdEqualTo(serverId).findFirst();
+    if (session == null) return;
 
-      if (session == null) return;
+    await _pushSessionUpdate(db, session, 'session name');
+  }
 
-      // Convert to API model
-      final apiSession = ModelMapper.localToSession(session);
-      final updateData = apiSession.toJson();
-      updateData['name'] = name; // Ensure name is updated
+  /// Push a full-session PUT update via the centralized sync helper and log
+  /// the outcome. Non-409 failures propagate to the caller's retry logic.
+  Future<void> _pushSessionUpdate(
+    Isar db,
+    LocalSession session,
+    String what,
+  ) async {
+    final outcome = await SessionUpdateSyncHelper(
+      _apiService,
+    ).pushUpdate(db, session);
 
-      await _apiService.put<void>(
-        ApiConfig.sessionById(serverId),
-        data: updateData,
-      );
-
-      // Update sync status in local DB
-      await db.writeTxn(() async {
-        final localSession =
-            await db.localSessions
-                .filter()
-                .serverIdEqualTo(serverId)
-                .findFirst();
-        if (localSession != null) {
-          localSession.isSynced = true;
-          localSession.syncStatus = 'synced';
-          await db.localSessions.put(localSession);
-        }
-      });
-    } on DioException catch (e) {
-      // Handle version conflicts (Issue #13)
-      if (e.response?.statusCode == 409) {
-        debugPrint('⚠️ Conflict detected - server version is newer');
-
-        // Server wins: reload fresh data from server
-        try {
-          final serverSession = await getSession(serverId);
-
-          // Update local cache with server version
-          await db.writeTxn(() async {
-            final localSession =
-                await db.localSessions
-                    .filter()
-                    .serverIdEqualTo(serverId)
-                    .findFirst();
-            if (localSession != null) {
-              final updated = ModelMapper.sessionToLocal(
-                serverSession,
-                localId: localSession.localId,
-                isSynced: true,
-              );
-              await db.localSessions.put(updated);
-            }
-          });
-
-          debugPrint('🔄 Local session updated with server version');
-        } catch (reloadError) {
-          debugPrint('⚠️ Failed to reload server session: $reloadError');
-        }
-      } else {
-        rethrow;
-      }
-    } catch (e) {
-      rethrow; // Let caller handle error
+    switch (outcome) {
+      case SessionSyncOutcome.synced:
+        debugPrint('✅ Synced $what to server');
+        break;
+      case SessionSyncOutcome.conflict:
+        debugPrint(
+          '⚠️ Conflict detected updating $what - stored for manual resolution',
+        );
+        break;
+      case SessionSyncOutcome.conflictDataInvalid:
+        debugPrint(
+          '⚠️ Conflict response malformed updating $what - will retry later',
+        );
+        break;
+      case SessionSyncOutcome.deferred:
+        debugPrint('⚠️ Could not confirm $what update - will retry later');
+        break;
     }
   }
 

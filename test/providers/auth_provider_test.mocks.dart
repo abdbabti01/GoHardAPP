@@ -5,8 +5,9 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i3;
 
+import 'package:dio/dio.dart' as _i10;
 import 'package:go_hard_app/data/local/services/local_database_service.dart'
-    as _i11;
+    as _i12;
 import 'package:go_hard_app/data/models/auth_response.dart' as _i2;
 import 'package:go_hard_app/data/models/login_request.dart' as _i6;
 import 'package:go_hard_app/data/models/signup_request.dart' as _i7;
@@ -15,7 +16,7 @@ import 'package:go_hard_app/data/services/api_service.dart' as _i9;
 import 'package:go_hard_app/data/services/auth_service.dart' as _i8;
 import 'package:isar/isar.dart' as _i4;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i10;
+import 'package:mockito/src/dummies.dart' as _i11;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -206,6 +207,12 @@ class MockApiService extends _i1.Mock implements _i9.ApiService {
   );
 
   @override
+  void handleResponseError(_i10.DioException? error) => super.noSuchMethod(
+    Invocation.method(#handleResponseError, [error]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   _i3.Future<T> get<T>(String? path, {Map<String, dynamic>? queryParameters}) =>
       (super.noSuchMethod(
             Invocation.method(
@@ -214,8 +221,8 @@ class MockApiService extends _i1.Mock implements _i9.ApiService {
               {#queryParameters: queryParameters},
             ),
             returnValue:
-                _i10.ifNotNull(
-                  _i10.dummyValueOrNull<T>(
+                _i11.ifNotNull(
+                  _i11.dummyValueOrNull<T>(
                     this,
                     Invocation.method(
                       #get,
@@ -241,8 +248,8 @@ class MockApiService extends _i1.Mock implements _i9.ApiService {
       (super.noSuchMethod(
             Invocation.method(#post, [path], {#data: data}),
             returnValue:
-                _i10.ifNotNull(
-                  _i10.dummyValueOrNull<T>(
+                _i11.ifNotNull(
+                  _i11.dummyValueOrNull<T>(
                     this,
                     Invocation.method(#post, [path], {#data: data}),
                   ),
@@ -260,8 +267,8 @@ class MockApiService extends _i1.Mock implements _i9.ApiService {
       (super.noSuchMethod(
             Invocation.method(#put, [path], {#data: data}),
             returnValue:
-                _i10.ifNotNull(
-                  _i10.dummyValueOrNull<T>(
+                _i11.ifNotNull(
+                  _i11.dummyValueOrNull<T>(
                     this,
                     Invocation.method(#put, [path], {#data: data}),
                   ),
@@ -295,7 +302,7 @@ class MockApiService extends _i1.Mock implements _i9.ApiService {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockLocalDatabaseService extends _i1.Mock
-    implements _i11.LocalDatabaseService {
+    implements _i12.LocalDatabaseService {
   MockLocalDatabaseService() {
     _i1.throwOnMissingStub(this);
   }
@@ -322,6 +329,12 @@ class MockLocalDatabaseService extends _i1.Mock
             ),
           )
           as _i3.Future<_i4.Isar>);
+
+  @override
+  void setTestDatabase(_i4.Isar? isar) => super.noSuchMethod(
+    Invocation.method(#setTestDatabase, [isar]),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i3.Future<void> close() =>
