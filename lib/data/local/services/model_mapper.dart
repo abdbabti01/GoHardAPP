@@ -133,7 +133,10 @@ class ModelMapper {
   /// push a full session update (periodic sync, date edits, name edits)
   /// cannot drift from each other. Sends the actual persisted version
   /// (which may be null) - never a guessed value - and omits id/userId,
-  /// which the server no longer requires for a PUT.
+  /// which the server no longer requires for a PUT. Also omits
+  /// programId/programWorkoutId: SessionUpdateRequestDto doesn't accept
+  /// them - program relationships are server-controlled, not editable
+  /// through this endpoint.
   static Map<String, dynamic> buildSessionUpdateRequest(
     LocalSession localSession,
   ) {
@@ -175,8 +178,6 @@ class ModelMapper {
           pausedAtUtc != null
               ? DateTimeHelper.formatTimestamp(pausedAtUtc)
               : null,
-      'programId': localSession.programId,
-      'programWorkoutId': localSession.programWorkoutId,
       'version': localSession.version,
     };
   }

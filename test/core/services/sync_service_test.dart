@@ -154,6 +154,50 @@ void main() {
       expect(stored.syncStatus, 'synced');
     });
 
+    test('reconciliation is idempotent: a second sync() does not re-GET or '
+        'mutate an already-hydrated row', () async {
+      final session = await insertSession(
+        serverId: 100,
+        version: null,
+        syncStatus: 'synced',
+        isSynced: true,
+        name: 'Old clean row',
+      );
+      when(mockApiService.get<Map<String, dynamic>>(any)).thenAnswer(
+        (_) async => serverSessionJson(version: 3, name: 'From server'),
+      );
+
+      await syncService.sync();
+
+      final afterFirst = await isar.localSessions.get(session.localId);
+      expect(afterFirst!.version, 3);
+      expect(afterFirst.name, 'From server');
+      expect(afterFirst.isSynced, true);
+      expect(afterFirst.syncStatus, 'synced');
+      verify(mockApiService.get<Map<String, dynamic>>(any)).called(1);
+
+      await syncService.sync();
+
+      // The row now has a non-null version, so the versionIsNull() filter
+      // excludes it from reconciliation on the second pass - no second
+      // GET, and the hydrated row is untouched.
+      verifyNever(mockApiService.get<Map<String, dynamic>>(any));
+      verifyNever(mockApiService.put<dynamic>(any, data: anyNamed('data')));
+      verifyNever(mockApiService.patch<void>(any, data: anyNamed('data')));
+
+      final afterSecond = await isar.localSessions.get(session.localId);
+      expect(afterSecond!.version, 3);
+      expect(afterSecond.name, 'From server');
+      expect(afterSecond.isSynced, true);
+      expect(afterSecond.syncStatus, 'synced');
+      expect(
+        afterSecond.lastModifiedServer!.isAtSameMomentAs(
+          afterFirst.lastModifiedServer!,
+        ),
+        true,
+      );
+    });
+
     test(
       'pending-update version-null rows become a conflict without losing local data',
       () async {

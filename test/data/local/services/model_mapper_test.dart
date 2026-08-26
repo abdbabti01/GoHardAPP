@@ -331,9 +331,33 @@ void main() {
       expect(request['type'], 'strength');
       expect(request['name'], 'Push day');
       expect(request['status'], 'completed');
-      expect(request['programId'], 10);
-      expect(request['programWorkoutId'], 20);
     });
+
+    test(
+      'omits programId and programWorkoutId, matching SessionUpdateRequestDto',
+      () {
+        // Program relationships are server-controlled and not part of the
+        // API's update DTO, even though the local session still carries
+        // them for display/caching purposes.
+        final localSession = LocalSession(
+          serverId: 123,
+          userId: 456,
+          date: DateTime(2024, 3, 2),
+          status: 'in_progress',
+          programId: 10,
+          programWorkoutId: 20,
+          isSynced: false,
+          syncStatus: 'pending_update',
+          lastModifiedLocal: DateTime.now(),
+          version: 2,
+        );
+
+        final request = ModelMapper.buildSessionUpdateRequest(localSession);
+
+        expect(request.containsKey('programId'), false);
+        expect(request.containsKey('programWorkoutId'), false);
+      },
+    );
   });
 
   group('ModelMapper - Exercise Conversion', () {
