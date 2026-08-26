@@ -13,6 +13,11 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
   final SessionRepository _sessionRepository;
   final ConnectivityService? _connectivity;
 
+  // Injectable UTC clock, used only for lifecycle elapsed-time
+  // recalculation so tests can control elapsed "time spent suspended"
+  // deterministically. Defaults to the real clock in production.
+  final DateTime Function() _nowUtc;
+
   Session? _currentSession;
   bool _isLoading = false;
   String? _errorMessage;
@@ -28,7 +33,11 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
   // Connectivity subscription
   StreamSubscription<bool>? _connectivitySubscription;
 
-  ActiveWorkoutProvider(this._sessionRepository, [this._connectivity]) {
+  ActiveWorkoutProvider(
+    this._sessionRepository, [
+    this._connectivity,
+    DateTime Function()? nowUtc,
+  ]) : _nowUtc = nowUtc ?? _defaultNowUtc {
     // Register app lifecycle observer to detect when app resumes
     WidgetsBinding.instance.addObserver(this);
 
@@ -52,29 +61,76 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
     });
   }
 
+  static DateTime _defaultNowUtc() => DateTime.now().toUtc();
+
+  /// Whether the current session should have an active UI refresh ticker:
+  /// in-progress and not paused by the user. Timer.periodic is never the
+  /// source of truth for elapsed time - this is the single place that
+  /// condition is expressed, so lifecycle handling and session loading
+  /// never duplicate it inline.
+  bool get _shouldHaveRunningTicker =>
+      _currentSession != null &&
+      _currentSession!.status == 'in_progress' &&
+      _currentSession!.pausedAt == null;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    if (state == AppLifecycleState.resumed) {
-      debugPrint('⏱️ App resumed - recalculating elapsed time');
-      // Recalculate elapsed time immediately for responsive UI
-      _recalculateElapsedTime();
+    switch (state) {
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _handleAppSuspending();
+        break;
+      case AppLifecycleState.resumed:
+        _handleAppResumed();
+        break;
+    }
+  }
 
-      // CRITICAL FIX: For in-progress sessions, DON'T reload from DB!
-      // The in-memory state has correct UTC timestamps. Reloading from DB
-      // could load corrupted timestamps (from before the UTC fix was deployed).
-      // Only reload for non-active sessions (draft, completed, etc.)
-      if (_currentSession != null && _currentSession!.status != 'in_progress') {
-        debugPrint(
-          '🔄 Reloading session ${_currentSession!.id} from DB after resume (not in_progress)',
-        );
-        loadSession(_currentSession!.id, showLoading: false);
-      } else if (_currentSession != null) {
-        debugPrint(
-          '🏋️ In-progress session - keeping in-memory timestamps (startedAt: ${_currentSession!.startedAt})',
-        );
-      }
+  /// The app is going inactive/hidden/backgrounded/detached (screen locked,
+  /// app switched away, or similar). iOS may suspend the process at any
+  /// point after this, so Timer.periodic cannot be relied on to keep
+  /// ticking - stop and cancel it now. This never touches startedAt,
+  /// pausedAt, status, duration, version, or sync/conflict metadata, never
+  /// reloads the session, and never pauses the workout: the workout keeps
+  /// running conceptually according to its timestamps while suspended, and
+  /// resuming recalculates elapsed time from those timestamps.
+  void _handleAppSuspending() {
+    _stopTimer();
+  }
+
+  /// The app has returned to the foreground. The in-memory session's
+  /// timestamps are authoritative, so elapsed time is recalculated from
+  /// them directly - no repository/Isar read is needed or performed for an
+  /// in-progress session. If the workout should be ticking, exactly one
+  /// fresh ticker is (re)started; _startTimer()'s own guard combined with
+  /// stopping first here keeps repeated resumed events from ever creating
+  /// more than one.
+  void _handleAppResumed() {
+    debugPrint('⏱️ App resumed - recalculating elapsed time');
+    _recalculateElapsedTime();
+
+    if (_shouldHaveRunningTicker) {
+      _stopTimer();
+      _startTimer();
+    }
+
+    // CRITICAL FIX: For in-progress sessions, DON'T reload from DB!
+    // The in-memory state has correct UTC timestamps. Reloading from DB
+    // could load corrupted timestamps (from before the UTC fix was deployed).
+    // Only reload for non-active sessions (draft, completed, etc.)
+    if (_currentSession != null && _currentSession!.status != 'in_progress') {
+      debugPrint(
+        '🔄 Reloading session ${_currentSession!.id} from DB after resume (not in_progress)',
+      );
+      loadSession(_currentSession!.id, showLoading: false);
+    } else if (_currentSession != null) {
+      debugPrint(
+        '🏋️ In-progress session - keeping in-memory timestamps (startedAt: ${_currentSession!.startedAt})',
+      );
     }
   }
 
@@ -94,9 +150,7 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('  Timer PAUSED - recalculated: ${calculated.inSeconds}s');
     } else {
       // Timer is running - calculate from current time
-      calculated = DateTime.now().toUtc().difference(
-        _currentSession!.startedAt!,
-      );
+      calculated = _nowUtc().difference(_currentSession!.startedAt!);
       debugPrint('  Timer RUNNING - recalculated: ${calculated.inSeconds}s');
     }
 
@@ -154,7 +208,7 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
           calculated = _currentSession!.pausedAt!.difference(
             _currentSession!.startedAt!,
           );
-          shouldBeRunning = false;
+          shouldBeRunning = _shouldHaveRunningTicker;
           debugPrint('  Timer PAUSED:');
           debugPrint(
             '    pausedAt: ${_currentSession!.pausedAt} (isUtc: ${_currentSession!.pausedAt!.isUtc})',
@@ -169,7 +223,7 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
           // Timer is running - calculate from current time
           final nowUtc = DateTime.now().toUtc();
           calculated = nowUtc.difference(_currentSession!.startedAt!);
-          shouldBeRunning = _currentSession?.status == 'in_progress';
+          shouldBeRunning = _shouldHaveRunningTicker;
           debugPrint('  Timer RUNNING:');
           debugPrint('    nowUtc: $nowUtc');
           debugPrint(
@@ -352,9 +406,14 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
     final newStartedAt = _currentSession!.startedAt!.add(pauseDuration);
 
     // Update UI IMMEDIATELY - don't wait for anything
+    // CRITICAL: clearPausedAt: true is required to actually clear it -
+    // pausedAt: null alone is indistinguishable from omitting it in
+    // copyWith's "override or keep existing" convention and would leave
+    // the stale pausedAt in place, which _shouldHaveRunningTicker relies
+    // on to decide whether to restart the ticker after app resume.
     _currentSession = _currentSession!.copyWith(
       startedAt: newStartedAt,
-      pausedAt: null, // Clear pausedAt
+      clearPausedAt: true,
     );
 
     // Resume timer
