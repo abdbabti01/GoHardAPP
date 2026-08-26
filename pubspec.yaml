@@ -115,6 +115,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  fake_async: ^1.3.2
 
   # Code Generation
   build_runner: ^2.4.7

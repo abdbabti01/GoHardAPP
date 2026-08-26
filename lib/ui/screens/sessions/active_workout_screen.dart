@@ -46,14 +46,14 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
   }
 
   Future<void> _handleAddExercise() async {
-    final result = await Navigator.of(
+    // Deliberately no post-return reload: ActiveWorkoutProvider.addExercise()
+    // (invoked by AddExerciseScreen itself) already updates currentSession's
+    // exercise list in memory without touching startedAt/pausedAt/status. A
+    // reload here would force a fresh Isar read of those timing fields,
+    // which is unnecessary and was the trigger for a timer-corruption bug.
+    await Navigator.of(
       context,
     ).pushNamed(RouteNames.addExercise, arguments: widget.sessionId);
-
-    // Reload session if exercise was added
-    if (result == true && mounted) {
-      context.read<ActiveWorkoutProvider>().loadSession(widget.sessionId);
-    }
   }
 
   Future<void> _handleFinishWorkout() async {

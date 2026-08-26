@@ -349,4 +349,127 @@ void main() {
       );
     },
   );
+
+  group('SyncService - offline-created session timestamps survive sync '
+      '(regression: absolute instant must be preserved)', () {
+    test('a session created, started and paused entirely offline sends the '
+        'correct absolute-instant timestamps on first sync, not shifted by '
+        'the local timezone', () async {
+      // These simulate a workout that was created, started, and paused
+      // while offline: the row is written directly to Isar and never
+      // touched again until sync() reads it fresh (Isar returns
+      // DateTime fields local-flagged but instant-correct - see
+      // model_mapper_isar_roundtrip_test.dart - which is exactly what
+      // _syncCreateSession must handle correctly).
+      final startedAtUtc = DateTime.utc(2024, 1, 15, 10, 0, 0);
+      final pausedAtUtc = DateTime.utc(2024, 1, 15, 10, 30, 0);
+
+      await isar.writeTxn(
+        () => isar.localSessions.put(
+          LocalSession(
+            serverId: null,
+            userId: userId,
+            date: DateTime.utc(2024, 1, 15),
+            status: 'in_progress',
+            startedAt: startedAtUtc,
+            pausedAt: pausedAtUtc,
+            isSynced: false,
+            syncStatus: 'pending_create',
+            lastModifiedLocal: DateTime.now().toUtc(),
+          ),
+        ),
+      );
+
+      when(
+        mockApiService.post<Map<String, dynamic>>(any, data: anyNamed('data')),
+      ).thenAnswer((_) async => serverSessionJson(id: 300, version: 1));
+
+      await syncService.sync();
+
+      final captured =
+          verify(
+            mockApiService.post<Map<String, dynamic>>(
+              any,
+              data: captureAnyNamed('data'),
+            ),
+          ).captured;
+      expect(captured, hasLength(1));
+      final payload = captured.single as Map<String, dynamic>;
+
+      // The absolute instant must be preserved exactly - not merely
+      // "some UTC-looking string". Parsing the captured string back and
+      // comparing microsecondsSinceEpoch is the only assertion that
+      // cannot be satisfied by a component-copy bug that happens to
+      // produce a plausible-looking but wrong string.
+      final sentStartedAt = DateTime.parse(payload['startedAt'] as String);
+      expect(sentStartedAt.isUtc, true);
+      expect(
+        sentStartedAt.microsecondsSinceEpoch,
+        startedAtUtc.microsecondsSinceEpoch,
+      );
+      expect(payload['startedAt'], startedAtUtc.toIso8601String());
+
+      final sentPausedAt = DateTime.parse(payload['pausedAt'] as String);
+      expect(sentPausedAt.isUtc, true);
+      expect(
+        sentPausedAt.microsecondsSinceEpoch,
+        pausedAtUtc.microsecondsSinceEpoch,
+      );
+      expect(payload['pausedAt'], pausedAtUtc.toIso8601String());
+
+      // The request shape itself must be untouched: no id/exercises/
+      // version/programId/programWorkoutId, matching what this endpoint
+      // received before this fix.
+      expect(payload.containsKey('id'), false);
+      expect(payload.containsKey('exercises'), false);
+      expect(payload.containsKey('version'), false);
+      expect(payload.containsKey('programId'), false);
+      expect(payload.containsKey('programWorkoutId'), false);
+      expect(payload['userId'], userId);
+      expect(payload['status'], 'in_progress');
+
+      // A successful create must still store the authoritative
+      // server-assigned id and version and transition out of
+      // pending_create.
+      final all = await isar.localSessions.where().findAll();
+      expect(all, hasLength(1));
+      expect(all.first.serverId, 300);
+      expect(all.first.version, 1);
+      expect(all.first.isSynced, true);
+      expect(all.first.syncStatus, 'synced');
+    });
+
+    test('a failed sync of an offline-created, started-and-paused session '
+        'leaves it pending_create for retry (timestamps do not affect the '
+        'retry contract)', () async {
+      await isar.writeTxn(
+        () => isar.localSessions.put(
+          LocalSession(
+            serverId: null,
+            userId: userId,
+            date: DateTime.utc(2024, 1, 15),
+            status: 'in_progress',
+            startedAt: DateTime.utc(2024, 1, 15, 10, 0, 0),
+            pausedAt: DateTime.utc(2024, 1, 15, 10, 30, 0),
+            isSynced: false,
+            syncStatus: 'pending_create',
+            lastModifiedLocal: DateTime.now().toUtc(),
+          ),
+        ),
+      );
+
+      when(
+        mockApiService.post<Map<String, dynamic>>(any, data: anyNamed('data')),
+      ).thenThrow(ApiException('Network error - cannot connect to server'));
+
+      await syncService.sync();
+
+      final all = await isar.localSessions.where().findAll();
+      expect(all, hasLength(1));
+      expect(all.first.syncStatus, 'pending_create');
+      expect(all.first.serverId, isNull);
+      expect(all.first.startedAt, isNotNull);
+      expect(all.first.pausedAt, isNotNull);
+    });
+  });
 }
