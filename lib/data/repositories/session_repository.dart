@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
-import 'package:dio/dio.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
 import '../models/session.dart';
@@ -8,6 +7,7 @@ import '../models/exercise.dart';
 import '../models/program_workout.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/session_update_sync_helper.dart';
 import '../local/services/local_database_service.dart';
 import '../local/services/model_mapper.dart';
 import '../local/models/local_session.dart';
@@ -834,26 +834,24 @@ class SessionRepository {
     Isar db,
     int localId,
   ) async {
-    try {
-      final data = await _apiService.post<Map<String, dynamic>>(
-        ApiConfig.sessions,
-        data: session.toJson(),
-      );
-      final apiSession = Session.fromJson(data);
+    final data = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.sessions,
+      data: session.toJson(),
+    );
+    final apiSession = Session.fromJson(data);
 
-      // Update local session with server ID
-      await db.writeTxn(() async {
-        final localSession = await db.localSessions.get(localId);
-        if (localSession != null) {
-          localSession.serverId = apiSession.id;
-          localSession.isSynced = true;
-          localSession.syncStatus = 'synced';
-          await db.localSessions.put(localSession);
-        }
-      });
-    } catch (e) {
-      rethrow; // Let caller handle error
-    }
+    // Update local session with the full authoritative server response
+    // (including the server-assigned version) rather than inventing one.
+    await db.writeTxn(() async {
+      final existing = await db.localSessions.get(localId);
+      if (existing == null) return;
+      final updated = ModelMapper.sessionToLocal(
+        apiSession,
+        localId: localId,
+        isSynced: true,
+      );
+      await db.localSessions.put(updated);
+    });
   }
 
   /// Create session in local database
@@ -1434,150 +1432,65 @@ class SessionRepository {
   }
 
   /// Background sync: Update workout date on server
+  /// The date is already persisted on the local row before this runs, so
+  /// this just pushes the current local state through the centralized
+  /// update helper.
   Future<void> _syncSessionDateToServer(
     Isar db,
     int serverId,
     DateTime newDate,
   ) async {
-    try {
-      // Fetch the current session to send full data (required by PUT)
-      final session =
-          await db.localSessions.filter().serverIdEqualTo(serverId).findFirst();
+    final session =
+        await db.localSessions.filter().serverIdEqualTo(serverId).findFirst();
+    if (session == null) return;
 
-      if (session == null) return;
-
-      // Convert to API model
-      final apiSession = ModelMapper.localToSession(session);
-      final updateData = apiSession.toJson();
-
-      await _apiService.put<void>(
-        ApiConfig.sessionById(serverId),
-        data: updateData,
-      );
-
-      // Mark as synced
-      await db.writeTxn(() async {
-        final updatedSession =
-            await db.localSessions
-                .filter()
-                .serverIdEqualTo(serverId)
-                .findFirst();
-        if (updatedSession != null) {
-          updatedSession.isSynced = true;
-          updatedSession.syncStatus = 'synced';
-          await db.localSessions.put(updatedSession);
-        }
-      });
-    } on DioException catch (e) {
-      // Handle version conflicts (Issue #13)
-      if (e.response?.statusCode == 409) {
-        debugPrint('⚠️ Conflict detected - server version is newer');
-
-        // Server wins: reload fresh data from server
-        try {
-          final serverSession = await getSession(serverId);
-
-          // Update local cache with server version
-          await db.writeTxn(() async {
-            final localSession =
-                await db.localSessions
-                    .filter()
-                    .serverIdEqualTo(serverId)
-                    .findFirst();
-            if (localSession != null) {
-              final updated = ModelMapper.sessionToLocal(
-                serverSession,
-                localId: localSession.localId,
-                isSynced: true,
-              );
-              await db.localSessions.put(updated);
-            }
-          });
-
-          debugPrint('🔄 Local session updated with server version');
-        } catch (reloadError) {
-          debugPrint('⚠️ Failed to reload server session: $reloadError');
-        }
-      } else {
-        rethrow;
-      }
-    } catch (e) {
-      debugPrint('Error syncing workout date to server: $e');
-      rethrow;
-    }
+    await _pushSessionUpdate(db, session, 'workout date');
   }
 
   /// Background sync: Update session name on server
+  /// The name is already persisted on the local row before this runs, so
+  /// this just pushes the current local state through the centralized
+  /// update helper.
   Future<void> _syncSessionNameToServer(
     Isar db,
     int serverId,
     String name,
   ) async {
-    try {
-      // Fetch the current session to send full data (required by PUT)
-      final session =
-          await db.localSessions.filter().serverIdEqualTo(serverId).findFirst();
+    final session =
+        await db.localSessions.filter().serverIdEqualTo(serverId).findFirst();
+    if (session == null) return;
 
-      if (session == null) return;
+    await _pushSessionUpdate(db, session, 'session name');
+  }
 
-      // Convert to API model
-      final apiSession = ModelMapper.localToSession(session);
-      final updateData = apiSession.toJson();
-      updateData['name'] = name; // Ensure name is updated
+  /// Push a full-session PUT update via the centralized sync helper and log
+  /// the outcome. Non-409 failures propagate to the caller's retry logic.
+  Future<void> _pushSessionUpdate(
+    Isar db,
+    LocalSession session,
+    String what,
+  ) async {
+    final outcome = await SessionUpdateSyncHelper(
+      _apiService,
+    ).pushUpdate(db, session);
 
-      await _apiService.put<void>(
-        ApiConfig.sessionById(serverId),
-        data: updateData,
-      );
-
-      // Update sync status in local DB
-      await db.writeTxn(() async {
-        final localSession =
-            await db.localSessions
-                .filter()
-                .serverIdEqualTo(serverId)
-                .findFirst();
-        if (localSession != null) {
-          localSession.isSynced = true;
-          localSession.syncStatus = 'synced';
-          await db.localSessions.put(localSession);
-        }
-      });
-    } on DioException catch (e) {
-      // Handle version conflicts (Issue #13)
-      if (e.response?.statusCode == 409) {
-        debugPrint('⚠️ Conflict detected - server version is newer');
-
-        // Server wins: reload fresh data from server
-        try {
-          final serverSession = await getSession(serverId);
-
-          // Update local cache with server version
-          await db.writeTxn(() async {
-            final localSession =
-                await db.localSessions
-                    .filter()
-                    .serverIdEqualTo(serverId)
-                    .findFirst();
-            if (localSession != null) {
-              final updated = ModelMapper.sessionToLocal(
-                serverSession,
-                localId: localSession.localId,
-                isSynced: true,
-              );
-              await db.localSessions.put(updated);
-            }
-          });
-
-          debugPrint('🔄 Local session updated with server version');
-        } catch (reloadError) {
-          debugPrint('⚠️ Failed to reload server session: $reloadError');
-        }
-      } else {
-        rethrow;
-      }
-    } catch (e) {
-      rethrow; // Let caller handle error
+    switch (outcome) {
+      case SessionSyncOutcome.synced:
+        debugPrint('✅ Synced $what to server');
+        break;
+      case SessionSyncOutcome.conflict:
+        debugPrint(
+          '⚠️ Conflict detected updating $what - stored for manual resolution',
+        );
+        break;
+      case SessionSyncOutcome.conflictDataInvalid:
+        debugPrint(
+          '⚠️ Conflict response malformed updating $what - will retry later',
+        );
+        break;
+      case SessionSyncOutcome.deferred:
+        debugPrint('⚠️ Could not confirm $what update - will retry later');
+        break;
     }
   }
 

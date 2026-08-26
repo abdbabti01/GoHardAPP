@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
+import '../../data/models/session.dart';
 import '../../data/services/api_service.dart';
 import '../../data/services/auth_service.dart';
+import '../../data/services/session_update_sync_helper.dart';
 import '../../data/local/services/local_database_service.dart';
+import '../../data/local/services/model_mapper.dart';
 import '../../data/local/models/local_session.dart';
 import '../../data/local/models/local_exercise.dart';
 import '../../data/local/models/local_exercise_set.dart';
@@ -166,12 +170,21 @@ class SyncService {
       return;
     }
 
-    // Only sync sessions belonging to current user
+    // Safely bring rows created before version tracking existed up to date
+    // before running the normal pending-item sync below.
+    await _reconcileUpgradedSessionVersions(db, userId);
+
+    // Only sync sessions belonging to current user. Conflict rows are
+    // explicitly excluded here (not just via the switch's default branch)
+    // so they can never enter the automatic retry loop - they stay stored
+    // and queryable for the future resolution UI.
     final pendingSessions =
         await db.localSessions
             .filter()
             .isSyncedEqualTo(false)
             .userIdEqualTo(userId)
+            .not()
+            .syncStatusEqualTo('conflict')
             .findAll();
 
     if (pendingSessions.isEmpty) {
@@ -206,44 +219,35 @@ class SyncService {
   Future<void> _syncCreateSession(Isar db, LocalSession localSession) async {
     debugPrint('  Creating session ${localSession.localId} on server...');
 
-    try {
-      // POST to server
-      final response = await _apiService.post<Map<String, dynamic>>(
-        ApiConfig.sessions,
-        data: {
-          'userId': localSession.userId,
-          'date': localSession.date.toIso8601String(),
-          'duration': localSession.duration,
-          'notes': localSession.notes,
-          'type': localSession.type,
-          'name': localSession.name,
-          'status': localSession.status,
-          'startedAt': localSession.startedAt?.toIso8601String(),
-          'completedAt': localSession.completedAt?.toIso8601String(),
-          'pausedAt': localSession.pausedAt?.toIso8601String(),
-        },
-      );
+    final response = await _apiService.post<Map<String, dynamic>>(
+      ApiConfig.sessions,
+      data: {
+        'userId': localSession.userId,
+        'date': localSession.date.toIso8601String(),
+        'duration': localSession.duration,
+        'notes': localSession.notes,
+        'type': localSession.type,
+        'name': localSession.name,
+        'status': localSession.status,
+        'startedAt': localSession.startedAt?.toIso8601String(),
+        'completedAt': localSession.completedAt?.toIso8601String(),
+        'pausedAt': localSession.pausedAt?.toIso8601String(),
+      },
+    );
+    final apiSession = Session.fromJson(response);
 
-      // Update local session with server ID
-      await db.writeTxn(() async {
-        localSession.serverId = response['id'] as int;
-        localSession.isSynced = true;
-        localSession.syncStatus = 'synced';
-        // Parse server timestamp as UTC for consistent comparisons
-        localSession.lastModifiedServer =
-            DateTime.parse(response['date'] as String).toUtc();
-        localSession.syncRetryCount = 0;
-        localSession.syncError = null;
-        localSession.lastSyncAttempt = DateTime.now().toUtc();
-        await db.localSessions.put(localSession);
-      });
-
-      debugPrint(
-        '  ✅ Session created with server ID: ${localSession.serverId}',
+    // Persist the full authoritative response (including the
+    // server-assigned version) rather than inventing one.
+    await db.writeTxn(() async {
+      final updated = ModelMapper.sessionToLocal(
+        apiSession,
+        localId: localSession.localId,
+        isSynced: true,
       );
-    } catch (e) {
-      rethrow;
-    }
+      await db.localSessions.put(updated);
+    });
+
+    debugPrint('  ✅ Session created with server ID: ${apiSession.id}');
   }
 
   /// Sync a session that needs to be updated on the server
@@ -264,87 +268,98 @@ class SyncService {
 
     debugPrint('  Updating session ${localSession.serverId} on server...');
 
-    try {
-      // Fetch current server version to check for conflicts
-      final serverData = await _apiService.get<Map<String, dynamic>>(
-        ApiConfig.sessionById(localSession.serverId!),
-      );
+    final outcome = await SessionUpdateSyncHelper(
+      _apiService,
+    ).pushUpdate(db, localSession);
 
-      // Parse server timestamp as UTC for consistent comparisons
-      final serverModified =
-          DateTime.parse(serverData['date'] as String).toUtc();
-
-      // Server-wins conflict resolution
-      if (localSession.lastModifiedServer != null &&
-          serverModified.isAfter(localSession.lastModifiedServer!)) {
+    switch (outcome) {
+      case SessionSyncOutcome.synced:
+        debugPrint('  ✅ Session updated on server');
+        break;
+      case SessionSyncOutcome.conflict:
+        debugPrint('  ⚠️ Conflict detected - stored for manual resolution');
+        break;
+      case SessionSyncOutcome.conflictDataInvalid:
+        debugPrint('  ⚠️ Conflict response malformed - will retry later');
+        break;
+      case SessionSyncOutcome.deferred:
         debugPrint(
-          '  ⚠️ Conflict detected - server has newer data, discarding local changes',
+          '  ⚠️ Update result could not be confirmed - will retry later',
         );
+        break;
+    }
+  }
 
-        // Update local with server data (server wins)
+  /// Safely reconcile sessions synced before version tracking existed
+  /// (serverId set, version still null) so they never trigger a blind PUT
+  /// with a guessed version.
+  ///
+  /// - Clean rows ('synced'): hydrated read-only from the server.
+  /// - Rows with a pending local edit ('pending_update'): the server is
+  ///   snapshotted read-only and the row is marked 'conflict' - local
+  ///   mutable fields are never touched or overwritten.
+  /// - 'pending_delete' and 'pending_create' rows need no action here and
+  ///   are left untouched; their existing sync paths handle them.
+  ///
+  /// Any GET failure leaves the original row and sync status untouched for
+  /// a later retry - it never manufactures a resolved conflict.
+  Future<void> _reconcileUpgradedSessionVersions(Isar db, int userId) async {
+    final cleanUnversioned =
+        await db.localSessions
+            .filter()
+            .userIdEqualTo(userId)
+            .versionIsNull()
+            .serverIdIsNotNull()
+            .syncStatusEqualTo('synced')
+            .findAll();
+
+    for (final session in cleanUnversioned) {
+      try {
+        final data = await _apiService.get<Map<String, dynamic>>(
+          ApiConfig.sessionById(session.serverId!),
+        );
+        final serverSession = Session.fromJson(data);
         await db.writeTxn(() async {
-          localSession.status = serverData['status'] as String;
-          localSession.notes = serverData['notes'] as String?;
-          localSession.duration = serverData['duration'] as int?;
-          localSession.type = serverData['type'] as String?;
-          localSession.name = serverData['name'] as String?;
-          localSession.startedAt =
-              serverData['startedAt'] != null
-                  ? DateTime.parse(serverData['startedAt'] as String)
-                  : null;
-          localSession.completedAt =
-              serverData['completedAt'] != null
-                  ? DateTime.parse(serverData['completedAt'] as String).toUtc()
-                  : null;
-          localSession.pausedAt =
-              serverData['pausedAt'] != null
-                  ? DateTime.parse(serverData['pausedAt'] as String).toUtc()
-                  : null;
-          localSession.lastModifiedServer = serverModified;
-          localSession.isSynced = true;
-          localSession.syncStatus = 'synced';
-          localSession.syncRetryCount = 0;
-          localSession.syncError = null;
-          localSession.lastSyncAttempt = DateTime.now().toUtc();
-          await db.localSessions.put(localSession);
+          final refreshed = ModelMapper.sessionToLocal(
+            serverSession,
+            localId: session.localId,
+            isSynced: true,
+          );
+          await db.localSessions.put(refreshed);
         });
-
-        debugPrint('  ✅ Local session updated from server (conflict resolved)');
-        return;
+      } catch (e) {
+        debugPrint(
+          '  ⚠️ Could not refresh version for clean session ${session.serverId}, will retry later: $e',
+        );
       }
+    }
 
-      // No conflict - update server with local changes (full PUT)
-      await _apiService.put<void>(
-        ApiConfig.sessionById(localSession.serverId!),
-        data: {
-          'id': localSession.serverId!,
-          'userId': localSession.userId,
-          'date': localSession.date.toIso8601String(),
-          'duration': localSession.duration,
-          'notes': localSession.notes,
-          'type': localSession.type,
-          'name': localSession.name,
-          'status': localSession.status,
-          'startedAt': localSession.startedAt?.toIso8601String(),
-          'completedAt': localSession.completedAt?.toIso8601String(),
-          'pausedAt': localSession.pausedAt?.toIso8601String(),
-        },
-      );
+    final pendingUnversioned =
+        await db.localSessions
+            .filter()
+            .userIdEqualTo(userId)
+            .versionIsNull()
+            .serverIdIsNotNull()
+            .syncStatusEqualTo('pending_update')
+            .findAll();
 
-      // Mark as synced
-      await db.writeTxn(() async {
-        localSession.isSynced = true;
-        localSession.syncStatus = 'synced';
-        localSession.lastModifiedServer = DateTime.now().toUtc();
-        localSession.syncRetryCount = 0;
-        localSession.syncError = null;
-        localSession.lastSyncAttempt = DateTime.now().toUtc();
-        await db.localSessions.put(localSession);
-      });
-
-      debugPrint('  ✅ Session updated on server');
-    } catch (e) {
-      rethrow;
+    for (final session in pendingUnversioned) {
+      try {
+        final data = await _apiService.get<Map<String, dynamic>>(
+          ApiConfig.sessionById(session.serverId!),
+        );
+        await db.writeTxn(() async {
+          session.conflictServerSnapshotJson = jsonEncode(data);
+          session.conflictServerVersion = data['version'] as int?;
+          session.conflictDetectedAt = DateTime.now().toUtc();
+          session.syncStatus = 'conflict';
+          await db.localSessions.put(session);
+        });
+      } catch (e) {
+        debugPrint(
+          '  ⚠️ Could not reconcile pending session ${session.serverId}, will retry later: $e',
+        );
+      }
     }
   }
 

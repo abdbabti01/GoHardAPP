@@ -45,3 +45,10 @@ app.*.map.json
 /android/app/release
 tmpclaude-*
 .aider*
+
+# Isar native library downloaded by Isar.initializeIsarCore(download: true)
+# when running tests that need a real Isar instance (see test/core/services
+# and test/data/services) - not a build output, just a cached download.
+/isar.dll
+/libisar.so
+/libisar.dylib

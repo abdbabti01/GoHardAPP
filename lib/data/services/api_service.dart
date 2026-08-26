@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../core/constants/api_config.dart';
+import 'api_exception.dart';
 import 'auth_service.dart';
 
 /// HTTP API service using Dio
@@ -40,12 +42,7 @@ class ApiService {
           return handler.next(options);
         },
         onError: (error, handler) {
-          // Handle 401 Unauthorized - notify app to trigger proper logout
-          if (error.response?.statusCode == 401 && !_unauthorizedTriggered) {
-            _unauthorizedTriggered = true;
-            // Call the callback if set (triggers AuthProvider.logout)
-            onUnauthorized?.call();
-          }
+          handleResponseError(error);
           return handler.next(error);
         },
       ),
@@ -57,6 +54,17 @@ class ApiService {
     _unauthorizedTriggered = false;
   }
 
+  /// Handle 401 Unauthorized - notify app to trigger proper logout.
+  /// Extracted from the interceptor so it can be unit tested without a real
+  /// network round-trip.
+  @visibleForTesting
+  void handleResponseError(DioException error) {
+    if (error.response?.statusCode == 401 && !_unauthorizedTriggered) {
+      _unauthorizedTriggered = true;
+      onUnauthorized?.call();
+    }
+  }
+
   /// Generic GET request
   Future<T> get<T>(String path, {Map<String, dynamic>? queryParameters}) async {
     try {
@@ -66,7 +74,7 @@ class ApiService {
       );
       return response.data as T;
     } on DioException catch (e) {
-      throw _handleError(e);
+      throw ApiException.fromDioException(e);
     }
   }
 
@@ -76,7 +84,7 @@ class ApiService {
       final response = await _dio.post<T>(path, data: data);
       return response.data as T;
     } on DioException catch (e) {
-      throw _handleError(e);
+      throw ApiException.fromDioException(e);
     }
   }
 
@@ -86,7 +94,7 @@ class ApiService {
       final response = await _dio.put<T>(path, data: data);
       return response.data as T;
     } on DioException catch (e) {
-      throw _handleError(e);
+      throw ApiException.fromDioException(e);
     }
   }
 
@@ -100,7 +108,7 @@ class ApiService {
       }
       return response.data as T;
     } on DioException catch (e) {
-      throw _handleError(e);
+      throw ApiException.fromDioException(e);
     }
   }
 
@@ -110,63 +118,7 @@ class ApiService {
       final response = await _dio.delete(path, data: data);
       return response.statusCode == 200 || response.statusCode == 204;
     } on DioException catch (e) {
-      throw _handleError(e);
-    }
-  }
-
-  /// Handle Dio errors and convert to user-friendly exceptions
-  Exception _handleError(DioException error) {
-    if (error.type == DioExceptionType.connectionTimeout) {
-      return Exception(
-        'Connection timeout - please check your internet connection',
-      );
-    } else if (error.type == DioExceptionType.receiveTimeout) {
-      return Exception('Request timeout - server took too long to respond');
-    } else if (error.type == DioExceptionType.connectionError) {
-      return Exception('Network error - cannot connect to server');
-    } else if (error.response != null) {
-      final statusCode = error.response?.statusCode;
-      final data = error.response?.data;
-
-      // Extract validation errors for 400 Bad Request
-      if (statusCode == 400 && data is Map) {
-        final errors = data['errors'];
-        if (errors is Map && errors.isNotEmpty) {
-          // Format validation errors: "FieldName: error message"
-          final errorMessages = <String>[];
-          errors.forEach((key, value) {
-            if (value is List && value.isNotEmpty) {
-              errorMessages.add('$key: ${value.first}');
-            }
-          });
-          if (errorMessages.isNotEmpty) {
-            return Exception('Validation errors:\n${errorMessages.join('\n')}');
-          }
-        }
-      }
-
-      final message =
-          data?['message'] ??
-          data?['title'] ??
-          error.response?.statusMessage ??
-          'Server error';
-
-      switch (statusCode) {
-        case 400:
-          return Exception('Bad request: $message');
-        case 401:
-          return Exception('Unauthorized - please login again');
-        case 403:
-          return Exception('Forbidden - you don\'t have permission');
-        case 404:
-          return Exception('Not found: $message');
-        case 500:
-          return Exception('Server error: $message');
-        default:
-          return Exception('Error ($statusCode): $message');
-      }
-    } else {
-      return Exception('Network error: ${error.message}');
+      throw ApiException.fromDioException(e);
     }
   }
 }

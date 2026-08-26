@@ -193,6 +193,149 @@ void main() {
     });
   });
 
+  group('ModelMapper - Version Handling', () {
+    test('sessionToLocal preserves the API session version', () {
+      final apiSession = Session(
+        id: 123,
+        userId: 456,
+        date: DateTime(2024, 1, 15),
+        status: 'in_progress',
+        exercises: [],
+        version: 7,
+      );
+
+      final localSession = ModelMapper.sessionToLocal(apiSession);
+
+      expect(localSession.version, 7);
+    });
+
+    test(
+      'localToSession falls back to 1 for display only when version is unknown',
+      () {
+        final localSession = LocalSession(
+          serverId: 123,
+          userId: 456,
+          date: DateTime(2024, 1, 15),
+          status: 'in_progress',
+          isSynced: false,
+          syncStatus: 'pending_update',
+          lastModifiedLocal: DateTime.now(),
+          version: null,
+        );
+
+        final apiSession = ModelMapper.localToSession(localSession);
+
+        expect(apiSession.version, 1);
+      },
+    );
+
+    test('localToSession preserves a known version', () {
+      final localSession = LocalSession(
+        serverId: 123,
+        userId: 456,
+        date: DateTime(2024, 1, 15),
+        status: 'in_progress',
+        isSynced: true,
+        syncStatus: 'synced',
+        lastModifiedLocal: DateTime.now(),
+        version: 9,
+      );
+
+      final apiSession = ModelMapper.localToSession(localSession);
+
+      expect(apiSession.version, 9);
+    });
+  });
+
+  group('ModelMapper - buildSessionUpdateRequest', () {
+    test('sends the persisted version, not a fallback of 1', () {
+      final localSession = LocalSession(
+        serverId: 123,
+        userId: 456,
+        date: DateTime(2024, 1, 15),
+        name: 'Leg day',
+        status: 'in_progress',
+        isSynced: false,
+        syncStatus: 'pending_update',
+        lastModifiedLocal: DateTime.now(),
+        version: 5,
+      );
+
+      final request = ModelMapper.buildSessionUpdateRequest(localSession);
+
+      expect(request['version'], 5);
+    });
+
+    test(
+      'sends a null version untouched when the local row never learned one',
+      () {
+        final localSession = LocalSession(
+          serverId: 123,
+          userId: 456,
+          date: DateTime(2024, 1, 15),
+          status: 'in_progress',
+          isSynced: false,
+          syncStatus: 'pending_update',
+          lastModifiedLocal: DateTime.now(),
+          version: null,
+        );
+
+        final request = ModelMapper.buildSessionUpdateRequest(localSession);
+
+        expect(request.containsKey('version'), true);
+        expect(request['version'], isNull);
+      },
+    );
+
+    test('omits id and userId, matching the server contract', () {
+      final localSession = LocalSession(
+        serverId: 123,
+        userId: 456,
+        date: DateTime(2024, 1, 15),
+        status: 'in_progress',
+        isSynced: false,
+        syncStatus: 'pending_update',
+        lastModifiedLocal: DateTime.now(),
+        version: 1,
+      );
+
+      final request = ModelMapper.buildSessionUpdateRequest(localSession);
+
+      expect(request.containsKey('id'), false);
+      expect(request.containsKey('userId'), false);
+    });
+
+    test('includes the current mutable fields', () {
+      final localSession = LocalSession(
+        serverId: 123,
+        userId: 456,
+        date: DateTime(2024, 3, 2),
+        duration: 1800,
+        notes: 'Felt strong',
+        type: 'strength',
+        name: 'Push day',
+        status: 'completed',
+        programId: 10,
+        programWorkoutId: 20,
+        isSynced: false,
+        syncStatus: 'pending_update',
+        lastModifiedLocal: DateTime.now(),
+        version: 2,
+      );
+
+      final request = ModelMapper.buildSessionUpdateRequest(localSession);
+
+      expect(request['date'], '2024-03-02');
+      expect(request['duration'], 1800);
+      expect(request['notes'], 'Felt strong');
+      expect(request['type'], 'strength');
+      expect(request['name'], 'Push day');
+      expect(request['status'], 'completed');
+      expect(request['programId'], 10);
+      expect(request['programWorkoutId'], 20);
+    });
+  });
+
   group('ModelMapper - Exercise Conversion', () {
     test('exerciseToLocal should convert API Exercise to LocalExercise', () {
       // Arrange

@@ -1,3 +1,4 @@
+import '../../../core/utils/datetime_helper.dart';
 import '../../models/session.dart';
 import '../../models/exercise.dart';
 import '../../models/exercise_set.dart';
@@ -63,6 +64,7 @@ class ModelMapper {
       syncStatus: syncStatus,
       lastModifiedLocal: DateTime.now(),
       lastModifiedServer: DateTime.now(),
+      version: apiSession.version,
     );
 
     // Preserve existing localId if updating an existing session
@@ -117,7 +119,66 @@ class ModelMapper {
       programId: localSession.programId,
       programWorkoutId: localSession.programWorkoutId,
       exercises: exercises,
+      // Display-only fallback: the API Session model requires a
+      // non-nullable version. This value must never be used to build a
+      // network update request (use buildSessionUpdateRequest for that,
+      // which reads localSession.version directly).
+      version: localSession.version ?? 1,
     );
+  }
+
+  /// Build the request body for a full-session PUT update.
+  ///
+  /// Centralizes the mutable-field contract so the three call sites that
+  /// push a full session update (periodic sync, date edits, name edits)
+  /// cannot drift from each other. Sends the actual persisted version
+  /// (which may be null) - never a guessed value - and omits id/userId,
+  /// which the server no longer requires for a PUT.
+  static Map<String, dynamic> buildSessionUpdateRequest(
+    LocalSession localSession,
+  ) {
+    DateTime? toUtcTimestamp(DateTime? dt) {
+      if (dt == null) return null;
+      if (dt.isUtc) return dt;
+      return DateTime.utc(
+        dt.year,
+        dt.month,
+        dt.day,
+        dt.hour,
+        dt.minute,
+        dt.second,
+        dt.millisecond,
+        dt.microsecond,
+      );
+    }
+
+    final startedAtUtc = toUtcTimestamp(localSession.startedAt);
+    final completedAtUtc = toUtcTimestamp(localSession.completedAt);
+    final pausedAtUtc = toUtcTimestamp(localSession.pausedAt);
+
+    return {
+      'date': DateTimeHelper.formatDate(localSession.date),
+      'duration': localSession.duration,
+      'notes': localSession.notes,
+      'type': localSession.type,
+      'name': localSession.name,
+      'status': localSession.status,
+      'startedAt':
+          startedAtUtc != null
+              ? DateTimeHelper.formatTimestamp(startedAtUtc)
+              : null,
+      'completedAt':
+          completedAtUtc != null
+              ? DateTimeHelper.formatTimestamp(completedAtUtc)
+              : null,
+      'pausedAt':
+          pausedAtUtc != null
+              ? DateTimeHelper.formatTimestamp(pausedAtUtc)
+              : null,
+      'programId': localSession.programId,
+      'programWorkoutId': localSession.programWorkoutId,
+      'version': localSession.version,
+    };
   }
 
   // ========== Exercise Mapping ==========

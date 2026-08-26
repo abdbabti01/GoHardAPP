@@ -75,6 +75,15 @@ class LocalDatabaseService {
     return _isar!;
   }
 
+  /// Inject an already-open Isar instance, bypassing the normal
+  /// path_provider-based [initialize] flow. For tests only: unit tests run
+  /// without platform channels, so they cannot resolve an app documents
+  /// directory to open a real database through [initialize].
+  @visibleForTesting
+  void setTestDatabase(Isar isar) {
+    _isar = isar;
+  }
+
   /// Get the current database instance
   /// Throws if database is not initialized
   Isar get database {
