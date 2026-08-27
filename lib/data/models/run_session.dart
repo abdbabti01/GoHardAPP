@@ -99,6 +99,15 @@ class RunSession {
     return '${distance!.toStringAsFixed(2)} km';
   }
 
+  /// Create a copy of this RunSession with some fields replaced.
+  ///
+  /// [pausedAt] follows the standard "pass a value to override, omit to
+  /// keep" copyWith convention, which cannot distinguish "omitted" from
+  /// "explicitly passed null" - so passing `pausedAt: null` alone does NOT
+  /// clear it (it falls back to the existing value, same as omitting it).
+  /// To explicitly clear pausedAt, pass [clearPausedAt]: true instead. If
+  /// both [pausedAt] and `clearPausedAt: true` are supplied, clearing
+  /// takes precedence and [pausedAt] is ignored. Mirrors Session.copyWith.
   RunSession copyWith({
     int? id,
     int? userId,
@@ -112,6 +121,7 @@ class RunSession {
     DateTime? startedAt,
     DateTime? completedAt,
     DateTime? pausedAt,
+    bool clearPausedAt = false,
     List<GpsPoint>? route,
   }) {
     return RunSession(
@@ -126,7 +136,7 @@ class RunSession {
       status: status ?? this.status,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
-      pausedAt: pausedAt ?? this.pausedAt,
+      pausedAt: clearPausedAt ? null : (pausedAt ?? this.pausedAt),
       route: route ?? this.route,
     );
   }
