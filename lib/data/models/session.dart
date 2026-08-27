@@ -101,7 +101,15 @@ class Session {
   /// Check if session is from a program
   bool get isFromProgram => programId != null && programId! > 0;
 
-  /// Create a copy of this Session with some fields replaced
+  /// Create a copy of this Session with some fields replaced.
+  ///
+  /// [pausedAt] follows the standard "pass a value to override, omit to
+  /// keep" copyWith convention, which cannot distinguish "omitted" from
+  /// "explicitly passed null" - so passing `pausedAt: null` alone does NOT
+  /// clear it (it falls back to the existing value, same as omitting it).
+  /// To explicitly clear pausedAt, pass [clearPausedAt]: true instead. If
+  /// both [pausedAt] and `clearPausedAt: true` are supplied, clearing
+  /// takes precedence and [pausedAt] is ignored.
   Session copyWith({
     int? id,
     int? userId,
@@ -114,6 +122,7 @@ class Session {
     DateTime? startedAt,
     DateTime? completedAt,
     DateTime? pausedAt,
+    bool clearPausedAt = false,
     List<Exercise>? exercises,
     int? programId,
     int? programWorkoutId,
@@ -130,7 +139,7 @@ class Session {
       status: status ?? this.status,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
-      pausedAt: pausedAt ?? this.pausedAt,
+      pausedAt: clearPausedAt ? null : (pausedAt ?? this.pausedAt),
       exercises: exercises ?? this.exercises,
       programId: programId ?? this.programId,
       programWorkoutId: programWorkoutId ?? this.programWorkoutId,
