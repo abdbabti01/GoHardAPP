@@ -186,11 +186,14 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     BuildContext context,
     NutritionProvider provider,
   ) {
-    final progress = provider.dailyProgress;
+    // Sourced from today's local MealLog (same as TodayScreen) rather than
+    // the server-fetched dailyProgress snapshot, which can lag behind a
+    // local mutation until background/periodic sync reaches the server.
+    final mealLog = provider.todaysMealLog;
     final activeGoal = provider.activeGoal;
     final goal = activeGoal?.dailyCalories ?? 2000;
-    final planned = progress?.plannedCalories ?? 0;
-    final consumed = progress?.consumedCalories ?? 0;
+    final planned = mealLog?.plannedCalories ?? 0;
+    final consumed = mealLog?.consumedCalories ?? 0;
     final remaining = goal - consumed;
     final isOverConsumed = consumed > goal;
     final isOverPlanned = planned > goal;
@@ -534,13 +537,16 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
   }
 
   Widget _buildMacroProgress(BuildContext context, NutritionProvider provider) {
-    final progress = provider.dailyProgress;
+    // Sourced from today's local MealLog (same as TodayScreen) rather than
+    // the server-fetched dailyProgress snapshot, which can lag behind a
+    // local mutation until background/periodic sync reaches the server.
+    final mealLog = provider.todaysMealLog;
     final goal = provider.activeGoal;
 
-    // Get consumed values from DailyNutritionProgress
-    final consumedProtein = progress?.consumedProtein ?? 0;
-    final consumedCarbs = progress?.consumedCarbohydrates ?? 0;
-    final consumedFat = progress?.consumedFat ?? 0;
+    // Get consumed values from today's local MealLog
+    final consumedProtein = mealLog?.consumedProtein ?? 0;
+    final consumedCarbs = mealLog?.consumedCarbohydrates ?? 0;
+    final consumedFat = mealLog?.consumedFat ?? 0;
 
     final goalProtein = goal?.dailyProtein ?? 150;
     final goalCarbs = goal?.dailyCarbohydrates ?? 200;
