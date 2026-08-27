@@ -26,13 +26,13 @@ class _NutritionSummaryCardState extends State<NutritionSummaryCard> {
   Widget build(BuildContext context) {
     return Consumer<NutritionProvider>(
       builder: (context, provider, child) {
-        final consumed = provider.todaysMealLog?.totalCalories ?? 0;
+        final consumed = provider.todaysMealLog?.consumedCalories ?? 0;
         final goal = provider.activeGoal?.dailyCalories ?? 2000;
         final percentage = (consumed / goal * 100).clamp(0, 100);
 
-        final protein = provider.todaysMealLog?.totalProtein ?? 0;
-        final carbs = provider.todaysMealLog?.totalCarbohydrates ?? 0;
-        final fat = provider.todaysMealLog?.totalFat ?? 0;
+        final protein = provider.todaysMealLog?.consumedProtein ?? 0;
+        final carbs = provider.todaysMealLog?.consumedCarbohydrates ?? 0;
+        final fat = provider.todaysMealLog?.consumedFat ?? 0;
 
         final proteinGoal = provider.activeGoal?.dailyProtein ?? 150;
         final carbsGoal = provider.activeGoal?.dailyCarbohydrates ?? 200;

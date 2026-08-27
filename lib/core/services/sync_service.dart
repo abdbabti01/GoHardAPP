@@ -8,6 +8,7 @@ import '../../data/services/auth_service.dart';
 import '../../data/services/session_update_sync_helper.dart';
 import '../../data/local/services/local_database_service.dart';
 import '../../data/local/services/model_mapper.dart';
+import '../../data/local/services/local_nutrition_totals_calculator.dart';
 import '../../data/local/models/local_session.dart';
 import '../../data/local/models/local_exercise.dart';
 import '../../data/local/models/local_exercise_set.dart';
@@ -1457,7 +1458,32 @@ class SyncService {
     }
   }
 
+  /// Loads the entries belonging to [mealLogLocalId] and derives
+  /// consumed-only totals via the shared [LocalNutritionTotalsCalculator] -
+  /// the same formula the repository uses to reconcile
+  /// `LocalMealLog.total*` and to repair legacy-polluted rows on read.
+  /// Used at the sync-payload boundary so an unreconciled or stale stored
+  /// aggregate can never be transmitted as "consumed".
+  Future<LocalNutritionTotals> _consumedTotalsForMealLog(
+    Isar db,
+    int mealLogLocalId,
+  ) async {
+    final entries =
+        await db.localMealEntrys
+            .filter()
+            .mealLogLocalIdEqualTo(mealLogLocalId)
+            .findAll();
+    return LocalNutritionTotalsCalculator.consumed(entries);
+  }
+
   Future<void> _syncCreateMealLog(Isar db, LocalMealLog log) async {
+    // Derive consumed totals fresh from this log's entries rather than
+    // trusting LocalMealLog.total* - the stored aggregate may not yet be
+    // reconciled (e.g. a log created entirely offline before its first
+    // sync), and this is the network boundary: it must never transmit
+    // planned/unconsumed food as consumed.
+    final consumed = await _consumedTotalsForMealLog(db, log.localId);
+
     final response = await _apiService.post<Map<String, dynamic>>(
       ApiConfig.mealLogs,
       data: {
@@ -1465,12 +1491,12 @@ class SyncService {
         'date': log.date.toIso8601String(),
         'notes': log.notes,
         'waterIntake': log.waterIntake,
-        'totalCalories': log.totalCalories,
-        'totalProtein': log.totalProtein,
-        'totalCarbohydrates': log.totalCarbohydrates,
-        'totalFat': log.totalFat,
-        'totalFiber': log.totalFiber,
-        'totalSodium': log.totalSodium,
+        'totalCalories': consumed.calories,
+        'totalProtein': consumed.protein,
+        'totalCarbohydrates': consumed.carbohydrates,
+        'totalFat': consumed.fat,
+        'totalFiber': consumed.fiber,
+        'totalSodium': consumed.sodium,
       },
     );
 
@@ -1493,6 +1519,10 @@ class SyncService {
       return;
     }
 
+    // Same derivation as _syncCreateMealLog: never trust the stored
+    // aggregate at the network boundary, always recompute from entries.
+    final consumed = await _consumedTotalsForMealLog(db, log.localId);
+
     await _apiService.put<void>(
       ApiConfig.mealLogById(log.serverId!),
       data: {
@@ -1501,12 +1531,12 @@ class SyncService {
         'date': log.date.toIso8601String(),
         'notes': log.notes,
         'waterIntake': log.waterIntake,
-        'totalCalories': log.totalCalories,
-        'totalProtein': log.totalProtein,
-        'totalCarbohydrates': log.totalCarbohydrates,
-        'totalFat': log.totalFat,
-        'totalFiber': log.totalFiber,
-        'totalSodium': log.totalSodium,
+        'totalCalories': consumed.calories,
+        'totalProtein': consumed.protein,
+        'totalCarbohydrates': consumed.carbohydrates,
+        'totalFat': consumed.fat,
+        'totalFiber': consumed.fiber,
+        'totalSodium': consumed.sodium,
       },
     );
 

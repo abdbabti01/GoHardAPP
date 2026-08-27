@@ -15,6 +15,7 @@ import 'package:go_hard_app/data/models/exercise_set.dart';
 import 'package:go_hard_app/data/models/program.dart';
 import 'package:go_hard_app/data/models/program_workout.dart';
 import 'package:go_hard_app/data/models/meal_log.dart';
+import 'package:go_hard_app/data/models/meal_entry.dart';
 import 'package:go_hard_app/data/models/nutrition_goal.dart';
 import 'package:go_hard_app/data/models/nutrition_summary.dart';
 import 'package:go_hard_app/data/models/daily_nutrition_progress.dart';
@@ -891,6 +892,19 @@ void main() {
         totalProtein: 0,
         totalCarbohydrates: 0,
         totalFat: 0,
+        // caloriesRemaining/calorieProgressPercentage read consumedCalories,
+        // which is derived from mealEntries (consumed-only), not the raw
+        // totalCalories field - populate an entry so this fixture actually
+        // reflects "1200 consumed" rather than the ambiguous top-level total.
+        mealEntries: [
+          MealEntry(
+            id: 1,
+            mealLogId: 1,
+            isConsumed: true,
+            totalCalories: 1200,
+            createdAt: DateTime.now(),
+          ),
+        ],
       );
 
       final goal = createTestGoal(dailyCalories: 2000);
@@ -2170,6 +2184,21 @@ void main() {
         totalProtein: 150,
         totalCarbohydrates: 200,
         totalFat: 65,
+        // See the note in 'caloriesRemaining calculates correctly' above:
+        // the provider getters read consumedCalories/consumedProtein, which
+        // require mealEntries to be populated.
+        mealEntries: [
+          MealEntry(
+            id: 1,
+            mealLogId: 1,
+            isConsumed: true,
+            totalCalories: 2000,
+            totalProtein: 150,
+            totalCarbohydrates: 200,
+            totalFat: 65,
+            createdAt: DateTime.now(),
+          ),
+        ],
       );
 
       final streak = StreakInfo(
@@ -2217,6 +2246,17 @@ void main() {
         totalProtein: 0,
         totalCarbohydrates: 0,
         totalFat: 0,
+        // caloriesRemaining/calorieProgressPercentage read consumedCalories,
+        // which requires mealEntries to be populated.
+        mealEntries: [
+          MealEntry(
+            id: 1,
+            mealLogId: 1,
+            isConsumed: true,
+            totalCalories: 2500,
+            createdAt: DateTime.now(),
+          ),
+        ],
       );
 
       final streak = StreakInfo(
@@ -2683,6 +2723,17 @@ void main() {
           totalProtein: 0,
           totalCarbohydrates: 0,
           totalFat: 0,
+          // caloriesRemaining/calorieProgressPercentage read
+          // consumedCalories, which requires mealEntries to be populated.
+          mealEntries: [
+            MealEntry(
+              id: 1,
+              mealLogId: 1,
+              isConsumed: true,
+              totalCalories: 1000,
+              createdAt: DateTime.now(),
+            ),
+          ],
         );
 
         final streak = StreakInfo(
@@ -2732,6 +2783,17 @@ void main() {
         totalProtein: 0,
         totalCarbohydrates: 0,
         totalFat: 0,
+        // caloriesRemaining/calorieProgressPercentage read consumedCalories,
+        // which requires mealEntries to be populated.
+        mealEntries: [
+          MealEntry(
+            id: 1,
+            mealLogId: 1,
+            isConsumed: true,
+            totalCalories: 1700,
+            createdAt: DateTime.now(),
+          ),
+        ],
       );
 
       final streak = StreakInfo(

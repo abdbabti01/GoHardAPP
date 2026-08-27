@@ -460,37 +460,37 @@ class NutritionProvider extends ChangeNotifier {
     );
   }
 
-  /// Get calories remaining today
+  /// Get calories remaining today (goal minus consumed, not planned)
   double get caloriesRemaining {
     if (_activeGoal == null || _todaysMealLog == null) return 0;
-    return _activeGoal!.dailyCalories - _todaysMealLog!.totalCalories;
+    return _activeGoal!.dailyCalories - _todaysMealLog!.consumedCalories;
   }
 
-  /// Get protein remaining today
+  /// Get protein remaining today (goal minus consumed, not planned)
   double get proteinRemaining {
     if (_activeGoal == null || _todaysMealLog == null) return 0;
-    return _activeGoal!.dailyProtein - _todaysMealLog!.totalProtein;
+    return _activeGoal!.dailyProtein - _todaysMealLog!.consumedProtein;
   }
 
-  /// Get calorie progress percentage
+  /// Get calorie progress percentage (consumed, not planned)
   double get calorieProgressPercentage {
     if (_activeGoal == null ||
         _todaysMealLog == null ||
         _activeGoal!.dailyCalories == 0) {
       return 0;
     }
-    return (_todaysMealLog!.totalCalories / _activeGoal!.dailyCalories * 100)
+    return (_todaysMealLog!.consumedCalories / _activeGoal!.dailyCalories * 100)
         .clamp(0, 150);
   }
 
-  /// Get protein progress percentage
+  /// Get protein progress percentage (consumed, not planned)
   double get proteinProgressPercentage {
     if (_activeGoal == null ||
         _todaysMealLog == null ||
         _activeGoal!.dailyProtein == 0) {
       return 0;
     }
-    return (_todaysMealLog!.totalProtein / _activeGoal!.dailyProtein * 100)
+    return (_todaysMealLog!.consumedProtein / _activeGoal!.dailyProtein * 100)
         .clamp(0, 150);
   }
 
