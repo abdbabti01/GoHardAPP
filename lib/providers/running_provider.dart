@@ -15,6 +15,12 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   // ignore: unused_field - Reserved for future online/offline status checks
   final ConnectivityService? _connectivity;
 
+  // Injectable UTC clock, used only for lifecycle elapsed-time
+  // recalculation so tests can control elapsed "time spent suspended"
+  // deterministically. Defaults to the real clock in production. Mirrors
+  // ActiveWorkoutProvider's established pattern.
+  final DateTime Function() _nowUtc;
+
   RunSession? _currentRun;
   List<RunSession> _recentRuns = [];
   Map<String, dynamic> _weeklyStats = {};
@@ -42,9 +48,15 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
     distanceFilter: 5, // Update every 5 meters
   );
 
-  RunningProvider(this._runningRepository, [this._connectivity]) {
+  RunningProvider(
+    this._runningRepository, [
+    this._connectivity,
+    DateTime Function()? nowUtc,
+  ]) : _nowUtc = nowUtc ?? _defaultNowUtc {
     WidgetsBinding.instance.addObserver(this);
   }
+
+  static DateTime _defaultNowUtc() => DateTime.now().toUtc();
 
   // Getters
   RunSession? get currentRun => _currentRun;
@@ -102,7 +114,7 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       calculated = _currentRun!.pausedAt!.difference(_currentRun!.startedAt!);
       debugPrint('  Timer PAUSED - recalculated: ${calculated.inSeconds}s');
     } else {
-      calculated = DateTime.now().toUtc().difference(_currentRun!.startedAt!);
+      calculated = _nowUtc().difference(_currentRun!.startedAt!);
       debugPrint('  Timer RUNNING - recalculated: ${calculated.inSeconds}s');
     }
 
@@ -308,9 +320,15 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
             : Duration.zero;
     final newStartedAt = _currentRun!.startedAt!.add(pauseDuration);
 
+    // CRITICAL: clearPausedAt: true is required to actually clear it -
+    // pausedAt: null alone is indistinguishable from omitting it in
+    // copyWith's "override or keep existing" convention and would leave
+    // the stale pausedAt in place, which _recalculateElapsedTime relies on
+    // to decide whether the run should still be treated as paused after an
+    // app suspend/resume cycle.
     _currentRun = _currentRun!.copyWith(
       startedAt: newStartedAt,
-      pausedAt: null,
+      clearPausedAt: true,
     );
 
     _startTimer();
