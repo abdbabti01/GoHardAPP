@@ -262,6 +262,24 @@ class FriendsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clear all friends/requests state and stop request polling if active
+  /// (called on logout).
+  void clear() {
+    stopRequestPolling();
+    _friends = [];
+    _incomingRequests = [];
+    _outgoingRequests = [];
+    _searchResults = [];
+    _selectedProfile = null;
+    _selectedProfileStatus = null;
+    _isLoading = false;
+    _isSearching = false;
+    _isLoadingProfile = false;
+    _errorMessage = null;
+    notifyListeners();
+    debugPrint('🧹 FriendsProvider cleared');
+  }
+
   @override
   void dispose() {
     stopRequestPolling();

@@ -278,6 +278,27 @@ class MessagesProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clear all direct-message state and stop both polling timers (called on
+  /// logout). Unlike [clearMessagesCache], which only clears the message
+  /// cache, this also stops [_conversationPollingTimer] and
+  /// [_unreadCountPollingTimer] - without this, the 30-second unread-count
+  /// timer in particular keeps firing indefinitely across logout/login
+  /// boundaries, since it is otherwise only ever stopped by dispose(), which
+  /// never runs for this app-scoped provider.
+  void clear() {
+    stopConversationPolling();
+    stopUnreadCountPolling();
+    _conversations = [];
+    _messagesByFriend.clear();
+    _totalUnreadCount = 0;
+    _isLoading = false;
+    _isLoadingMessages = false;
+    _isSending = false;
+    _errorMessage = null;
+    notifyListeners();
+    debugPrint('🧹 MessagesProvider cleared');
+  }
+
   @override
   void dispose() {
     stopConversationPolling();

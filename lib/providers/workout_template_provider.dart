@@ -337,6 +337,19 @@ class WorkoutTemplateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clear all workout-template data (called on logout)
+  void clear() {
+    _templates = [];
+    _communityTemplates = [];
+    _selectedTemplate = null;
+    _isLoading = false;
+    _errorMessage = null;
+    _selectedCategory = null;
+    _showActiveOnly = true;
+    notifyListeners();
+    debugPrint('🧹 WorkoutTemplateProvider cleared');
+  }
+
   // === PRIVATE HELPERS ===
 
   /// Find a template by ID across all lists

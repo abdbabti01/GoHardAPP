@@ -10,6 +10,16 @@ import 'ui/screens/main_screen.dart';
 import 'ui/screens/auth/login_screen.dart';
 import 'ui/screens/onboarding/onboarding_screen.dart';
 
+/// Global navigator key used as the single centralized logout-navigation
+/// trigger (see `SessionCleanupInitializer`/`AuthProvider.onLoggedOut`), so
+/// that every logout path - the manual button and the silent 401/
+/// session-expiry path, neither of which necessarily has a live
+/// `BuildContext` at the moment logout completes - can reliably clear the
+/// navigation stack down to the login screen. `currentState` is null (and
+/// the navigation call a safe no-op) if the navigator is not mounted, so
+/// this can never touch a disposed/stale context.
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
 /// Root application widget
 /// Configures navigation, theming, and auth guard
 class MyApp extends StatelessWidget {
@@ -35,6 +45,7 @@ class MyApp extends StatelessWidget {
         final accentColor = settingsProvider.accentColor;
 
         return MaterialApp(
+          navigatorKey: appNavigatorKey,
           title: 'GoHard - Workout Tracker',
           debugShowCheckedModeBanner: false,
 

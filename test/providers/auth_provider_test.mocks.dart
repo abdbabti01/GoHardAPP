@@ -152,6 +152,15 @@ class MockAuthService extends _i1.Mock implements _i8.AuthService {
           as _i3.Future<void>);
 
   @override
+  _i3.Future<void> clearSessionCredentials() =>
+      (super.noSuchMethod(
+            Invocation.method(#clearSessionCredentials, []),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
+
+  @override
   _i3.Future<void> saveThemePreference(String? theme) =>
       (super.noSuchMethod(
             Invocation.method(#saveThemePreference, [theme]),

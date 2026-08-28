@@ -556,8 +556,16 @@ class SessionsProvider extends ChangeNotifier {
 
   /// Clear all sessions data (called on logout)
   void clear() {
-    // Cancel stream subscription to prevent receiving old user's data
-    _sessionsStreamSubscription?.cancel();
+    // Cancel stream subscription to prevent receiving old user's data.
+    // Guarded: a cancel() that throws (synchronously, or via a rejected
+    // Future) must not abort the rest of this method - _sessions must
+    // still be reset below regardless, matching the resilience pattern
+    // used for GPS subscription cancellation in RunningProvider.
+    try {
+      _sessionsStreamSubscription?.cancel();
+    } catch (e) {
+      debugPrint('⚠️ SessionsProvider: stream cancel error (ignored): $e');
+    }
     _sessionsStreamSubscription = null;
     _sessions = [];
     _errorMessage = null;

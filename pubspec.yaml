@@ -126,6 +126,7 @@ dev_dependencies:
   # Testing & Mocking
   mockito: ^5.4.4
   geolocator_platform_interface: ^4.2.6
+  flutter_secure_storage_platform_interface: ^1.1.2
   plugin_platform_interface: ^2.1.8
 
   # Linting
