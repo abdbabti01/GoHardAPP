@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'package:fake_async/fake_async.dart';
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride, TargetPlatform;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
@@ -176,6 +177,12 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform
   /// individually, including ones superseded by a later call.
   final List<_FakePositionSubscription> subscriptions = [];
 
+  /// The exact LocationSettings passed to each getPositionStream() call,
+  /// in the same order as [subscriptions] - lets tests assert exactly
+  /// which settings (AppleSettings vs. the plain LocationSettings) were
+  /// used for a given subscription attempt.
+  final List<LocationSettings?> locationSettingsPerCall = [];
+
   /// If set, the *next* getPositionStream().listen() call throws this
   /// instead of succeeding, then is cleared. See _FakePositionStream.
   Object? throwOnNextListen;
@@ -184,6 +191,7 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform
   Stream<Position> getPositionStream({LocationSettings? locationSettings}) {
     final subscription = _FakePositionSubscription();
     subscriptions.add(subscription);
+    locationSettingsPerCall.add(locationSettings);
     final error = throwOnNextListen;
     throwOnNextListen = null;
     return _FakePositionStream(subscription, throwOnListen: error);
@@ -249,6 +257,9 @@ void main() {
     } catch (_) {
       // Already disposed by the test body.
     }
+    // Reset any per-test platform override so it can never leak into a
+    // later test - safe to call even if a test never set one.
+    debugDefaultTargetPlatformOverride = null;
   });
 
   group('pauseRun', () {
@@ -669,6 +680,102 @@ void main() {
     provider.startCurrentRun();
     async.flushMicrotasks();
   }
+
+  group('platform-specific location settings (iOS background delivery)', () {
+    test('iOS uses AppleSettings with the exact required background-delivery '
+        'values', () {
+      fakeAsync((async) {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(status: 'draft'));
+        when(
+          mockRepo.startRun(1),
+        ).thenAnswer((_) async => _run(startedAt: fakeNow));
+
+        startTrackedRun(async);
+
+        expect(fakePlatform.locationSettingsPerCall.length, 1);
+        final settings = fakePlatform.locationSettingsPerCall.single;
+        expect(settings, isA<AppleSettings>());
+        final apple = settings as AppleSettings;
+        expect(
+          apple.accuracy,
+          LocationAccuracy.high,
+          reason:
+              'accuracy must be preserved at high, not raised to best - '
+              'geolocator_apple 2.3.13 maps high to '
+              'kCLLocationAccuracyNearestTenMeters and best to the '
+              'materially higher-power kCLLocationAccuracyBest, and '
+              'nothing about background delivery requires the increase',
+        );
+        expect(apple.distanceFilter, 5);
+        expect(apple.activityType, ActivityType.fitness);
+        expect(apple.pauseLocationUpdatesAutomatically, isFalse);
+        expect(apple.showBackgroundLocationIndicator, isTrue);
+        expect(apple.allowBackgroundLocationUpdates, isTrue);
+      });
+    });
+
+    test('a lifecycle-triggered recovery on iOS also uses AppleSettings, not '
+        'just the initial start', () {
+      fakeAsync((async) {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(status: 'draft'));
+        when(
+          mockRepo.startRun(1),
+        ).thenAnswer((_) async => _run(startedAt: fakeNow));
+
+        startTrackedRun(async);
+        final firstSubscription = fakePlatform.subscriptions.single;
+
+        firstSubscription.deliverError(Exception('gps hiccup'));
+        async.flushMicrotasks();
+
+        provider.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        async.flushMicrotasks();
+
+        expect(fakePlatform.locationSettingsPerCall.length, 2);
+        expect(
+          fakePlatform.locationSettingsPerCall.last,
+          isA<AppleSettings>(),
+          reason:
+              'every subscription attempt must resolve settings fresh, '
+              'not just the very first one',
+        );
+      });
+    });
+
+    test('a non-iOS platform (Android) keeps using the existing plain '
+        'LocationSettings, unchanged by this PR', () {
+      fakeAsync((async) {
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(status: 'draft'));
+        when(
+          mockRepo.startRun(1),
+        ).thenAnswer((_) async => _run(startedAt: fakeNow));
+
+        startTrackedRun(async);
+
+        expect(fakePlatform.locationSettingsPerCall.length, 1);
+        final settings = fakePlatform.locationSettingsPerCall.single;
+        expect(
+          settings,
+          isNot(isA<AppleSettings>()),
+          reason: 'Android must not receive iOS-specific settings',
+        );
+        expect(settings!.accuracy, LocationAccuracy.high);
+        expect(settings.distanceFilter, 5);
+      });
+    });
+  });
 
   group('GPS subscription ownership', () {
     test('starting a run creates exactly one subscription', () {

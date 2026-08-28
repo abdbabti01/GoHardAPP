@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:math' show sin, cos, sqrt, atan2, pi;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import '../data/models/run_session.dart';
@@ -119,11 +121,72 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   // User weight for calories calculation (set from ProfileProvider)
   double? _userWeightKg;
 
-  // Location settings
+  // Location settings for platforms with no platform-specific override
+  // below (Android and any other supported platform) - unchanged from
+  // before this PR.
   static const LocationSettings _locationSettings = LocationSettings(
     accuracy: LocationAccuracy.high,
     distanceFilter: 5, // Update every 5 meters
   );
+
+  /// Resolves the [LocationSettings] to use for the current platform.
+  ///
+  /// iOS gets [AppleSettings] so the position stream can keep delivering
+  /// while the app is backgrounded/locked for an explicitly user-started
+  /// active run (Running Finding R2's iOS configuration PR):
+  /// - `allowBackgroundLocationUpdates: true` plus `showBackgroundLocationIndicator: true`
+  ///   are the two flags geolocator_apple forwards to
+  ///   `CLLocationManager.allowsBackgroundLocationUpdates`/
+  ///   `showsBackgroundLocationIndicator` - required for background
+  ///   delivery to be attempted at all, together with the
+  ///   `UIBackgroundModes: location` entry already present in
+  ///   ios/Runner/Info.plist.
+  /// - `pauseLocationUpdatesAutomatically: false` opts out of iOS's own
+  ///   motion-based auto-pause heuristic (meant for automotive/stationary
+  ///   detection), since GoHard's explicit pause/resume buttons are the
+  ///   only intended way to stop tracking - an OS-driven pause here would
+  ///   look identical to the "silent stall" failure mode Running Finding
+  ///   R2 already guards against, but through a path this file cannot
+  ///   observe or recover from.
+  /// - `activityType: fitness` is Apple's documented hint for a
+  ///   walking/running/cycling workout, affecting iOS's internal power
+  ///   management heuristics.
+  /// - `accuracy: high` matches the value already used for every other
+  ///   platform, deliberately *not* raised to `best`. geolocator_apple
+  ///   2.3.13 maps `LocationAccuracy.high` to `kCLLocationAccuracyNearestTenMeters`
+  ///   and `LocationAccuracy.best` to `kCLLocationAccuracyBest` - a
+  ///   materially higher (more power-hungry) tier per Apple's own
+  ///   `CLLocationAccuracy` constants, not an equivalent one. Nothing about
+  ///   this PR's background-delivery goal or the app's existing running
+  ///   behavior requires that extra precision, so `high` is preserved
+  ///   rather than trading battery life for accuracy with no concrete
+  ///   requirement behind it.
+  ///
+  /// This method does not request "Always" authorization and does not
+  /// change anything about `_checkLocationPermission()` - the existing
+  /// When-In-Use permission flow is unchanged, as required for this PR.
+  /// Background delivery depends on iOS authorization and runtime policy.
+  /// This configuration enables background-capable active-run tracking;
+  /// final behavior must be validated on a real iPhone before adding any
+  /// Always-permission upgrade. This method configures `AppleSettings`
+  /// only - any permission escalation is a separate, later decision.
+  ///
+  /// Every other platform (Android, and any future platform without an
+  /// explicit branch) keeps using the existing [_locationSettings] value
+  /// unchanged - this PR does not modify Android behavior.
+  LocationSettings _resolveLocationSettings() {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+        activityType: ActivityType.fitness,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+        allowBackgroundLocationUpdates: true,
+      );
+    }
+    return _locationSettings;
+  }
 
   RunningProvider(
     this._runningRepository, [
@@ -652,7 +715,7 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     try {
       _positionStream = Geolocator.getPositionStream(
-        locationSettings: _locationSettings,
+        locationSettings: _resolveLocationSettings(),
       ).listen(
         (position) => _onPositionUpdate(position, generation, runId),
         onError:
