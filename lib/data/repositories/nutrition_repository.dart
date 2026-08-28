@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
+import '../../core/services/session_request_coordinator.dart';
 import '../../core/services/user_session_epoch.dart';
 import '../models/food_template.dart';
 import '../models/meal_log.dart';
@@ -13,6 +14,8 @@ import '../models/nutrition_summary.dart';
 import '../models/daily_nutrition_progress.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/session_request_context.dart';
+import '../services/session_request_exceptions.dart';
 import '../local/services/local_database_service.dart';
 import '../local/services/model_mapper.dart';
 import '../local/services/local_nutrition_totals_calculator.dart';
@@ -49,10 +52,32 @@ import '../local/models/local_food_template.dart';
 ///    `insideWriteTxnForTesting` / `afterWriteTxnForTesting` test seams
 ///    below for how this exact race is exercised deterministically.
 ///
-/// This repository does not itself solve `SyncService`/`_backgroundSync`
-/// session ownership (a background push scheduled while the session was
-/// still current can still complete after that session has since ended -
-/// see `_backgroundSync`'s doc comment) or `AuthProvider` logout ordering;
+/// ## Detached/background session ownership
+///
+/// Every fire-and-forget push or refresh this repository schedules (via
+/// [_backgroundSync]) captures its own [SessionRequestContext] from
+/// [_sessionCoordinator] SYNCHRONOUSLY at the moment it is scheduled - not
+/// inside the detached callback itself - so a callback that started under
+/// User A can never silently adopt whichever session happens to be active
+/// when it finally runs. Every migrated background HTTP call is bound to
+/// that captured context (pinned JWT, dispatch-time epoch recheck,
+/// generation-scoped cancellation - see [ApiService]'s class doc comment),
+/// and every acknowledging local write it may perform (setting `serverId`,
+/// `isSynced`, `syncStatus`, or replacing cached rows) is re-guarded with
+/// [UserSessionEpoch.isCurrent] immediately after the HTTP response,
+/// immediately before its `writeTxn`, and again as the first statement
+/// inside that `writeTxn` - the same three-checkpoint shape the
+/// synchronous mutations below already use, plus a re-resolution of the
+/// target row by its stable local identity so a stale acknowledgment can
+/// never land on a row that no longer belongs to the captured session. See
+/// `beforeBackgroundHttpDispatchForTesting` /
+/// `afterBackgroundHttpResponseForTesting` /
+/// `insideBackgroundWriteTxnForTesting` for how this is exercised
+/// deterministically in tests.
+///
+/// This repository does not itself solve `SyncService` session ownership
+/// or `AuthProvider` logout-triggered cancellation (`_sessionCoordinator`
+/// is only used here to capture contexts, never to cancel a generation);
 /// both remain explicitly out of scope for this class and are tracked as
 /// separate follow-ups.
 class NutritionRepository {
@@ -67,12 +92,20 @@ class NutritionRepository {
   /// repository only ever reads it via capture()/isCurrent().
   final UserSessionEpoch _sessionEpoch;
 
+  /// Shared app-wide coordinator that captures a [SessionRequestContext]
+  /// (pinned JWT + generation-scoped [CancelToken]) for every detached
+  /// background HTTP call this repository schedules. The SAME instance
+  /// handed to every other consumer (see main.dart); never constructed
+  /// privately.
+  final SessionRequestCoordinator _sessionCoordinator;
+
   NutritionRepository(
     this._apiService,
     this._localDb,
     this._connectivity,
     this._authService,
     this._sessionEpoch,
+    this._sessionCoordinator,
   );
 
   // ============ Test-only session-race seams ============
@@ -95,6 +128,28 @@ class NutritionRepository {
 
   @visibleForTesting
   Future<void> Function()? afterWriteTxnForTesting;
+
+  // ============ Test-only background-race seams ============
+  //
+  // Same idea as the three hooks above, but for the detached/background
+  // path: [beforeBackgroundHttpDispatchForTesting] runs immediately before
+  // a migrated background HTTP call. [afterBackgroundHttpResponseForTesting]
+  // runs AFTER each acknowledging call site's own post-HTTP epoch check has
+  // already run (not before it) - deliberately, so a test using it to
+  // invalidate exercises the pre-writeTxn checkpoint specifically, rather
+  // than being masked by the post-HTTP checkpoint independently catching
+  // the exact same, already-current-at-that-point invalidation. [
+  // insideBackgroundWriteTxnForTesting] runs as the first statement inside
+  // an acknowledging background `writeTxn`, mirroring the analogous
+  // foreground hook above.
+  @visibleForTesting
+  Future<void> Function()? beforeBackgroundHttpDispatchForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? afterBackgroundHttpResponseForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? insideBackgroundWriteTxnForTesting;
 
   Future<void> _runTestHook(Future<void> Function()? hook) async {
     if (hook != null) {
@@ -274,14 +329,68 @@ class NutritionRepository {
 
   // ============ Helper Methods ============
 
-  /// Background sync operation with standard logging
+  /// Schedules [operation] to run detached from the caller, bound to the
+  /// session that is current RIGHT NOW - not whichever session happens to
+  /// be active when the detached work finally runs.
+  ///
+  /// [SessionRequestCoordinator.captureContext] is invoked synchronously,
+  /// before this method returns, so the capture itself always happens at
+  /// scheduling time even though [operation] only runs after the returned
+  /// context Future resolves. If capture fails (logged out, or the session
+  /// changed while the JWT read was in flight), [operation] never runs -
+  /// nothing is sent to the API and nothing is acknowledged.
+  ///
+  /// [SessionStaleException] and [RequestCancelledException] are expected
+  /// lifecycle outcomes of a session ending mid-flight - logged as neither
+  /// a success nor a failure, never surfaced as a user-visible error, and
+  /// never treated as grounds to mark anything permanently failed. Every
+  /// other exception preserves the exact "log and continue" behavior this
+  /// method always had.
   void _backgroundSync(
-    Future<void> Function() syncOperation,
+    Future<void> Function(SessionRequestContext context) operation,
     String successMessage,
   ) {
-    syncOperation()
-        .then((_) => debugPrint('✅ Background sync: $successMessage'))
-        .catchError((e) => debugPrint('⚠️ Background sync failed: $e'));
+    final contextFuture = _sessionCoordinator.captureContext();
+    _runDetachedSync(contextFuture, operation, successMessage);
+  }
+
+  Future<void> _runDetachedSync(
+    Future<SessionRequestContext?> contextFuture,
+    Future<void> Function(SessionRequestContext context) operation,
+    String successMessage,
+  ) async {
+    final context = await contextFuture;
+    if (context == null) return;
+
+    try {
+      await operation(context);
+      debugPrint('✅ Background sync: $successMessage');
+    } on SessionStaleException {
+      // Expected lifecycle outcome - the session ended before this
+      // completed. Not a failure; nothing to log or retry differently.
+    } on RequestCancelledException {
+      // Expected lifecycle outcome - the request was cancelled because the
+      // session ended. Same treatment as SessionStaleException.
+    } catch (e) {
+      debugPrint('⚠️ Background sync failed: $e');
+    }
+  }
+
+  /// Wraps a single migrated background HTTP call with the before-dispatch
+  /// test seam so every call site gets it without repeating the
+  /// boilerplate. Staleness AT dispatch time is already enforced by
+  /// [ApiService] itself via [context]'s pinned
+  /// [SessionRequestContext.epochToken].
+  ///
+  /// Deliberately does NOT also run [afterBackgroundHttpResponseForTesting]
+  /// - every acknowledging call site below runs that hook itself,
+  /// positioned AFTER its own post-HTTP checkpoint (not before it), so a
+  /// test using that hook to invalidate exercises the pre-writeTxn
+  /// checkpoint specifically rather than being masked by the post-HTTP one
+  /// catching the exact same, already-current-at-that-point invalidation.
+  Future<T> _dispatchBackgroundHttp<T>(Future<T> Function() call) async {
+    await _runTestHook(beforeBackgroundHttpDispatchForTesting);
+    return call();
   }
 
   /// Recompute and persist [LocalMealLog.totalCalories]/etc. as the
@@ -357,7 +466,7 @@ class NutritionRepository {
 
       if (_connectivity.isOnline) {
         _backgroundSync(
-          () => _syncMealLogFromServer(db, localLog.serverId, userId, today),
+          (context) => _syncMealLogFromServer(db, context),
           'Synced today\'s meal log',
         );
       }
@@ -389,27 +498,73 @@ class NutritionRepository {
     return await _createLocalMealLog(db, userId, today);
   }
 
-  /// Sync meal log from server
+  /// Sync meal log from server - background refresh triggered by
+  /// [getTodaysMealLog]'s cache-hit path. Bound to [context]: the HTTP
+  /// call carries its pinned JWT, and the resulting cache write is fully
+  /// gated by [_cacheMealLogWithEntries]'s [UserSessionToken] scoping.
   Future<void> _syncMealLogFromServer(
     Isar db,
-    int? serverId,
-    int userId,
-    DateTime date,
+    SessionRequestContext context,
   ) async {
-    try {
-      final data = await _apiService.get<Map<String, dynamic>>(
+    final data = await _dispatchBackgroundHttp(
+      () => _apiService.get<Map<String, dynamic>>(
         ApiConfig.mealLogToday,
-      );
-      final serverMealLog = MealLog.fromJson(data);
-      await _cacheMealLogWithEntries(db, serverMealLog);
-    } catch (e) {
-      debugPrint('⚠️ Failed to sync meal log from server: $e');
-    }
+        sessionContext: context,
+      ),
+    );
+    final serverMealLog = MealLog.fromJson(data);
+    await _cacheMealLogWithEntries(
+      db,
+      serverMealLog,
+      scopeToken: context.epochToken,
+    );
   }
 
-  /// Cache a MealLog with all its entries and food items
-  Future<void> _cacheMealLogWithEntries(Isar db, MealLog mealLog) async {
+  /// Cache a MealLog with all its entries and food items.
+  ///
+  /// [scopeToken] is non-null only when called from a background refresh
+  /// (see the class doc comment's "Detached/background session ownership"
+  /// section) and gates the entire write behind three checkpoints -
+  /// immediately on entry (the post-HTTP checkpoint, from the caller's
+  /// perspective), immediately before the write transaction (after
+  /// re-resolving the target by its stable server identity), and again as
+  /// the very first statement inside the transaction - plus a direct
+  /// ownership check against [MealLog.userId], so a stale or foreign
+  /// response can never reach local storage. `null` (every foreground
+  /// call site, unchanged) preserves this method's original unconditional
+  /// behavior.
+  Future<void> _cacheMealLogWithEntries(
+    Isar db,
+    MealLog mealLog, {
+    UserSessionToken? scopeToken,
+  }) async {
+    if (scopeToken != null) {
+      // Checkpoint 1: post-HTTP, before touching Isar at all.
+      if (!_sessionEpoch.isCurrent(scopeToken)) return;
+      if (mealLog.userId != scopeToken.userId) return;
+
+      await _runTestHook(afterBackgroundHttpResponseForTesting);
+
+      // Re-resolve the target by its stable server identity before
+      // deciding whether to acknowledge - never assume the row this
+      // response names is still the right one to touch.
+      final target =
+          await db.localMealLogs
+              .filter()
+              .serverIdEqualTo(mealLog.id)
+              .findFirst();
+      // Checkpoint 2: immediately before entering the write transaction.
+      if (!_sessionEpoch.isCurrent(scopeToken)) return;
+      if (target != null && target.userId != scopeToken.userId) return;
+    }
+
     await db.writeTxn(() async {
+      if (scopeToken != null) {
+        await _runTestHook(insideBackgroundWriteTxnForTesting);
+        // Checkpoint 3: first statement inside the write transaction.
+        if (!_sessionEpoch.isCurrent(scopeToken)) return;
+      }
+
       // Find or create local meal log
       var existingLog =
           await db.localMealLogs
@@ -727,7 +882,7 @@ class NutritionRepository {
     // Sync in background if online
     if (_connectivity.isOnline) {
       _backgroundSync(
-        () => _syncMealLogsFromServer(startDate, endDate),
+        (context) => _syncMealLogsFromServer(startDate, endDate, context),
         'Synced meal logs history',
       );
     }
@@ -735,32 +890,40 @@ class NutritionRepository {
     return logs;
   }
 
-  /// Sync meal logs from server
+  /// Sync meal logs from server. Bound to [context]: the HTTP call carries
+  /// its pinned JWT, and each cached row is independently gated by
+  /// [_cacheMealLogWithEntries]'s [UserSessionToken] scoping - a session
+  /// change mid-loop stops acknowledging further rows without discarding
+  /// ones already safely cached under the still-current session.
   Future<void> _syncMealLogsFromServer(
     DateTime? startDate,
     DateTime? endDate,
+    SessionRequestContext context,
   ) async {
-    try {
-      final queryParams = <String, String>{};
-      if (startDate != null) {
-        queryParams['startDate'] = startDate.toIso8601String();
-      }
-      if (endDate != null) {
-        queryParams['endDate'] = endDate.toIso8601String();
-      }
+    final queryParams = <String, String>{};
+    if (startDate != null) {
+      queryParams['startDate'] = startDate.toIso8601String();
+    }
+    if (endDate != null) {
+      queryParams['endDate'] = endDate.toIso8601String();
+    }
 
-      final data = await _apiService.get<List<dynamic>>(
+    final data = await _dispatchBackgroundHttp(
+      () => _apiService.get<List<dynamic>>(
         ApiConfig.mealLogs,
         queryParameters: queryParams.isNotEmpty ? queryParams : null,
-      );
+        sessionContext: context,
+      ),
+    );
 
-      final db = _localDb.database;
-      for (final json in data) {
-        final mealLog = MealLog.fromJson(json as Map<String, dynamic>);
-        await _cacheMealLogWithEntries(db, mealLog);
-      }
-    } catch (e) {
-      debugPrint('⚠️ Failed to sync meal logs from server: $e');
+    final db = _localDb.database;
+    for (final json in data) {
+      final mealLog = MealLog.fromJson(json as Map<String, dynamic>);
+      await _cacheMealLogWithEntries(
+        db,
+        mealLog,
+        scopeToken: context.epochToken,
+      );
     }
   }
 
@@ -811,9 +974,12 @@ class NutritionRepository {
     // Sync in background if online
     if (_connectivity.isOnline && localLog.serverId != null) {
       _backgroundSync(
-        () => _apiService.put<void>(
-          ApiConfig.mealLogWater(localLog.serverId!),
-          data: waterIntake,
+        (context) => _dispatchBackgroundHttp(
+          () => _apiService.put<void>(
+            ApiConfig.mealLogWater(localLog.serverId!),
+            data: waterIntake,
+            sessionContext: context,
+          ),
         ),
         'Synced water intake',
       );
@@ -928,7 +1094,7 @@ class NutritionRepository {
     // Sync in background if online and entry has server ID
     if (_connectivity.isOnline && entry.serverId != null) {
       _backgroundSync(
-        () => _syncFoodItemToServer(savedFood, entry.serverId!),
+        (context) => _syncFoodItemToServer(savedFood, entry.serverId!, context),
         'Synced food item to server',
       );
     }
@@ -936,33 +1102,63 @@ class NutritionRepository {
     return ModelMapper.localToFoodItem(savedFood);
   }
 
-  /// Sync food item to server
+  /// Sync food item to server. Bound to [context]: the HTTP call carries
+  /// its pinned JWT, and the resulting serverId/isSynced acknowledgment is
+  /// gated behind three checkpoints (post-HTTP, pre-writeTxn, and
+  /// first-statement-inside-writeTxn) plus a re-resolution of
+  /// [localFood]'s row by its stable local identity and parent-chain
+  /// ownership, so a stale response can never acknowledge a row that no
+  /// longer belongs to the captured session.
   Future<void> _syncFoodItemToServer(
     LocalFoodItem localFood,
     int mealEntryServerId,
+    SessionRequestContext context,
   ) async {
-    try {
-      final data = await _apiService.post<Map<String, dynamic>>(
+    final data = await _dispatchBackgroundHttp(
+      () => _apiService.post<Map<String, dynamic>>(
         ApiConfig.foodItemQuickAdd,
         data: {
           'mealEntryId': mealEntryServerId,
           'foodTemplateId': localFood.foodTemplateId,
           'quantity': localFood.quantity,
         },
-      );
-      final serverFood = FoodItem.fromJson(data);
+        sessionContext: context,
+      ),
+    );
+    final serverFood = FoodItem.fromJson(data);
 
-      // Update local with server ID
-      final db = _localDb.database;
-      await db.writeTxn(() async {
-        localFood.serverId = serverFood.id;
-        localFood.isSynced = true;
-        localFood.syncStatus = 'synced';
-        await db.localFoodItems.put(localFood);
-      });
-    } catch (e) {
-      debugPrint('⚠️ Failed to sync food item: $e');
+    // Checkpoint 1: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+    await _runTestHook(afterBackgroundHttpResponseForTesting);
+
+    final db = _localDb.database;
+
+    // Re-resolve by stable local identity and validate the full
+    // parent-chain ownership before deciding whether to acknowledge.
+    final target = await db.localFoodItems.get(localFood.localId);
+    if (target == null ||
+        !await _isMealEntryOwnedBy(
+          db,
+          target.mealEntryLocalId,
+          context.epochToken,
+        )) {
+      return;
     }
+
+    // Checkpoint 2: immediately before entering the write transaction.
+    if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+    await db.writeTxn(() async {
+      await _runTestHook(insideBackgroundWriteTxnForTesting);
+      // Checkpoint 3: first statement inside the write transaction.
+      if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+      target.serverId = serverFood.id;
+      target.isSynced = true;
+      target.syncStatus = 'synced';
+      await db.localFoodItems.put(target);
+    });
   }
 
   /// Delete food item - offline-first
@@ -1030,7 +1226,12 @@ class NutritionRepository {
     // Sync in background if online and had server ID
     if (_connectivity.isOnline && serverId != null) {
       _backgroundSync(
-        () => _apiService.delete(ApiConfig.foodItemById(serverId)),
+        (context) => _dispatchBackgroundHttp(
+          () => _apiService.delete(
+            ApiConfig.foodItemById(serverId),
+            sessionContext: context,
+          ),
+        ),
         'Deleted food item on server',
       );
     }
@@ -1097,7 +1298,7 @@ class NutritionRepository {
     // Sync in background if online
     if (_connectivity.isOnline) {
       _backgroundSync(
-        () => _syncFoodTemplatesFromServer(category, isCustom),
+        (context) => _syncFoodTemplatesFromServer(category, isCustom, context),
         'Synced food templates',
       );
     }
@@ -1105,47 +1306,65 @@ class NutritionRepository {
     return filtered.map((t) => ModelMapper.localToFoodTemplate(t)).toList();
   }
 
-  /// Sync food templates from server
+  /// Sync food templates from server. Bound to [context]: the HTTP call
+  /// carries its pinned JWT. Food templates are a shared catalog (not
+  /// per-user data - see the class doc comment's ownership section), so
+  /// the cache write is gated only by session-currency, never by a
+  /// per-row userId restriction that would incorrectly treat this shared
+  /// data as owned by one user.
   Future<void> _syncFoodTemplatesFromServer(
     String? category,
     bool? isCustom,
+    SessionRequestContext context,
   ) async {
-    try {
-      final queryParams = <String, String>{};
-      if (category != null) queryParams['category'] = category;
-      if (isCustom != null) queryParams['isCustom'] = isCustom.toString();
+    final queryParams = <String, String>{};
+    if (category != null) queryParams['category'] = category;
+    if (isCustom != null) queryParams['isCustom'] = isCustom.toString();
 
-      final data = await _apiService.get<List<dynamic>>(
+    final data = await _dispatchBackgroundHttp(
+      () => _apiService.get<List<dynamic>>(
         ApiConfig.foodTemplates,
         queryParameters: queryParams.isNotEmpty ? queryParams : null,
-      );
+        sessionContext: context,
+      ),
+    );
 
-      final db = _localDb.database;
-      await db.writeTxn(() async {
-        for (final json in data) {
-          final template = FoodTemplate.fromJson(json as Map<String, dynamic>);
+    // Checkpoint 1: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(context.epochToken)) return;
 
-          var existing =
-              await db.localFoodTemplates
-                  .filter()
-                  .serverIdEqualTo(template.id)
-                  .findFirst();
+    await _runTestHook(afterBackgroundHttpResponseForTesting);
 
-          if (existing != null) {
-            final updated = ModelMapper.foodTemplateToLocal(
-              template,
-              localId: existing.localId,
-            );
-            await db.localFoodTemplates.put(updated);
-          } else {
-            final local = ModelMapper.foodTemplateToLocal(template);
-            await db.localFoodTemplates.put(local);
-          }
+    final db = _localDb.database;
+
+    // Checkpoint 2: immediately before entering the write transaction.
+    if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+    await db.writeTxn(() async {
+      await _runTestHook(insideBackgroundWriteTxnForTesting);
+      // Checkpoint 3: first statement inside the write transaction.
+      if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+      for (final json in data) {
+        final template = FoodTemplate.fromJson(json as Map<String, dynamic>);
+
+        var existing =
+            await db.localFoodTemplates
+                .filter()
+                .serverIdEqualTo(template.id)
+                .findFirst();
+
+        if (existing != null) {
+          final updated = ModelMapper.foodTemplateToLocal(
+            template,
+            localId: existing.localId,
+          );
+          await db.localFoodTemplates.put(updated);
+        } else {
+          final local = ModelMapper.foodTemplateToLocal(template);
+          await db.localFoodTemplates.put(local);
         }
-      });
-    } catch (e) {
-      debugPrint('⚠️ Failed to sync food templates: $e');
-    }
+      }
+    });
   }
 
   /// Search foods
@@ -1324,7 +1543,7 @@ class NutritionRepository {
     // Sync in background if online
     if (_connectivity.isOnline) {
       _backgroundSync(
-        () => _syncFoodTemplateToServer(savedTemplate),
+        (context) => _syncFoodTemplateToServer(savedTemplate, context),
         'Synced custom food template',
       );
     }
@@ -1332,26 +1551,53 @@ class NutritionRepository {
     return ModelMapper.localToFoodTemplate(savedTemplate);
   }
 
-  /// Sync food template to server
-  Future<void> _syncFoodTemplateToServer(LocalFoodTemplate local) async {
-    try {
-      final template = ModelMapper.localToFoodTemplate(local);
-      final data = await _apiService.post<Map<String, dynamic>>(
+  /// Sync a newly-created custom food template to server. Bound to
+  /// [context]: the HTTP call carries its pinned JWT, and the resulting
+  /// serverId/isSynced acknowledgment is gated behind three checkpoints
+  /// plus a re-resolution of [local]'s row by its stable local identity
+  /// and direct `createdByUserId` ownership - this push only ever
+  /// acknowledges a template this session itself created.
+  Future<void> _syncFoodTemplateToServer(
+    LocalFoodTemplate local,
+    SessionRequestContext context,
+  ) async {
+    final template = ModelMapper.localToFoodTemplate(local);
+    final data = await _dispatchBackgroundHttp(
+      () => _apiService.post<Map<String, dynamic>>(
         ApiConfig.foodTemplates,
         data: template.toJson(),
-      );
-      final serverTemplate = FoodTemplate.fromJson(data);
+        sessionContext: context,
+      ),
+    );
+    final serverTemplate = FoodTemplate.fromJson(data);
 
-      final db = _localDb.database;
-      await db.writeTxn(() async {
-        local.serverId = serverTemplate.id;
-        local.isSynced = true;
-        local.syncStatus = 'synced';
-        await db.localFoodTemplates.put(local);
-      });
-    } catch (e) {
-      debugPrint('⚠️ Failed to sync food template: $e');
+    // Checkpoint 1: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+    await _runTestHook(afterBackgroundHttpResponseForTesting);
+
+    final db = _localDb.database;
+
+    // Re-resolve by stable local identity and validate direct ownership
+    // before deciding whether to acknowledge.
+    final target = await db.localFoodTemplates.get(local.localId);
+    if (target == null || target.createdByUserId != context.epochToken.userId) {
+      return;
     }
+
+    // Checkpoint 2: immediately before entering the write transaction.
+    if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+    await db.writeTxn(() async {
+      await _runTestHook(insideBackgroundWriteTxnForTesting);
+      // Checkpoint 3: first statement inside the write transaction.
+      if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+      target.serverId = serverTemplate.id;
+      target.isSynced = true;
+      target.syncStatus = 'synced';
+      await db.localFoodTemplates.put(target);
+    });
   }
 
   // ============ Nutrition Goals - Offline First ============
@@ -1378,7 +1624,7 @@ class NutritionRepository {
 
       if (_connectivity.isOnline) {
         _backgroundSync(
-          () => _syncNutritionGoalFromServer(db, userId),
+          (context) => _syncNutritionGoalFromServer(db, context),
           'Synced nutrition goal',
         );
       }
@@ -1410,36 +1656,66 @@ class NutritionRepository {
     return NutritionGoal.defaultGoal(userId);
   }
 
-  /// Sync nutrition goal from server
-  Future<void> _syncNutritionGoalFromServer(Isar db, int userId) async {
-    try {
-      final data = await _apiService.get<Map<String, dynamic>>(
+  /// Sync nutrition goal from server. Bound to [context]: the HTTP call
+  /// carries its pinned JWT, and the resulting cache write is gated
+  /// behind three checkpoints plus a direct [NutritionGoal.userId]
+  /// ownership check, so a stale or foreign response can never replace
+  /// this session's cached goal. Also skips a row with pending local
+  /// changes, mirroring the same guard in [_cacheMealLogWithEntries] -
+  /// otherwise a background refresh could silently discard a local edit
+  /// that hasn't reached the server yet.
+  Future<void> _syncNutritionGoalFromServer(
+    Isar db,
+    SessionRequestContext context,
+  ) async {
+    final data = await _dispatchBackgroundHttp(
+      () => _apiService.get<Map<String, dynamic>>(
         ApiConfig.nutritionGoalActive,
-      );
-      final goal = NutritionGoal.fromJson(data);
+        sessionContext: context,
+      ),
+    );
+    final goal = NutritionGoal.fromJson(data);
 
-      await db.writeTxn(() async {
-        var existing =
-            await db.localNutritionGoals
-                .filter()
-                .serverIdEqualTo(goal.id)
-                .findFirst();
+    // Checkpoint 1: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+    if (goal.userId != context.epochToken.userId) return;
 
-        if (existing != null) {
-          final updated = ModelMapper.nutritionGoalToLocal(
-            goal,
-            localId: existing.localId,
-          );
-          await db.localNutritionGoals.put(updated);
-        } else {
-          await db.localNutritionGoals.put(
-            ModelMapper.nutritionGoalToLocal(goal),
-          );
-        }
-      });
-    } catch (e) {
-      debugPrint('⚠️ Failed to sync nutrition goal: $e');
-    }
+    await _runTestHook(afterBackgroundHttpResponseForTesting);
+
+    // Checkpoint 2: immediately before entering the write transaction.
+    if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+    await db.writeTxn(() async {
+      await _runTestHook(insideBackgroundWriteTxnForTesting);
+      // Checkpoint 3: first statement inside the write transaction.
+      if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+      var existing =
+          await db.localNutritionGoals
+              .filter()
+              .serverIdEqualTo(goal.id)
+              .findFirst();
+
+      // Skip caching over a row with pending local changes - mirrors the
+      // identical guard in _cacheMealLogWithEntries.
+      if (existing != null &&
+          (existing.syncStatus == 'pending_update' ||
+              existing.syncStatus == 'pending_delete')) {
+        return;
+      }
+
+      if (existing != null) {
+        final updated = ModelMapper.nutritionGoalToLocal(
+          goal,
+          localId: existing.localId,
+        );
+        await db.localNutritionGoals.put(updated);
+      } else {
+        await db.localNutritionGoals.put(
+          ModelMapper.nutritionGoalToLocal(goal),
+        );
+      }
+    });
   }
 
   /// Update nutrition goal - offline-first
@@ -1496,9 +1772,12 @@ class NutritionRepository {
     // Sync in background if online
     if (_connectivity.isOnline && localGoal.serverId != null) {
       _backgroundSync(
-        () => _apiService.put<void>(
-          ApiConfig.nutritionGoalById(localGoal.serverId!),
-          data: goal.toJson(),
+        (context) => _dispatchBackgroundHttp(
+          () => _apiService.put<void>(
+            ApiConfig.nutritionGoalById(localGoal.serverId!),
+            data: goal.toJson(),
+            sessionContext: context,
+          ),
         ),
         'Synced nutrition goal update',
       );
@@ -1563,7 +1842,7 @@ class NutritionRepository {
     // Sync in background if online
     if (_connectivity.isOnline) {
       _backgroundSync(
-        () => _syncNutritionGoalToServer(savedGoal),
+        (context) => _syncNutritionGoalToServer(savedGoal, context),
         'Synced new nutrition goal',
       );
     }
@@ -1571,26 +1850,50 @@ class NutritionRepository {
     return ModelMapper.localToNutritionGoal(savedGoal);
   }
 
-  /// Sync nutrition goal to server
-  Future<void> _syncNutritionGoalToServer(LocalNutritionGoal local) async {
-    try {
-      final goal = ModelMapper.localToNutritionGoal(local);
-      final data = await _apiService.post<Map<String, dynamic>>(
+  /// Sync a newly-created nutrition goal to server. Bound to [context]:
+  /// the HTTP call carries its pinned JWT, and the resulting
+  /// serverId/isSynced acknowledgment is gated behind three checkpoints
+  /// plus a re-resolution of [local]'s row by its stable local identity
+  /// and direct `userId` ownership.
+  Future<void> _syncNutritionGoalToServer(
+    LocalNutritionGoal local,
+    SessionRequestContext context,
+  ) async {
+    final goal = ModelMapper.localToNutritionGoal(local);
+    final data = await _dispatchBackgroundHttp(
+      () => _apiService.post<Map<String, dynamic>>(
         ApiConfig.nutritionGoals,
         data: goal.toJson(),
-      );
-      final serverGoal = NutritionGoal.fromJson(data);
+        sessionContext: context,
+      ),
+    );
+    final serverGoal = NutritionGoal.fromJson(data);
 
-      final db = _localDb.database;
-      await db.writeTxn(() async {
-        local.serverId = serverGoal.id;
-        local.isSynced = true;
-        local.syncStatus = 'synced';
-        await db.localNutritionGoals.put(local);
-      });
-    } catch (e) {
-      debugPrint('⚠️ Failed to sync nutrition goal: $e');
-    }
+    // Checkpoint 1: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+    await _runTestHook(afterBackgroundHttpResponseForTesting);
+
+    final db = _localDb.database;
+
+    // Re-resolve by stable local identity and validate direct ownership
+    // before deciding whether to acknowledge.
+    final target = await db.localNutritionGoals.get(local.localId);
+    if (target == null || target.userId != context.epochToken.userId) return;
+
+    // Checkpoint 2: immediately before entering the write transaction.
+    if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+    await db.writeTxn(() async {
+      await _runTestHook(insideBackgroundWriteTxnForTesting);
+      // Checkpoint 3: first statement inside the write transaction.
+      if (!_sessionEpoch.isCurrent(context.epochToken)) return;
+
+      target.serverId = serverGoal.id;
+      target.isSynced = true;
+      target.syncStatus = 'synced';
+      await db.localNutritionGoals.put(target);
+    });
   }
 
   // ============ Analytics (Server-only) ============
@@ -1902,18 +2205,32 @@ class NutritionRepository {
 
     // Sync to API immediately (not background) so dashboard refresh gets updated data
     if (_connectivity.isOnline && localEntry.serverId != null) {
-      try {
-        await _apiService.put<void>(
-          ApiConfig.mealEntryConsume(localEntry.serverId!),
-          data: {
-            'isConsumed': isConsumed,
-            if (consumedAt != null) 'consumedAt': consumedAt.toIso8601String(),
-          },
-        );
-        debugPrint('✅ Synced meal consumed status to API');
-      } catch (e) {
-        debugPrint('⚠️ Failed to sync meal consumed status: $e');
-        // Local change is saved, will sync later
+      // Captured fresh, right here, rather than reusing the earlier
+      // `token` - this call happens after the writeTxn's own await gap,
+      // and a full SessionRequestContext (pinned JWT + cancel token) is
+      // needed to bind the HTTP call, not just the UserSessionToken.
+      final context = await _sessionCoordinator.captureContext();
+      if (context != null) {
+        try {
+          await _apiService.put<void>(
+            ApiConfig.mealEntryConsume(localEntry.serverId!),
+            data: {
+              'isConsumed': isConsumed,
+              if (consumedAt != null)
+                'consumedAt': consumedAt.toIso8601String(),
+            },
+            sessionContext: context,
+          );
+          debugPrint('✅ Synced meal consumed status to API');
+        } on SessionStaleException {
+          // Expected lifecycle outcome - local change is saved, will sync
+          // later under whichever session is current then.
+        } on RequestCancelledException {
+          // Same treatment as SessionStaleException.
+        } catch (e) {
+          debugPrint('⚠️ Failed to sync meal consumed status: $e');
+          // Local change is saved, will sync later
+        }
       }
     }
   }
@@ -1995,8 +2312,11 @@ class NutritionRepository {
 
     if (_connectivity.isOnline && localLog.serverId != null) {
       _backgroundSync(
-        () => _apiService.post<Map<String, dynamic>>(
-          ApiConfig.mealLogClear(localLog.serverId!),
+        (context) => _dispatchBackgroundHttp(
+          () => _apiService.post<Map<String, dynamic>>(
+            ApiConfig.mealLogClear(localLog.serverId!),
+            sessionContext: context,
+          ),
         ),
         'Synced clear all food',
       );
@@ -2093,24 +2413,27 @@ class NutritionRepository {
     // Background sync if online
     if (_connectivity.isOnline && parentEntry.serverId != null) {
       _backgroundSync(
-        () => _apiService.post<Map<String, dynamic>>(
-          ApiConfig.foodItems,
-          data: {
-            'mealEntryId': parentEntry.serverId,
-            'foodTemplateId': foodItem.foodTemplateId,
-            'name': foodItem.name,
-            'brand': foodItem.brand,
-            'quantity': foodItem.quantity,
-            'servingSize': foodItem.servingSize,
-            'servingUnit': foodItem.servingUnit,
-            'calories': foodItem.calories,
-            'protein': foodItem.protein,
-            'carbohydrates': foodItem.carbohydrates,
-            'fat': foodItem.fat,
-            'fiber': foodItem.fiber,
-            'sugar': foodItem.sugar,
-            'sodium': foodItem.sodium,
-          },
+        (context) => _dispatchBackgroundHttp(
+          () => _apiService.post<Map<String, dynamic>>(
+            ApiConfig.foodItems,
+            data: {
+              'mealEntryId': parentEntry.serverId,
+              'foodTemplateId': foodItem.foodTemplateId,
+              'name': foodItem.name,
+              'brand': foodItem.brand,
+              'quantity': foodItem.quantity,
+              'servingSize': foodItem.servingSize,
+              'servingUnit': foodItem.servingUnit,
+              'calories': foodItem.calories,
+              'protein': foodItem.protein,
+              'carbohydrates': foodItem.carbohydrates,
+              'fat': foodItem.fat,
+              'fiber': foodItem.fiber,
+              'sugar': foodItem.sugar,
+              'sodium': foodItem.sodium,
+            },
+            sessionContext: context,
+          ),
         ),
         'Synced new food item',
       );
@@ -2221,9 +2544,12 @@ class NutritionRepository {
     // Background sync if online
     if (_connectivity.isOnline && localItem.serverId != null) {
       _backgroundSync(
-        () => _apiService.patch<void>(
-          ApiConfig.foodItemQuantity(localItem.serverId!),
-          data: {'quantity': quantity},
+        (context) => _dispatchBackgroundHttp(
+          () => _apiService.patch<void>(
+            ApiConfig.foodItemQuantity(localItem.serverId!),
+            data: {'quantity': quantity},
+            sessionContext: context,
+          ),
         ),
         'Synced food quantity update',
       );
@@ -2287,12 +2613,24 @@ class NutritionRepository {
 
       final result = CalculatedNutrition.fromJson(response);
 
-      // Update local cache with new goal
+      // Update local cache with new goal. Best-effort: the goal was
+      // already created successfully above, so a failure here (including
+      // an expected SessionStaleException/RequestCancelledException from
+      // a session change mid-refresh) must never turn this method's
+      // overall success into a failure.
       if (result.nutritionGoalId != null) {
-        final db = _localDb.database;
-        final userId = await _authService.getUserId();
-        if (userId != null) {
-          await _syncNutritionGoalFromServer(db, userId);
+        try {
+          final db = _localDb.database;
+          final context = await _sessionCoordinator.captureContext();
+          if (context != null) {
+            await _syncNutritionGoalFromServer(db, context);
+          }
+        } on SessionStaleException {
+          // Expected lifecycle outcome - not a failure, nothing to log.
+        } on RequestCancelledException {
+          // Same treatment as SessionStaleException.
+        } catch (e) {
+          debugPrint('⚠️ Failed to refresh cached nutrition goal: $e');
         }
       }
 
