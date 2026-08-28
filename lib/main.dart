@@ -554,11 +554,20 @@ void main() async {
           create:
               (context) => NutritionProvider(
                 context.read<NutritionRepository>(),
+                // UserSessionEpoch is a fixed .value() singleton, never
+                // reactively watched, so it is read directly here rather
+                // than added as a formal ProxyProvider type parameter.
+                context.read<UserSessionEpoch>(),
                 context.read<ConnectivityService>(),
               ),
           update:
-              (_, nutritionRepo, connectivity, previous) =>
-                  previous ?? NutritionProvider(nutritionRepo, connectivity),
+              (context, nutritionRepo, connectivity, previous) =>
+                  previous ??
+                  NutritionProvider(
+                    nutritionRepo,
+                    context.read<UserSessionEpoch>(),
+                    connectivity,
+                  ),
         ),
         ChangeNotifierProvider<MusicPlayerProvider>(
           create: (_) => MusicPlayerProvider(),
