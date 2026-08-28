@@ -299,11 +299,13 @@ void main() async {
                     localDb,
                     connectivity,
                     authService,
-                    // UserSessionEpoch is a fixed .value() singleton, never
-                    // reactively watched, so it is read directly here
-                    // rather than added as a formal ProxyProvider type
-                    // parameter.
+                    // UserSessionEpoch and SessionRequestCoordinator are
+                    // fixed .value()/ProxyProvider singletons, never
+                    // reactively watched, so they are read directly here
+                    // rather than added as formal ProxyProvider type
+                    // parameters.
                     context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
                   ),
         ),
         ProxyProvider2<ApiService, ConnectivityService, FriendsRepository>(

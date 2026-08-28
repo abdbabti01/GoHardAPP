@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
 import 'package:mockito/mockito.dart';
 
+import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/local/models/local_food_item.dart';
 import 'package:go_hard_app/data/local/models/local_food_template.dart';
@@ -33,6 +34,7 @@ void main() {
   late LocalDatabaseService localDb;
   late NutritionRepository repository;
   late UserSessionEpoch sessionEpoch;
+  late SessionRequestCoordinator sessionCoordinator;
 
   const userId = 1;
   const otherUserId = 2;
@@ -59,12 +61,17 @@ void main() {
     mockAuthService = MockAuthService();
     mockConnectivity = MockConnectivityService();
     when(mockAuthService.getUserId()).thenAnswer((_) async => userId);
+    when(mockAuthService.getToken()).thenAnswer((_) async => 'test-jwt');
     when(mockConnectivity.isOnline).thenReturn(false);
 
     localDb = LocalDatabaseService.instance;
     localDb.setTestDatabase(isar);
 
     sessionEpoch = UserSessionEpoch()..activate(userId);
+    sessionCoordinator = SessionRequestCoordinator(
+      sessionEpoch,
+      mockAuthService,
+    );
 
     repository = NutritionRepository(
       mockApiService,
@@ -72,6 +79,7 @@ void main() {
       mockConnectivity,
       mockAuthService,
       sessionEpoch,
+      sessionCoordinator,
     );
   });
 
@@ -948,7 +956,11 @@ void main() {
       () async {
         when(mockConnectivity.isOnline).thenReturn(true);
         when(
-          mockApiService.put<void>(any, data: anyNamed('data')),
+          mockApiService.put<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         ).thenAnswer((_) async {});
         final goal = await insertNutritionGoal(
           serverId: 71,
@@ -961,7 +973,11 @@ void main() {
         );
 
         await untilCalled(
-          mockApiService.put<void>(any, data: anyNamed('data')),
+          mockApiService.put<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         );
         await Future<void>.delayed(const Duration(milliseconds: 50));
 
@@ -970,6 +986,7 @@ void main() {
               mockApiService.put<void>(
                 captureAny,
                 data: captureAnyNamed('data'),
+                sessionContext: anyNamed('sessionContext'),
               ),
             ).captured;
         expect(captured[0], 'nutritiongoals/71');
@@ -986,14 +1003,22 @@ void main() {
       () async {
         when(mockConnectivity.isOnline).thenReturn(true);
         when(
-          mockApiService.put<void>(any, data: anyNamed('data')),
+          mockApiService.put<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         ).thenAnswer((_) async {});
         await insertMealLog(serverId: 72);
 
         await repository.updateWaterIntake(72, 1500);
 
         await untilCalled(
-          mockApiService.put<void>(any, data: anyNamed('data')),
+          mockApiService.put<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         );
         await Future<void>.delayed(const Duration(milliseconds: 50));
 
@@ -1002,6 +1027,7 @@ void main() {
               mockApiService.put<void>(
                 captureAny,
                 data: captureAnyNamed('data'),
+                sessionContext: anyNamed('sessionContext'),
               ),
             ).captured;
         expect(captured[0], 'meallogs/72/water');

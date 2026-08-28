@@ -6,6 +6,7 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
 import 'package:go_hard_app/core/services/connectivity_service.dart';
+import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/local/models/local_food_item.dart';
 import 'package:go_hard_app/data/local/models/local_food_template.dart';
@@ -30,6 +31,7 @@ void main() {
   late LocalDatabaseService localDb;
   late NutritionRepository repository;
   late UserSessionEpoch sessionEpoch;
+  late SessionRequestCoordinator sessionCoordinator;
 
   const userId = 1;
   const otherUserId = 2;
@@ -56,6 +58,7 @@ void main() {
     mockAuthService = MockAuthService();
     mockConnectivity = MockConnectivityService();
     when(mockAuthService.getUserId()).thenAnswer((_) async => userId);
+    when(mockAuthService.getToken()).thenAnswer((_) async => 'test-jwt');
     // Most mutation sites are exercised offline: this is where the bug
     // lived, and it keeps every test free of background-sync stubbing.
     when(mockConnectivity.isOnline).thenReturn(false);
@@ -64,6 +67,10 @@ void main() {
     localDb.setTestDatabase(isar);
 
     sessionEpoch = UserSessionEpoch()..activate(userId);
+    sessionCoordinator = SessionRequestCoordinator(
+      sessionEpoch,
+      mockAuthService,
+    );
 
     repository = NutritionRepository(
       mockApiService,
@@ -71,6 +78,7 @@ void main() {
       mockConnectivity,
       mockAuthService,
       sessionEpoch,
+      sessionCoordinator,
     );
   });
 
@@ -841,6 +849,7 @@ void main() {
           mockApiService.get<List<dynamic>>(
             any,
             queryParameters: anyNamed('queryParameters'),
+            sessionContext: anyNamed('sessionContext'),
           ),
         ).thenAnswer(
           (_) async => [
@@ -871,6 +880,7 @@ void main() {
           mockApiService.get<List<dynamic>>(
             any,
             queryParameters: anyNamed('queryParameters'),
+            sessionContext: anyNamed('sessionContext'),
           ),
         );
         await Future<void>.delayed(const Duration(milliseconds: 50));

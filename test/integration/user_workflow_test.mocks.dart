@@ -291,6 +291,63 @@ class MockNutritionRepository extends _i1.Mock
   }
 
   @override
+  set beforeWriteTxnForTesting(
+    _i13.Future<void> Function()? _beforeWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#beforeWriteTxnForTesting, _beforeWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideWriteTxnForTesting(
+    _i13.Future<void> Function()? _insideWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#insideWriteTxnForTesting, _insideWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterWriteTxnForTesting(
+    _i13.Future<void> Function()? _afterWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#afterWriteTxnForTesting, _afterWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeBackgroundHttpDispatchForTesting(
+    _i13.Future<void> Function()? _beforeBackgroundHttpDispatchForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeBackgroundHttpDispatchForTesting,
+      _beforeBackgroundHttpDispatchForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterBackgroundHttpResponseForTesting(
+    _i13.Future<void> Function()? _afterBackgroundHttpResponseForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterBackgroundHttpResponseForTesting,
+      _afterBackgroundHttpResponseForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideBackgroundWriteTxnForTesting(
+    _i13.Future<void> Function()? _insideBackgroundWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #insideBackgroundWriteTxnForTesting,
+      _insideBackgroundWriteTxnForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   _i13.Future<_i4.MealLog> getTodaysMealLog() =>
       (super.noSuchMethod(
             Invocation.method(#getTodaysMealLog, []),
