@@ -750,10 +750,10 @@ void main() {
       });
     });
 
-    test('a non-iOS platform (Android) keeps using the existing plain '
+    test('a non-iOS, non-Android platform keeps using the existing plain '
         'LocationSettings, unchanged by this PR', () {
       fakeAsync((async) {
-        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+        debugDefaultTargetPlatformOverride = TargetPlatform.linux;
 
         when(
           mockRepo.getRunSession(1),
@@ -766,16 +766,185 @@ void main() {
 
         expect(fakePlatform.locationSettingsPerCall.length, 1);
         final settings = fakePlatform.locationSettingsPerCall.single;
-        expect(
-          settings,
-          isNot(isA<AppleSettings>()),
-          reason: 'Android must not receive iOS-specific settings',
-        );
+        expect(settings, isNot(isA<AppleSettings>()));
+        expect(settings, isNot(isA<AndroidSettings>()));
         expect(settings!.accuracy, LocationAccuracy.high);
         expect(settings.distanceFilter, 5);
       });
     });
   });
+
+  group(
+    'platform-specific location settings (Android background delivery)',
+    () {
+      test('Android uses AndroidSettings with a foreground-service '
+          'notification configured', () {
+        fakeAsync((async) {
+          debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+          when(
+            mockRepo.getRunSession(1),
+          ).thenAnswer((_) async => _run(status: 'draft'));
+          when(
+            mockRepo.startRun(1),
+          ).thenAnswer((_) async => _run(startedAt: fakeNow));
+
+          startTrackedRun(async);
+
+          expect(fakePlatform.locationSettingsPerCall.length, 1);
+          final settings = fakePlatform.locationSettingsPerCall.single;
+          expect(settings, isA<AndroidSettings>());
+          final android = settings as AndroidSettings;
+          expect(
+            android.accuracy,
+            LocationAccuracy.high,
+            reason: 'accuracy must be unchanged from the pre-existing value',
+          );
+          expect(android.distanceFilter, 5);
+
+          final config = android.foregroundNotificationConfig;
+          expect(
+            config,
+            isNotNull,
+            reason:
+                'foregroundNotificationConfig is what makes geolocator_android '
+                'start GeolocatorLocationService as a real foreground service '
+                '(Service.startForeground()) instead of a plain location '
+                'client - required for GPS to keep delivering with the screen '
+                'locked or the app backgrounded',
+          );
+          expect(
+            config!.setOngoing,
+            isTrue,
+            reason:
+                'the notification must be non-dismissible while tracking is '
+                'active, so it keeps clearly indicating that a run is being '
+                'tracked - a dismissible notification would let the service '
+                'keep running invisibly',
+          );
+          expect(
+            config.notificationTitle,
+            'GoHard',
+            reason: 'exact copy is locked down, not just non-empty',
+          );
+          expect(
+            config.notificationText,
+            'Tracking your run',
+            reason: 'exact copy is locked down, not just non-empty',
+          );
+          expect(
+            config.notificationChannelName,
+            'Run Tracking',
+            reason:
+                'the channel name shown in system settings must be the '
+                'product-specific one, not the plugin default '
+                '("Background Location")',
+          );
+          expect(
+            config.enableWakeLock,
+            isTrue,
+            reason:
+                'this foreground service represents an explicitly '
+                'user-started active workout - reliable GPS delivery while '
+                'the screen is locked is more important than minimizing '
+                'power during the run, so the CPU must be kept awake',
+          );
+          expect(
+            config.enableWifiLock,
+            isFalse,
+            reason: 'GPS tracking does not require a Wi-Fi lock',
+          );
+          expect(
+            config.notificationIcon.name,
+            'ic_launcher',
+            reason:
+                'must resolve to the exact @mipmap/ic_launcher icon already '
+                'used by every other notification in this app - no new '
+                'drawable resource is introduced',
+          );
+          expect(config.notificationIcon.defType, 'mipmap');
+        });
+      });
+
+      test(
+        'a lifecycle-triggered recovery on Android also uses AndroidSettings '
+        'with the foreground notification config, not just the initial '
+        'start',
+        () {
+          fakeAsync((async) {
+            debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+            when(
+              mockRepo.getRunSession(1),
+            ).thenAnswer((_) async => _run(status: 'draft'));
+            when(
+              mockRepo.startRun(1),
+            ).thenAnswer((_) async => _run(startedAt: fakeNow));
+
+            startTrackedRun(async);
+            final firstSubscription = fakePlatform.subscriptions.single;
+
+            firstSubscription.deliverError(Exception('gps hiccup'));
+            async.flushMicrotasks();
+
+            provider.didChangeAppLifecycleState(AppLifecycleState.resumed);
+            async.flushMicrotasks();
+
+            expect(fakePlatform.locationSettingsPerCall.length, 2);
+            final recovered = fakePlatform.locationSettingsPerCall.last;
+            expect(
+              recovered,
+              isA<AndroidSettings>(),
+              reason:
+                  'every subscription attempt must resolve settings fresh, not '
+                  'just the very first one - a recovery without the foreground '
+                  'config would silently stop being a foreground service',
+            );
+            expect(
+              (recovered as AndroidSettings).foregroundNotificationConfig,
+              isNotNull,
+            );
+          });
+        },
+      );
+
+      test(
+        'pausing stops the GPS subscription, which is what causes '
+        'geolocator_android to tear down the foreground service and its '
+        'notification (StreamHandlerImpl.onCancel -> disableBackgroundMode)',
+        () {
+          fakeAsync((async) {
+            debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+            when(
+              mockRepo.getRunSession(1),
+            ).thenAnswer((_) async => _run(status: 'draft'));
+            when(
+              mockRepo.startRun(1),
+            ).thenAnswer((_) async => _run(startedAt: fakeNow));
+            when(
+              mockRepo.pauseRun(1, any),
+            ).thenAnswer((_) async => _run(startedAt: fakeNow));
+
+            startTrackedRun(async);
+            final subscription = fakePlatform.subscriptions.single;
+
+            provider.pauseRun();
+            async.flushMicrotasks();
+
+            expect(
+              subscription.cancelled,
+              isTrue,
+              reason:
+                  'cancelling the subscription is the only signal the native '
+                  'plugin needs to stop the foreground service/notification - '
+                  'no additional Android-specific stop call is required',
+            );
+          });
+        },
+      );
+    },
+  );
 
   group('GPS subscription ownership', () {
     test('starting a run creates exactly one subscription', () {
