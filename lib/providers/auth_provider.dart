@@ -8,6 +8,7 @@ import '../data/services/api_service.dart';
 import '../data/local/services/local_database_service.dart';
 import '../core/services/background_service.dart';
 import '../core/services/push_notification_service.dart';
+import '../core/services/user_session_epoch.dart';
 
 /// Provider for authentication state management
 /// Combines LoginViewModel and SignupViewModel from MAUI app
@@ -16,6 +17,17 @@ class AuthProvider extends ChangeNotifier {
   final AuthService _authService;
   final ApiService _apiService;
   final LocalDatabaseService _localDb;
+
+  /// The app's single shared session-identity service. AuthProvider is the
+  /// sole owner of both activate() (on every authentication-success path
+  /// below) and invalidate() (at the start of every logout pass) - no
+  /// other class calls either method, so there is exactly one place that
+  /// can ever advance the generation, and no risk of a double-increment
+  /// from, say, SessionCleanupCoordinator also invalidating independently.
+  /// This is not a circular dependency: UserSessionEpoch depends on
+  /// nothing, so injecting it here (and into every Provider that needs to
+  /// capture/check it) never creates a cycle.
+  final UserSessionEpoch _sessionEpoch;
 
   // Login fields
   String _email = '';
@@ -74,6 +86,7 @@ class AuthProvider extends ChangeNotifier {
     this._authService,
     this._apiService,
     this._localDb,
+    this._sessionEpoch,
   ) {
     // Set up callback for 401 unauthorized errors
     _apiService.onUnauthorized = _handleSessionExpired;
@@ -150,6 +163,22 @@ class AuthProvider extends ChangeNotifier {
     required bool resetSignupFields,
     required String resultErrorMessage,
   }) async {
+    // 0. Invalidate the session identity FIRST, synchronously, before
+    // anything else in this logout pass runs - including the FCM
+    // unregister call below. AuthProvider owns this call exclusively (no
+    // other class ever calls activate()/invalidate()), and _runLogout's
+    // _logoutInFlight guard ensures _performLogout - and therefore this
+    // line - runs exactly once per logical logout pass, regardless of how
+    // many concurrent/repeated manual-logout or forced-401 triggers
+    // arrive. This does not depend on onSessionEnding being wired at all:
+    // a bare AuthProvider (e.g. in a test, or in any alternate app wiring
+    // that never constructs a SessionCleanupCoordinator) still invalidates
+    // correctly, because this call has nothing to do with the coordinator
+    // - it is unconditional and always runs. The coordinator itself must
+    // never independently call invalidate() - doing so would double the
+    // generation increment for a single logical logout.
+    _sessionEpoch.invalidate();
+
     if (unregisterFcm) {
       // Unregister FCM token from server (non-blocking)
       try {
@@ -287,6 +316,20 @@ class AuthProvider extends ChangeNotifier {
         _currentUserId = await _authService.getUserId();
         _currentUserName = await _authService.getUserName();
         _currentUserEmail = await _authService.getUserEmail();
+
+        // A restored session is a live authentication-success path just
+        // like login()/signup() - activate() before this state becomes
+        // observable (notifyListeners() below), so anything that reacts
+        // to isAuthenticated flipping true captures the correct, already
+        // -activated generation from its very first load. If the stored
+        // token is somehow missing its user ID, this is not a valid
+        // restorable session - fall through without activating.
+        final userId = _currentUserId;
+        if (userId != null) {
+          _sessionEpoch.activate(userId);
+        } else {
+          _isAuthenticated = false;
+        }
       }
     } finally {
       _isInitializing = false;
@@ -324,6 +367,14 @@ class AuthProvider extends ChangeNotifier {
       _currentUserId = response.userId;
       _currentUserName = response.name;
       _currentUserEmail = response.email;
+
+      // Mint a fresh session generation now that the authoritative user ID
+      // is known, before notifyListeners() (in the finally block below)
+      // can cause any authenticated-screen Provider to start loading data
+      // - every such load's captured token is guaranteed to be this new
+      // generation, never a stale one from a previous session or a
+      // logged-out gap.
+      _sessionEpoch.activate(response.userId);
 
       // Reset the unauthorized flag for fresh session
       _apiService.resetUnauthorizedFlag();
@@ -416,6 +467,12 @@ class AuthProvider extends ChangeNotifier {
       _currentUserId = response.userId;
       _currentUserName = response.name;
       _currentUserEmail = response.email;
+
+      // Signup authenticates immediately (same as login) - mint a fresh
+      // session generation before notifyListeners() (in the finally block
+      // below) can cause any authenticated-screen Provider to start
+      // loading data.
+      _sessionEpoch.activate(response.userId);
 
       // Save token for background service (non-blocking)
       try {
