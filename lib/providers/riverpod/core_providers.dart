@@ -16,6 +16,7 @@ import '../../data/services/api_service.dart';
 import '../../data/services/auth_service.dart';
 import '../../core/services/connectivity_service.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/services/user_session_epoch.dart';
 
 // ============================================================
 // Service Providers (Singletons)
@@ -48,8 +49,17 @@ final authServiceProvider = Provider<AuthService>((ref) {
   return AuthService();
 });
 
+/// User session epoch provider. This unused/unmounted Riverpod scaffold
+/// already constructs its own separate service instances rather than the
+/// ones main.dart's MultiProvider wires up (see authServiceProvider above),
+/// so a dedicated instance here follows the file's existing pattern.
+final userSessionEpochProvider = Provider<UserSessionEpoch>((ref) {
+  return UserSessionEpoch();
+});
+
 /// API service provider (depends on AuthService)
 final apiServiceProvider = Provider<ApiService>((ref) {
   final authService = ref.watch(authServiceProvider);
-  return ApiService(authService);
+  final sessionEpoch = ref.watch(userSessionEpochProvider);
+  return ApiService(authService, sessionEpoch);
 });

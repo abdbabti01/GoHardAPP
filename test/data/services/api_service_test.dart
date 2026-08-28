@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/services/api_service.dart';
 import 'package:go_hard_app/data/services/auth_service.dart';
 
@@ -21,7 +22,7 @@ void main() {
     late ApiService apiService;
 
     setUp(() {
-      apiService = ApiService(AuthService());
+      apiService = ApiService(AuthService(), UserSessionEpoch());
     });
 
     test('invokes onUnauthorized exactly once for repeated 401s', () {
