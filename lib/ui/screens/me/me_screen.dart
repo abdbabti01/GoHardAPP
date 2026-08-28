@@ -322,12 +322,14 @@ class _MeScreenState extends State<MeScreen> {
           );
 
           if (confirmed == true && context.mounted) {
+            // Navigation to the login screen is handled centrally by
+            // AuthProvider.onLoggedOut (wired in SessionCleanupInitializer)
+            // once cleanup and credential/Isar clearing complete - this is
+            // also what the silent 401/session-expiry logout path relies
+            // on, since it has no BuildContext of its own to navigate with.
+            // A second manual navigation call here would violate "logout
+            // navigates exactly once".
             await context.read<AuthProvider>().logout();
-            if (context.mounted) {
-              Navigator.of(
-                context,
-              ).pushNamedAndRemoveUntil(RouteNames.login, (route) => false);
-            }
           }
         },
         icon: const Icon(Icons.logout, color: Colors.red),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Service for managing authentication tokens and user data in secure storage
@@ -78,7 +79,12 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
-  /// Clear all authentication data from secure storage
+  /// Clear all authentication data from secure storage.
+  ///
+  /// Kept for the legacy (unreachable/dead - no ProviderScope is ever
+  /// mounted) Riverpod auth_notifier.dart call site. The live logout path
+  /// (AuthProvider) uses [clearSessionCredentials] below instead, which
+  /// also removes the cached profile payload this method omits.
   Future<void> clearToken() async {
     await Future.wait([
       _storage.delete(key: _tokenKey),
@@ -87,6 +93,49 @@ class AuthService {
       _storage.delete(key: _userEmailKey),
       // Don't delete theme preference - user's theme choice persists across logins
     ]);
+  }
+
+  /// Every secure-storage key that identifies the signed-in user or their
+  /// session, in the order [clearSessionCredentials] attempts to delete
+  /// them. Deliberately excludes [_themePreferenceKey]: it is a
+  /// device-wide UI preference, not user-identifying data, and is meant to
+  /// persist across logins (see [saveThemePreference]'s doc comment).
+  ///
+  /// There is no separate refresh-token key: this app's auth model only
+  /// ever stores a single JWT ([_tokenKey]) - [saveToken] has no
+  /// refresh-token parameter and none is persisted anywhere.
+  static const List<String> _sessionCredentialKeys = [
+    _tokenKey,
+    _userIdKey,
+    _userNameKey,
+    _userEmailKey,
+    _cachedProfileKey,
+  ];
+
+  /// Removes every session/user-identity key from secure storage - the JWT,
+  /// user id/name/email, and the cached profile payload
+  /// ([_cachedProfileKey], which the older [clearToken] does not touch,
+  /// and whose survival past logout is what let a previous user's cached
+  /// profile be shown to whoever logs in next on the same device).
+  ///
+  /// Each key is deleted independently: a failure deleting one key is
+  /// logged and does not prevent attempting the rest. This method never
+  /// throws - it is a deliberately best-effort operation. Logout must
+  /// always be able to proceed to the next step (Isar clearing, in-memory
+  /// state reset, navigation) regardless of secure-storage failures; a
+  /// failure here is reported via debug logging, not by claiming a
+  /// guarantee this method cannot actually make if the underlying secure
+  /// storage itself is unavailable.
+  Future<void> clearSessionCredentials() async {
+    for (final key in _sessionCredentialKeys) {
+      try {
+        await _storage.delete(key: key);
+      } catch (e) {
+        debugPrint(
+          '⚠️ AuthService: failed to delete secure-storage key "$key": $e',
+        );
+      }
+    }
   }
 
   /// Save theme preference to secure storage

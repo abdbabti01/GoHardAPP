@@ -316,6 +316,19 @@ class SharedWorkoutProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clear all shared-workout data (called on logout)
+  void clear() {
+    _sharedWorkouts = [];
+    _savedWorkouts = [];
+    _mySharedWorkouts = [];
+    _isLoading = false;
+    _errorMessage = null;
+    _selectedCategory = null;
+    _selectedDifficulty = null;
+    notifyListeners();
+    debugPrint('🧹 SharedWorkoutProvider cleared');
+  }
+
   // === PRIVATE HELPERS ===
 
   /// Find a workout by ID across all lists

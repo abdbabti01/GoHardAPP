@@ -87,4 +87,16 @@ class AnalyticsProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
   }
+
+  /// Clear all analytics data (called on logout)
+  void clear() {
+    _workoutStats = null;
+    _exerciseProgress = [];
+    _personalRecords = [];
+    _muscleGroupVolume = [];
+    _errorMessage = null;
+    _isLoading = false;
+    notifyListeners();
+    debugPrint('🧹 AnalyticsProvider cleared');
+  }
 }

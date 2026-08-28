@@ -576,6 +576,20 @@ class ProgramsProvider extends ChangeNotifier {
     return result;
   }
 
+  /// Clear all programs data (called on logout)
+  void clear() {
+    _programs = [];
+    _activePrograms = [];
+    _completedPrograms = [];
+    _isLoading = false;
+    _isCreating = false;
+    _isUpdating = false;
+    _errorMessage = null;
+    _newlyCreatedProgramId = null;
+    notifyListeners();
+    debugPrint('🧹 ProgramsProvider cleared');
+  }
+
   @override
   void dispose() {
     _connectivitySubscription?.cancel();

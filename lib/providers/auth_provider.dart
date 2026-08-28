@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../data/models/login_request.dart';
 import '../data/models/signup_request.dart';
@@ -38,6 +39,36 @@ class AuthProvider extends ChangeNotifier {
   String? _currentUserName;
   String? _currentUserEmail;
 
+  /// Awaited at the very start of every logout pass (manual or forced),
+  /// before credentials/Isar are touched - the single seam through which
+  /// active-resource teardown (GPS, timers, polling, Isar watchers) and
+  /// settled-state clearing happens for every logout trigger. Set once from
+  /// main.dart after the full Provider graph exists (mirroring the
+  /// `_apiService.onUnauthorized` wiring below), so this class never needs
+  /// to depend on the 15+ feature Providers a SessionCleanupCoordinator
+  /// clears - avoiding a circular dependency in either direction.
+  Future<void> Function()? onSessionEnding;
+
+  /// Invoked exactly once per completed logout pass, after credentials and
+  /// Isar are cleared and this provider's own state has settled - the
+  /// single centralized navigation trigger for every logout path (manual
+  /// button, 401/session-expiry). Set from app.dart via a global
+  /// `NavigatorState` key, so this file never needs a `BuildContext`.
+  void Function()? onLoggedOut;
+
+  // Guards logout()/_forceLogout() so concurrent or repeated calls from
+  // either trigger collapse into a single cleanup+navigation pass instead
+  // of running it twice (e.g. a 401 arriving while a manual logout is
+  // already in flight). Every caller after the first awaits this same
+  // Future rather than starting a second pass; it is cleared once the pass
+  // completes (success or failure) so a later authenticated session's own
+  // eventual logout starts a fresh one.
+  Future<void>? _logoutInFlight;
+
+  /// True while a logout pass (cleanup + credential/Isar clearing) is in
+  /// progress. Exposed for tests/diagnostics.
+  bool get isLoggingOut => _logoutInFlight != null;
+
   AuthProvider(
     this._authRepository,
     this._authService,
@@ -55,16 +86,99 @@ class AuthProvider extends ChangeNotifier {
     if (!_isAuthenticated) return; // Already logged out
 
     debugPrint('⚠️ Session expired - logging out user');
-    // Trigger logout without showing loading state
-    _forceLogout();
+    // Trigger logout without showing loading state. _forceLogout()'s own
+    // security boundary (_performLogout) is already non-throwing by
+    // construction - every step inside it, including the navigation
+    // callback, is individually guarded - but this outer catch remains a
+    // deliberate last-resort backstop: nothing here is watching this
+    // unawaited Future, so if some future change ever let an exception
+    // past that inner boundary, it must still never surface as an
+    // unhandled asynchronous error.
+    unawaited(
+      _forceLogout().catchError((Object e, StackTrace stackTrace) {
+        debugPrint('⚠️ Forced logout encountered an unexpected error: $e');
+      }),
+    );
   }
 
   /// Force logout due to session expiry (silent, no FCM unregister attempt)
-  Future<void> _forceLogout() async {
-    // Clear authentication token
-    await _authService.clearToken();
+  Future<void> _forceLogout() {
+    return _runLogout(
+      unregisterFcm: false,
+      resetSignupFields: false,
+      resultErrorMessage: 'Session expired - please login again',
+    );
+  }
 
-    // Clear background service (non-blocking)
+  /// Runs one logout pass, or - if one is already in flight from a
+  /// concurrent caller (either trigger) - awaits that same pass instead of
+  /// starting a second one. This is what makes concurrent
+  /// manual-logout-plus-401 and repeated logout calls collapse into exactly
+  /// one cleanup, one credential/Isar clear, and one navigation.
+  Future<void> _runLogout({
+    required bool unregisterFcm,
+    required bool resetSignupFields,
+    required String resultErrorMessage,
+  }) {
+    final inFlight = _logoutInFlight;
+    if (inFlight != null) return inFlight;
+
+    final future = _performLogout(
+      unregisterFcm: unregisterFcm,
+      resetSignupFields: resetSignupFields,
+      resultErrorMessage: resultErrorMessage,
+    );
+    _logoutInFlight = future;
+    return future.whenComplete(() {
+      _logoutInFlight = null;
+    });
+  }
+
+  /// Runs every security-critical logout step as an independent,
+  /// best-effort attempt: session cleanup, credential removal, background
+  /// auth-task cleanup, Isar clearing, and the navigation callback are each
+  /// wrapped in their own try/catch (a flat sequence, not nested), so a
+  /// failure in any one of them is logged and never prevents the next step
+  /// from running - including the navigation step itself, so a throwing
+  /// `onLoggedOut` cannot propagate out of this method. The in-memory state
+  /// reset is unconditional - outside any try/catch, since assigning local
+  /// fields cannot fail - so this method itself can never throw and
+  /// AuthProvider always reaches the logged-out state with navigation
+  /// attempted exactly once, regardless of which step (if any) failed.
+  Future<void> _performLogout({
+    required bool unregisterFcm,
+    required bool resetSignupFields,
+    required String resultErrorMessage,
+  }) async {
+    if (unregisterFcm) {
+      // Unregister FCM token from server (non-blocking)
+      try {
+        await PushNotificationService().unregisterToken();
+      } catch (e) {
+        debugPrint('⚠️ Failed to unregister FCM token: $e');
+      }
+    }
+
+    // 1. Stop active resources (GPS/timers/polling/watchers) and clear
+    // settled Provider state - individually best-effort per operation
+    // inside the coordinator already, guarded again here regardless.
+    try {
+      await onSessionEnding?.call();
+    } catch (e) {
+      debugPrint('⚠️ Session cleanup coordinator failed: $e');
+    }
+
+    // 2. Remove every session/user-identity secure-storage key (token,
+    // user id/name/email, cached profile). clearSessionCredentials()
+    // itself never throws (each key is deleted independently inside it),
+    // but this step is guarded regardless, matching every other step here.
+    try {
+      await _authService.clearSessionCredentials();
+    } catch (e) {
+      debugPrint('⚠️ Failed to clear session credentials: $e');
+    }
+
+    // 3. Clear background service token and cancel scheduled tasks.
     try {
       await BackgroundService.clearAuthToken();
       await BackgroundService.cancelNutritionCheck();
@@ -72,23 +186,45 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('⚠️ Failed to clear background service: $e');
     }
 
-    // Clear all local database data for privacy/security
+    // 4. Clear all local database data for privacy/security.
     try {
       await _localDb.clearAll();
-      debugPrint('✅ Local database cleared on session expiry');
+      debugPrint('✅ Local database cleared on logout');
     } catch (e) {
       debugPrint('⚠️ Failed to clear local database: $e');
     }
 
-    // Clear local state
+    // 5. In-memory state reset - unconditional, regardless of any failure
+    // above.
     _isAuthenticated = false;
     _currentUserId = null;
     _currentUserName = null;
     _currentUserEmail = null;
     _email = '';
     _password = '';
-    _errorMessage = 'Session expired - please login again';
+    if (resetSignupFields) {
+      _signupName = '';
+      _signupUsername = '';
+      _signupEmail = '';
+      _signupPassword = '';
+      _signupConfirmPassword = '';
+    }
+    _errorMessage = resultErrorMessage;
     notifyListeners();
+
+    // 6. Navigate to login - attempted exactly once per logout pass. Guarded
+    // like every step above: if the callback itself throws, this method
+    // must still complete normally (not propagate to the manual-logout
+    // caller, MeScreen) rather than relying solely on the outer defensive
+    // catch that only the forced/401 trigger's unawaited call site has.
+    // That outer catch remains as a last-resort backstop for anything
+    // unforeseen; this is the first line of defense for both triggers
+    // alike, so they share identical failure behavior.
+    try {
+      onLoggedOut?.call();
+    } catch (e) {
+      debugPrint('⚠️ onLoggedOut callback failed: $e');
+    }
   }
 
   // Getters
@@ -305,47 +441,12 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Logout user
-  Future<void> logout() async {
-    // Unregister FCM token from server (non-blocking)
-    try {
-      await PushNotificationService().unregisterToken();
-    } catch (e) {
-      debugPrint('⚠️ Failed to unregister FCM token: $e');
-    }
-
-    // Clear authentication token
-    await _authService.clearToken();
-
-    // Clear background service token and cancel tasks (non-blocking)
-    try {
-      await BackgroundService.clearAuthToken();
-      await BackgroundService.cancelNutritionCheck();
-    } catch (e) {
-      debugPrint('⚠️ Failed to clear background service: $e');
-    }
-
-    // Clear all local database data for privacy/security
-    try {
-      await _localDb.clearAll();
-      debugPrint('✅ Local database cleared on logout');
-    } catch (e) {
-      debugPrint('⚠️ Failed to clear local database: $e');
-    }
-
-    // Clear local state
-    _isAuthenticated = false;
-    _currentUserId = null;
-    _currentUserName = null;
-    _currentUserEmail = null;
-    _email = '';
-    _password = '';
-    _signupName = '';
-    _signupUsername = '';
-    _signupEmail = '';
-    _signupPassword = '';
-    _signupConfirmPassword = '';
-    _errorMessage = '';
-    notifyListeners();
+  Future<void> logout() {
+    return _runLogout(
+      unregisterFcm: true,
+      resetSignupFields: true,
+      resultErrorMessage: '',
+    );
   }
 
   /// Clear error message

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'app.dart';
+import 'core/services/session_cleanup_initializer.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/api_service.dart';
 import 'data/repositories/auth_repository.dart';
@@ -598,7 +599,12 @@ void main() async {
                   previous ?? MessagesProvider(messagesRepo),
         ),
       ],
-      child: const SyncServiceInitializer(child: MyApp()),
+      child: SyncServiceInitializer(
+        child: SessionCleanupInitializer(
+          navigatorKey: appNavigatorKey,
+          child: const MyApp(),
+        ),
+      ),
     ),
   );
 }
