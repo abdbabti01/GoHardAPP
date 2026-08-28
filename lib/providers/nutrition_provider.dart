@@ -9,6 +9,7 @@ import '../data/models/nutrition_summary.dart';
 import '../data/models/daily_nutrition_progress.dart';
 import '../data/repositories/nutrition_repository.dart';
 import '../core/services/connectivity_service.dart';
+import '../core/services/user_session_epoch.dart';
 
 export '../data/repositories/nutrition_repository.dart'
     show
@@ -23,6 +24,18 @@ export '../data/repositories/nutrition_repository.dart'
 /// Provider for nutrition tracking
 class NutritionProvider extends ChangeNotifier {
   final NutritionRepository _nutritionRepository;
+
+  /// Shared app-wide session-identity service. Every async method below
+  /// captures a token before its first await and rechecks
+  /// `_sessionEpoch.isCurrent(token)` after every await before touching any
+  /// field or calling notifyListeners() - this drops any result that
+  /// resolves after the session that requested it has ended (logout, or a
+  /// different user logging in), instead of writing it into the shared
+  /// provider instance the next session also uses. This does NOT protect
+  /// NutritionRepository's own local Isar writes or background sync pushes
+  /// - see the repository/SyncService follow-up notes referenced from the
+  /// investigation this PR is based on.
+  final UserSessionEpoch _sessionEpoch;
   final ConnectivityService? _connectivity;
 
   // State
@@ -48,12 +61,37 @@ class NutritionProvider extends ChangeNotifier {
   bool _isLoadingHistory = false;
   String _historyFilter = 'week'; // 'week', 'month', '3months'
 
+  /// Monotonically increasing id for the most recently *requested*
+  /// [loadNutritionHistory] call. Each call captures its own value at
+  /// start; only the call whose captured value still equals this field when
+  /// its await resolves is allowed to commit `_nutritionHistory`/
+  /// `_isLoadingHistory`/`_errorMessage` - this is what makes the LATEST
+  /// requested filter always win regardless of resolution order (A -> B ->
+  /// A resolves correctly even though the first and third requests can
+  /// share the same filter string, which is why generation - not the
+  /// filter value alone - is the source of truth here). Bumped by [clear]
+  /// too, so an in-flight history request is invalidated independently of
+  /// the session epoch as well.
+  int _historyRequestGeneration = 0;
+
   StreamSubscription<bool>? _connectivitySubscription;
 
-  NutritionProvider(this._nutritionRepository, [this._connectivity]) {
+  NutritionProvider(
+    this._nutritionRepository,
+    this._sessionEpoch, [
+    this._connectivity,
+  ]) {
+    // Listen for connectivity changes and refresh when going online. This
+    // callback can fire at any point in the app's lifetime, including
+    // during a logged-out gap between one user's logout and the next
+    // user's login - capture a token fresh on every invocation and skip
+    // entirely if there is no active session, so a connectivity flap while
+    // logged out can never dispatch a nutrition load for nobody.
     _connectivitySubscription = _connectivity?.connectivityStream.listen((
       isOnline,
     ) {
+      final token = _sessionEpoch.capture();
+      if (token == null) return;
       if (isOnline && _todaysMealLog == null) {
         debugPrint('📡 Connection restored - loading nutrition data');
         loadTodaysData();
@@ -78,8 +116,17 @@ class NutritionProvider extends ChangeNotifier {
   bool get isLoadingHistory => _isLoadingHistory;
   String get historyFilter => _historyFilter;
 
-  /// Load today's meal log, active goal, and progress
+  /// Load today's meal log, active goal, and progress.
+  ///
+  /// Session-epoch guarded: [token] is captured before any await, and
+  /// re-checked after the await (including inside catch/finally) before
+  /// touching any field or calling notifyListeners(). If the session that
+  /// requested this load has since ended - logout, or a different user
+  /// logging in - the response is dropped silently.
   Future<void> loadTodaysData() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -91,6 +138,7 @@ class NutritionProvider extends ChangeNotifier {
         _nutritionRepository.getNutritionDashboard(),
         _nutritionRepository.getStreak(),
       ]);
+      if (!_sessionEpoch.isCurrent(token)) return;
 
       _todaysMealLog = results[0] as MealLog;
       final dashboardData = results[1] as NutritionDashboardData;
@@ -105,12 +153,15 @@ class NutritionProvider extends ChangeNotifier {
         '✅ Loaded nutrition data - planned: ${_dailyProgress?.plannedCalories.toStringAsFixed(0)}, consumed: ${_dailyProgress?.consumedCalories.toStringAsFixed(0)} cals',
       );
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage =
           'Failed to load nutrition data: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Load nutrition data error: $e');
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -129,8 +180,32 @@ class NutritionProvider extends ChangeNotifier {
     }
   }
 
-  /// Load nutrition history for past days
+  /// Load nutrition history for past days.
+  ///
+  /// Guarded by BOTH session identity and a monotonically increasing
+  /// request generation, captured together before the first await:
+  /// - [token] guards against the session ending or a different user
+  ///   logging in while the request is in flight.
+  /// - [requestGeneration] guards against the SAME user switching the
+  ///   history filter (via [setHistoryFilter]) to a different value before
+  ///   this request resolves - a case the session token alone cannot
+  ///   catch, since the session never changes. Only the request holding
+  ///   the CURRENT generation may commit, so the most recently *requested*
+  ///   filter always wins regardless of resolution order (A -> B -> A
+  ///   resolves correctly, since the first and third requests would share
+  ///   a filter string but never a generation).
   Future<void> loadNutritionHistory() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+
+    final requestGeneration = ++_historyRequestGeneration;
+    final requestedFilter = _historyFilter;
+
+    bool ownsRequest() =>
+        _sessionEpoch.isCurrent(token) &&
+        requestGeneration == _historyRequestGeneration &&
+        requestedFilter == _historyFilter;
+
     _isLoadingHistory = true;
     notifyListeners();
 
@@ -138,22 +213,27 @@ class NutritionProvider extends ChangeNotifier {
       final now = DateTime.now();
       final startDate = _getHistoryStartDate(now);
 
-      _nutritionHistory = await _nutritionRepository.getMealLogs(
+      final results = await _nutritionRepository.getMealLogs(
         startDate: startDate,
         endDate: now.subtract(const Duration(days: 1)), // Exclude today
       );
+      if (!ownsRequest()) return;
 
       // Sort by date descending (most recent first)
-      _nutritionHistory.sort((a, b) => b.date.compareTo(a.date));
+      results.sort((a, b) => b.date.compareTo(a.date));
+      _nutritionHistory = results;
 
       debugPrint(
         '✅ Loaded ${_nutritionHistory.length} days of nutrition history',
       );
     } catch (e) {
+      if (!ownsRequest()) return;
       debugPrint('Load nutrition history error: $e');
     } finally {
-      _isLoadingHistory = false;
-      notifyListeners();
+      if (ownsRequest()) {
+        _isLoadingHistory = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -179,17 +259,25 @@ class NutritionProvider extends ChangeNotifier {
     }
   }
 
-  /// Load food categories
+  /// Load food categories. Session-epoch guarded like [loadTodaysData].
   Future<void> loadCategories() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+
     try {
-      _categories = await _nutritionRepository.getFoodCategories();
+      final result = await _nutritionRepository.getFoodCategories();
+      if (!_sessionEpoch.isCurrent(token)) return;
+      _categories = result;
       notifyListeners();
     } catch (e) {
       debugPrint('Load categories error: $e');
     }
   }
 
-  /// Search for foods
+  /// Search for foods. Session-epoch guarded like [loadTodaysData]; the
+  /// short-query early return below is a purely synchronous local-state
+  /// clear (no repository call, so no staleness is possible) and is left
+  /// unguarded.
   Future<void> searchFoods(String query, {String? category}) async {
     if (query.length < 2) {
       _searchResults = [];
@@ -197,20 +285,28 @@ class NutritionProvider extends ChangeNotifier {
       return;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+
     _isSearching = true;
     notifyListeners();
 
     try {
-      _searchResults = await _nutritionRepository.searchFoods(
+      final results = await _nutritionRepository.searchFoods(
         query,
         category: category,
       );
+      if (!_sessionEpoch.isCurrent(token)) return;
+      _searchResults = results;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       debugPrint('Search foods error: $e');
       _searchResults = [];
     } finally {
-      _isSearching = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isSearching = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -220,22 +316,40 @@ class NutritionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Get food by barcode
+  /// Get food by barcode. Session-epoch guarded: a stale result is dropped
+  /// (returns null) rather than handed back to a caller whose session has
+  /// since ended.
   Future<FoodTemplate?> getFoodByBarcode(String barcode) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     try {
-      return await _nutritionRepository.getFoodByBarcode(barcode);
+      final result = await _nutritionRepository.getFoodByBarcode(barcode);
+      if (!_sessionEpoch.isCurrent(token)) return null;
+      return result;
     } catch (e) {
       debugPrint('Get food by barcode error: $e');
       return null;
     }
   }
 
-  /// Quick add food to a meal
+  /// Quick add food to a meal.
+  ///
+  /// The outer [token] is captured before the mutation and rechecked
+  /// immediately after it - if the session ended during the mutation
+  /// itself, the nested reload below never starts. [loadTodaysData]
+  /// independently captures and validates its own token; the recheck after
+  /// awaiting it here only guards this method's own remaining state
+  /// (`_isAddingFood`/the returned bool) against a session change that
+  /// happened during the nested reload.
   Future<bool> quickAddFood({
     required int mealEntryId,
     required int foodTemplateId,
     double quantity = 1,
   }) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     _isAddingFood = true;
     _errorMessage = null;
     notifyListeners();
@@ -246,24 +360,30 @@ class NutritionProvider extends ChangeNotifier {
         foodTemplateId: foodTemplateId,
         quantity: quantity,
       );
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       // Reload today's data to get updated totals
       await loadTodaysData();
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       debugPrint('✅ Added food to meal entry $mealEntryId');
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to add food: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Add food error: $e');
       return false;
     } finally {
-      _isAddingFood = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isAddingFood = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Add custom food item
+  /// Add custom food item. Same outer/nested ownership guarding as
+  /// [quickAddFood].
   Future<bool> addCustomFood({
     required int mealEntryId,
     required String name,
@@ -275,6 +395,9 @@ class NutritionProvider extends ChangeNotifier {
     double servingSize = 100,
     String servingUnit = 'g',
   }) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     _isAddingFood = true;
     _errorMessage = null;
     notifyListeners();
@@ -295,28 +418,43 @@ class NutritionProvider extends ChangeNotifier {
       );
 
       await _nutritionRepository.addFoodItem(foodItem);
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       await loadTodaysData();
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       debugPrint('✅ Added custom food: $name');
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to add food: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Add custom food error: $e');
       return false;
     } finally {
-      _isAddingFood = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isAddingFood = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Update food item quantity
+  /// Update food item quantity. Same outer/nested ownership guarding as
+  /// [quickAddFood]; no loading flag of its own, matching prior behavior.
   Future<bool> updateFoodQuantity(int foodItemId, double quantity) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     try {
       await _nutritionRepository.updateFoodQuantity(foodItemId, quantity);
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       await loadTodaysData();
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to update quantity: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Update food quantity error: $e');
@@ -325,14 +463,23 @@ class NutritionProvider extends ChangeNotifier {
     }
   }
 
-  /// Delete food item
+  /// Delete food item. Same outer/nested ownership guarding as
+  /// [quickAddFood]; no loading flag of its own, matching prior behavior.
   Future<bool> deleteFoodItem(int foodItemId) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     try {
       await _nutritionRepository.deleteFoodItem(foodItemId);
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       await loadTodaysData();
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       debugPrint('✅ Deleted food item $foodItemId');
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to delete food: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Delete food error: $e');
@@ -341,8 +488,12 @@ class NutritionProvider extends ChangeNotifier {
     }
   }
 
-  /// Get AI-powered food alternatives for a food item
+  /// Get AI-powered food alternatives for a food item. Session-epoch
+  /// guarded: a stale result is dropped (returns empty list).
   Future<List<FoodAlternative>> getFoodAlternatives(FoodItem food) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return [];
+
     try {
       // Calculate per-serving values for the request
       final perServingCalories = food.calories / food.quantity;
@@ -350,27 +501,36 @@ class NutritionProvider extends ChangeNotifier {
       final perServingCarbs = food.carbohydrates / food.quantity;
       final perServingFat = food.fat / food.quantity;
 
-      return await _nutritionRepository.getFoodAlternatives(
+      final result = await _nutritionRepository.getFoodAlternatives(
         foodName: food.name,
         calories: perServingCalories,
         protein: perServingProtein,
         carbohydrates: perServingCarbs,
         fat: perServingFat,
       );
+      if (!_sessionEpoch.isCurrent(token)) return [];
+      return result;
     } catch (e) {
       debugPrint('Get food alternatives error: $e');
       return [];
     }
   }
 
-  /// Replace a food item with an alternative
+  /// Replace a food item with an alternative. Rechecks ownership after
+  /// EVERY await, including between the delete and the add - both are
+  /// independent repository operations belonging to the same original
+  /// session.
   Future<bool> replaceFoodWithAlternative(
     FoodItem oldFood,
     FoodAlternative alternative,
   ) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     try {
       // Delete the old food
       await _nutritionRepository.deleteFoodItem(oldFood.id);
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       // Add the new food
       final newFoodItem = FoodItem(
@@ -388,11 +548,15 @@ class NutritionProvider extends ChangeNotifier {
       );
 
       await _nutritionRepository.addFoodItem(newFoodItem);
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       await loadTodaysData();
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       debugPrint('✅ Replaced ${oldFood.name} with ${alternative.name}');
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to replace food: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Replace food error: $e');
@@ -401,20 +565,29 @@ class NutritionProvider extends ChangeNotifier {
     }
   }
 
-  /// Mark meal as consumed
+  /// Mark meal as consumed. Same outer/nested ownership guarding as
+  /// [quickAddFood]; no loading flag of its own, matching prior behavior.
   Future<bool> markMealAsConsumed(
     int mealEntryId, {
     bool isConsumed = true,
   }) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     try {
       await _nutritionRepository.markMealAsConsumed(
         mealEntryId,
         isConsumed: isConsumed,
         consumedAt: DateTime.now(),
       );
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       await loadTodaysData();
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to update meal: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Mark meal consumed error: $e');
@@ -423,15 +596,24 @@ class NutritionProvider extends ChangeNotifier {
     }
   }
 
-  /// Update water intake
+  /// Update water intake. Same outer/nested ownership guarding as
+  /// [quickAddFood]; no loading flag of its own, matching prior behavior.
   Future<bool> updateWaterIntake(double waterMl) async {
     if (_todaysMealLog == null) return false;
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     try {
       await _nutritionRepository.updateWaterIntake(_todaysMealLog!.id, waterMl);
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       await loadTodaysData();
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to update water: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Update water error: $e');
@@ -500,7 +682,10 @@ class NutritionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Update nutrition goal
+  /// Update nutrition goal. A stale completion can never overwrite
+  /// `_activeGoal` with User A's edit once the session has moved on -
+  /// there is no nested reload here, so the post-await check on the single
+  /// repository call is the only guard this method needs.
   Future<bool> updateNutritionGoal({
     required double dailyCalories,
     required double dailyProtein,
@@ -511,12 +696,17 @@ class NutritionProvider extends ChangeNotifier {
   }) async {
     if (_activeGoal == null) return false;
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
+    final currentGoal = _activeGoal!;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final updatedGoal = _activeGoal!.copyWith(
+      final updatedGoal = currentGoal.copyWith(
         dailyCalories: dailyCalories,
         dailyProtein: dailyProtein,
         dailyCarbohydrates: dailyCarbohydrates,
@@ -527,9 +717,10 @@ class NutritionProvider extends ChangeNotifier {
       );
 
       await _nutritionRepository.updateNutritionGoal(
-        _activeGoal!.id,
+        currentGoal.id,
         updatedGoal,
       );
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _activeGoal = updatedGoal;
 
       debugPrint(
@@ -537,17 +728,21 @@ class NutritionProvider extends ChangeNotifier {
       );
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to update goals: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Update nutrition goal error: $e');
       return false;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Create a new nutrition goal
+  /// Create a new nutrition goal. Same single-await ownership guarding as
+  /// [updateNutritionGoal].
   Future<bool> createNutritionGoal({
     String? name,
     required double dailyCalories,
@@ -557,6 +752,9 @@ class NutritionProvider extends ChangeNotifier {
     double? dailyFiber,
     double? dailyWater,
   }) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -576,24 +774,32 @@ class NutritionProvider extends ChangeNotifier {
         createdAt: DateTime.now(),
       );
 
-      _activeGoal = await _nutritionRepository.createNutritionGoal(newGoal);
+      final created = await _nutritionRepository.createNutritionGoal(newGoal);
+      if (!_sessionEpoch.isCurrent(token)) return false;
+      _activeGoal = created;
 
       debugPrint(
         '✅ Created nutrition goal: ${dailyCalories.toStringAsFixed(0)} cals',
       );
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to create goals: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Create nutrition goal error: $e');
       return false;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Create a custom food template
+  /// Create a custom food template. Session-epoch guarded like
+  /// [updateNutritionGoal]; no field is written on success (the created
+  /// template is returned to the caller), so only the loading/error flags
+  /// and the returned value need guarding.
   Future<FoodTemplate?> createCustomFoodTemplate({
     required String name,
     String? brand,
@@ -608,6 +814,9 @@ class NutritionProvider extends ChangeNotifier {
     double? sugar,
     double? sodium,
   }) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -632,20 +841,29 @@ class NutritionProvider extends ChangeNotifier {
       );
 
       final created = await _nutritionRepository.createFoodTemplate(template);
+      if (!_sessionEpoch.isCurrent(token)) return null;
+
       debugPrint('✅ Created custom food template: $name');
       return created;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to create food: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Create custom food template error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Create custom food template and add to meal
+  /// Create custom food template and add to meal. Both nested calls
+  /// ([createCustomFoodTemplate] and [quickAddFood]) are independently
+  /// session-epoch guarded; this wrapper additionally rechecks ownership
+  /// between them so a session that ended while the template was being
+  /// created never goes on to call the repository again via [quickAddFood].
   Future<bool> createAndAddCustomFood({
     required int mealEntryId,
     required String name,
@@ -662,6 +880,9 @@ class NutritionProvider extends ChangeNotifier {
     double? sodium,
     double quantity = 1,
   }) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     // First create the template
     final template = await createCustomFoodTemplate(
       name: name,
@@ -677,6 +898,7 @@ class NutritionProvider extends ChangeNotifier {
       sugar: sugar,
       sodium: sodium,
     );
+    if (!_sessionEpoch.isCurrent(token)) return false;
 
     if (template == null) return false;
 
@@ -688,9 +910,13 @@ class NutritionProvider extends ChangeNotifier {
     );
   }
 
-  /// Clear all food for today's meal log
+  /// Clear all food for today's meal log. Same outer/nested ownership
+  /// guarding as [quickAddFood].
   Future<bool> clearAllFood() async {
     if (_todaysMealLog == null) return false;
+
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
 
     _isLoading = true;
     _errorMessage = null;
@@ -698,26 +924,39 @@ class NutritionProvider extends ChangeNotifier {
 
     try {
       await _nutritionRepository.clearAllFood(_todaysMealLog!.id);
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       await loadTodaysData();
+      if (!_sessionEpoch.isCurrent(token)) return false;
+
       debugPrint('✅ Cleared all food for today');
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to clear food: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Clear all food error: $e');
       return false;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Calculate personalized nutrition targets from user metrics and goal
+  /// Calculate personalized nutrition targets from user metrics and goal.
+  /// No field is written on success (the result is returned to the
+  /// caller), so only the loading/error flags and the returned value need
+  /// guarding.
   Future<CalculatedNutrition?> calculateNutritionFromMetrics({
     required String goalType,
     double? targetWeightChange,
     int? timeframeWeeks,
   }) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -728,6 +967,7 @@ class NutritionProvider extends ChangeNotifier {
         targetWeightChange: targetWeightChange,
         timeframeWeeks: timeframeWeeks,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
       if (result != null) {
         debugPrint(
@@ -737,23 +977,36 @@ class NutritionProvider extends ChangeNotifier {
 
       return result;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to calculate nutrition: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Calculate nutrition error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Calculate and save nutrition targets as active goal
-  /// Throws [OfflineNutritionException] if offline
+  /// Calculate and save nutrition targets as active goal.
+  /// Throws [OfflineNutritionException] if offline.
+  ///
+  /// [OfflineNutritionException]/[MissingMetricsException] are rethrown
+  /// unconditionally regardless of session state - they touch no provider
+  /// field, and the caller (not this provider) is responsible for handling
+  /// them, exactly like before this guarding was added. The nested
+  /// [loadTodaysData] reload is only started if the session is still
+  /// current after the calculate-and-save call succeeds.
   Future<CalculatedNutrition?> calculateAndSaveNutrition({
     required String goalType,
     double? targetWeightChange,
     int? timeframeWeeks,
   }) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -764,10 +1017,12 @@ class NutritionProvider extends ChangeNotifier {
         targetWeightChange: targetWeightChange,
         timeframeWeeks: timeframeWeeks,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
       if (result != null) {
         // Reload nutrition data to get updated goal
         await loadTodaysData();
+        if (!_sessionEpoch.isCurrent(token)) return null;
         debugPrint(
           '✅ Calculated and saved nutrition: ${result.dailyCalories.toStringAsFixed(0)} cals',
         );
@@ -781,22 +1036,36 @@ class NutritionProvider extends ChangeNotifier {
       // Re-throw missing metrics exception so caller can guide user
       rethrow;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to calculate and save nutrition: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Calculate and save nutrition error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Get available activity levels
+  /// Get available activity levels. Session-epoch guarded: a stale result
+  /// is dropped (returns empty list).
   Future<List<ActivityLevelOption>> getActivityLevels() async {
-    return await _nutritionRepository.getActivityLevels();
+    final token = _sessionEpoch.capture();
+    if (token == null) return [];
+
+    final result = await _nutritionRepository.getActivityLevels();
+    if (!_sessionEpoch.isCurrent(token)) return [];
+    return result;
   }
 
-  /// Clear all data (called on logout)
+  /// Clear all data (called on logout). Immediate and synchronous - no
+  /// await here, so nothing can race this method itself. Also bumps
+  /// [_historyRequestGeneration] so any in-flight [loadNutritionHistory]
+  /// request is invalidated independently of the session epoch (this
+  /// remains a complete invalidation even if clear() is ever invoked
+  /// without a preceding UserSessionEpoch.invalidate() call).
   void clear() {
     _todaysMealLog = null;
     _activeGoal = null;
@@ -810,6 +1079,10 @@ class NutritionProvider extends ChangeNotifier {
     _isLoading = false;
     _isSearching = false;
     _isAddingFood = false;
+    _lastLoadedDate = null;
+    _nutritionHistory = [];
+    _isLoadingHistory = false;
+    _historyRequestGeneration++;
     notifyListeners();
     debugPrint('🧹 NutritionProvider cleared');
   }

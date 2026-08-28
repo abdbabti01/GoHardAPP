@@ -10,6 +10,7 @@ import 'package:go_hard_app/data/models/meal_entry.dart';
 import 'package:go_hard_app/data/models/meal_log.dart';
 import 'package:go_hard_app/data/models/nutrition_goal.dart';
 import 'package:go_hard_app/data/models/nutrition_summary.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/repositories/nutrition_repository.dart';
 import 'package:go_hard_app/providers/nutrition_provider.dart';
 import 'package:go_hard_app/ui/screens/nutrition/nutrition_dashboard_screen.dart';
@@ -28,10 +29,12 @@ import 'nutrition_dashboard_screen_test.mocks.dart';
 void main() {
   late MockNutritionRepository mockRepository;
   late MockConnectivityService mockConnectivity;
+  late UserSessionEpoch sessionEpoch;
 
   setUp(() {
     mockRepository = MockNutritionRepository();
     mockConnectivity = MockConnectivityService();
+    sessionEpoch = UserSessionEpoch()..activate(1);
     when(mockConnectivity.isOnline).thenReturn(true);
     when(
       mockConnectivity.connectivityStream,
@@ -143,7 +146,11 @@ void main() {
       ),
     ).thenAnswer((_) async => []);
 
-    final provider = NutritionProvider(mockRepository, mockConnectivity);
+    final provider = NutritionProvider(
+      mockRepository,
+      sessionEpoch,
+      mockConnectivity,
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -367,7 +374,11 @@ void main() {
             ),
           ).thenAnswer((_) async {});
 
-          final provider = NutritionProvider(mockRepository, mockConnectivity);
+          final provider = NutritionProvider(
+            mockRepository,
+            sessionEpoch,
+            mockConnectivity,
+          );
           await tester.pumpWidget(
             MaterialApp(
               home: ChangeNotifierProvider<NutritionProvider>.value(
@@ -463,7 +474,11 @@ void main() {
             ),
           ).thenAnswer((_) async {});
 
-          final provider = NutritionProvider(mockRepository, mockConnectivity);
+          final provider = NutritionProvider(
+            mockRepository,
+            sessionEpoch,
+            mockConnectivity,
+          );
           await tester.pumpWidget(
             MaterialApp(
               home: ChangeNotifierProvider<NutritionProvider>.value(
@@ -532,7 +547,11 @@ void main() {
           ),
         ).thenAnswer((_) async => []);
 
-        final provider = NutritionProvider(mockRepository, mockConnectivity);
+        final provider = NutritionProvider(
+          mockRepository,
+          sessionEpoch,
+          mockConnectivity,
+        );
         await tester.pumpWidget(
           MaterialApp(
             home: ChangeNotifierProvider<NutritionProvider>.value(

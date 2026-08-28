@@ -20,6 +20,7 @@ import 'package:go_hard_app/data/models/nutrition_goal.dart';
 import 'package:go_hard_app/data/models/nutrition_summary.dart';
 import 'package:go_hard_app/data/models/daily_nutrition_progress.dart';
 import 'package:go_hard_app/core/services/connectivity_service.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 
 @GenerateMocks([
   SessionRepository,
@@ -38,6 +39,7 @@ void main() {
   late MockProgramsRepository mockProgramsRepository;
   late MockAuthService mockAuthService;
   late MockConnectivityService mockConnectivity;
+  late UserSessionEpoch sessionEpoch;
 
   setUp(() {
     mockSessionRepository = MockSessionRepository();
@@ -45,6 +47,7 @@ void main() {
     mockProgramsRepository = MockProgramsRepository();
     mockAuthService = MockAuthService();
     mockConnectivity = MockConnectivityService();
+    sessionEpoch = UserSessionEpoch()..activate(1);
 
     // Default stubs
     when(mockAuthService.getUserId()).thenAnswer((_) async => 1);
@@ -865,6 +868,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -929,6 +933,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -973,6 +978,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1052,6 +1058,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1080,6 +1087,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1135,6 +1143,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1348,6 +1357,7 @@ void main() {
 
         final provider = NutritionProvider(
           mockNutritionRepository,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -1468,6 +1478,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2090,6 +2101,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2145,6 +2157,7 @@ void main() {
 
         final provider = NutritionProvider(
           mockNutritionRepository,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -2217,6 +2230,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2275,6 +2289,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2402,6 +2417,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2556,6 +2572,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2754,6 +2771,7 @@ void main() {
 
         final provider = NutritionProvider(
           mockNutritionRepository,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -2812,6 +2830,7 @@ void main() {
 
       final provider = NutritionProvider(
         mockNutritionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 

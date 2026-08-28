@@ -321,7 +321,11 @@ void main() {
       ConnectivityService.instance,
     );
     messagesProvider = MessagesProvider(mockMessagesRepo);
-    nutritionProvider = NutritionProvider(mockNutritionRepo, null);
+    nutritionProvider = NutritionProvider(
+      mockNutritionRepo,
+      sessionEpoch,
+      null,
+    );
     goalsProvider = GoalsProvider(mockGoalsRepo, null);
     chatProvider = ChatProvider(
       mockChatRepo,
