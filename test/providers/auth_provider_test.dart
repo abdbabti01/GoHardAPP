@@ -9,6 +9,7 @@ import 'package:go_hard_app/data/services/auth_service.dart';
 import 'package:go_hard_app/data/services/api_service.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/models/auth_response.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 
 @GenerateMocks([AuthRepository, AuthService, ApiService, LocalDatabaseService])
 import 'auth_provider_test.mocks.dart';
@@ -19,12 +20,18 @@ void main() {
   late MockAuthService mockAuthService;
   late MockApiService mockApiService;
   late MockLocalDatabaseService mockLocalDb;
+  // A real UserSessionEpoch instance (not a mock) - it's a plain,
+  // dependency-free value service, so tests exercise its actual
+  // activate()/invalidate()/capture()/isCurrent() behavior rather than
+  // stubbing it.
+  late UserSessionEpoch sessionEpoch;
 
   setUp(() {
     mockAuthRepository = MockAuthRepository();
     mockAuthService = MockAuthService();
     mockApiService = MockApiService();
     mockLocalDb = MockLocalDatabaseService();
+    sessionEpoch = UserSessionEpoch();
 
     // Stub the auth check methods called in constructor
     when(mockAuthService.isAuthenticated()).thenAnswer((_) async => false);
@@ -37,6 +44,7 @@ void main() {
       mockAuthService,
       mockApiService,
       mockLocalDb,
+      sessionEpoch,
     );
   });
 
@@ -287,12 +295,14 @@ void main() {
     setUp(() {
       apiService = ApiService(mockAuthService);
       calls = [];
+      sessionEpoch = UserSessionEpoch();
 
       authProvider = AuthProvider(
         mockAuthRepository,
         mockAuthService,
         apiService,
         mockLocalDb,
+        sessionEpoch,
       );
 
       when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {
@@ -680,6 +690,320 @@ void main() {
       // earlier callback failure.
       await authProvider.logout();
       expect(loggedOutCalls, 2);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Logout PR 2A: AuthProvider is the exclusive owner of
+  // UserSessionEpoch.activate()/invalidate(). These tests prove every live
+  // authentication-success path activates exactly once with the
+  // authoritative user ID, every logout trigger invalidates exactly once
+  // per logical pass, and the generation never resets, decrements, or gets
+  // reused across a logout -> login cycle.
+  // -------------------------------------------------------------------
+  group('AuthProvider - Session epoch ownership (Logout PR 2A)', () {
+    Future<void> pumpUntilInitialized(AuthProvider provider) async {
+      while (provider.isInitializing) {
+        await Future.delayed(Duration.zero);
+      }
+    }
+
+    test('a failed startup restoration (isAuthenticated() == false) never '
+        'activates the epoch', () async {
+      // The top-level setUp() already stubs isAuthenticated() -> false
+      // and constructs `authProvider` against `sessionEpoch`.
+      await pumpUntilInitialized(authProvider);
+
+      expect(authProvider.isAuthenticated, isFalse);
+      expect(sessionEpoch.capture(), isNull);
+    });
+
+    test('a valid stored session restored at startup activates the epoch '
+        'exactly once with the authoritative user ID, before it becomes '
+        'observable', () async {
+      final freshEpoch = UserSessionEpoch();
+      when(mockAuthService.isAuthenticated()).thenAnswer((_) async => true);
+      when(mockAuthService.getUserId()).thenAnswer((_) async => 42);
+      when(
+        mockAuthService.getUserName(),
+      ).thenAnswer((_) async => 'Restored User');
+      when(
+        mockAuthService.getUserEmail(),
+      ).thenAnswer((_) async => 'restored@example.com');
+
+      final restored = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        mockApiService,
+        mockLocalDb,
+        freshEpoch,
+      );
+      await pumpUntilInitialized(restored);
+
+      expect(restored.isAuthenticated, isTrue);
+      final token = freshEpoch.capture();
+      expect(token, isNotNull);
+      expect(token!.userId, 42);
+      expect(
+        token.generation,
+        1,
+        reason: 'exactly one activate() call on a fresh epoch',
+      );
+    });
+
+    test(
+      'a stored session with isAuthenticated() == true but a missing user '
+      'ID is treated as not authenticated and never activates the epoch',
+      () async {
+        final freshEpoch = UserSessionEpoch();
+        when(mockAuthService.isAuthenticated()).thenAnswer((_) async => true);
+        when(mockAuthService.getUserId()).thenAnswer((_) async => null);
+        when(mockAuthService.getUserName()).thenAnswer((_) async => null);
+        when(mockAuthService.getUserEmail()).thenAnswer((_) async => null);
+
+        final broken = AuthProvider(
+          mockAuthRepository,
+          mockAuthService,
+          mockApiService,
+          mockLocalDb,
+          freshEpoch,
+        );
+        await pumpUntilInitialized(broken);
+
+        expect(broken.isAuthenticated, isFalse);
+        expect(freshEpoch.capture(), isNull);
+      },
+    );
+
+    test('login() activates the epoch exactly once with the response '
+        'user ID on success, and never on failure', () async {
+      when(
+        mockAuthRepository.login(any),
+      ).thenThrow(Exception('bad credentials'));
+      authProvider.updateEmail('test@example.com');
+      authProvider.updatePassword('password123');
+
+      final failed = await authProvider.login();
+      expect(failed, isFalse);
+      expect(
+        sessionEpoch.capture(),
+        isNull,
+        reason: 'a failed login must never activate the epoch',
+      );
+
+      when(mockAuthRepository.login(any)).thenAnswer(
+        (_) async => AuthResponse(
+          token: 'tok',
+          userId: 9,
+          name: 'Test User',
+          email: 'test@example.com',
+        ),
+      );
+      when(
+        mockAuthService.saveToken(
+          token: anyNamed('token'),
+          userId: anyNamed('userId'),
+          name: anyNamed('name'),
+          email: anyNamed('email'),
+        ),
+      ).thenAnswer((_) async {});
+
+      final ok = await authProvider.login();
+      expect(ok, isTrue);
+      final token = sessionEpoch.capture();
+      expect(token, isNotNull);
+      expect(token!.userId, 9);
+    });
+
+    test('signup() activates the epoch exactly once with the response '
+        'user ID on success', () async {
+      when(mockAuthRepository.signup(any)).thenAnswer(
+        (_) async => AuthResponse(
+          token: 'tok',
+          userId: 3,
+          name: 'New User',
+          email: 'new@example.com',
+        ),
+      );
+      when(
+        mockAuthService.saveToken(
+          token: anyNamed('token'),
+          userId: anyNamed('userId'),
+          name: anyNamed('name'),
+          email: anyNamed('email'),
+        ),
+      ).thenAnswer((_) async {});
+
+      authProvider.setSignupName('New User');
+      authProvider.setSignupUsername('newuser');
+      authProvider.setSignupEmail('new@example.com');
+      authProvider.setSignupPassword('password123');
+      authProvider.setSignupConfirmPassword('password123');
+
+      final ok = await authProvider.signup();
+      expect(ok, isTrue);
+      final token = sessionEpoch.capture();
+      expect(token, isNotNull);
+      expect(token!.userId, 3);
+    });
+
+    test(
+      'manual logout invalidates the epoch synchronously, on a bare '
+      'AuthProvider with no onSessionEnding/onLoggedOut wired at all',
+      () async {
+        when(mockAuthRepository.login(any)).thenAnswer(
+          (_) async => AuthResponse(
+            token: 'tok',
+            userId: 1,
+            name: 'Test User',
+            email: 'test@example.com',
+          ),
+        );
+        when(
+          mockAuthService.saveToken(
+            token: anyNamed('token'),
+            userId: anyNamed('userId'),
+            name: anyNamed('name'),
+            email: anyNamed('email'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          mockAuthService.clearSessionCredentials(),
+        ).thenAnswer((_) async {});
+
+        authProvider.updateEmail('test@example.com');
+        authProvider.updatePassword('password123');
+        await authProvider.login();
+        expect(sessionEpoch.capture(), isNotNull);
+
+        // authProvider.onSessionEnding / onLoggedOut are never set in this
+        // test - proving invalidate() does not depend on that wiring.
+        await authProvider.logout();
+
+        expect(sessionEpoch.capture(), isNull);
+      },
+    );
+
+    test('repeated sequential logout calls are safe: the epoch stays '
+        'invalidated and no error is thrown', () async {
+      when(mockAuthRepository.login(any)).thenAnswer(
+        (_) async => AuthResponse(
+          token: 'tok',
+          userId: 1,
+          name: 'Test User',
+          email: 'test@example.com',
+        ),
+      );
+      when(
+        mockAuthService.saveToken(
+          token: anyNamed('token'),
+          userId: anyNamed('userId'),
+          name: anyNamed('name'),
+          email: anyNamed('email'),
+        ),
+      ).thenAnswer((_) async {});
+      when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {});
+
+      authProvider.updateEmail('test@example.com');
+      authProvider.updatePassword('password123');
+      await authProvider.login();
+
+      await authProvider.logout();
+      expect(sessionEpoch.capture(), isNull);
+
+      await authProvider.logout();
+      expect(sessionEpoch.capture(), isNull);
+    });
+
+    test('the generation strictly increases and old tokens never become '
+        'current again across a full logout -> login cycle', () async {
+      when(mockAuthRepository.login(any)).thenAnswer(
+        (_) async => AuthResponse(
+          token: 'tok',
+          userId: 1,
+          name: 'Test User',
+          email: 'test@example.com',
+        ),
+      );
+      when(
+        mockAuthService.saveToken(
+          token: anyNamed('token'),
+          userId: anyNamed('userId'),
+          name: anyNamed('name'),
+          email: anyNamed('email'),
+        ),
+      ).thenAnswer((_) async {});
+      when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {});
+
+      authProvider.updateEmail('test@example.com');
+      authProvider.updatePassword('password123');
+
+      await authProvider.login();
+      final firstToken = sessionEpoch.capture()!;
+
+      await authProvider.logout();
+      expect(sessionEpoch.isCurrent(firstToken), isFalse);
+
+      // logout() resets both the email and password fields, so they must
+      // be re-entered before logging back in.
+      authProvider.updateEmail('test@example.com');
+      authProvider.updatePassword('password123');
+      await authProvider.login();
+      final secondToken = sessionEpoch.capture()!;
+
+      expect(secondToken.generation, greaterThan(firstToken.generation));
+      expect(
+        sessionEpoch.isCurrent(firstToken),
+        isFalse,
+        reason:
+            'a token from the first login must never become current '
+            'again',
+      );
+    });
+
+    test('a forced logout from a 401 invalidates the epoch at the same point '
+        'as a manual logout', () async {
+      final apiService = ApiService(mockAuthService);
+      final coordinationEpoch = UserSessionEpoch();
+      final forced = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        apiService,
+        mockLocalDb,
+        coordinationEpoch,
+      );
+
+      when(mockAuthRepository.login(any)).thenAnswer(
+        (_) async => AuthResponse(
+          token: 'tok',
+          userId: 1,
+          name: 'Test User',
+          email: 'test@example.com',
+        ),
+      );
+      when(
+        mockAuthService.saveToken(
+          token: anyNamed('token'),
+          userId: anyNamed('userId'),
+          name: anyNamed('name'),
+          email: anyNamed('email'),
+        ),
+      ).thenAnswer((_) async {});
+      when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {});
+
+      forced.updateEmail('test@example.com');
+      forced.updatePassword('password123');
+      await forced.login();
+      expect(coordinationEpoch.capture(), isNotNull);
+
+      // Simulate the API interceptor detecting a 401. _handleSessionExpired
+      // fires an unawaited logout pass, so poll until it settles.
+      apiService.onUnauthorized?.call();
+      while (forced.isLoggingOut) {
+        await Future.delayed(Duration.zero);
+      }
+
+      expect(coordinationEpoch.capture(), isNull);
     });
   });
 }

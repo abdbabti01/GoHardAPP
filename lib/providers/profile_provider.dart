@@ -6,12 +6,14 @@ import '../data/models/profile_update_request.dart';
 import '../data/repositories/profile_repository.dart';
 import '../data/services/auth_service.dart';
 import '../core/services/connectivity_service.dart';
+import '../core/services/user_session_epoch.dart';
 
 /// Provider for user profile management
 /// Replaces ProfileViewModel from MAUI app
 class ProfileProvider extends ChangeNotifier {
   final ProfileRepository _profileRepository;
   final AuthService _authService;
+  final UserSessionEpoch _sessionEpoch;
   final ConnectivityService? _connectivity;
 
   User? _currentUser;
@@ -25,16 +27,29 @@ class ProfileProvider extends ChangeNotifier {
 
   ProfileProvider(
     this._profileRepository,
-    this._authService, [
+    this._authService,
+    this._sessionEpoch, [
     this._connectivity,
   ]) {
-    // Load theme from local storage on init
+    // Load theme from local storage on init - deliberately NOT
+    // session-epoch-guarded: theme preference is device-wide, not
+    // user-specific (see clear()'s own comment below), so it is meant to
+    // survive across accounts, unlike every other field this provider
+    // holds.
     _loadCachedTheme();
 
-    // Listen for connectivity changes and refresh when going online
+    // Listen for connectivity changes and refresh when going online. This
+    // callback can fire at any point in the app's lifetime, including
+    // during a logged-out gap between one user's logout and the next
+    // user's login - capture a token fresh on every invocation (not once
+    // at listener-registration time) and skip entirely if there is no
+    // active session, so a connectivity flap while logged out can never
+    // dispatch a profile load for nobody.
     _connectivitySubscription = _connectivity?.connectivityStream.listen((
       isOnline,
     ) {
+      final token = _sessionEpoch.capture();
+      if (token == null) return;
       if (isOnline && _currentUser != null) {
         debugPrint('📡 Connection restored - refreshing profile');
         loadUserProfile();
@@ -71,14 +86,26 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  /// Load current user profile with stats
+  /// Load current user profile with stats.
+  ///
+  /// Session-epoch guarded: [token] is captured before any await, and
+  /// re-checked after every await (including inside catch/finally) before
+  /// touching any field or calling notifyListeners(). If the session that
+  /// requested this load has since ended - logout, or a different user
+  /// logging in - the response is dropped silently rather than
+  /// overwriting whatever the current session's own state already is.
   Future<void> loadUserProfile() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _currentUser = await _profileRepository.getProfile();
+      final user = await _profileRepository.getProfile();
+      if (!_sessionEpoch.isCurrent(token)) return;
+      _currentUser = user;
 
       // Save theme preference to local storage for offline access
       if (_currentUser?.themePreference != null) {
@@ -86,59 +113,79 @@ class ProfileProvider extends ChangeNotifier {
         await _authService.saveThemePreference(_currentUser!.themePreference!);
       }
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage =
           'Failed to load profile: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Load profile error: $e');
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Update user profile
+  /// Update user profile. Same session-epoch guarding as [loadUserProfile].
   Future<bool> updateProfile(ProfileUpdateRequest request) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     _isUpdating = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _currentUser = await _profileRepository.updateProfile(request);
+      final user = await _profileRepository.updateProfile(request);
+      if (!_sessionEpoch.isCurrent(token)) return false;
+      _currentUser = user;
 
       // Save theme preference to local storage if updated
       if (_currentUser?.themePreference != null) {
         _cachedThemePreference = _currentUser!.themePreference;
         await _authService.saveThemePreference(_currentUser!.themePreference!);
+        if (!_sessionEpoch.isCurrent(token)) return false;
       }
 
-      _isUpdating = false;
-      notifyListeners();
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to update profile: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Update profile error: $e');
-      _isUpdating = false;
-      notifyListeners();
       return false;
+    } finally {
+      if (_sessionEpoch.isCurrent(token)) {
+        _isUpdating = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Upload profile photo
+  /// Upload profile photo. [loadUserProfile]'s own nested call is
+  /// independently session-epoch guarded; this method additionally guards
+  /// its own [_isUploadingPhoto]/[_errorMessage] assignments with the same
+  /// token captured at the start.
   Future<bool> uploadProfilePhoto(File imageFile) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     _isUploadingPhoto = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       await _profileRepository.uploadProfilePhoto(imageFile);
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       // Reload profile to get updated photo URL
       await loadUserProfile();
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       _isUploadingPhoto = false;
       notifyListeners();
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to upload photo: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Upload photo error: $e');
@@ -148,22 +195,29 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  /// Delete profile photo
+  /// Delete profile photo. Same session-epoch guarding as
+  /// [uploadProfilePhoto].
   Future<bool> deleteProfilePhoto() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     _isUploadingPhoto = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       await _profileRepository.deleteProfilePhoto();
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       // Reload profile to get updated data
       await loadUserProfile();
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       _isUploadingPhoto = false;
       notifyListeners();
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to delete photo: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Delete photo error: $e');

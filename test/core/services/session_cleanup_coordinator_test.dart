@@ -12,6 +12,7 @@ import 'package:mockito/mockito.dart';
 import 'package:go_hard_app/core/services/connectivity_service.dart';
 import 'package:go_hard_app/core/services/notification_service.dart';
 import 'package:go_hard_app/core/services/session_cleanup_coordinator.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/models/run_session.dart';
 import 'package:go_hard_app/data/models/session.dart';
 import 'package:go_hard_app/data/repositories/achievement_repository.dart';
@@ -279,6 +280,12 @@ void main() {
   late SharedWorkoutProvider sharedWorkoutProvider;
 
   late SessionCleanupCoordinator coordinator;
+  // Real UserSessionEpoch, activated for a single test user - this suite is
+  // Logout PR 1 scope (active-resource teardown), not the epoch's own
+  // behavior, so it only needs an active session for the epoch-guarded
+  // ChatProvider/ProfileProvider load methods below to actually reach their
+  // repositories instead of no-op'ing on a null capture().
+  late UserSessionEpoch sessionEpoch;
 
   setUp(() {
     fakePlatform = _FakeGeolocatorPlatform();
@@ -304,6 +311,8 @@ void main() {
     when(mockAuthService.getThemePreference()).thenAnswer((_) async => null);
     when(mockMessagesRepo.getUnreadCount()).thenAnswer((_) async => 0);
 
+    sessionEpoch = UserSessionEpoch()..activate(1);
+
     runningProvider = RunningProvider(mockRunningRepo, null);
     activeWorkoutProvider = ActiveWorkoutProvider(mockSessionRepo, null);
     sessionsProvider = SessionsProvider(
@@ -314,8 +323,17 @@ void main() {
     messagesProvider = MessagesProvider(mockMessagesRepo);
     nutritionProvider = NutritionProvider(mockNutritionRepo, null);
     goalsProvider = GoalsProvider(mockGoalsRepo, null);
-    chatProvider = ChatProvider(mockChatRepo, ConnectivityService.instance);
-    profileProvider = ProfileProvider(mockProfileRepo, mockAuthService, null);
+    chatProvider = ChatProvider(
+      mockChatRepo,
+      ConnectivityService.instance,
+      sessionEpoch,
+    );
+    profileProvider = ProfileProvider(
+      mockProfileRepo,
+      mockAuthService,
+      sessionEpoch,
+      null,
+    );
     bodyMetricsProvider = BodyMetricsProvider(mockBodyMetricsRepo, null);
     analyticsProvider = AnalyticsProvider(mockAnalyticsRepo);
     achievementsProvider = AchievementsProvider(mockAchievementRepo);

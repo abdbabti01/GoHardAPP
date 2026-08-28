@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 
 import 'app.dart';
 import 'core/services/session_cleanup_initializer.dart';
+import 'core/services/user_session_epoch.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/api_service.dart';
 import 'data/repositories/auth_repository.dart';
@@ -95,6 +96,14 @@ void main() async {
 
   // Initialize secure storage
   const secureStorage = FlutterSecureStorage();
+
+  // Single shared session-identity instance for the whole app process.
+  // Depends on nothing (see UserSessionEpoch's own doc comment), so it is
+  // safe to construct here alongside the other app-lifetime singletons and
+  // hand the SAME instance to every Provider that needs to capture/check
+  // it - only AuthProvider ever calls activate()/invalidate() on it.
+  final sessionEpoch = UserSessionEpoch();
+
   runApp(
     /// MultiProvider setup for dependency injection and state management
     /// Matches the service and ViewModel structure from MAUI app
@@ -105,6 +114,7 @@ void main() async {
         ChangeNotifierProvider<ConnectivityService>.value(value: connectivity),
         Provider<NotificationService>.value(value: notificationService),
         Provider<FlutterSecureStorage>.value(value: secureStorage),
+        Provider<UserSessionEpoch>.value(value: sessionEpoch),
         Provider<AuthService>(create: (_) => AuthService()),
         ProxyProvider<AuthService, ApiService>(
           update: (_, authService, __) => ApiService(authService),
@@ -322,11 +332,21 @@ void main() async {
                 context.read<AuthService>(),
                 context.read<ApiService>(),
                 context.read<LocalDatabaseService>(),
+                // UserSessionEpoch is a fixed .value() singleton, never
+                // reactively watched, so it is read directly here rather
+                // than added as a formal ProxyProvider type parameter.
+                context.read<UserSessionEpoch>(),
               ),
           update:
-              (_, authRepo, authService, apiService, localDb, previous) =>
+              (context, authRepo, authService, apiService, localDb, previous) =>
                   previous ??
-                  AuthProvider(authRepo, authService, apiService, localDb),
+                  AuthProvider(
+                    authRepo,
+                    authService,
+                    apiService,
+                    localDb,
+                    context.read<UserSessionEpoch>(),
+                  ),
         ),
         ChangeNotifierProxyProvider3<
           SessionRepository,
@@ -398,12 +418,18 @@ void main() async {
               (context) => ProfileProvider(
                 context.read<ProfileRepository>(),
                 context.read<AuthService>(),
+                context.read<UserSessionEpoch>(),
                 context.read<ConnectivityService>(),
               ),
           update:
-              (_, profileRepo, authService, connectivity, previous) =>
+              (context, profileRepo, authService, connectivity, previous) =>
                   previous ??
-                  ProfileProvider(profileRepo, authService, connectivity),
+                  ProfileProvider(
+                    profileRepo,
+                    authService,
+                    context.read<UserSessionEpoch>(),
+                    connectivity,
+                  ),
         ),
         ChangeNotifierProxyProvider<AnalyticsRepository, AnalyticsProvider>(
           create:
@@ -422,10 +448,16 @@ void main() async {
               (context) => ChatProvider(
                 context.read<ChatRepository>(),
                 context.read<ConnectivityService>(),
+                context.read<UserSessionEpoch>(),
               ),
           update:
-              (_, chatRepo, connectivity, previous) =>
-                  previous ?? ChatProvider(chatRepo, connectivity),
+              (context, chatRepo, connectivity, previous) =>
+                  previous ??
+                  ChatProvider(
+                    chatRepo,
+                    connectivity,
+                    context.read<UserSessionEpoch>(),
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           SharedWorkoutRepository,

@@ -4,6 +4,7 @@ import '../data/models/chat_conversation.dart';
 import '../data/models/chat_message.dart';
 import '../data/repositories/chat_repository.dart';
 import '../core/services/connectivity_service.dart';
+import '../core/services/user_session_epoch.dart';
 
 export '../data/repositories/chat_repository.dart'
     show
@@ -18,6 +19,7 @@ export '../data/repositories/chat_repository.dart'
 class ChatProvider extends ChangeNotifier {
   final ChatRepository _chatRepository;
   final ConnectivityService _connectivity;
+  final UserSessionEpoch _sessionEpoch;
 
   List<ChatConversation> _conversations = [];
   ChatConversation? _currentConversation;
@@ -26,14 +28,21 @@ class ChatProvider extends ChangeNotifier {
   String? _errorMessage;
   StreamSubscription<bool>? _connectivitySubscription;
 
-  ChatProvider(this._chatRepository, this._connectivity) {
+  ChatProvider(this._chatRepository, this._connectivity, this._sessionEpoch) {
     // Don't auto-load conversations here - they'll be loaded after login
     // This prevents trying to load conversations before user is authenticated
 
-    // Listen for connectivity changes and refresh when going online
+    // Listen for connectivity changes and refresh when going online. This
+    // callback can fire at any point in the app's lifetime, including during
+    // a logged-out gap between one user's logout and the next user's login -
+    // capture a token fresh on every invocation and skip entirely if there
+    // is no active session, so a connectivity flap while logged out can
+    // never dispatch a conversation load for nobody.
     _connectivitySubscription = _connectivity.connectivityStream.listen((
       isOnline,
     ) {
+      final token = _sessionEpoch.capture();
+      if (token == null) return;
       if (isOnline) {
         debugPrint('📡 Connection restored - refreshing conversations');
         loadConversations(showLoading: false);
@@ -49,9 +58,18 @@ class ChatProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isOffline => !_connectivity.isOnline;
 
-  /// Load all conversations for current user
+  /// Load all conversations for current user.
+  ///
+  /// Session-epoch guarded: [token] is captured before any await, and
+  /// re-checked after every await (including inside catch/finally) before
+  /// touching any field or calling notifyListeners(). If the session that
+  /// requested this load has since ended - logout, or a different user
+  /// logging in - the response is dropped silently.
   Future<void> loadConversations({bool showLoading = true}) async {
     if (_isLoading) return;
+
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
 
     if (showLoading) {
       _isLoading = true;
@@ -61,21 +79,29 @@ class ChatProvider extends ChangeNotifier {
 
     try {
       final conversationList = await _chatRepository.getConversations();
+      if (!_sessionEpoch.isCurrent(token)) return;
       _conversations = conversationList;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage =
           'Failed to load conversations: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Load conversations error: $e');
     } finally {
-      if (showLoading) {
-        _isLoading = false;
+      if (_sessionEpoch.isCurrent(token)) {
+        if (showLoading) {
+          _isLoading = false;
+        }
+        notifyListeners();
       }
-      notifyListeners();
     }
   }
 
-  /// Load a specific conversation with all messages
+  /// Load a specific conversation with all messages. Same session-epoch
+  /// guarding as [loadConversations].
   Future<void> loadConversation(int conversationId) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -84,14 +110,18 @@ class ChatProvider extends ChangeNotifier {
       final conversation = await _chatRepository.getConversation(
         conversationId,
       );
+      if (!_sessionEpoch.isCurrent(token)) return;
       _currentConversation = conversation;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage =
           'Failed to load conversation: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Load conversation error: $e');
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -106,6 +136,9 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -115,6 +148,7 @@ class ChatProvider extends ChangeNotifier {
         title: title,
         type: type,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
       if (conversation != null) {
         _conversations.insert(0, conversation);
@@ -123,17 +157,43 @@ class ChatProvider extends ChangeNotifier {
 
       return conversation;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to create conversation: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Create conversation error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Send a message and get AI response
+  /// Send a message and get AI response.
+  ///
+  /// Guarded by BOTH session identity and conversation identity, captured
+  /// together before the first await:
+  /// - [token] guards against the session ending (logout) or a different
+  ///   user logging in while the AI-response await is in flight.
+  /// - [conversationId] guards against the SAME user switching to a
+  ///   DIFFERENT conversation in this same shared provider instance while
+  ///   that await is in flight - a case the session token alone cannot
+  ///   catch, since the session never changes.
+  ///
+  /// [ownsConversation] is rechecked after the await and before every
+  /// success/failure/error mutation; nothing below ever mutates
+  /// [_currentConversation] or [_conversations] without it passing first,
+  /// and every mutation re-reads the CURRENT conversation by [conversationId]
+  /// rather than reusing a stale local reference or list index. This
+  /// prevents both a null-assert crash (if [clear] ran mid-flight) and
+  /// appending this response into a conversation - same account or a
+  /// different one - that it does not belong to.
+  ///
+  /// The `_isSending` reentrancy guard below also means at most one
+  /// [sendMessage] call is ever in flight for this provider at a time, so
+  /// there is never a "newer" send operation for this one's `finally` block
+  /// to incorrectly clear.
   Future<bool> sendMessage(String message) async {
     if (isOffline) {
       _errorMessage = 'Cannot send messages offline - AI requires connection';
@@ -141,11 +201,23 @@ class ChatProvider extends ChangeNotifier {
       return false;
     }
 
-    if (_currentConversation == null) {
+    if (_isSending) return false;
+
+    final conversation = _currentConversation;
+    if (conversation == null) {
       _errorMessage = 'No active conversation';
       notifyListeners();
       return false;
     }
+
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
+    final conversationId = conversation.id;
+
+    bool ownsConversation() =>
+        _sessionEpoch.isCurrent(token) &&
+        _currentConversation?.id == conversationId;
 
     _isSending = true;
     _errorMessage = null;
@@ -155,64 +227,83 @@ class ChatProvider extends ChangeNotifier {
       // Add user message optimistically to UI
       final userMessage = ChatMessage(
         id: 0, // Temporary ID
-        conversationId: _currentConversation!.id,
+        conversationId: conversationId,
         role: 'user',
         content: message,
         createdAt: DateTime.now().toUtc(),
       );
 
-      _currentConversation = _currentConversation!.copyWith(
-        messages: [..._currentConversation!.messages, userMessage],
+      _currentConversation = conversation.copyWith(
+        messages: [...conversation.messages, userMessage],
       );
       notifyListeners();
 
       // Send to server and get AI response
       final aiResponse = await _chatRepository.sendMessage(
-        conversationId: _currentConversation!.id,
+        conversationId: conversationId,
         message: message,
       );
+      if (!ownsConversation()) return false;
+      // Re-read the CURRENT conversation by id - never the locally
+      // captured [conversation] snapshot from before the await, which may
+      // now be stale even though the id still matches (e.g. a reload
+      // picked up other changes while this request was in flight).
+      final owned = _currentConversation!;
+
+      if (aiResponse != null && aiResponse.conversationId != conversationId) {
+        // Defense-in-depth: the repository's own response claims a
+        // different conversation than the one this request was sent for -
+        // never attach it, regardless of local state. Treated the same as
+        // a failed response: roll back the optimistic message rather than
+        // leaving it stuck in a pending-looking state.
+        _currentConversation = owned.copyWith(
+          messages: owned.messages.where((m) => m.id != 0).toList(),
+        );
+        _errorMessage = 'Failed to get AI response';
+        return false;
+      }
 
       if (aiResponse != null) {
         // Update conversation with AI response
-        _currentConversation = _currentConversation!.copyWith(
-          messages: [..._currentConversation!.messages, aiResponse],
+        final updated = owned.copyWith(
+          messages: [...owned.messages, aiResponse],
           lastMessageAt: aiResponse.createdAt,
         );
+        _currentConversation = updated;
 
-        // Update conversation in list
-        final index = _conversations.indexWhere(
-          (c) => c.id == _currentConversation!.id,
-        );
+        // Update conversation in list by its stable id, never by a
+        // positional index captured before the await.
+        final index = _conversations.indexWhere((c) => c.id == conversationId);
         if (index != -1) {
-          _conversations[index] = _currentConversation!;
+          _conversations[index] = updated;
         }
 
         return true;
       } else {
         // Remove optimistic user message on failure
-        _currentConversation = _currentConversation!.copyWith(
-          messages:
-              _currentConversation!.messages.where((m) => m.id != 0).toList(),
+        _currentConversation = owned.copyWith(
+          messages: owned.messages.where((m) => m.id != 0).toList(),
         );
         _errorMessage = 'Failed to get AI response';
         return false;
       }
     } catch (e) {
-      // Remove optimistic user message on error
-      if (_currentConversation != null) {
-        _currentConversation = _currentConversation!.copyWith(
-          messages:
-              _currentConversation!.messages.where((m) => m.id != 0).toList(),
+      if (ownsConversation()) {
+        // Remove optimistic user message on error
+        final owned = _currentConversation!;
+        _currentConversation = owned.copyWith(
+          messages: owned.messages.where((m) => m.id != 0).toList(),
         );
+        _errorMessage =
+            'Failed to send message: ${e.toString().replaceAll('Exception: ', '')}';
       }
-
-      _errorMessage =
-          'Failed to send message: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Send message error: $e');
       return false;
     } finally {
-      _isSending = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isSending = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -224,8 +315,12 @@ class ChatProvider extends ChangeNotifier {
       return false;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     try {
       final success = await _chatRepository.deleteConversation(conversationId);
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       if (success) {
         _conversations.removeWhere((c) => c.id == conversationId);
@@ -243,6 +338,7 @@ class ChatProvider extends ChangeNotifier {
         return false;
       }
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to delete conversation: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Delete conversation error: $e');
@@ -251,7 +347,11 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Delete all conversations
+  /// Delete all conversations. Each iteration of the delete loop is
+  /// re-checked against [token]: if the session ends mid-batch, the loop
+  /// stops issuing further UI-state mutations for what is now a stale list
+  /// rather than continuing to clear/notify on behalf of a session that no
+  /// longer owns this provider instance.
   Future<bool> deleteAllConversations() async {
     if (isOffline) {
       _errorMessage = 'Cannot delete conversations offline';
@@ -263,6 +363,9 @@ class ChatProvider extends ChangeNotifier {
       return true;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     try {
       // Delete all conversations one by one
       int successCount = 0;
@@ -272,6 +375,7 @@ class ChatProvider extends ChangeNotifier {
         final success = await _chatRepository.deleteConversation(
           conversation.id,
         );
+        if (!_sessionEpoch.isCurrent(token)) return false;
         if (success) {
           successCount++;
         } else {
@@ -294,6 +398,7 @@ class ChatProvider extends ChangeNotifier {
 
       return failCount == 0;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to delete conversations: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Delete all conversations error: $e');
@@ -316,6 +421,9 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -328,6 +436,7 @@ class ChatProvider extends ChangeNotifier {
         equipment: equipment,
         limitations: limitations,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
       if (conversation != null) {
         _conversations.insert(0, conversation);
@@ -336,13 +445,16 @@ class ChatProvider extends ChangeNotifier {
 
       return conversation;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to generate workout plan: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Generate workout plan error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -360,6 +472,9 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -372,6 +487,7 @@ class ChatProvider extends ChangeNotifier {
         restrictions: restrictions,
         preferences: preferences,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
       if (conversation != null) {
         _conversations.insert(0, conversation);
@@ -380,13 +496,16 @@ class ChatProvider extends ChangeNotifier {
 
       return conversation;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to generate meal plan: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Generate meal plan error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -398,21 +517,28 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       final result = await _chatRepository.previewMealPlan(conversationId);
+      if (!_sessionEpoch.isCurrent(token)) return null;
       return result;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to preview meal plan: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Preview meal plan error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -428,6 +554,9 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -437,15 +566,19 @@ class ChatProvider extends ChangeNotifier {
         conversationId,
         day: day,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
       return result;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to apply meal plan: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Apply meal plan error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -467,6 +600,9 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -479,15 +615,19 @@ class ChatProvider extends ChangeNotifier {
         startDate: startDate,
         overwriteExisting: overwriteExisting,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
       return result;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to apply meal plan: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Apply meal plan week error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -503,6 +643,9 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -513,6 +656,7 @@ class ChatProvider extends ChangeNotifier {
         endDate: endDate,
         focusArea: focusArea,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
       if (conversation != null) {
         _conversations.insert(0, conversation);
@@ -521,13 +665,16 @@ class ChatProvider extends ChangeNotifier {
 
       return conversation;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to analyze progress: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Analyze progress error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -569,6 +716,9 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -577,16 +727,20 @@ class ChatProvider extends ChangeNotifier {
       final result = await _chatRepository.previewSessionsFromPlan(
         conversationId: _currentConversation!.id,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
       return result;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to preview sessions: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Preview sessions error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -613,6 +767,9 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -622,16 +779,20 @@ class ChatProvider extends ChangeNotifier {
         conversationId: _currentConversation!.id,
         startDate: startDate,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
       return result;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to create sessions: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Create sessions error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -663,6 +824,9 @@ class ChatProvider extends ChangeNotifier {
       return null;
     }
 
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -677,16 +841,20 @@ class ChatProvider extends ChangeNotifier {
         daysPerWeek: daysPerWeek,
         startDate: startDate,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
       return result;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to create program: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Create program error: $e');
       return null;
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
