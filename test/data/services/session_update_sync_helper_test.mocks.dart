@@ -7,8 +7,9 @@ import 'dart:async' as _i2;
 
 import 'package:dio/dio.dart' as _i4;
 import 'package:go_hard_app/data/services/api_service.dart' as _i3;
+import 'package:go_hard_app/data/services/session_request_context.dart' as _i5;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i5;
+import 'package:mockito/src/dummies.dart' as _i6;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -43,6 +44,24 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
   );
 
   @override
+  set beforeDispatchEpochCheckForTesting(
+    _i2.Future<void> Function()? _beforeDispatchEpochCheckForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeDispatchEpochCheckForTesting,
+      _beforeDispatchEpochCheckForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set testHttpClientAdapter(_i4.HttpClientAdapter? adapter) =>
+      super.noSuchMethod(
+        Invocation.setter(#testHttpClientAdapter, adapter),
+        returnValueForMissingStub: null,
+      );
+
+  @override
   void resetUnauthorizedFlag() => super.noSuchMethod(
     Invocation.method(#resetUnauthorizedFlag, []),
     returnValueForMissingStub: null,
@@ -55,21 +74,31 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
   );
 
   @override
-  _i2.Future<T> get<T>(String? path, {Map<String, dynamic>? queryParameters}) =>
+  _i2.Future<T> get<T>(
+    String? path, {
+    Map<String, dynamic>? queryParameters,
+    _i5.SessionRequestContext? sessionContext,
+  }) =>
       (super.noSuchMethod(
             Invocation.method(
               #get,
               [path],
-              {#queryParameters: queryParameters},
+              {
+                #queryParameters: queryParameters,
+                #sessionContext: sessionContext,
+              },
             ),
             returnValue:
-                _i5.ifNotNull(
-                  _i5.dummyValueOrNull<T>(
+                _i6.ifNotNull(
+                  _i6.dummyValueOrNull<T>(
                     this,
                     Invocation.method(
                       #get,
                       [path],
-                      {#queryParameters: queryParameters},
+                      {
+                        #queryParameters: queryParameters,
+                        #sessionContext: sessionContext,
+                      },
                     ),
                   ),
                   (T v) => _i2.Future<T>.value(v),
@@ -79,62 +108,113 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
                   Invocation.method(
                     #get,
                     [path],
-                    {#queryParameters: queryParameters},
+                    {
+                      #queryParameters: queryParameters,
+                      #sessionContext: sessionContext,
+                    },
                   ),
                 ),
           )
           as _i2.Future<T>);
 
   @override
-  _i2.Future<T> post<T>(String? path, {dynamic data}) =>
+  _i2.Future<T> post<T>(
+    String? path, {
+    dynamic data,
+    _i5.SessionRequestContext? sessionContext,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#post, [path], {#data: data}),
+            Invocation.method(
+              #post,
+              [path],
+              {#data: data, #sessionContext: sessionContext},
+            ),
             returnValue:
-                _i5.ifNotNull(
-                  _i5.dummyValueOrNull<T>(
+                _i6.ifNotNull(
+                  _i6.dummyValueOrNull<T>(
                     this,
-                    Invocation.method(#post, [path], {#data: data}),
+                    Invocation.method(
+                      #post,
+                      [path],
+                      {#data: data, #sessionContext: sessionContext},
+                    ),
                   ),
                   (T v) => _i2.Future<T>.value(v),
                 ) ??
                 _FakeFuture_0<T>(
                   this,
-                  Invocation.method(#post, [path], {#data: data}),
+                  Invocation.method(
+                    #post,
+                    [path],
+                    {#data: data, #sessionContext: sessionContext},
+                  ),
                 ),
           )
           as _i2.Future<T>);
 
   @override
-  _i2.Future<T> put<T>(String? path, {dynamic data}) =>
+  _i2.Future<T> put<T>(
+    String? path, {
+    dynamic data,
+    _i5.SessionRequestContext? sessionContext,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#put, [path], {#data: data}),
+            Invocation.method(
+              #put,
+              [path],
+              {#data: data, #sessionContext: sessionContext},
+            ),
             returnValue:
-                _i5.ifNotNull(
-                  _i5.dummyValueOrNull<T>(
+                _i6.ifNotNull(
+                  _i6.dummyValueOrNull<T>(
                     this,
-                    Invocation.method(#put, [path], {#data: data}),
+                    Invocation.method(
+                      #put,
+                      [path],
+                      {#data: data, #sessionContext: sessionContext},
+                    ),
                   ),
                   (T v) => _i2.Future<T>.value(v),
                 ) ??
                 _FakeFuture_0<T>(
                   this,
-                  Invocation.method(#put, [path], {#data: data}),
+                  Invocation.method(
+                    #put,
+                    [path],
+                    {#data: data, #sessionContext: sessionContext},
+                  ),
                 ),
           )
           as _i2.Future<T>);
 
   @override
-  _i2.Future<T?> patch<T>(String? path, {dynamic data}) =>
+  _i2.Future<T?> patch<T>(
+    String? path, {
+    dynamic data,
+    _i5.SessionRequestContext? sessionContext,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#patch, [path], {#data: data}),
+            Invocation.method(
+              #patch,
+              [path],
+              {#data: data, #sessionContext: sessionContext},
+            ),
             returnValue: _i2.Future<T?>.value(),
           )
           as _i2.Future<T?>);
 
   @override
-  _i2.Future<bool> delete(String? path, {dynamic data}) =>
+  _i2.Future<bool> delete(
+    String? path, {
+    dynamic data,
+    _i5.SessionRequestContext? sessionContext,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#delete, [path], {#data: data}),
+            Invocation.method(
+              #delete,
+              [path],
+              {#data: data, #sessionContext: sessionContext},
+            ),
             returnValue: _i2.Future<bool>.value(false),
           )
           as _i2.Future<bool>);

@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 
 import 'app.dart';
 import 'core/services/session_cleanup_initializer.dart';
+import 'core/services/session_request_coordinator.dart';
 import 'core/services/user_session_epoch.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/api_service.dart';
@@ -116,8 +117,23 @@ void main() async {
         Provider<FlutterSecureStorage>.value(value: secureStorage),
         Provider<UserSessionEpoch>.value(value: sessionEpoch),
         Provider<AuthService>(create: (_) => AuthService()),
-        ProxyProvider<AuthService, ApiService>(
-          update: (_, authService, __) => ApiService(authService),
+        ProxyProvider2<AuthService, UserSessionEpoch, ApiService>(
+          update:
+              (_, authService, sessionEpoch, __) =>
+                  ApiService(authService, sessionEpoch),
+        ),
+        // Session-bound HTTP request capture/cancellation coordinator (PR
+        // A). Depends only on the same shared UserSessionEpoch instance and
+        // AuthService - not yet consumed by any repository or SyncService,
+        // and not yet wired into AuthProvider's logout pass (PR C).
+        ProxyProvider2<
+          UserSessionEpoch,
+          AuthService,
+          SessionRequestCoordinator
+        >(
+          update:
+              (_, sessionEpoch, authService, __) =>
+                  SessionRequestCoordinator(sessionEpoch, authService),
         ),
 
         // Repositories

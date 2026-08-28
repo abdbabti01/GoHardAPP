@@ -293,9 +293,9 @@ void main() {
     }
 
     setUp(() {
-      apiService = ApiService(mockAuthService);
-      calls = [];
       sessionEpoch = UserSessionEpoch();
+      apiService = ApiService(mockAuthService, sessionEpoch);
+      calls = [];
 
       authProvider = AuthProvider(
         mockAuthRepository,
@@ -963,8 +963,8 @@ void main() {
 
     test('a forced logout from a 401 invalidates the epoch at the same point '
         'as a manual logout', () async {
-      final apiService = ApiService(mockAuthService);
       final coordinationEpoch = UserSessionEpoch();
+      final apiService = ApiService(mockAuthService, coordinationEpoch);
       final forced = AuthProvider(
         mockAuthRepository,
         mockAuthService,
