@@ -277,12 +277,17 @@ void main() async {
           NutritionRepository
         >(
           update:
-              (_, apiService, localDb, connectivity, authService, __) =>
+              (context, apiService, localDb, connectivity, authService, __) =>
                   NutritionRepository(
                     apiService,
                     localDb,
                     connectivity,
                     authService,
+                    // UserSessionEpoch is a fixed .value() singleton, never
+                    // reactively watched, so it is read directly here
+                    // rather than added as a formal ProxyProvider type
+                    // parameter.
+                    context.read<UserSessionEpoch>(),
                   ),
         ),
         ProxyProvider2<ApiService, ConnectivityService, FriendsRepository>(

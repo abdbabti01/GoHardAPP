@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
+import '../../core/services/user_session_epoch.dart';
 import '../models/food_template.dart';
 import '../models/meal_log.dart';
 import '../models/meal_entry.dart';
@@ -22,18 +23,254 @@ import '../local/models/local_nutrition_goal.dart';
 import '../local/models/local_food_template.dart';
 
 /// Repository for nutrition operations with offline-first support
+///
+/// ## Local ownership enforcement
+///
+/// Every mutation below that resolves its target by an externally-supplied
+/// ID (`updateWaterIntake`, `quickAddFood`, `deleteFoodItem`,
+/// `updateNutritionGoal`, `markMealAsConsumed`, `clearAllFood`,
+/// `addFoodItem`, `updateFoodQuantity`) enforces two independent things
+/// before it is allowed to touch a row:
+///
+/// 1. **Row ownership** - the resolved [LocalMealLog]/[LocalNutritionGoal]
+///    (direct `userId`) or [LocalMealEntry]/[LocalFoodItem] (owned
+///    transitively through their parent [LocalMealLog]) must belong to the
+///    calling [UserSessionToken.userId]. See `_resolveOwnedMealLog` et al.
+/// 2. **Operation/session ownership** - the [_sessionEpoch] token captured
+///    at method entry must still be [UserSessionEpoch.isCurrent] at every
+///    checkpoint the method passes through. Row ownership alone is not
+///    enough: a method can resolve a perfectly-owned row, have its user
+///    log out (which invalidates the epoch and empties Isar via
+///    `LocalDatabaseService.clearAll`), and only then reach its
+///    `writeTxn` - without the epoch recheck placed as the FIRST statement
+///    inside that `writeTxn` callback, that write would silently
+///    reinsert/resurrect the logged-out user's row into a database that
+///    was just cleared. See the `beforeWriteTxnForTesting` /
+///    `insideWriteTxnForTesting` / `afterWriteTxnForTesting` test seams
+///    below for how this exact race is exercised deterministically.
+///
+/// This repository does not itself solve `SyncService`/`_backgroundSync`
+/// session ownership (a background push scheduled while the session was
+/// still current can still complete after that session has since ended -
+/// see `_backgroundSync`'s doc comment) or `AuthProvider` logout ordering;
+/// both remain explicitly out of scope for this class and are tracked as
+/// separate follow-ups.
 class NutritionRepository {
   final ApiService _apiService;
   final LocalDatabaseService _localDb;
   final ConnectivityService _connectivity;
   final AuthService _authService;
 
+  /// Shared app-wide session-identity instance - the SAME object handed to
+  /// every other Provider/repository that needs it (see main.dart). Only
+  /// AuthProvider ever calls activate()/invalidate() on it; this
+  /// repository only ever reads it via capture()/isCurrent().
+  final UserSessionEpoch _sessionEpoch;
+
   NutritionRepository(
     this._apiService,
     this._localDb,
     this._connectivity,
     this._authService,
+    this._sessionEpoch,
   );
+
+  // ============ Test-only session-race seams ============
+  //
+  // Three hooks, one per checkpoint, let tests deterministically land a
+  // session invalidation (and, where relevant, a clearAll() wipe) at each
+  // of the three points every protected mutation re-checks
+  // `_sessionEpoch.isCurrent(token)` around its writeTxn: immediately
+  // before entering it, as the very first statement inside it (the
+  // checkpoint that specifically closes the "waiting for Isar's write
+  // lock" race described on this class), and immediately after it
+  // returns. Each is `@visibleForTesting`, defaults to null, and is never
+  // assigned outside test code - production control flow and performance
+  // are unaffected.
+  @visibleForTesting
+  Future<void> Function()? beforeWriteTxnForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? insideWriteTxnForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? afterWriteTxnForTesting;
+
+  Future<void> _runTestHook(Future<void> Function()? hook) async {
+    if (hook != null) {
+      await hook();
+    }
+  }
+
+  // ============ Session/ownership Helpers ============
+
+  /// Captures the caller's session token and validates it hasn't changed
+  /// by the time [AuthService.getUserId] resolves. Returns null if there
+  /// is no active session (logged out), if the session changed while the
+  /// userId read was in flight (a logout/relogin race), or if the
+  /// resolved userId doesn't match the captured token's userId. Callers
+  /// must treat null exactly like "no authenticated user" - the same
+  /// failure every other unauthenticated check in this file already uses
+  /// - and must not perform any Isar query or API call in that case.
+  ///
+  /// Deliberately never rereads/adopts a later userId: the single
+  /// [AuthService.getUserId] read below is compared back against the
+  /// SAME token captured before it, never used to silently swap identity.
+  Future<UserSessionToken?> _captureOwnedSessionToken() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
+    final userId = await _authService.getUserId();
+
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (userId == null || userId != token.userId) return null;
+
+    return token;
+  }
+
+  /// Resolves a [LocalMealLog] identified ambiguously by [id] (server ID
+  /// or local Isar ID - every public model ID is `serverId ?? localId`,
+  /// see `ModelMapper.localToMealLog`) to a row owned by [token.userId],
+  /// or null if neither interpretation yields an owned row.
+  ///
+  /// Tries the server-ID interpretation first, but only accepts a match
+  /// owned by the caller - a foreign server-ID match (same numeric [id],
+  /// different owner) never prevents falling through to the local-ID
+  /// interpretation, since server IDs and Isar auto-increment local IDs
+  /// are independent sequences that can collide on the same number.
+  Future<LocalMealLog?> _resolveOwnedMealLog(
+    Isar db,
+    int id,
+    UserSessionToken token,
+  ) async {
+    final byServerId =
+        await db.localMealLogs
+            .filter()
+            .serverIdEqualTo(id)
+            .userIdEqualTo(token.userId)
+            .findFirst();
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (byServerId != null) return byServerId;
+
+    final byLocalId = await db.localMealLogs.get(id);
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (byLocalId != null && byLocalId.userId == token.userId) {
+      return byLocalId;
+    }
+
+    return null;
+  }
+
+  /// Same contract as [_resolveOwnedMealLog], for [LocalNutritionGoal].
+  Future<LocalNutritionGoal?> _resolveOwnedNutritionGoal(
+    Isar db,
+    int id,
+    UserSessionToken token,
+  ) async {
+    final byServerId =
+        await db.localNutritionGoals
+            .filter()
+            .serverIdEqualTo(id)
+            .userIdEqualTo(token.userId)
+            .findFirst();
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (byServerId != null) return byServerId;
+
+    final byLocalId = await db.localNutritionGoals.get(id);
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (byLocalId != null && byLocalId.userId == token.userId) {
+      return byLocalId;
+    }
+
+    return null;
+  }
+
+  /// True if [mealLogLocalId] resolves to a [LocalMealLog] owned by
+  /// [token.userId]. False (never throws) for a missing/orphaned parent,
+  /// so an orphaned child row is treated the same as a foreign one - never
+  /// mutated.
+  Future<bool> _isMealLogOwnedBy(
+    Isar db,
+    int mealLogLocalId,
+    UserSessionToken token,
+  ) async {
+    final parentLog = await db.localMealLogs.get(mealLogLocalId);
+    if (!_sessionEpoch.isCurrent(token)) return false;
+    return parentLog != null && parentLog.userId == token.userId;
+  }
+
+  /// Resolves a [LocalMealEntry] identified ambiguously by [id] to a row
+  /// whose parent [LocalMealLog] is owned by [token.userId] - entries have
+  /// no direct `userId` field, so ownership is only reachable by walking
+  /// `mealLogLocalId`. Same server-ID-first-but-not-exclusive strategy as
+  /// [_resolveOwnedMealLog]: a foreign or orphaned server-ID candidate
+  /// falls through to the local-ID interpretation, which is independently
+  /// validated through its own parent.
+  Future<LocalMealEntry?> _resolveOwnedMealEntry(
+    Isar db,
+    int id,
+    UserSessionToken token,
+  ) async {
+    final byServerId =
+        await db.localMealEntrys.filter().serverIdEqualTo(id).findFirst();
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (byServerId != null &&
+        await _isMealLogOwnedBy(db, byServerId.mealLogLocalId, token)) {
+      return byServerId;
+    }
+
+    final byLocalId = await db.localMealEntrys.get(id);
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (byLocalId != null &&
+        await _isMealLogOwnedBy(db, byLocalId.mealLogLocalId, token)) {
+      return byLocalId;
+    }
+
+    return null;
+  }
+
+  /// True if [mealEntryLocalId] resolves to a [LocalMealEntry] whose
+  /// parent [LocalMealLog] is owned by [token.userId]. False for a missing
+  /// entry or a missing/foreign grandparent log - an orphaned food item is
+  /// never mutated.
+  Future<bool> _isMealEntryOwnedBy(
+    Isar db,
+    int mealEntryLocalId,
+    UserSessionToken token,
+  ) async {
+    final parentEntry = await db.localMealEntrys.get(mealEntryLocalId);
+    if (!_sessionEpoch.isCurrent(token)) return false;
+    if (parentEntry == null) return false;
+    return _isMealLogOwnedBy(db, parentEntry.mealLogLocalId, token);
+  }
+
+  /// Resolves a [LocalFoodItem] identified ambiguously by [id] to a row
+  /// whose full grandparent chain (`mealEntryLocalId` ->
+  /// `LocalMealEntry.mealLogLocalId` -> `LocalMealLog.userId`) is owned by
+  /// [token.userId]. Same server-ID-first-but-not-exclusive strategy as
+  /// [_resolveOwnedMealLog].
+  Future<LocalFoodItem?> _resolveOwnedFoodItem(
+    Isar db,
+    int id,
+    UserSessionToken token,
+  ) async {
+    final byServerId =
+        await db.localFoodItems.filter().serverIdEqualTo(id).findFirst();
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (byServerId != null &&
+        await _isMealEntryOwnedBy(db, byServerId.mealEntryLocalId, token)) {
+      return byServerId;
+    }
+
+    final byLocalId = await db.localFoodItems.get(id);
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (byLocalId != null &&
+        await _isMealEntryOwnedBy(db, byLocalId.mealEntryLocalId, token)) {
+      return byLocalId;
+    }
+
+    return null;
+  }
 
   // ============ Helper Methods ============
 
@@ -529,20 +766,33 @@ class NutritionRepository {
 
   /// Update water intake - offline-first
   Future<void> updateWaterIntake(int mealLogId, double waterIntake) async {
+    final token = await _captureOwnedSessionToken();
+    if (token == null) {
+      throw Exception('User not authenticated');
+    }
+
     final db = _localDb.database;
 
-    // Find local meal log
-    var localLog =
-        await db.localMealLogs.filter().serverIdEqualTo(mealLogId).findFirst();
-    localLog ??= await db.localMealLogs.get(mealLogId);
-
+    // Find local meal log, owned by the captured user
+    final localLog = await _resolveOwnedMealLog(db, mealLogId, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
     if (localLog == null) {
       throw Exception('Meal log not found');
     }
 
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     // Update locally first
     await db.writeTxn(() async {
-      localLog!.waterIntake = waterIntake;
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      localLog.waterIntake = waterIntake;
       localLog.lastModifiedLocal = DateTime.now().toUtc();
       localLog.isSynced = false;
       if (localLog.serverId != null) {
@@ -551,13 +801,18 @@ class NutritionRepository {
       await db.localMealLogs.put(localLog);
     });
 
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     debugPrint('💧 Updated water intake locally: $waterIntake ml');
 
     // Sync in background if online
     if (_connectivity.isOnline && localLog.serverId != null) {
       _backgroundSync(
         () => _apiService.put<void>(
-          ApiConfig.mealLogWater(localLog!.serverId!),
+          ApiConfig.mealLogWater(localLog.serverId!),
           data: waterIntake,
         ),
         'Synced water intake',
@@ -573,23 +828,27 @@ class NutritionRepository {
     required int foodTemplateId,
     double quantity = 1,
   }) async {
+    final token = await _captureOwnedSessionToken();
+    if (token == null) {
+      throw Exception('User not authenticated');
+    }
+
     final db = _localDb.database;
 
-    // Find local meal entry
-    var localEntry =
-        await db.localMealEntrys
-            .filter()
-            .serverIdEqualTo(mealEntryId)
-            .findFirst();
-    localEntry ??= await db.localMealEntrys.get(mealEntryId);
-
+    // Find local meal entry, owned by the captured user
+    final localEntry = await _resolveOwnedMealEntry(db, mealEntryId, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
     if (localEntry == null) {
       throw Exception('Meal entry not found');
     }
 
     // Get food template from cache or API
-    FoodTemplate? template = await _getFoodTemplateById(foodTemplateId);
-
+    final template = await _getFoodTemplateById(foodTemplateId);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
     if (template == null) {
       throw Exception('Food template not found');
     }
@@ -602,7 +861,15 @@ class NutritionRepository {
     final now = DateTime.now();
     late LocalFoodItem savedFood;
 
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
       final localFood = LocalFoodItem(
         mealEntryLocalId: entry.localId,
         mealEntryServerId: entry.serverId,
@@ -651,6 +918,11 @@ class NutritionRepository {
       await _reconcileMealLogConsumedTotals(db, entry.mealLogLocalId);
     });
 
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     debugPrint('➕ Added food "${foodTemplate.name}" locally');
 
     // Sync in background if online and entry has server ID
@@ -695,23 +967,36 @@ class NutritionRepository {
 
   /// Delete food item - offline-first
   Future<void> deleteFoodItem(int id) async {
+    final token = await _captureOwnedSessionToken();
+    if (token == null) {
+      throw Exception('User not authenticated');
+    }
+
     final db = _localDb.database;
 
-    // Find local food item
-    var localFood =
-        await db.localFoodItems.filter().serverIdEqualTo(id).findFirst();
-    localFood ??= await db.localFoodItems.get(id);
-
+    // Find local food item, owned by the captured user
+    final localFood = await _resolveOwnedFoodItem(db, id, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
     if (localFood == null) {
       throw Exception('Food item not found');
     }
 
     final serverId = localFood.serverId;
 
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
       // Update meal entry totals
       final localEntry = await db.localMealEntrys.get(
-        localFood!.mealEntryLocalId,
+        localFood.mealEntryLocalId,
       );
       if (localEntry != null) {
         localEntry.totalCalories -= localFood.calories;
@@ -734,6 +1019,11 @@ class NutritionRepository {
         await _reconcileMealLogConsumedTotals(db, localEntry.mealLogLocalId);
       }
     });
+
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
 
     debugPrint('🗑️ Deleted food item locally');
 
@@ -1154,20 +1444,33 @@ class NutritionRepository {
 
   /// Update nutrition goal - offline-first
   Future<void> updateNutritionGoal(int id, NutritionGoal goal) async {
+    final token = await _captureOwnedSessionToken();
+    if (token == null) {
+      throw Exception('User not authenticated');
+    }
+
     final db = _localDb.database;
 
-    // Find local goal
-    var localGoal =
-        await db.localNutritionGoals.filter().serverIdEqualTo(id).findFirst();
-    localGoal ??= await db.localNutritionGoals.get(id);
-
+    // Find local goal, owned by the captured user
+    final localGoal = await _resolveOwnedNutritionGoal(db, id, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
     if (localGoal == null) {
       throw Exception('Nutrition goal not found');
     }
 
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     // Update locally first
     await db.writeTxn(() async {
-      localGoal!.dailyCalories = goal.dailyCalories;
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      localGoal.dailyCalories = goal.dailyCalories;
       localGoal.dailyProtein = goal.dailyProtein;
       localGoal.dailyCarbohydrates = goal.dailyCarbohydrates;
       localGoal.dailyFat = goal.dailyFat;
@@ -1183,13 +1486,18 @@ class NutritionRepository {
       await db.localNutritionGoals.put(localGoal);
     });
 
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     debugPrint('✅ Updated nutrition goal locally');
 
     // Sync in background if online
     if (_connectivity.isOnline && localGoal.serverId != null) {
       _backgroundSync(
         () => _apiService.put<void>(
-          ApiConfig.nutritionGoalById(localGoal!.serverId!),
+          ApiConfig.nutritionGoalById(localGoal.serverId!),
           data: goal.toJson(),
         ),
         'Synced nutrition goal update',
@@ -1546,18 +1854,31 @@ class NutritionRepository {
     bool isConsumed = true,
     DateTime? consumedAt,
   }) async {
+    final token = await _captureOwnedSessionToken();
+    if (token == null) {
+      throw Exception('User not authenticated');
+    }
+
     final db = _localDb.database;
 
-    var localEntry =
-        await db.localMealEntrys.filter().serverIdEqualTo(entryId).findFirst();
-    localEntry ??= await db.localMealEntrys.get(entryId);
-
+    final localEntry = await _resolveOwnedMealEntry(db, entryId, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
     if (localEntry == null) {
       throw Exception('Meal entry not found');
     }
 
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     await db.writeTxn(() async {
-      localEntry!.isConsumed = isConsumed;
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      localEntry.isConsumed = isConsumed;
       localEntry.consumedAt =
           isConsumed ? (consumedAt ?? DateTime.now()) : null;
       localEntry.lastModifiedLocal = DateTime.now().toUtc();
@@ -1573,6 +1894,11 @@ class NutritionRepository {
       // consumed is toggled.
       await _reconcileMealLogConsumedTotals(db, localEntry.mealLogLocalId);
     });
+
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
 
     // Sync to API immediately (not background) so dashboard refresh gets updated data
     if (_connectivity.isOnline && localEntry.serverId != null) {
@@ -1594,22 +1920,35 @@ class NutritionRepository {
 
   /// Clear all food for today
   Future<MealLog> clearAllFood(int mealLogId) async {
+    final token = await _captureOwnedSessionToken();
+    if (token == null) {
+      throw Exception('User not authenticated');
+    }
+
     final db = _localDb.database;
 
-    var localLog =
-        await db.localMealLogs.filter().serverIdEqualTo(mealLogId).findFirst();
-    localLog ??= await db.localMealLogs.get(mealLogId);
-
+    final localLog = await _resolveOwnedMealLog(db, mealLogId, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
     if (localLog == null) {
       throw Exception('Meal log not found');
     }
 
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
       // Get all entries for this log
       final entries =
           await db.localMealEntrys
               .filter()
-              .mealLogLocalIdEqualTo(localLog!.localId)
+              .mealLogLocalIdEqualTo(localLog.localId)
               .findAll();
 
       for (final entry in entries) {
@@ -1647,12 +1986,17 @@ class NutritionRepository {
       await db.localMealLogs.put(localLog);
     });
 
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     debugPrint('🗑️ Cleared all food locally');
 
     if (_connectivity.isOnline && localLog.serverId != null) {
       _backgroundSync(
         () => _apiService.post<Map<String, dynamic>>(
-          ApiConfig.mealLogClear(localLog!.serverId!),
+          ApiConfig.mealLogClear(localLog.serverId!),
         ),
         'Synced clear all food',
       );
@@ -1665,16 +2009,22 @@ class NutritionRepository {
 
   /// Add a food item to a meal entry - offline-first
   Future<FoodItem> addFoodItem(FoodItem foodItem) async {
+    final token = await _captureOwnedSessionToken();
+    if (token == null) {
+      throw Exception('User not authenticated');
+    }
+
     final db = _localDb.database;
 
-    // Find the parent meal entry
-    var parentEntry =
-        await db.localMealEntrys
-            .filter()
-            .serverIdEqualTo(foodItem.mealEntryId)
-            .findFirst();
-    parentEntry ??= await db.localMealEntrys.get(foodItem.mealEntryId);
-
+    // Find the parent meal entry, owned by the captured user
+    final parentEntry = await _resolveOwnedMealEntry(
+      db,
+      foodItem.mealEntryId,
+      token,
+    );
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
     if (parentEntry == null) {
       throw Exception('Meal entry not found');
     }
@@ -1704,11 +2054,20 @@ class NutritionRepository {
     );
 
     int insertedId = 0;
+
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
       insertedId = await db.localFoodItems.put(localFoodItem);
 
       // Update entry totals (status-independent)
-      parentEntry!.totalCalories += foodItem.calories;
+      parentEntry.totalCalories += foodItem.calories;
       parentEntry.totalProtein += foodItem.protein;
       parentEntry.totalCarbohydrates += foodItem.carbohydrates;
       parentEntry.totalFat += foodItem.fat;
@@ -1724,6 +2083,11 @@ class NutritionRepository {
       await _reconcileMealLogConsumedTotals(db, parentEntry.mealLogLocalId);
     });
 
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     debugPrint('✅ Added food item locally: ${foodItem.name}');
 
     // Background sync if online
@@ -1732,7 +2096,7 @@ class NutritionRepository {
         () => _apiService.post<Map<String, dynamic>>(
           ApiConfig.foodItems,
           data: {
-            'mealEntryId': parentEntry!.serverId,
+            'mealEntryId': parentEntry.serverId,
             'foodTemplateId': foodItem.foodTemplateId,
             'name': foodItem.name,
             'brand': foodItem.brand,
@@ -1774,15 +2138,17 @@ class NutritionRepository {
 
   /// Update food item quantity - offline-first
   Future<void> updateFoodQuantity(int foodItemId, double quantity) async {
+    final token = await _captureOwnedSessionToken();
+    if (token == null) {
+      throw Exception('User not authenticated');
+    }
+
     final db = _localDb.database;
 
-    var localItem =
-        await db.localFoodItems
-            .filter()
-            .serverIdEqualTo(foodItemId)
-            .findFirst();
-    localItem ??= await db.localFoodItems.get(foodItemId);
-
+    final localItem = await _resolveOwnedFoodItem(db, foodItemId, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
     if (localItem == null) {
       throw Exception('Food item not found');
     }
@@ -1801,9 +2167,17 @@ class NutritionRepository {
     final newCarbs = oldCarbs * quantityRatio;
     final newFat = oldFat * quantityRatio;
 
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
       // Update item
-      localItem!.quantity = quantity;
+      localItem.quantity = quantity;
       localItem.calories = newCalories;
       localItem.protein = newProtein;
       localItem.carbohydrates = newCarbs;
@@ -1837,13 +2211,18 @@ class NutritionRepository {
       }
     });
 
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
+
     debugPrint('✅ Updated food quantity locally');
 
     // Background sync if online
     if (_connectivity.isOnline && localItem.serverId != null) {
       _backgroundSync(
         () => _apiService.patch<void>(
-          ApiConfig.foodItemQuantity(localItem!.serverId!),
+          ApiConfig.foodItemQuantity(localItem.serverId!),
           data: {'quantity': quantity},
         ),
         'Synced food quantity update',

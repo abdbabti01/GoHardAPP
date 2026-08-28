@@ -6,6 +6,7 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
 import 'package:go_hard_app/core/services/connectivity_service.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/local/models/local_food_item.dart';
 import 'package:go_hard_app/data/local/models/local_food_template.dart';
 import 'package:go_hard_app/data/local/models/local_meal_entry.dart';
@@ -28,6 +29,7 @@ void main() {
   late MockConnectivityService mockConnectivity;
   late LocalDatabaseService localDb;
   late NutritionRepository repository;
+  late UserSessionEpoch sessionEpoch;
 
   const userId = 1;
   const otherUserId = 2;
@@ -61,11 +63,14 @@ void main() {
     localDb = LocalDatabaseService.instance;
     localDb.setTestDatabase(isar);
 
+    sessionEpoch = UserSessionEpoch()..activate(userId);
+
     repository = NutritionRepository(
       mockApiService,
       localDb,
       mockConnectivity,
       mockAuthService,
+      sessionEpoch,
     );
   });
 
