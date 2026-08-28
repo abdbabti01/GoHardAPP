@@ -121,12 +121,75 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   // User weight for calories calculation (set from ProfileProvider)
   double? _userWeightKg;
 
-  // Location settings for platforms with no platform-specific override
-  // below (Android and any other supported platform) - unchanged from
-  // before this PR.
+  // Location settings used as a fallback for any platform without a
+  // platform-specific override below - both iOS and Android now have their
+  // own (see _resolveLocationSettings()).
   static const LocationSettings _locationSettings = LocationSettings(
     accuracy: LocationAccuracy.high,
     distanceFilter: 5, // Update every 5 meters
+  );
+
+  /// Foreground-service notification configuration for Android background
+  /// location delivery on an explicitly user-started active run - the
+  /// Android counterpart to Running Finding R2's iOS configuration PR:
+  /// - Supplying [AndroidSettings.foregroundNotificationConfig] is what
+  ///   makes geolocator_android 4.6.2 route position-stream creation through
+  ///   `GeolocatorLocationService.startLocationService()` +
+  ///   `enableBackgroundMode()` (see the plugin's `StreamHandlerImpl.onListen`)
+  ///   instead of a plain, non-foreground location client. That method calls
+  ///   the real `Service.startForeground()` API on a dedicated
+  ///   `android.app.Service` the plugin already declares in its own
+  ///   AndroidManifest.xml with `foregroundServiceType="location"` - this
+  ///   app does not need to declare that service itself. This is what keeps
+  ///   GPS delivering while the screen is locked or the app is backgrounded.
+  /// - `setOngoing: true` makes the notification non-dismissible while a run
+  ///   is being tracked, so it keeps clearly indicating that tracking is
+  ///   active - a swipe-dismissible notification would let the foreground
+  ///   service keep running invisibly, which the product requirement
+  ///   explicitly rules out.
+  /// - Tapping the notification returns to the app for free: the plugin's
+  ///   `BackgroundNotification.buildBringToFrontIntent()` always attaches a
+  ///   `PendingIntent` that relaunches the app's launcher activity. No
+  ///   config field exists for this on geolocator_android 4.6.2, and none is
+  ///   needed.
+  /// - `notificationIcon` is deliberately left at its default
+  ///   (`AndroidResource(name: 'ic_launcher', defType: 'mipmap')`), which is
+  ///   exactly the `@mipmap/ic_launcher` icon already used by every other
+  ///   notification in this app (push_notification_service.dart,
+  ///   notification_service.dart) - no new drawable resource is introduced.
+  /// - `enableWakeLock: true`: this foreground service represents an
+  ///   explicitly user-started active workout - reliable GPS delivery while
+  ///   the screen is locked is more important than minimizing power draw
+  ///   for the run's duration, so the CPU is deliberately kept awake rather
+  ///   than risking delayed/batched position updates. The wake lock is
+  ///   scoped entirely to the lifetime of this subscription: geolocator_android's
+  ///   `GeolocatorLocationService.obtainWakeLocks()` acquires it in the same
+  ///   `enableBackgroundMode()` call that starts the foreground service, and
+  ///   `disableBackgroundMode()` calls `releaseWakeLocks()` - which is
+  ///   invoked by `StreamHandlerImpl.onCancel()` the moment this app cancels
+  ///   the subscription (via `_stopGpsTracking()`/`dispose()`, unchanged by
+  ///   this PR). There is no separate lifecycle to manage here - cancelling
+  ///   the subscription is sufficient to release the wake lock, exactly like
+  ///   it is sufficient to remove the notification and stop the service.
+  /// - `enableWifiLock: false`: GPS tracking does not depend on Wi-Fi, so
+  ///   there is no reason to hold the Wi-Fi radio awake - left at its
+  ///   default.
+  ///
+  /// Actual stop-promptly behavior (pause/finish/discard/clear/disposal)
+  /// requires no extra native code: every one of those paths already goes
+  /// through `_stopGpsTracking()` or `dispose()`, both of which cancel the
+  /// underlying subscription - and geolocator_android's
+  /// `StreamHandlerImpl.onCancel()` responds to that cancellation by calling
+  /// `stopLocationService()` + `disableBackgroundMode()`, which tears down
+  /// the foreground service, releases the wake lock, and removes the
+  /// notification, all together.
+  static const ForegroundNotificationConfig
+  _androidForegroundNotificationConfig = ForegroundNotificationConfig(
+    notificationTitle: 'GoHard',
+    notificationText: 'Tracking your run',
+    notificationChannelName: 'Run Tracking',
+    setOngoing: true,
+    enableWakeLock: true,
   );
 
   /// Resolves the [LocationSettings] to use for the current platform.
@@ -171,9 +234,17 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Always-permission upgrade. This method configures `AppleSettings`
   /// only - any permission escalation is a separate, later decision.
   ///
-  /// Every other platform (Android, and any future platform without an
-  /// explicit branch) keeps using the existing [_locationSettings] value
-  /// unchanged - this PR does not modify Android behavior.
+  /// Android gets [AndroidSettings] with [_androidForegroundNotificationConfig]
+  /// so the position stream keeps delivering while the app is backgrounded/
+  /// the screen is locked for an explicitly user-started active run, backed
+  /// by a real Android location foreground service and its ongoing
+  /// notification - see [_androidForegroundNotificationConfig]'s doc comment
+  /// for exactly how and why. `accuracy`/`distanceFilter` are preserved at
+  /// the same values every other platform already used, unchanged by this
+  /// PR.
+  ///
+  /// Any future platform without an explicit branch keeps using the
+  /// existing [_locationSettings] value unchanged.
   LocationSettings _resolveLocationSettings() {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       return AppleSettings(
@@ -183,6 +254,13 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
         pauseLocationUpdatesAutomatically: false,
         showBackgroundLocationIndicator: true,
         allowBackgroundLocationUpdates: true,
+      );
+    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+        foregroundNotificationConfig: _androidForegroundNotificationConfig,
       );
     }
     return _locationSettings;

@@ -2,6 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <!-- Camera and storage permissions for profile photos -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -15,10 +16,25 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
-    <!-- Location permissions for GPS tracking -->
+    <!-- Location permissions for GPS tracking.
+         No ACCESS_BACKGROUND_LOCATION: run tracking is always started from a
+         visible Activity in direct response to explicit user action (start/
+         resume a run, or an app-lifecycle "resumed" recovery, which by
+         definition only fires once the app is visible again - see
+         RunningProvider._resolveLocationSettings()/_recoverGpsTrackingIfNeeded()).
+         The location foreground service (foregroundServiceType="location",
+         declared by the geolocator_android plugin) is always *created* while
+         the app has foreground location access, and per Android's location
+         permission model a running foreground service keeps that access even
+         after the app is placed in the background/the screen is locked -
+         ACCESS_BACKGROUND_LOCATION is only required to *create* a location
+         foreground service from an already-backgrounded context, which this
+         feature never does. See
+         https://developer.android.com/develop/sensors-and-location/location/permissions
+         and
+         https://developer.android.com/develop/background-work/services/fgs/service-types. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <application
         android:label="GoHard"
