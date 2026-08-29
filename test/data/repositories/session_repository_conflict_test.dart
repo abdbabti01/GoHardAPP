@@ -64,6 +64,8 @@ void main() {
       localDb,
       ConnectivityService.instance,
       mockAuthService,
+      sessionEpoch,
+      sessionCoordinator,
     );
   });
 
@@ -154,7 +156,13 @@ void main() {
         // Isar round-trips DateTime by instant but drops the UTC flag, so
         // compare moments rather than exact DateTime equality.
         expect(stored.conflictDetectedAt!.isAtSameMomentAs(detectedAt), true);
-        verifyNever(mockApiService.put<dynamic>(any, data: anyNamed('data')));
+        verifyNever(
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
       },
     );
   });
@@ -182,7 +190,13 @@ void main() {
         // Isar round-trips DateTime by instant but drops the UTC flag, so
         // compare moments rather than exact DateTime equality.
         expect(stored.conflictDetectedAt!.isAtSameMomentAs(detectedAt), true);
-        verifyNever(mockApiService.put<dynamic>(any, data: anyNamed('data')));
+        verifyNever(
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
       },
     );
   });
@@ -213,7 +227,13 @@ void main() {
         // Isar round-trips DateTime by instant but drops the UTC flag, so
         // compare moments rather than exact DateTime equality.
         expect(stored.conflictDetectedAt!.isAtSameMomentAs(detectedAt), true);
-        verifyNever(mockApiService.patch<void>(any, data: anyNamed('data')));
+        verifyNever(
+          mockApiService.patch<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
       },
     );
 
@@ -243,7 +263,13 @@ void main() {
         // Isar round-trips DateTime by instant but drops the UTC flag, so
         // compare moments rather than exact DateTime equality.
         expect(stored.conflictDetectedAt!.isAtSameMomentAs(detectedAt), true);
-        verifyNever(mockApiService.patch<void>(any, data: anyNamed('data')));
+        verifyNever(
+          mockApiService.patch<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
       },
     );
 
@@ -269,7 +295,13 @@ void main() {
         // Isar round-trips DateTime by instant but drops the UTC flag, so
         // compare moments rather than exact DateTime equality.
         expect(stored.conflictDetectedAt!.isAtSameMomentAs(detectedAt), true);
-        verifyNever(mockApiService.patch<void>(any, data: anyNamed('data')));
+        verifyNever(
+          mockApiService.patch<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
       },
     );
 
@@ -295,8 +327,20 @@ void main() {
         // Isar round-trips DateTime by instant but drops the UTC flag, so
         // compare moments rather than exact DateTime equality.
         expect(stored.conflictDetectedAt!.isAtSameMomentAs(detectedAt), true);
-        verifyNever(mockApiService.put<dynamic>(any, data: anyNamed('data')));
-        verifyNever(mockApiService.patch<void>(any, data: anyNamed('data')));
+        verifyNever(
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
+        verifyNever(
+          mockApiService.patch<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
       },
     );
   });
@@ -306,7 +350,11 @@ void main() {
       'renaming a normal synced session sets pending_update and pushes',
       () async {
         when(
-          mockApiService.put<dynamic>(any, data: anyNamed('data')),
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         ).thenAnswer(
           (_) async => serverSessionJson(version: 6, name: 'Renamed'),
         );
@@ -323,10 +371,18 @@ void main() {
 
         // The background push (fire-and-forget) should still fire.
         await untilCalled(
-          mockApiService.put<dynamic>(any, data: anyNamed('data')),
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         );
         verify(
-          mockApiService.put<dynamic>(any, data: anyNamed('data')),
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         ).called(1);
       },
     );
@@ -335,9 +391,18 @@ void main() {
       'renaming an already pending_update session stays pending_update and pushes again',
       () async {
         when(
-          mockApiService.put<dynamic>(any, data: anyNamed('data')),
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         ).thenAnswer((_) async => null);
-        when(mockApiService.get<Map<String, dynamic>>(any)).thenAnswer(
+        when(
+          mockApiService.get<Map<String, dynamic>>(
+            any,
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).thenAnswer(
           (_) async => serverSessionJson(version: 6, name: 'Renamed again'),
         );
         await insertSession(
@@ -354,10 +419,18 @@ void main() {
         expect(justEdited.isSynced, false);
 
         await untilCalled(
-          mockApiService.put<dynamic>(any, data: anyNamed('data')),
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         );
         verify(
-          mockApiService.put<dynamic>(any, data: anyNamed('data')),
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         ).called(1);
       },
     );

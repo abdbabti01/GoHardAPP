@@ -2,11 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
+import '../../core/services/session_request_coordinator.dart';
+import '../../core/services/user_session_epoch.dart';
 import '../models/session.dart';
 import '../models/exercise.dart';
 import '../models/program_workout.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/session_request_context.dart';
+import '../services/session_request_exceptions.dart';
 import '../services/session_update_sync_helper.dart';
 import '../local/services/local_database_service.dart';
 import '../local/services/model_mapper.dart';
@@ -15,36 +19,220 @@ import '../local/models/local_exercise.dart';
 import '../local/models/local_exercise_set.dart';
 import '../local/models/local_exercise_template.dart';
 
-/// Repository for session (workout) operations with offline support
+/// Repository for session (workout) operations with offline support.
+///
+/// ## Session/ownership model
+///
+/// Every public asynchronous operation below that touches authenticated
+/// session data captures a [SessionRequestContext] via
+/// [_sessionCoordinator] at operation entry (never after an internal
+/// `await`), and uses `context.epochToken.userId` as the sole authoritative
+/// user for the remainder of that operation - never a later, independently
+/// re-read user ID. A `null` capture (logged out, or the session changed
+/// while the JWT read was in flight) is treated exactly like today's
+/// existing unauthenticated/not-found convention: no Isar mutation, no HTTP.
+///
+/// Every [ApiService] call this repository makes - foreground (awaited
+/// inline) or background (fire-and-forget) - is bound to that captured
+/// context, so it carries the pinned JWT captured at entry rather than
+/// whatever the live token happens to be, and can never be dispatched after
+/// the session that started it has ended (see [ApiService]'s own class doc
+/// comment). Every detached/background push schedules
+/// [SessionRequestCoordinator.captureContext] (or reuses the context already
+/// captured at entry) SYNCHRONOUSLY, before any later callback, so the
+/// background closure is always bound to the session that scheduled it, not
+/// whichever session happens to be active when it finally runs.
+///
+/// ## Local ID ownership
+///
+/// Every public ID (`serverId ?? localId`, see `ModelMapper.localToSession`)
+/// is resolved through [_resolveOwnedSession]/[_resolveOwnedSessionOrThrow]:
+/// the server-ID interpretation is tried first, but only a match owned by
+/// the captured user is accepted - a foreign server-ID match (same numeric
+/// ID, different owner) never blocks falling through to the local-ID
+/// interpretation, since server IDs and Isar auto-increment local IDs are
+/// independent sequences that can collide on the same number. A foreign or
+/// missing target always follows the existing not-found convention
+/// (`Exception('Session not found: $id')`) without revealing whether a
+/// foreign row exists.
+///
+/// ## Session graph ownership
+///
+/// [LocalExercise] is owned transitively through `sessionLocalId ->
+/// LocalSession.userId`, and [LocalExerciseSet] through `exerciseLocalId ->
+/// LocalExercise.sessionLocalId -> LocalSession.userId`. A background cache
+/// refresh only ever writes/deletes child rows for a [LocalSession] it has
+/// independently re-validated as owned by the captured user - never a
+/// replacement or foreign session's children.
+///
+/// ## Transaction/logout race protection
+///
+/// Every mutation/cache acknowledgment below rechecks
+/// [UserSessionEpoch.isCurrent] immediately after every awaited HTTP/local
+/// lookup, immediately before entering its `writeTxn`, and again as the
+/// FIRST statement inside that `writeTxn` - the three-checkpoint shape that
+/// guarantees a logout landing anywhere in that window (including while
+/// Isar's write lock is being awaited) never lets a write land after
+/// `LocalDatabaseService.clearAll()` has already run, and never lets a
+/// stale acknowledgment resurrect or overwrite a since-replaced row. See the
+/// `beforeWriteTxnForTesting` / `insideWriteTxnForTesting` /
+/// `afterWriteTxnForTesting` and background-flavored equivalents below for
+/// how this is exercised deterministically in tests.
+///
+/// [SessionStaleException] and [RequestCancelledException] are expected
+/// lifecycle outcomes of a session ending mid-flight, not failures: they are
+/// logged as neither a success nor an error, never surfaced to the user,
+/// and never treated as grounds to mark a row permanently failed or
+/// increment a retry counter. Every other exception preserves this
+/// repository's existing "log and continue, retry later" behavior.
 class SessionRepository {
   final ApiService _apiService;
   final LocalDatabaseService _localDb;
   final ConnectivityService _connectivity;
+  // Kept for constructor-shape consistency with every other repository's
+  // ProxyProvider4<ApiService, LocalDatabaseService, ConnectivityService,
+  // AuthService, ...> wiring in main.dart. No longer read directly - every
+  // userId lookup this repository needs now comes from the captured
+  // SessionRequestContext/UserSessionToken instead, per the class doc
+  // comment above.
+  // ignore: unused_field
   final AuthService _authService;
+
+  /// Shared app-wide session-identity instance - the SAME object handed to
+  /// every other Provider/repository that needs it (see main.dart). Only
+  /// AuthProvider ever calls activate()/invalidate() on it; this repository
+  /// only ever reads it via capture()/isCurrent().
+  final UserSessionEpoch _sessionEpoch;
+
+  /// Shared app-wide coordinator that captures a [SessionRequestContext]
+  /// (pinned JWT + generation-scoped CancelToken) for every session-bound
+  /// HTTP call this repository makes. The SAME instance handed to every
+  /// other consumer (see main.dart); never constructed privately.
+  final SessionRequestCoordinator _sessionCoordinator;
 
   SessionRepository(
     this._apiService,
     this._localDb,
     this._connectivity,
     this._authService,
+    this._sessionEpoch,
+    this._sessionCoordinator,
   );
 
-  // ========== Helper Methods (Refactored - Issue #18) ==========
+  static const String _unauthenticated = 'User not authenticated';
 
-  /// Find a local session by ID (tries server ID first, then local ID)
-  Future<LocalSession?> _findLocalSession(Isar db, int id) async {
-    return await db.localSessions.filter().serverIdEqualTo(id).findFirst() ??
-        await db.localSessions.get(id);
+  // ============ Test-only session-race seams ============
+  //
+  // One hook per checkpoint, mirroring NutritionRepository's identical
+  // seams. Each is @visibleForTesting, defaults to null, and is never
+  // assigned outside test code - production control flow/performance are
+  // unaffected.
+  @visibleForTesting
+  Future<void> Function()? beforeWriteTxnForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? insideWriteTxnForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? afterWriteTxnForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? beforeBackgroundHttpDispatchForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? afterBackgroundHttpResponseForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? insideBackgroundWriteTxnForTesting;
+
+  /// Fires immediately before each child (Exercise/ExerciseSet) delete
+  /// inside [_deleteSessionAndRelatedData]'s transaction, after the
+  /// exercises have already been queried - lets a test land a parent
+  /// reassignment exactly in the window the grandparent-ownership recheck
+  /// below is meant to close.
+  @visibleForTesting
+  Future<void> Function()? beforeChildDeleteForTesting;
+
+  Future<void> _runTestHook(Future<void> Function()? hook) async {
+    if (hook != null) {
+      await hook();
+    }
   }
 
-  /// Find a local session by ID or throw if not found
-  Future<LocalSession> _findLocalSessionOrThrow(Isar db, int id) async {
-    final session = await _findLocalSession(db, id);
+  // ============ Session/ownership helpers ============
+
+  /// Resolves a [LocalSession] identified ambiguously by [id] (server ID or
+  /// local Isar ID) to a row owned by [token.userId], or `null` if neither
+  /// interpretation yields an owned row. See the class doc comment's "Local
+  /// ID ownership" section.
+  Future<LocalSession?> _resolveOwnedSession(
+    Isar db,
+    int id,
+    UserSessionToken token,
+  ) async {
+    final byServerId =
+        await db.localSessions
+            .filter()
+            .serverIdEqualTo(id)
+            .userIdEqualTo(token.userId)
+            .findFirst();
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (byServerId != null) return byServerId;
+
+    final byLocalId = await db.localSessions.get(id);
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (byLocalId != null && byLocalId.userId == token.userId) {
+      return byLocalId;
+    }
+
+    return null;
+  }
+
+  /// Same as [_resolveOwnedSession], but throws the existing not-found
+  /// convention when no owned row exists.
+  Future<LocalSession> _resolveOwnedSessionOrThrow(
+    Isar db,
+    int id,
+    UserSessionToken token,
+  ) async {
+    final session = await _resolveOwnedSession(db, id, token);
     if (session == null) {
       throw Exception('Session not found: $id');
     }
     return session;
   }
+
+  /// Re-resolves [localId] by its STABLE local identity and verifies direct
+  /// ownership against [token.userId]. Used by every background
+  /// acknowledgment to confirm the row it is about to write to still
+  /// belongs to the session that started the operation, rather than
+  /// trusting a captured reference that may since have been replaced.
+  Future<LocalSession?> _ownedSessionByLocalId(
+    Isar db,
+    int localId,
+    UserSessionToken token,
+  ) async {
+    final row = await db.localSessions.get(localId);
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (row == null || row.userId != token.userId) return null;
+    return row;
+  }
+
+  /// True if [sessionLocalId] resolves to a [LocalSession] owned by
+  /// [token.userId]. False (never throws) for a missing/orphaned parent, so
+  /// an orphaned exercise is treated the same as a foreign one - never
+  /// mutated.
+  Future<bool> _isSessionOwnedByLocalId(
+    Isar db,
+    int sessionLocalId,
+    UserSessionToken token,
+  ) async {
+    final parent = await db.localSessions.get(sessionLocalId);
+    if (!_sessionEpoch.isCurrent(token)) return false;
+    return parent != null && parent.userId == token.userId;
+  }
+
+  // ============ Generic helpers ============
 
   /// Load exercises for a session from local database
   Future<List<Exercise>> _loadExercisesForSession(
@@ -71,18 +259,62 @@ class SessionRepository {
     return ModelMapper.localToSession(localSession, exercises: exercises);
   }
 
-  /// Execute a background sync operation with standard logging
+  /// Fired synchronously, exactly once per [_backgroundSync] call, with the
+  /// Future that completes once THAT SPECIFIC detached operation has fully
+  /// settled - after its HTTP dispatch, its success/error handling, and any
+  /// acknowledgment writeTxn or guarded stale/cancelled exit inside
+  /// [operation] have all finished (it never rejects: the same
+  /// success/error handling [_backgroundSync] always applies runs first,
+  /// so this always completes, never throws). Tests use it to await
+  /// deterministic completion of detached work instead of guessing with a
+  /// delay - see `session_repository_session_ownership_test.dart`.
+  ///
+  /// Each call passes its OWN distinct Future, so a test scheduling
+  /// multiple overlapping background operations (e.g. two repository calls
+  /// in quick succession) can tell them apart by call order rather than
+  /// awaiting the wrong one. Defaults to null in production - a pure
+  /// no-op that does not change scheduling, timing, or error handling.
+  @visibleForTesting
+  void Function(Future<void> operationSettled)?
+  onBackgroundSyncScheduledForTesting;
+
+  /// Schedules [operation] to run detached from the caller. [operation]
+  /// must already be bound to a captured [SessionRequestContext]/
+  /// [UserSessionToken] - this helper only handles the fire-and-forget
+  /// execution and expected-lifecycle-outcome classification, exactly like
+  /// NutritionRepository's identical helper.
+  ///
+  /// [SessionStaleException] and [RequestCancelledException] are logged as
+  /// neither a success nor a failure - never surfaced as a user-visible
+  /// error, never grounds to mark anything permanently failed. Every other
+  /// exception preserves this repository's original "log and continue"
+  /// behavior.
   void _backgroundSync(
-    Future<void> Function() syncOperation,
+    Future<void> Function() operation,
     String successMessage,
   ) {
-    syncOperation()
+    final settled = operation()
         .then((_) {
           debugPrint('✅ Background sync: $successMessage');
         })
         .catchError((e) {
+          if (e is SessionStaleException || e is RequestCancelledException) {
+            debugPrint(
+              'ℹ️ Background sync skipped (session ended): $successMessage',
+            );
+            return;
+          }
           debugPrint('⚠️ Background sync failed, will retry later: $e');
         });
+    onBackgroundSyncScheduledForTesting?.call(settled);
+  }
+
+  /// Wraps a single background HTTP call with the before-dispatch test seam.
+  /// Staleness AT dispatch time is already enforced by [ApiService] itself
+  /// via the bound [SessionRequestContext.epochToken].
+  Future<T> _dispatchBackgroundHttp<T>(Future<T> Function() call) async {
+    await _runTestHook(beforeBackgroundHttpDispatchForTesting);
+    return call();
   }
 
   /// True while [localSession] has an unresolved 409 conflict recorded
@@ -129,13 +361,18 @@ class SessionRepository {
       _connectivity.isOnline &&
       localSession.serverId != null;
 
-  /// Mark a local session as needing sync (pending_update if server ID exists)
+  /// Mark a local session as needing sync (pending_update if server ID
+  /// exists). [token] is rechecked as the first statement inside the write
+  /// transaction, per the class doc comment's transaction-race section.
   Future<void> _markSessionForSync(
     Isar db,
-    LocalSession localSession, {
+    LocalSession localSession,
+    UserSessionToken token, {
     String? newStatus,
   }) async {
     await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
       _applyLocalEditBookkeeping(localSession, newStatus: newStatus);
       await db.localSessions.put(localSession);
     });
@@ -145,28 +382,41 @@ class SessionRepository {
   /// Offline-first: returns local cache immediately, syncs with server in background
   /// Set [waitForSync] to true to wait for server sync before returning (useful after login)
   Future<List<Session>> getSessions({bool waitForSync = false}) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      debugPrint('⚠️ No authenticated session, returning empty list');
+      return [];
+    }
+    final token = context.epochToken;
     final Isar db = _localDb.database;
 
     // If waitForSync is true and we're online, sync first then return fresh data
     if (waitForSync && _connectivity.isOnline) {
       debugPrint('⏳ Waiting for server sync before returning sessions...');
-      await _syncSessionsFromServer(db);
-      final freshSessions = await _getLocalSessions(db);
+      try {
+        await _syncSessionsFromServer(db, context);
+      } on SessionStaleException {
+        // Expected lifecycle outcome.
+      } on RequestCancelledException {
+        // Expected lifecycle outcome.
+      }
+      if (!_sessionEpoch.isCurrent(token)) return [];
+      final freshSessions = await _getLocalSessions(db, token);
       return freshSessions;
     }
 
     // Otherwise, use offline-first approach: load from cache first for instant response
-    final cachedSessions = await _getLocalSessions(db);
+    final cachedSessions = await _getLocalSessions(db, token);
 
-    // Then sync with server in background if online (don't block)
+    // Then sync with server in background if online (don't block). The
+    // context captured above is handed straight into the closure, so this
+    // detached refresh stays bound to the session that scheduled it even
+    // if a different user logs in before it completes.
     if (_connectivity.isOnline) {
-      _syncSessionsFromServer(db)
-          .then((_) {
-            debugPrint('✅ Background sync: Sessions synced from server');
-          })
-          .catchError((e) {
-            debugPrint('⚠️ Background sync failed: $e');
-          });
+      _backgroundSync(
+        () => _syncSessionsFromServer(db, context),
+        'Sessions synced from server',
+      );
     }
 
     return cachedSessions;
@@ -175,21 +425,22 @@ class SessionRepository {
   /// Get all in-progress sessions for the current user
   /// Used to ensure only one workout is active at a time
   Future<List<Session>> getInProgressSessions() async {
-    final Isar db = _localDb.database;
-    final userId = await _authService.getUserId();
-
-    if (userId == null) {
-      debugPrint('⚠️ No authenticated user, returning empty list');
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      debugPrint('⚠️ No authenticated session, returning empty list');
       return [];
     }
+    final token = context.epochToken;
+    final Isar db = _localDb.database;
 
     // Get all in-progress sessions from local DB
     final localSessions =
         await db.localSessions
             .filter()
-            .userIdEqualTo(userId)
+            .userIdEqualTo(token.userId)
             .statusEqualTo('in_progress')
             .findAll();
+    if (!_sessionEpoch.isCurrent(token)) return [];
 
     // Convert to Session models with exercises (using helper)
     final sessions = <Session>[];
@@ -200,185 +451,195 @@ class SessionRepository {
     return sessions;
   }
 
-  /// Background sync: Fetch sessions from server and update cache
-  Future<void> _syncSessionsFromServer(Isar db) async {
-    try {
-      // Fetch from API
-      final data = await _apiService.get<List<dynamic>>(ApiConfig.sessions);
+  /// Background sync: Fetch sessions from server and update cache. Bound to
+  /// [context]: the HTTP call carries its pinned JWT, and every cache write
+  /// is gated behind the class doc comment's three-checkpoint shape plus a
+  /// direct [LocalSession.userId] ownership check.
+  Future<void> _syncSessionsFromServer(
+    Isar db,
+    SessionRequestContext context,
+  ) async {
+    final token = context.epochToken;
 
-      // Debug: Log raw JSON to check programId
-      debugPrint('📥 Received ${data.length} sessions from API');
-      for (final sessionJson in data.take(3)) {
+    // Fetch from API
+    final data = await _dispatchBackgroundHttp(
+      () => _apiService.get<List<dynamic>>(
+        ApiConfig.sessions,
+        sessionContext: context,
+      ),
+    );
+
+    debugPrint('📥 Received ${data.length} sessions from API');
+
+    final apiSessions =
+        data
+            .map((json) => Session.fromJson(json as Map<String, dynamic>))
+            .toList();
+
+    // Checkpoint: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    await _runTestHook(afterBackgroundHttpResponseForTesting);
+
+    final currentUserId = token.userId;
+
+    // Checkpoint: immediately before entering the write transaction.
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    // Update local cache (sessions AND their exercises)
+    await db.writeTxn(() async {
+      await _runTestHook(insideBackgroundWriteTxnForTesting);
+      // Checkpoint: first statement inside the write transaction.
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      for (final apiSession in apiSessions) {
+        // Only cache sessions belonging to current user
+        if (apiSession.userId != currentUserId) {
+          debugPrint(
+            '  ⏭️ Skipping session ${apiSession.id} - belongs to different user (${apiSession.userId} != $currentUserId)',
+          );
+          continue;
+        }
+
+        // Check if session already exists locally
+        final existingLocal =
+            await db.localSessions
+                .filter()
+                .serverIdEqualTo(apiSession.id)
+                .findFirst();
+
+        // Never overwrite a row that no longer belongs to the current
+        // user - a serverId collision (or a foreign row somehow sharing
+        // it) must never be silently claimed by this refresh.
+        if (existingLocal != null && existingLocal.userId != currentUserId) {
+          debugPrint(
+            '  ⏭️ Skipping session ${apiSession.id} - local row owned by a different user',
+          );
+          continue;
+        }
+
+        // Skip sessions with pending local changes - don't overwrite with
+        // server data. 'conflict' rows are included here: a background
+        // cache refresh must never silently discard the local edit and
+        // conflict metadata a 409 resolution still needs.
+        if (existingLocal != null &&
+            (existingLocal.syncStatus == 'pending_delete' ||
+                existingLocal.syncStatus == 'pending_update' ||
+                existingLocal.syncStatus == 'conflict')) {
+          debugPrint(
+            '  ⏭️ Skipping session ${apiSession.id} - has pending local changes (${existingLocal.syncStatus})',
+          );
+          continue;
+        }
+
+        // CRITICAL FIX: Never overwrite in-progress sessions from server!
+        // This prevents the 5-hour timer bug caused by server returning incorrect timestamps.
+        // Local state is authoritative for active workouts.
+        if (existingLocal != null && existingLocal.status == 'in_progress') {
+          debugPrint(
+            '  ⏭️ Skipping session ${apiSession.id} - in_progress workout, keeping local timestamps',
+          );
+          continue;
+        }
+
+        LocalSession savedSession;
+        if (existingLocal != null) {
+          // Update existing local session
+          final updated = ModelMapper.sessionToLocal(
+            apiSession,
+            localId: existingLocal.localId,
+            isSynced: true,
+          );
+          await db.localSessions.put(updated);
+          savedSession = updated;
+        } else {
+          // Create new local session
+          final localSession = ModelMapper.sessionToLocal(apiSession);
+          await db.localSessions.put(localSession);
+          savedSession = localSession;
+        }
+
+        // Save exercises for this session
+        int exerciseCount = 0;
+        for (final apiExercise in apiSession.exercises) {
+          // Check if exercise already exists locally
+          final existingExercise =
+              await db.localExercises
+                  .filter()
+                  .serverIdEqualTo(apiExercise.id)
+                  .findFirst();
+
+          if (existingExercise != null) {
+            // Update existing
+            final updated = ModelMapper.exerciseToLocal(
+              apiExercise,
+              sessionLocalId: savedSession.localId,
+              localId: existingExercise.localId,
+              isSynced: true,
+            );
+            await db.localExercises.put(updated);
+          } else {
+            // Create new
+            final localExercise = ModelMapper.exerciseToLocal(
+              apiExercise,
+              sessionLocalId: savedSession.localId,
+            );
+            await db.localExercises.put(localExercise);
+          }
+          exerciseCount++;
+        }
         debugPrint(
-          '  Session JSON: programId=${sessionJson['programId']}, programWorkoutId=${sessionJson['programWorkoutId']}, name=${sessionJson['name']}',
+          '  📝 Cached $exerciseCount exercises for session ${apiSession.id}',
         );
       }
 
-      final apiSessions =
-          data
-              .map((json) => Session.fromJson(json as Map<String, dynamic>))
-              .toList();
+      // Remove sessions that were deleted on the server (cascade delete cleanup).
+      // Already scoped to currentUserId, so this cannot touch another
+      // user's rows.
+      final serverSessionIds = apiSessions.map((s) => s.id).toSet();
+      final allLocalSessions =
+          await db.localSessions
+              .filter()
+              .userIdEqualTo(currentUserId)
+              .serverIdIsNotNull()
+              .findAll();
 
-      // Get current user ID for filtering
-      final currentUserId = await _authService.getUserId();
-      if (currentUserId == null) {
-        debugPrint('⚠️ No authenticated user, skipping cache update');
-        return; // Exit background sync, cache already returned to caller
-      }
-
-      // Update local cache (sessions AND their exercises)
-      await db.writeTxn(() async {
-        for (final apiSession in apiSessions) {
-          // Only cache sessions belonging to current user
-          if (apiSession.userId != currentUserId) {
-            debugPrint(
-              '  ⏭️ Skipping session ${apiSession.id} - belongs to different user (${apiSession.userId} != $currentUserId)',
-            );
-            continue;
-          }
-
-          // Check if session already exists locally
-          final existingLocal =
-              await db.localSessions
-                  .filter()
-                  .serverIdEqualTo(apiSession.id)
-                  .findFirst();
-
-          // Skip sessions with pending local changes - don't overwrite with
-          // server data. 'conflict' rows are included here: a background
-          // cache refresh must never silently discard the local edit and
-          // conflict metadata a 409 resolution still needs.
-          if (existingLocal != null &&
-              (existingLocal.syncStatus == 'pending_delete' ||
-                  existingLocal.syncStatus == 'pending_update' ||
-                  existingLocal.syncStatus == 'conflict')) {
-            debugPrint(
-              '  ⏭️ Skipping session ${apiSession.id} - has pending local changes (${existingLocal.syncStatus})',
-            );
-            continue;
-          }
-
-          // CRITICAL FIX: Never overwrite in-progress sessions from server!
-          // This prevents the 5-hour timer bug caused by server returning incorrect timestamps.
-          // Local state is authoritative for active workouts.
-          if (existingLocal != null && existingLocal.status == 'in_progress') {
-            debugPrint(
-              '  ⏭️ Skipping session ${apiSession.id} - in_progress workout, keeping local timestamps',
-            );
-            continue;
-          }
-
-          LocalSession savedSession;
-          if (existingLocal != null) {
-            // Update existing local session
-            final updated = ModelMapper.sessionToLocal(
-              apiSession,
-              localId: existingLocal.localId,
-              isSynced: true,
-            );
-            await db.localSessions.put(updated);
-            savedSession = updated;
-          } else {
-            // Create new local session
-            final localSession = ModelMapper.sessionToLocal(apiSession);
-            await db.localSessions.put(localSession);
-            savedSession = localSession;
-          }
-
-          // Save exercises for this session
-          int exerciseCount = 0;
-          for (final apiExercise in apiSession.exercises) {
-            // Check if exercise already exists locally
-            final existingExercise =
-                await db.localExercises
-                    .filter()
-                    .serverIdEqualTo(apiExercise.id)
-                    .findFirst();
-
-            if (existingExercise != null) {
-              // Update existing
-              final updated = ModelMapper.exerciseToLocal(
-                apiExercise,
-                sessionLocalId: savedSession.localId,
-                localId: existingExercise.localId,
-                isSynced: true,
-              );
-              await db.localExercises.put(updated);
-              debugPrint(
-                '    ✏️ Updated exercise ${updated.serverId}, sessionLocalId=${updated.sessionLocalId}',
-              );
-            } else {
-              // Create new
-              final localExercise = ModelMapper.exerciseToLocal(
-                apiExercise,
-                sessionLocalId: savedSession.localId,
-              );
-              final savedExerciseId = await db.localExercises.put(
-                localExercise,
-              );
-              debugPrint(
-                '    ➕ Created exercise ${localExercise.serverId}, localId=$savedExerciseId, sessionLocalId=${localExercise.sessionLocalId}',
-              );
-            }
-            exerciseCount++;
-          }
+      for (final localSession in allLocalSessions) {
+        if (!serverSessionIds.contains(localSession.serverId)) {
           debugPrint(
-            '  📝 Cached $exerciseCount exercises for session ${apiSession.id}',
+            '  🗑️ Removing session ${localSession.serverId} (deleted on server)',
           );
-        }
 
-        // Remove sessions that were deleted on the server (cascade delete cleanup)
-        final serverSessionIds = apiSessions.map((s) => s.id).toSet();
-        final allLocalSessions =
-            await db.localSessions
+          final exercisesToDelete =
+              await db.localExercises
+                  .filter()
+                  .sessionLocalIdEqualTo(localSession.localId)
+                  .findAll();
+
+          for (final exercise in exercisesToDelete) {
+            await db.localExerciseSets
                 .filter()
-                .userIdEqualTo(currentUserId)
-                .serverIdIsNotNull()
-                .findAll();
-
-        for (final localSession in allLocalSessions) {
-          if (!serverSessionIds.contains(localSession.serverId)) {
-            // Session exists locally but not on server - it was deleted (cascade)
-            debugPrint(
-              '  🗑️ Removing session ${localSession.serverId} (deleted on server)',
-            );
-
-            // Delete associated exercises first
-            final exercisesToDelete =
-                await db.localExercises
-                    .filter()
-                    .sessionLocalIdEqualTo(localSession.localId)
-                    .findAll();
-
-            for (final exercise in exercisesToDelete) {
-              await db.localExercises.delete(exercise.localId);
-            }
-
-            // Delete the session
-            await db.localSessions.delete(localSession.localId);
+                .exerciseLocalIdEqualTo(exercise.localId)
+                .deleteAll();
+            await db.localExercises.delete(exercise.localId);
           }
-        }
-      });
 
-      debugPrint('✅ Synced ${apiSessions.length} sessions from server');
-    } catch (e) {
-      // Sync failed - but that's okay, we already returned cached data
-      rethrow; // Let the caller handle the error
-    }
+          await db.localSessions.delete(localSession.localId);
+        }
+      }
+    });
+
+    debugPrint('✅ Synced ${apiSessions.length} sessions from server');
   }
 
-  /// Get sessions from local database with exercises
-  Future<List<Session>> _getLocalSessions(Isar db) async {
-    // Get current user ID to filter sessions
-    final userId = await _authService.getUserId();
-    if (userId == null) {
-      debugPrint('⚠️ No authenticated user, returning empty list');
-      return [];
-    }
-
-    // Filter sessions by current user only
+  /// Get sessions from local database with exercises, scoped to [token].
+  Future<List<Session>> _getLocalSessions(
+    Isar db,
+    UserSessionToken token,
+  ) async {
     final localSessions =
-        await db.localSessions.filter().userIdEqualTo(userId).findAll();
+        await db.localSessions.filter().userIdEqualTo(token.userId).findAll();
+    if (!_sessionEpoch.isCurrent(token)) return [];
 
     // Convert to Session models, skipping deleted/archived (using helper)
     final sessions = <Session>[];
@@ -398,17 +659,23 @@ class SessionRepository {
   /// Get session by ID
   /// Offline-first: returns local cache, then tries to sync with server
   Future<Session> getSession(int id) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
+    final token = context.epochToken;
     final Isar db = _localDb.database;
 
-    // Check if there's a local version with pending changes
-    var localSession =
-        await db.localSessions.filter().serverIdEqualTo(id).findFirst();
-    localSession ??= await db.localSessions.get(id);
+    // Check if there's a local (owned) version with pending changes
+    final localSession = await _resolveOwnedSession(db, id, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     // If local session has pending changes, return it instead of fetching from server
     if (localSession != null && !localSession.isSynced) {
       debugPrint('📝 Session has pending changes, returning local version');
-      return await _getLocalSession(db, id);
+      return await _localSessionToSessionWithExercises(db, localSession);
     }
 
     // CRITICAL FIX: Always use local data for in-progress sessions!
@@ -418,7 +685,7 @@ class SessionRepository {
       debugPrint(
         '🏋️ In-progress session - using local timestamps (startedAt: ${localSession.startedAt})',
       );
-      return await _getLocalSession(db, id);
+      return await _localSessionToSessionWithExercises(db, localSession);
     }
 
     if (_connectivity.isOnline) {
@@ -426,30 +693,34 @@ class SessionRepository {
         // Fetch from API
         final data = await _apiService.get<Map<String, dynamic>>(
           ApiConfig.sessionById(id),
+          sessionContext: context,
         );
-
-        // DEBUG: Log what the server returns
-        debugPrint('🔽 SERVER RESPONSE for session $id:');
-        debugPrint('   Raw startedAt from API: ${data['startedAt']}');
-        debugPrint('   Raw pausedAt from API: ${data['pausedAt']}');
 
         final apiSession = Session.fromJson(data);
 
-        // DEBUG: Log what fromJson produces
-        debugPrint('   Parsed startedAt: ${apiSession.startedAt}');
-        debugPrint('   Parsed startedAt.isUtc: ${apiSession.startedAt?.isUtc}');
-        debugPrint('   Parsed startedAt.hour: ${apiSession.startedAt?.hour}');
-        debugPrint('   Parsed pausedAt: ${apiSession.pausedAt}');
-        debugPrint('   Parsed pausedAt.isUtc: ${apiSession.pausedAt?.isUtc}');
+        if (apiSession.userId != token.userId) {
+          debugPrint('⚠️ Server returned a session for a different user');
+          return await _getLocalSession(db, id, token);
+        }
+
+        await _runTestHook(beforeWriteTxnForTesting);
+        if (!_sessionEpoch.isCurrent(token)) {
+          throw const SessionStaleException();
+        }
 
         // Update local cache (session AND exercises)
-        // Note: The API now returns date-only fields as "yyyy-MM-dd" without timezone issues
         await db.writeTxn(() async {
+          await _runTestHook(insideWriteTxnForTesting);
+          if (!_sessionEpoch.isCurrent(token)) return;
+
           final existingLocal =
               await db.localSessions
                   .filter()
                   .serverIdEqualTo(apiSession.id)
                   .findFirst();
+          if (existingLocal != null && existingLocal.userId != token.userId) {
+            return;
+          }
 
           LocalSession savedSession;
           if (existingLocal != null) {
@@ -493,58 +764,72 @@ class SessionRepository {
         });
 
         return apiSession;
+      } on SessionStaleException {
+        return await _getLocalSession(db, id, token);
+      } on RequestCancelledException {
+        return await _getLocalSession(db, id, token);
       } catch (e) {
         debugPrint('⚠️ API failed, falling back to local cache: $e');
-        return await _getLocalSession(db, id);
+        return await _getLocalSession(db, id, token);
       }
     } else {
       debugPrint('📴 Offline - returning cached session');
-      return await _getLocalSession(db, id);
+      return await _getLocalSession(db, id, token);
     }
   }
 
-  /// Get session from local database by ID (server ID or local ID) with exercises
-  Future<Session> _getLocalSession(Isar db, int id) async {
-    // Find local session using helper
-    final localSession = await _findLocalSessionOrThrow(db, id);
-
-    // Load exercises using helper
+  /// Get session from local database by owned ID (server ID or local ID)
+  /// with exercises
+  Future<Session> _getLocalSession(
+    Isar db,
+    int id,
+    UserSessionToken token,
+  ) async {
+    final localSession = await _resolveOwnedSessionOrThrow(db, id, token);
     final exercises = await _loadExercisesForSession(db, localSession.localId);
 
     debugPrint(
       '  📦 Loaded session ${localSession.serverId ?? localSession.localId} from cache with ${exercises.length} exercises',
     );
-    debugPrint('  📦 LocalSession startedAt: ${localSession.startedAt}');
-    debugPrint('  📦 LocalSession pausedAt: ${localSession.pausedAt}');
-    debugPrint('  📦 LocalSession status: ${localSession.status}');
 
-    final session = ModelMapper.localToSession(
-      localSession,
-      exercises: exercises,
-    );
-    debugPrint('  📦 Mapped Session startedAt: ${session.startedAt}');
-    debugPrint('  📦 Mapped Session pausedAt: ${session.pausedAt}');
-
-    return session;
+    return ModelMapper.localToSession(localSession, exercises: exercises);
   }
 
   /// Create new session
   /// Optimistic update: saves locally first, syncs to server if online
   Future<Session> createSession(Session session) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
+    final token = context.epochToken;
     final db = _localDb.database;
 
-    // ALWAYS create locally first for instant response
-    final localResult = await _createLocalSession(session, db, isPending: true);
+    // ALWAYS create locally first for instant response, always owned by
+    // the captured user regardless of what the caller-supplied [session]
+    // claims.
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+    final localResult = await _createLocalSession(
+      session,
+      db,
+      token,
+      isPending: true,
+    );
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
-    // Then sync to server in background if online (don't block)
+    // Then sync to server in background if online (don't block). Bound to
+    // the context captured at entry.
     if (_connectivity.isOnline) {
-      _syncCreateSessionToServer(session, db, localResult.id)
-          .then((_) {
-            debugPrint('✅ Background sync: Created session on server');
-          })
-          .catchError((e) {
-            debugPrint('⚠️ Background sync failed, will retry later: $e');
-          });
+      _backgroundSync(
+        () => _syncCreateSessionToServer(session, db, localResult.id, context),
+        'Created session on server',
+      );
     } else {
       debugPrint('📴 Offline - session will sync later');
     }
@@ -553,7 +838,6 @@ class SessionRepository {
   }
 
   /// Helper method to convert LocalSession to Session with exercises
-  /// Note: Uses _localSessionToSessionWithExercises helper for consistency
   Future<Session> _getSessionWithExercises(LocalSession localSession) async {
     final db = _localDb.database;
     return await _localSessionToSessionWithExercises(db, localSession);
@@ -568,12 +852,13 @@ class SessionRepository {
     DateTime programStartDate,
     int programId, // Use actual programId instead of programWorkout.programId
   ) async {
-    final db = _localDb.database;
-    final userId = await _authService.getUserId();
-
-    if (userId == null) {
-      throw Exception('User not authenticated');
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
     }
+    final token = context.epochToken;
+    final db = _localDb.database;
+    final userId = token.userId;
 
     // Check if a session already exists for this program workout
     final existingSessions =
@@ -582,6 +867,9 @@ class SessionRepository {
             .userIdEqualTo(userId)
             .programWorkoutIdEqualTo(programWorkoutId)
             .findAll();
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     // Find existing draft, planned, in_progress, or paused session
     final existingActiveSession = existingSessions.firstWhere(
@@ -640,21 +928,17 @@ class SessionRepository {
       try {
         final data = await _apiService.post<Map<String, dynamic>>(
           ApiConfig.sessionsFromProgramWorkout,
-          data: {
-            'programWorkoutId': programWorkoutId,
-            'programId': programId, // Send programId to backend
-          },
+          data: {'programWorkoutId': programWorkoutId, 'programId': programId},
+          sessionContext: context,
         );
         var apiSession = Session.fromJson(data);
 
         // Use scheduledDate from ProgramWorkout if available (single source of truth)
-        // This avoids timezone calculation issues - the date is stored on the server
         DateTime correctScheduledDate;
         if (programWorkout.scheduledDate != null) {
           final sd = programWorkout.scheduledDate!;
           correctScheduledDate = DateTime(sd.year, sd.month, sd.day);
         } else {
-          // Fallback for old data: calculate using local time
           final localStartDate = programStartDate.toLocal();
           final startDate = DateTime(
             localStartDate.year,
@@ -676,11 +960,9 @@ class SessionRepository {
           DateTime.now().day,
         );
 
-        // If scheduled date is in the past, reschedule to today
         final actualDate =
             correctScheduledDate.isBefore(today) ? today : correctScheduledDate;
 
-        // Use the correct date from ProgramWorkout, not the API-calculated one
         final apiDate = DateTime(
           apiSession.date.year,
           apiSession.date.month,
@@ -694,15 +976,22 @@ class SessionRepository {
           apiSession = apiSession.copyWith(date: actualDate);
         }
 
+        await _runTestHook(beforeWriteTxnForTesting);
+        if (!_sessionEpoch.isCurrent(token)) {
+          throw Exception(_unauthenticated);
+        }
+
         // Cache the session locally with exercises
         await db.writeTxn(() async {
+          await _runTestHook(insideWriteTxnForTesting);
+          if (!_sessionEpoch.isCurrent(token)) return;
+
           final localSession = ModelMapper.sessionToLocal(
             apiSession,
-            isSynced: true, // Session from server with correct date
+            isSynced: true,
           );
           await db.localSessions.put(localSession);
 
-          // Cache exercises
           for (final apiExercise in apiSession.exercises) {
             final localExercise = ModelMapper.exerciseToLocal(
               apiExercise,
@@ -715,6 +1004,10 @@ class SessionRepository {
 
         debugPrint('✅ Created session from program workout: ${apiSession.id}');
         return apiSession;
+      } on SessionStaleException {
+        throw Exception(_unauthenticated);
+      } on RequestCancelledException {
+        throw Exception(_unauthenticated);
       } catch (e) {
         debugPrint(
           '⚠️ Failed to create session on server, creating locally: $e',
@@ -726,17 +1019,14 @@ class SessionRepository {
     // Offline creation: Parse exercisesJson and create locally
     debugPrint('📴 Creating session from program workout offline');
 
-    // Parse exercises from JSON
     final exercisesData = programWorkout.exercises;
     final exercises = <Exercise>[];
 
-    // Use scheduledDate from ProgramWorkout if available (single source of truth)
     DateTime normalizedScheduledDate;
     if (programWorkout.scheduledDate != null) {
       final sd = programWorkout.scheduledDate!;
       normalizedScheduledDate = DateTime(sd.year, sd.month, sd.day);
     } else {
-      // Fallback for old data: calculate using local time
       final localStartDate = programStartDate.toLocal();
       final startDate = DateTime(
         localStartDate.year,
@@ -763,40 +1053,39 @@ class SessionRepository {
       DateTime.now().day,
     );
 
-    // If workout is in the past and being created now, reschedule to today
-    // This allows users to catch up on missed workouts
     final actualDate =
         normalizedScheduledDate.isBefore(today)
-            ? today // Reschedule missed workout to today
-            : normalizedScheduledDate; // Keep original date for future workouts
+            ? today
+            : normalizedScheduledDate;
 
-    // Determine status based on scheduled date
-    // - If scheduled for future: status = 'planned'
-    // - If scheduled for today or past: status = 'draft' (user can start immediately)
     final status = actualDate.isAfter(today) ? 'planned' : 'draft';
 
-    debugPrint(
-      '📅 Workout scheduled for: $normalizedScheduledDate, ${actualDate != normalizedScheduledDate ? 'rescheduled to today' : 'using original date'}',
-    );
-
-    // Create session with calculated date and status
     final session = Session(
-      id: 0, // Will be replaced with local ID
+      id: 0,
       userId: userId,
-      date: actualDate, // Use rescheduled date for past workouts
+      date: actualDate,
       name: programWorkout.workoutName,
       type: programWorkout.workoutType ?? 'Workout',
-      status: status, // Use calculated status
-      programId:
-          programId, // Use passed programId instead of programWorkout.programId
+      status: status,
+      programId: programId,
       programWorkoutId: programWorkoutId,
       exercises: exercises,
     );
 
     late int sessionLocalId;
 
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
     await db.writeTxn(() async {
-      // Create session
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
       final localSession = LocalSession(
         serverId: null,
         userId: userId,
@@ -818,7 +1107,6 @@ class SessionRepository {
 
       sessionLocalId = await db.localSessions.put(localSession);
 
-      // Create exercises from exercisesJson
       for (final exerciseData in exercisesData) {
         final exerciseName = exerciseData['name'] as String? ?? 'Exercise';
         final exerciseTemplateId = exerciseData['exerciseTemplateId'] as int?;
@@ -826,8 +1114,8 @@ class SessionRepository {
         final restTime = exerciseData['rest'] as int?;
 
         final exercise = Exercise(
-          id: 0, // Temporary
-          sessionId: sessionLocalId, // Use local ID
+          id: 0,
+          sessionId: sessionLocalId,
           name: exerciseName,
           exerciseTemplateId: exerciseTemplateId,
           notes: notes,
@@ -846,6 +1134,10 @@ class SessionRepository {
         exercises.add(exercise.copyWith(id: exerciseLocalId));
       }
     });
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     debugPrint(
       '💾 Created session offline with ${exercises.length} exercises (localId: $sessionLocalId)',
@@ -869,23 +1161,49 @@ class SessionRepository {
     );
   }
 
-  /// Background sync: Create session on server
+  /// Background sync: Create session on server. Bound to [context]: the
+  /// HTTP call carries its pinned JWT, and the resulting acknowledgment is
+  /// gated behind the class doc comment's three-checkpoint shape plus a
+  /// re-resolution of the target row by its stable local identity and
+  /// direct ownership.
   Future<void> _syncCreateSessionToServer(
     Session session,
     Isar db,
     int localId,
+    SessionRequestContext context,
   ) async {
-    final data = await _apiService.post<Map<String, dynamic>>(
-      ApiConfig.sessions,
-      data: session.toJson(),
+    final token = context.epochToken;
+
+    final data = await _dispatchBackgroundHttp(
+      () => _apiService.post<Map<String, dynamic>>(
+        ApiConfig.sessions,
+        data: session.toJson(),
+        sessionContext: context,
+      ),
     );
     final apiSession = Session.fromJson(data);
 
-    // Update local session with the full authoritative server response
-    // (including the server-assigned version) rather than inventing one.
+    // Checkpoint: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    await _runTestHook(afterBackgroundHttpResponseForTesting);
+
+    // Re-resolve by stable local identity and direct ownership before
+    // deciding whether to acknowledge.
+    final target = await _ownedSessionByLocalId(db, localId, token);
+    if (target == null) return;
+
+    // Checkpoint: immediately before entering the write transaction.
+    if (!_sessionEpoch.isCurrent(token)) return;
+
     await db.writeTxn(() async {
+      await _runTestHook(insideBackgroundWriteTxnForTesting);
+      // Checkpoint: first statement inside the write transaction.
+      if (!_sessionEpoch.isCurrent(token)) return;
+
       final existing = await db.localSessions.get(localId);
-      if (existing == null) return;
+      if (existing == null || existing.userId != token.userId) return;
+
       final updated = ModelMapper.sessionToLocal(
         apiSession,
         localId: localId,
@@ -895,15 +1213,17 @@ class SessionRepository {
     });
   }
 
-  /// Create session in local database
+  /// Create session in local database, always owned by [token.userId]
+  /// regardless of what [session] claims.
   Future<Session> _createLocalSession(
     Session session,
-    Isar db, {
+    Isar db,
+    UserSessionToken token, {
     required bool isPending,
   }) async {
     final localSession = LocalSession(
       serverId: isPending ? null : session.id,
-      userId: session.userId,
+      userId: token.userId,
       date: session.date,
       duration: session.duration,
       notes: session.notes,
@@ -920,13 +1240,16 @@ class SessionRepository {
       lastModifiedLocal: DateTime.now().toUtc(),
     );
 
-    await db.writeTxn(() => db.localSessions.put(localSession));
+    await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+      await db.localSessions.put(localSession);
+    });
 
     debugPrint('💾 Saved session locally: ${localSession.localId}');
 
-    // Return with local ID (temporary until synced)
     return Session(
-      id: localSession.localId, // Use local ID temporarily
+      id: localSession.localId,
       userId: localSession.userId,
       date: localSession.date,
       duration: localSession.duration,
@@ -951,19 +1274,30 @@ class SessionRepository {
     int? duration,
     DateTime? startedAtUtc,
   }) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
+    final token = context.epochToken;
     final Isar db = _localDb.database;
 
-    // Find local session using helper
-    final localSession = await _findLocalSessionOrThrow(db, id);
+    final localSession = await _resolveOwnedSessionOrThrow(db, id, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     // ALWAYS update locally first for instant response
     await _updateLocalSessionStatus(
       db,
       localSession,
       status,
+      token,
       duration: duration,
       startedAtUtc: startedAtUtc,
     );
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     // Then sync to server in background if online (using helper), unless
     // the row has an unresolved conflict - it must not be pushed until
@@ -972,8 +1306,9 @@ class SessionRepository {
       _backgroundSync(
         () => _syncSessionStatusToServer(
           db,
+          localSession.localId,
           localSession.serverId!,
-          localSession,
+          context,
         ),
         'Updated session status on server',
       );
@@ -987,77 +1322,73 @@ class SessionRepository {
     return await _localSessionToSessionWithExercises(db, localSession);
   }
 
-  /// Background sync: Update session status on server
+  /// Background sync: Update session status on server. Bound to [context]:
+  /// the HTTP call carries its pinned JWT, and the resulting acknowledgment
+  /// is gated behind the class doc comment's three-checkpoint shape plus a
+  /// re-resolution of the target row by its STABLE LOCAL ID and direct
+  /// ownership (never an unscoped `serverIdEqualTo` lookup).
   Future<void> _syncSessionStatusToServer(
     Isar db,
+    int sessionLocalId,
     int serverId,
-    LocalSession localSession,
+    SessionRequestContext context,
   ) async {
-    // Helper to convert an Isar timestamp to a UTC ISO8601 string with 'Z'
-    // suffix. Isar returns DateTime fields as local-flagged, but preserves
-    // the absolute instant correctly (verified against a real Isar
-    // instance in model_mapper_isar_roundtrip_test.dart), so a real
-    // .toUtc() call is the correct conversion - it relabels the value as
-    // UTC without shifting the instant.
+    final token = context.epochToken;
+
+    // Snapshot the fields to send from the currently-owned row before
+    // dispatching, so a concurrent edit mid-flight can't be lost.
+    final source = await _ownedSessionByLocalId(db, sessionLocalId, token);
+    if (source == null) return;
+
     String? toUtcIso8601(DateTime? dt) => dt?.toUtc().toIso8601String();
 
-    try {
-      // Send status AND timestamps to server (preserves timer state)
-      // IMPORTANT: Use toUtcIso8601 to ensure proper UTC format with 'Z' suffix
-      final startedAtString = toUtcIso8601(localSession.startedAt);
-      final pausedAtString = toUtcIso8601(localSession.pausedAt);
+    final startedAtString = toUtcIso8601(source.startedAt);
+    final pausedAtString = toUtcIso8601(source.pausedAt);
 
-      // DEBUG: Log exactly what we're sending
-      debugPrint('🔄 SYNC DEBUG - Sending to server:');
-      debugPrint('   localSession.startedAt: ${localSession.startedAt}');
-      debugPrint(
-        '   localSession.startedAt.isUtc: ${localSession.startedAt?.isUtc}',
-      );
-      debugPrint(
-        '   localSession.startedAt.hour: ${localSession.startedAt?.hour}',
-      );
-      debugPrint('   toUtcIso8601 result: $startedAtString');
-      debugPrint('   localSession.pausedAt: ${localSession.pausedAt}');
-      debugPrint('   pausedAt toUtcIso8601: $pausedAtString');
+    final requestData = {
+      'status': source.status,
+      if (source.startedAt != null) 'startedAt': startedAtString,
+      if (source.completedAt != null)
+        'completedAt': toUtcIso8601(source.completedAt),
+      if (source.pausedAt != null) 'pausedAt': pausedAtString,
+      if (source.pausedAt == null) 'clearPausedAt': true,
+      if (source.duration != null) 'duration': source.duration,
+    };
 
-      final data = {
-        'status': localSession.status,
-        if (localSession.startedAt != null) 'startedAt': startedAtString,
-        if (localSession.completedAt != null)
-          'completedAt': toUtcIso8601(localSession.completedAt),
-        if (localSession.pausedAt != null) 'pausedAt': pausedAtString,
-        // When pausedAt is null, tell server to clear it (for resume operation)
-        if (localSession.pausedAt == null) 'clearPausedAt': true,
-        if (localSession.duration != null) 'duration': localSession.duration,
-      };
-
-      debugPrint('   Full data payload: $data');
-
-      await _apiService.patch<void>(
+    await _dispatchBackgroundHttp(
+      () => _apiService.patch<void>(
         ApiConfig.sessionStatus(serverId),
-        data: data,
-      );
+        data: requestData,
+        sessionContext: context,
+      ),
+    );
 
-      debugPrint(
-        '✅ Synced session $serverId with timestamps (startedAt: ${localSession.startedAt})',
-      );
+    debugPrint('✅ Synced session $serverId with timestamps');
 
-      // Update sync status in local DB
-      await db.writeTxn(() async {
-        final session =
-            await db.localSessions
-                .filter()
-                .serverIdEqualTo(serverId)
-                .findFirst();
-        if (session != null) {
-          session.isSynced = true;
-          session.syncStatus = 'synced';
-          await db.localSessions.put(session);
-        }
-      });
-    } catch (e) {
-      rethrow; // Let caller handle error
-    }
+    // Checkpoint: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    await _runTestHook(afterBackgroundHttpResponseForTesting);
+
+    // Re-resolve by stable local identity and direct ownership.
+    final target = await _ownedSessionByLocalId(db, sessionLocalId, token);
+    if (target == null) return;
+
+    // Checkpoint: immediately before entering the write transaction.
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    await db.writeTxn(() async {
+      await _runTestHook(insideBackgroundWriteTxnForTesting);
+      // Checkpoint: first statement inside the write transaction.
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      final session = await db.localSessions.get(sessionLocalId);
+      if (session == null || session.userId != token.userId) return;
+
+      session.isSynced = true;
+      session.syncStatus = 'synced';
+      await db.localSessions.put(session);
+    });
   }
 
   /// Update session status in local database
@@ -1065,11 +1396,20 @@ class SessionRepository {
   Future<void> _updateLocalSessionStatus(
     Isar db,
     LocalSession localSession,
-    String status, {
+    String status,
+    UserSessionToken token, {
     int? duration,
     DateTime? startedAtUtc,
   }) async {
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
     await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
       final now = DateTime.now();
       final conflicted = _isConflicted(localSession);
       localSession.status = status;
@@ -1080,84 +1420,36 @@ class SessionRepository {
 
       // Set startedAt when status changes to 'in_progress'
       if (status == 'in_progress' && localSession.startedAt == null) {
-        // CRITICAL FIX: Use timestamp from provider if provided (calculated outside transaction)
-        // This ensures the same UTC calculation pattern as pause/resume which work correctly
         final timestampToUse = startedAtUtc ?? DateTime.now().toUtc();
-
-        debugPrint('🏋️ REPOSITORY - Setting startedAt:');
-        debugPrint('   Received startedAtUtc param: $startedAtUtc');
-        debugPrint('   startedAtUtc.isUtc: ${startedAtUtc?.isUtc}');
-        debugPrint('   startedAtUtc.hour: ${startedAtUtc?.hour}');
-        debugPrint('   timestampToUse: $timestampToUse');
-        debugPrint('   timestampToUse.isUtc: ${timestampToUse.isUtc}');
-        debugPrint('   timestampToUse.hour: ${timestampToUse.hour}');
-
         localSession.startedAt = timestampToUse;
-        localSession.pausedAt = null; // Clear any pause state
-
-        debugPrint(
-          '   After assignment - localSession.startedAt: ${localSession.startedAt}',
-        );
-        debugPrint(
-          '   After assignment - localSession.startedAt.isUtc: ${localSession.startedAt?.isUtc}',
-        );
-        debugPrint(
-          '   After assignment - localSession.startedAt.hour: ${localSession.startedAt?.hour}',
-        );
+        localSession.pausedAt = null;
       }
 
       // Set completedAt when status changes to 'completed'
       if (status == 'completed' && localSession.completedAt == null) {
         final completedAtUtc = DateTime.now().toUtc();
         localSession.completedAt = completedAtUtc;
-        debugPrint('✅ Set completedAt in DB (UTC): $completedAtUtc');
-
-        // Update workout frequency goals when a workout is completed (Issue #11)
-        final userId = await _authService.getUserId();
-        if (userId != null) {
-          await _updateWorkoutGoals(db, userId, completedAtUtc);
-        }
+        await _updateWorkoutGoals(db, token.userId, completedAtUtc);
       }
 
-      // Update duration if provided (from timer elapsed time)
       if (duration != null) {
         localSession.duration = duration;
-        debugPrint('⏱️ Set duration in DB: $duration minutes');
       }
 
-      // Only mark as pending_update if session already exists on server
-      // and it isn't already an unresolved conflict - conflicted rows may
-      // only leave that state through an explicit resolution.
-      // If no serverId, keep it as pending_create.
       if (!conflicted && localSession.serverId != null) {
         localSession.syncStatus = 'pending_update';
       }
       await db.localSessions.put(localSession);
-
-      // DEBUG: Check if Isar modified the object
-      debugPrint('🗄️ AFTER ISAR PUT:');
-      debugPrint('   localSession.startedAt: ${localSession.startedAt}');
-      debugPrint(
-        '   localSession.startedAt.isUtc: ${localSession.startedAt?.isUtc}',
-      );
-      debugPrint(
-        '   localSession.startedAt.hour: ${localSession.startedAt?.hour}',
-      );
     });
+
+    await _runTestHook(afterWriteTxnForTesting);
   }
 
   /// Update workout frequency goals when a workout is completed (Issue #11)
-  /// This ensures goals update even when offline
   ///
   /// NOTE: Currently goals are server-only (no LocalGoal model exists).
-  /// This method documents the intended client-side goal update logic.
-  /// To fully implement offline goal updates, you would need to:
-  /// 1. Create a LocalGoal model (lib/data/local/models/local_goal.dart)
-  /// 2. Add goals to LocalDatabaseService collections
-  /// 3. Update GoalsRepository to use offline-first pattern
-  /// 4. Uncomment the implementation below
-  ///
-  /// For now, goal updates only happen server-side via SessionsController.cs
+  /// This method documents the intended client-side goal update logic; see
+  /// git history for the previous full commented-out implementation sketch.
   Future<void> _updateWorkoutGoals(
     Isar db,
     int userId,
@@ -1166,85 +1458,51 @@ class SessionRepository {
     debugPrint(
       '📊 Goal updates (Issue #11): Currently server-only. LocalGoal model needed for offline support.',
     );
-
-    // TODO: Uncomment when LocalGoal model is created
-    /*
-    try {
-      // Find active workout frequency goals
-      final goals = await db.localGoals
-        .filter()
-        .userIdEqualTo(userId)
-        .isActiveEqualTo(true)
-        .goalTypeContains('workout', caseSensitive: false)
-        .or()
-        .goalTypeContains('frequency', caseSensitive: false)
-        .findAll();
-
-      if (goals.isEmpty) {
-        debugPrint('📊 No active workout frequency goals to update');
-        return;
-      }
-
-      await db.writeTxn(() async {
-        for (final goal in goals) {
-          // Increment currentValue
-          final oldValue = goal.currentValue ?? 0;
-          goal.currentValue = oldValue + 1;
-
-          debugPrint('📊 Updated goal "${goal.goalType}": $oldValue → ${goal.currentValue}/${goal.targetValue}');
-
-          // Check if goal is now complete
-          if (goal.currentValue! >= goal.targetValue!) {
-            goal.isCompleted = true;
-            goal.completedAt = completedAt;
-            debugPrint('🎉 Goal completed: ${goal.goalType}');
-          }
-
-          // Mark as needing sync
-          goal.isSynced = false;
-          if (goal.serverId != null) {
-            goal.syncStatus = 'pending_update';
-          }
-          goal.lastModifiedLocal = DateTime.now().toUtc();
-
-          await db.localGoals.put(goal);
-        }
-      });
-
-      debugPrint('✅ Updated ${goals.length} workout goals locally');
-    } catch (e) {
-      debugPrint('⚠️ Failed to update workout goals: $e');
-      // Don't throw - goal updates are non-critical
-    }
-    */
   }
 
   /// Pause session timer
   /// Works offline by updating local database
   /// [pausedAt] timestamp from provider (to avoid time drift)
   Future<void> pauseSession(int id, DateTime pausedAt) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
+    final token = context.epochToken;
     final Isar db = _localDb.database;
 
-    // Find local session using helper
-    final localSession = await _findLocalSessionOrThrow(db, id);
+    final localSession = await _resolveOwnedSessionOrThrow(db, id, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
-    // ALWAYS update locally first for instant response
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
     await db.writeTxn(() async {
-      localSession.pausedAt = pausedAt; // Use provided timestamp (already UTC)
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      localSession.pausedAt = pausedAt;
       _applyLocalEditBookkeeping(localSession);
       await db.localSessions.put(localSession);
     });
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     debugPrint('⏸️ Session paused locally (pausedAt UTC: $pausedAt)');
 
-    // Then sync to server in background if online, unless the row has an
-    // unresolved conflict.
     if (_shouldPushAfterEdit(localSession)) {
       _backgroundSync(
         () => _syncSessionStatusToServer(
           db,
+          localSession.localId,
           localSession.serverId!,
-          localSession,
+          context,
         ),
         'Pause synced to server',
       );
@@ -1255,31 +1513,46 @@ class SessionRepository {
   /// Works offline by updating local database
   /// [newStartedAt] adjusted timestamp from provider (to avoid time drift)
   Future<void> resumeSession(int id, DateTime newStartedAt) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
+    final token = context.epochToken;
     final Isar db = _localDb.database;
 
-    // Find local session using helper
-    final localSession = await _findLocalSessionOrThrow(db, id);
+    final localSession = await _resolveOwnedSessionOrThrow(db, id, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
-    // ALWAYS update locally first for instant response
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
     await db.writeTxn(() async {
-      // Use the adjusted startedAt provided by provider (already calculated)
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
       localSession.startedAt = newStartedAt;
       localSession.pausedAt = null;
       _applyLocalEditBookkeeping(localSession);
       await db.localSessions.put(localSession);
-      debugPrint('▶️ Adjusted startedAt to: $newStartedAt');
     });
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     debugPrint('▶️ Session resumed locally');
 
-    // Then sync to server in background if online, unless the row has an
-    // unresolved conflict.
     if (_shouldPushAfterEdit(localSession)) {
       _backgroundSync(
         () => _syncSessionStatusToServer(
           db,
+          localSession.localId,
           localSession.serverId!,
-          localSession,
+          context,
         ),
         'Resume synced to server',
       );
@@ -1289,13 +1562,24 @@ class SessionRepository {
   /// Archive a session (change status to 'archived')
   /// Archived sessions are hidden from main list but still count for programs
   Future<bool> archiveSession(int id) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
+    final token = context.epochToken;
     final Isar db = _localDb.database;
 
-    // Find local session using helper
-    final localSession = await _findLocalSessionOrThrow(db, id);
+    final localSession = await _resolveOwnedSessionOrThrow(db, id, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
-    // Change status to archived (using helper for standard sync marking)
-    await _markSessionForSync(db, localSession, newStatus: 'archived');
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+    await _markSessionForSync(db, localSession, token, newStatus: 'archived');
+    await _runTestHook(afterWriteTxnForTesting);
 
     debugPrint(
       '📦 Archived session: ${localSession.serverId ?? localSession.localId}',
@@ -1306,10 +1590,17 @@ class SessionRepository {
   /// Delete session
   /// Marks as pending_delete offline, deletes from server when online
   Future<bool> deleteSession(int id) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
+    final token = context.epochToken;
     final Isar db = _localDb.database;
 
-    // Find local session using helper
-    final localSession = await _findLocalSessionOrThrow(db, id);
+    final localSession = await _resolveOwnedSessionOrThrow(db, id, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     // Prevent deletion of completed program workouts
     if (localSession.status == 'completed' &&
@@ -1321,101 +1612,154 @@ class SessionRepository {
 
     if (_connectivity.isOnline && localSession.serverId != null) {
       try {
-        // Delete from server
         final success = await _apiService.delete(
           ApiConfig.sessionById(localSession.serverId!),
+          sessionContext: context,
         );
 
         if (success) {
-          // Delete from local database (including exercises and sets)
-          await _deleteSessionAndRelatedData(db, localSession);
+          if (!_sessionEpoch.isCurrent(token)) {
+            throw Exception(_unauthenticated);
+          }
+          await _deleteSessionAndRelatedData(db, localSession, token);
           debugPrint('✅ Deleted session from server: ${localSession.serverId}');
           return true;
         }
         return false;
+      } on SessionStaleException {
+        await _markForDeletion(db, localSession, token);
+        return true;
+      } on RequestCancelledException {
+        await _markForDeletion(db, localSession, token);
+        return true;
       } catch (e) {
         debugPrint('⚠️ Delete API failed, marking as pending: $e');
-        await _markForDeletion(db, localSession);
+        await _markForDeletion(db, localSession, token);
         return true;
       }
     } else {
       debugPrint('📴 Offline - marking session for deletion');
-      await _markForDeletion(db, localSession);
+      await _markForDeletion(db, localSession, token);
       return true;
     }
   }
 
   /// Mark session for deletion (to be synced later)
-  Future<void> _markForDeletion(Isar db, LocalSession localSession) async {
+  Future<void> _markForDeletion(
+    Isar db,
+    LocalSession localSession,
+    UserSessionToken token,
+  ) async {
     if (localSession.serverId == null) {
-      // Never synced to server - safe to delete immediately (with related data)
-      await _deleteSessionAndRelatedData(db, localSession);
+      await _deleteSessionAndRelatedData(db, localSession, token);
     } else {
-      // Synced before - mark for deletion
+      await _runTestHook(beforeWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
       await db.writeTxn(() async {
+        await _runTestHook(insideWriteTxnForTesting);
+        if (!_sessionEpoch.isCurrent(token)) return;
         localSession.isSynced = false;
         localSession.syncStatus = 'pending_delete';
         localSession.lastModifiedLocal = DateTime.now().toUtc();
         await db.localSessions.put(localSession);
       });
+      await _runTestHook(afterWriteTxnForTesting);
     }
   }
 
-  /// Delete session and all related exercises and sets
+  /// Delete session and all related exercises and sets. Reverifies parent
+  /// ownership as the first statement inside the transaction, per the class
+  /// doc comment's session graph ownership section - this must never delete
+  /// a session/its children that have been reassigned or replaced since
+  /// [localSession] was resolved.
   Future<void> _deleteSessionAndRelatedData(
     Isar db,
     LocalSession localSession,
+    UserSessionToken token,
   ) async {
+    final localId = localSession.localId;
+
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) return;
+
     await db.writeTxn(() async {
-      // Delete all exercises for this session
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      final current = await db.localSessions.get(localId);
+      if (current == null || current.userId != token.userId) return;
+
       final exercises =
           await db.localExercises
               .filter()
-              .sessionLocalIdEqualTo(localSession.localId)
+              .sessionLocalIdEqualTo(localId)
               .findAll();
 
       for (final exercise in exercises) {
-        // Delete all sets for this exercise
+        await _runTestHook(beforeChildDeleteForTesting);
+        // Grandparent-ownership recheck: re-resolve the exercise by its
+        // stable local identity and confirm it still belongs to the
+        // session being deleted before touching its sets - closes the
+        // window between the query above and this delete.
+        final currentExercise = await db.localExercises.get(exercise.localId);
+        if (currentExercise == null ||
+            currentExercise.sessionLocalId != localId) {
+          continue;
+        }
         await db.localExerciseSets
             .filter()
             .exerciseLocalIdEqualTo(exercise.localId)
             .deleteAll();
+        await db.localExercises.delete(exercise.localId);
       }
 
-      // Delete all exercises
-      await db.localExercises
-          .filter()
-          .sessionLocalIdEqualTo(localSession.localId)
-          .deleteAll();
-
-      // Delete the session
-      await db.localSessions.delete(localSession.localId);
+      await db.localSessions.delete(localId);
     });
+    await _runTestHook(afterWriteTxnForTesting);
   }
 
   /// Update session name
   /// Optimistic update: updates locally first, syncs to server if online
   Future<Session> updateSessionName(int id, String name) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
+    final token = context.epochToken;
     final Isar db = _localDb.database;
 
-    // Find local session using helper
-    final localSession = await _findLocalSessionOrThrow(db, id);
+    final localSession = await _resolveOwnedSessionOrThrow(db, id, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
-    // ALWAYS update locally first for instant response
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
     await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
       localSession.name = name;
       _applyLocalEditBookkeeping(localSession);
       await db.localSessions.put(localSession);
     });
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     debugPrint('✏️ Session name updated locally to: $name');
 
-    // Then sync to server in background if online, unless the row has an
-    // unresolved conflict - it must not be pushed until explicitly
-    // resolved.
     if (_shouldPushAfterEdit(localSession)) {
       _backgroundSync(
-        () => _syncSessionNameToServer(db, localSession.serverId!, name),
+        () => _pushSessionUpdate(
+          db,
+          localSession.localId,
+          'session name',
+          context,
+        ),
         'Updated session name on server',
       );
     } else if (_isConflicted(localSession)) {
@@ -1424,35 +1768,52 @@ class SessionRepository {
       debugPrint('📴 Offline - session name will sync later');
     }
 
-    // Return session with exercises using helper
     return await _localSessionToSessionWithExercises(db, localSession);
   }
 
   /// Update workout date (used when starting future planned workout early)
   /// Optimistic update: updates locally first, syncs to server if online
   Future<void> updateWorkoutDate(int id, DateTime newDate) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
+    final token = context.epochToken;
     final Isar db = _localDb.database;
 
-    // Find local session using helper
-    final localSession = await _findLocalSessionOrThrow(db, id);
+    final localSession = await _resolveOwnedSessionOrThrow(db, id, token);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
-    // ALWAYS update locally first for instant response
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
     await db.writeTxn(() async {
-      // Convert to date-only (no time component)
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
       final dateOnly = DateTime(newDate.year, newDate.month, newDate.day);
       localSession.date = dateOnly;
       _applyLocalEditBookkeeping(localSession);
       await db.localSessions.put(localSession);
     });
+    await _runTestHook(afterWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     debugPrint('📅 Workout date updated locally to: $newDate');
 
-    // Then sync to server in background if online, unless the row has an
-    // unresolved conflict - it must not be pushed until explicitly
-    // resolved.
     if (_shouldPushAfterEdit(localSession)) {
       _backgroundSync(
-        () => _syncSessionDateToServer(db, localSession.serverId!, newDate),
+        () => _pushSessionUpdate(
+          db,
+          localSession.localId,
+          'workout date',
+          context,
+        ),
         'Updated workout date on server',
       );
     } else if (_isConflicted(localSession)) {
@@ -1462,48 +1823,35 @@ class SessionRepository {
     }
   }
 
-  /// Background sync: Update workout date on server
-  /// The date is already persisted on the local row before this runs, so
-  /// this just pushes the current local state through the centralized
-  /// update helper.
-  Future<void> _syncSessionDateToServer(
-    Isar db,
-    int serverId,
-    DateTime newDate,
-  ) async {
-    final session =
-        await db.localSessions.filter().serverIdEqualTo(serverId).findFirst();
-    if (session == null) return;
-
-    await _pushSessionUpdate(db, session, 'workout date');
-  }
-
-  /// Background sync: Update session name on server
-  /// The name is already persisted on the local row before this runs, so
-  /// this just pushes the current local state through the centralized
-  /// update helper.
-  Future<void> _syncSessionNameToServer(
-    Isar db,
-    int serverId,
-    String name,
-  ) async {
-    final session =
-        await db.localSessions.filter().serverIdEqualTo(serverId).findFirst();
-    if (session == null) return;
-
-    await _pushSessionUpdate(db, session, 'session name');
-  }
-
   /// Push a full-session PUT update via the centralized sync helper and log
-  /// the outcome. Non-409 failures propagate to the caller's retry logic.
+  /// the outcome. Bound to [context]: the PUT (and, on a non-map success
+  /// response, the helper's own recovery GET) carries the pinned JWT, and
+  /// every write the helper may perform is additionally gated by
+  /// `isSessionCurrent`/`scopeUserId` - see `SessionUpdateSyncHelper`'s own
+  /// class doc comment. [sessionLocalId] is re-resolved by its stable local
+  /// identity and ownership immediately before dispatch, so a stale target
+  /// is never pushed.
   Future<void> _pushSessionUpdate(
     Isar db,
-    LocalSession session,
+    int sessionLocalId,
     String what,
+    SessionRequestContext context,
   ) async {
-    final outcome = await SessionUpdateSyncHelper(
-      _apiService,
-    ).pushUpdate(db, session);
+    final token = context.epochToken;
+
+    final session = await _ownedSessionByLocalId(db, sessionLocalId, token);
+    if (session == null) return;
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    final outcome = await _dispatchBackgroundHttp(
+      () => SessionUpdateSyncHelper(_apiService).pushUpdate(
+        db,
+        session,
+        sessionContext: context,
+        isSessionCurrent: () => _sessionEpoch.isCurrent(token),
+        scopeUserId: token.userId,
+      ),
+    );
 
     switch (outcome) {
       case SessionSyncOutcome.synced:
@@ -1536,10 +1884,8 @@ class SessionRepository {
         .userIdEqualTo(userId)
         .watch(fireImmediately: true)
         .asyncMap((localSessions) async {
-          // Convert local sessions to domain models with exercises (using helper)
           final sessions = <Session>[];
           for (final localSession in localSessions) {
-            // Skip deleted or archived sessions
             if (localSession.syncStatus == 'pending_delete' ||
                 localSession.status == 'archived') {
               continue;
@@ -1549,7 +1895,6 @@ class SessionRepository {
             );
           }
 
-          // Sort by date descending
           sessions.sort((a, b) => b.date.compareTo(a.date));
           return sessions;
         });
@@ -1561,40 +1906,79 @@ class SessionRepository {
     int sessionId,
     int exerciseTemplateId,
   ) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
+    final token = context.epochToken;
     final Isar db = _localDb.database;
 
-    // Find local session using helper
-    final localSession = await _findLocalSessionOrThrow(db, sessionId);
+    final localSession = await _resolveOwnedSessionOrThrow(
+      db,
+      sessionId,
+      token,
+    );
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
 
     if (_connectivity.isOnline && localSession.serverId != null) {
       try {
-        // Try API first
         final data = await _apiService.post<Map<String, dynamic>>(
           ApiConfig.sessionExercises(localSession.serverId!),
           data: {'exerciseTemplateId': exerciseTemplateId},
+          sessionContext: context,
         );
         final apiExercise = Exercise.fromJson(data);
 
-        // Cache the exercise locally
+        if (!_sessionEpoch.isCurrent(token)) {
+          throw const SessionStaleException();
+        }
+        if (!await _isSessionOwnedByLocalId(db, localSession.localId, token)) {
+          throw const SessionStaleException();
+        }
+
+        await _runTestHook(beforeWriteTxnForTesting);
         await db.writeTxn(() async {
+          await _runTestHook(insideWriteTxnForTesting);
+          if (!_sessionEpoch.isCurrent(token)) {
+            throw const SessionStaleException();
+          }
+
+          // Freshly reacquire the session by its stable local identity and
+          // re-verify ownership as the first operation inside the
+          // transaction - the pre-transaction check above (and the
+          // `localSession` object it used) proves nothing about the state
+          // at the moment this write actually happens, only about the
+          // moment it was read. Never reuse that stale object as proof of
+          // ownership here.
+          final owningSession = await db.localSessions.get(
+            localSession.localId,
+          );
+          if (owningSession == null || owningSession.userId != token.userId) {
+            throw const SessionStaleException();
+          }
+
           final localExercise = ModelMapper.exerciseToLocal(
             apiExercise,
-            sessionLocalId: localSession.localId,
+            sessionLocalId: owningSession.localId,
             isSynced: true,
           );
           await db.localExercises.put(localExercise);
         });
 
         return apiExercise;
+      } on SessionStaleException {
+        // Fall through to offline creation below.
+      } on RequestCancelledException {
+        // Fall through to offline creation below.
       } catch (e) {
         debugPrint('⚠️ Add exercise API failed, creating locally: $e');
-        // Fall through to offline creation
       }
     }
 
-    // Create exercise locally (offline or API failed)
-    // Get exercise template name from local cache
-    String exerciseName = 'Exercise'; // Default name
+    // Create exercise locally (offline, API failed, or session no longer current)
+    String exerciseName = 'Exercise';
     try {
       final templates =
           await db.collection<LocalExerciseTemplate>().where().findAll();
@@ -1607,11 +1991,22 @@ class SessionRepository {
       debugPrint('⚠️ Could not find exercise template $exerciseTemplateId: $e');
     }
 
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
     int localId = 0;
 
+    await _runTestHook(beforeWriteTxnForTesting);
     await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      final current = await db.localSessions.get(localSession.localId);
+      if (current == null || current.userId != token.userId) return;
+
       final tempExercise = Exercise(
-        id: 0, // Temporary, will be replaced
+        id: 0,
         sessionId: sessionId,
         name: exerciseName,
         exerciseTemplateId: exerciseTemplateId,
@@ -1629,9 +2024,8 @@ class SessionRepository {
       localId = await db.localExercises.put(localExercise);
     });
 
-    // Return exercise with local ID and name
     final newExercise = Exercise(
-      id: localId, // Use local ID temporarily
+      id: localId,
       sessionId: sessionId,
       name: exerciseName,
       exerciseTemplateId: exerciseTemplateId,

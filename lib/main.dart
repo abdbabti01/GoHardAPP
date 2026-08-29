@@ -149,12 +149,20 @@ void main() async {
           SessionRepository
         >(
           update:
-              (_, apiService, localDb, connectivity, authService, __) =>
+              (context, apiService, localDb, connectivity, authService, __) =>
                   SessionRepository(
                     apiService,
                     localDb,
                     connectivity,
                     authService,
+                    // UserSessionEpoch and SessionRequestCoordinator are
+                    // fixed .value()/ProxyProvider singletons, never
+                    // reactively watched, so they are read directly here
+                    // rather than added as formal ProxyProvider type
+                    // parameters (matches NutritionRepository's wiring
+                    // below).
+                    context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
                   ),
         ),
         ProxyProvider3<
