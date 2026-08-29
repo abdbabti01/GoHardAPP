@@ -7,7 +7,9 @@ import 'package:mockito/mockito.dart';
 
 import 'package:go_hard_app/core/constants/api_config.dart';
 import 'package:go_hard_app/core/services/connectivity_service.dart';
+import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/sync_service.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/local/models/local_chat_conversation.dart';
 import 'package:go_hard_app/data/local/models/local_chat_message.dart';
 import 'package:go_hard_app/data/local/models/local_exercise.dart';
@@ -39,6 +41,8 @@ void main() {
   late MockApiService mockApiService;
   late MockAuthService mockAuthService;
   late LocalDatabaseService localDb;
+  late UserSessionEpoch sessionEpoch;
+  late SessionRequestCoordinator sessionCoordinator;
   late SyncService syncService;
 
   const userId = 1;
@@ -86,9 +90,16 @@ void main() {
     mockApiService = MockApiService();
     mockAuthService = MockAuthService();
     when(mockAuthService.getUserId()).thenAnswer((_) async => userId);
+    when(mockAuthService.getToken()).thenAnswer((_) async => 'jwt-$userId');
 
     localDb = LocalDatabaseService.instance;
     localDb.setTestDatabase(isar);
+
+    sessionEpoch = UserSessionEpoch()..activate(userId);
+    sessionCoordinator = SessionRequestCoordinator(
+      sessionEpoch,
+      mockAuthService,
+    );
 
     syncService = SyncService(
       apiService: mockApiService,
@@ -97,6 +108,8 @@ void main() {
       // Real singleton, defaults to online - required for sync() to
       // proceed past its connectivity gate at all.
       connectivity: ConnectivityService.instance,
+      sessionEpoch: sessionEpoch,
+      sessionCoordinator: sessionCoordinator,
     );
   });
 
@@ -192,12 +205,14 @@ void main() {
           mockApiService.post<Map<String, dynamic>>(
             ApiConfig.mealLogs,
             data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
           ),
         ).thenAnswer((_) async => {'id': 999});
         when(
           mockApiService.post<Map<String, dynamic>>(
             ApiConfig.mealEntries,
             data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
           ),
         ).thenAnswer((_) async => {'id': 1});
 
@@ -208,6 +223,7 @@ void main() {
                   mockApiService.post<Map<String, dynamic>>(
                     ApiConfig.mealLogs,
                     data: captureAnyNamed('data'),
+                    sessionContext: anyNamed('sessionContext'),
                   ),
                 ).captured.single
                 as Map<String, dynamic>;
@@ -244,12 +260,14 @@ void main() {
           mockApiService.post<Map<String, dynamic>>(
             ApiConfig.mealLogs,
             data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
           ),
         ).thenAnswer((_) async => {'id': 999});
         when(
           mockApiService.post<Map<String, dynamic>>(
             ApiConfig.mealEntries,
             data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
           ),
         ).thenAnswer((_) async => {'id': 1});
 
@@ -260,6 +278,7 @@ void main() {
                   mockApiService.post<Map<String, dynamic>>(
                     ApiConfig.mealLogs,
                     data: captureAnyNamed('data'),
+                    sessionContext: anyNamed('sessionContext'),
                   ),
                 ).captured.single
                 as Map<String, dynamic>;
@@ -305,7 +324,11 @@ void main() {
         );
 
         when(
-          mockApiService.put<void>(any, data: anyNamed('data')),
+          mockApiService.put<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         ).thenAnswer((_) => Future<void>.value());
         // The two entries seeded above default to pending_create and are
         // synced afterward in the same sync() call; stub that permissively
@@ -315,6 +338,7 @@ void main() {
           mockApiService.post<Map<String, dynamic>>(
             ApiConfig.mealEntries,
             data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
           ),
         ).thenAnswer((_) async => {'id': 1});
 
@@ -322,7 +346,11 @@ void main() {
 
         final captured =
             verify(
-                  mockApiService.put<void>(any, data: captureAnyNamed('data')),
+                  mockApiService.put<void>(
+                    any,
+                    data: captureAnyNamed('data'),
+                    sessionContext: anyNamed('sessionContext'),
+                  ),
                 ).captured.single
                 as Map<String, dynamic>;
 

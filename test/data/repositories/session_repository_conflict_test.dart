@@ -6,7 +6,9 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
 import 'package:go_hard_app/core/services/connectivity_service.dart';
+import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/sync_service.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/local/models/local_exercise.dart';
 import 'package:go_hard_app/data/local/models/local_exercise_set.dart';
 import 'package:go_hard_app/data/local/models/local_session.dart';
@@ -25,6 +27,8 @@ void main() {
   late MockAuthService mockAuthService;
   late LocalDatabaseService localDb;
   late SessionRepository repository;
+  late UserSessionEpoch sessionEpoch;
+  late SessionRequestCoordinator sessionCoordinator;
 
   const userId = 1;
   const serverId = 100;
@@ -44,9 +48,16 @@ void main() {
     mockApiService = MockApiService();
     mockAuthService = MockAuthService();
     when(mockAuthService.getUserId()).thenAnswer((_) async => userId);
+    when(mockAuthService.getToken()).thenAnswer((_) async => 'jwt-$userId');
 
     localDb = LocalDatabaseService.instance;
     localDb.setTestDatabase(isar);
+
+    sessionEpoch = UserSessionEpoch()..activate(userId);
+    sessionCoordinator = SessionRequestCoordinator(
+      sessionEpoch,
+      mockAuthService,
+    );
 
     repository = SessionRepository(
       mockApiService,
@@ -372,11 +383,19 @@ void main() {
           authService: mockAuthService,
           localDb: localDb,
           connectivity: ConnectivityService.instance,
+          sessionEpoch: sessionEpoch,
+          sessionCoordinator: sessionCoordinator,
         );
 
         await syncService.sync();
 
-        verifyNever(mockApiService.put<dynamic>(any, data: anyNamed('data')));
+        verifyNever(
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
 
         final stored = await storedSession();
         expect(stored.name, 'Edited while conflicted');
