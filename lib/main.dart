@@ -122,10 +122,11 @@ void main() async {
               (_, authService, sessionEpoch, __) =>
                   ApiService(authService, sessionEpoch),
         ),
-        // Session-bound HTTP request capture/cancellation coordinator (PR
-        // A). Depends only on the same shared UserSessionEpoch instance and
-        // AuthService - not yet consumed by any repository or SyncService,
-        // and not yet wired into AuthProvider's logout pass (PR C).
+        // Session-bound HTTP request capture/cancellation coordinator.
+        // Depends only on the same shared UserSessionEpoch instance and
+        // AuthService. Consumed by NutritionRepository for session-bound
+        // requests and by AuthProvider's logout pass, which cancels the
+        // active generation here on every logout.
         ProxyProvider2<
           UserSessionEpoch,
           AuthService,
@@ -355,10 +356,12 @@ void main() async {
                 context.read<AuthService>(),
                 context.read<ApiService>(),
                 context.read<LocalDatabaseService>(),
-                // UserSessionEpoch is a fixed .value() singleton, never
-                // reactively watched, so it is read directly here rather
-                // than added as a formal ProxyProvider type parameter.
+                // UserSessionEpoch and SessionRequestCoordinator are fixed
+                // .value()/ProxyProvider singletons, never reactively
+                // watched, so they are read directly here rather than added
+                // as formal ProxyProvider type parameters.
                 context.read<UserSessionEpoch>(),
+                context.read<SessionRequestCoordinator>(),
               ),
           update:
               (context, authRepo, authService, apiService, localDb, previous) =>
@@ -369,6 +372,7 @@ void main() async {
                     apiService,
                     localDb,
                     context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
                   ),
         ),
         ChangeNotifierProxyProvider3<

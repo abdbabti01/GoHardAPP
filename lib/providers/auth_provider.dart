@@ -8,6 +8,7 @@ import '../data/services/api_service.dart';
 import '../data/local/services/local_database_service.dart';
 import '../core/services/background_service.dart';
 import '../core/services/push_notification_service.dart';
+import '../core/services/session_request_coordinator.dart';
 import '../core/services/user_session_epoch.dart';
 
 /// Provider for authentication state management
@@ -28,6 +29,14 @@ class AuthProvider extends ChangeNotifier {
   /// nothing, so injecting it here (and into every Provider that needs to
   /// capture/check it) never creates a cycle.
   final UserSessionEpoch _sessionEpoch;
+
+  /// The app's single shared session-bound HTTP request coordinator (see
+  /// its own class-level doc comment). AuthProvider is the only class that
+  /// calls [SessionRequestCoordinator.cancelCurrentGeneration] - it does so
+  /// immediately after [UserSessionEpoch.invalidate] in every logout pass,
+  /// so any request still bound to the session being ended is cancelled
+  /// rather than left to complete against a now-stale session.
+  final SessionRequestCoordinator _sessionRequestCoordinator;
 
   // Login fields
   String _email = '';
@@ -87,6 +96,7 @@ class AuthProvider extends ChangeNotifier {
     this._apiService,
     this._localDb,
     this._sessionEpoch,
+    this._sessionRequestCoordinator,
   ) {
     // Set up callback for 401 unauthorized errors
     _apiService.onUnauthorized = _handleSessionExpired;
@@ -178,6 +188,20 @@ class AuthProvider extends ChangeNotifier {
     // never independently call invalidate() - doing so would double the
     // generation increment for a single logical logout.
     _sessionEpoch.invalidate();
+
+    // 0b. Cancel every in-flight HTTP request still bound to the session
+    // just invalidated above - its own independent failure boundary, since
+    // SessionRequestCoordinator.cancelCurrentGeneration() is designed to be
+    // non-throwing but must never be trusted to stay that way from here.
+    // Deliberately not nested around the rest of this method: a failure
+    // here must never skip FCM unregister, SessionCleanupCoordinator,
+    // credential clearing, background-service cleanup, Isar clearing, the
+    // in-memory reset, or navigation below.
+    try {
+      _sessionRequestCoordinator.cancelCurrentGeneration();
+    } catch (e) {
+      debugPrint('⚠️ Failed to cancel in-flight session requests: $e');
+    }
 
     if (unregisterFcm) {
       // Unregister FCM token from server (non-blocking)
