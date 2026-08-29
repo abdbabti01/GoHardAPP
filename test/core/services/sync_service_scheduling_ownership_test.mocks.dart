@@ -28,13 +28,8 @@ import 'package:mockito/src/dummies.dart' as _i6;
 // ignore_for_file: subtype_of_sealed_class
 
 class _FakeFuture_0<T1> extends _i1.SmartFake implements _i2.Future<T1> {
-  _FakeFuture_0(
-    Object parent,
-    Invocation parentInvocation,
-  ) : super(
-          parent,
-          parentInvocation,
-        );
+  _FakeFuture_0(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
 }
 
 /// A class which mocks [ApiService].
@@ -47,51 +42,39 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
 
   @override
   set onUnauthorized(void Function()? _onUnauthorized) => super.noSuchMethod(
-        Invocation.setter(
-          #onUnauthorized,
-          _onUnauthorized,
-        ),
-        returnValueForMissingStub: null,
-      );
+    Invocation.setter(#onUnauthorized, _onUnauthorized),
+    returnValueForMissingStub: null,
+  );
 
   @override
   set beforeDispatchEpochCheckForTesting(
-          _i2.Future<void> Function()? _beforeDispatchEpochCheckForTesting) =>
-      super.noSuchMethod(
-        Invocation.setter(
-          #beforeDispatchEpochCheckForTesting,
-          _beforeDispatchEpochCheckForTesting,
-        ),
-        returnValueForMissingStub: null,
-      );
+    _i2.Future<void> Function()? _beforeDispatchEpochCheckForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeDispatchEpochCheckForTesting,
+      _beforeDispatchEpochCheckForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
 
   @override
   set testHttpClientAdapter(_i4.HttpClientAdapter? adapter) =>
       super.noSuchMethod(
-        Invocation.setter(
-          #testHttpClientAdapter,
-          adapter,
-        ),
+        Invocation.setter(#testHttpClientAdapter, adapter),
         returnValueForMissingStub: null,
       );
 
   @override
   void resetUnauthorizedFlag() => super.noSuchMethod(
-        Invocation.method(
-          #resetUnauthorizedFlag,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
+    Invocation.method(#resetUnauthorizedFlag, []),
+    returnValueForMissingStub: null,
+  );
 
   @override
   void handleResponseError(_i4.DioException? error) => super.noSuchMethod(
-        Invocation.method(
-          #handleResponseError,
-          [error],
-        ),
-        returnValueForMissingStub: null,
-      );
+    Invocation.method(#handleResponseError, [error]),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i2.Future<T> get<T>(
@@ -100,40 +83,42 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
     _i5.SessionRequestContext? sessionContext,
   }) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #get,
-          [path],
-          {
-            #queryParameters: queryParameters,
-            #sessionContext: sessionContext,
-          },
-        ),
-        returnValue: _i6.ifNotNull(
-              _i6.dummyValueOrNull<T>(
-                this,
-                Invocation.method(
-                  #get,
-                  [path],
-                  {
-                    #queryParameters: queryParameters,
-                    #sessionContext: sessionContext,
-                  },
-                ),
-              ),
-              (T v) => _i2.Future<T>.value(v),
-            ) ??
-            _FakeFuture_0<T>(
-              this,
-              Invocation.method(
-                #get,
-                [path],
-                {
-                  #queryParameters: queryParameters,
-                  #sessionContext: sessionContext,
-                },
-              ),
+            Invocation.method(
+              #get,
+              [path],
+              {
+                #queryParameters: queryParameters,
+                #sessionContext: sessionContext,
+              },
             ),
-      ) as _i2.Future<T>);
+            returnValue:
+                _i6.ifNotNull(
+                  _i6.dummyValueOrNull<T>(
+                    this,
+                    Invocation.method(
+                      #get,
+                      [path],
+                      {
+                        #queryParameters: queryParameters,
+                        #sessionContext: sessionContext,
+                      },
+                    ),
+                  ),
+                  (T v) => _i2.Future<T>.value(v),
+                ) ??
+                _FakeFuture_0<T>(
+                  this,
+                  Invocation.method(
+                    #get,
+                    [path],
+                    {
+                      #queryParameters: queryParameters,
+                      #sessionContext: sessionContext,
+                    },
+                  ),
+                ),
+          )
+          as _i2.Future<T>);
 
   @override
   _i2.Future<T> post<T>(
@@ -142,40 +127,33 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
     _i5.SessionRequestContext? sessionContext,
   }) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #post,
-          [path],
-          {
-            #data: data,
-            #sessionContext: sessionContext,
-          },
-        ),
-        returnValue: _i6.ifNotNull(
-              _i6.dummyValueOrNull<T>(
-                this,
-                Invocation.method(
-                  #post,
-                  [path],
-                  {
-                    #data: data,
-                    #sessionContext: sessionContext,
-                  },
-                ),
-              ),
-              (T v) => _i2.Future<T>.value(v),
-            ) ??
-            _FakeFuture_0<T>(
-              this,
-              Invocation.method(
-                #post,
-                [path],
-                {
-                  #data: data,
-                  #sessionContext: sessionContext,
-                },
-              ),
+            Invocation.method(
+              #post,
+              [path],
+              {#data: data, #sessionContext: sessionContext},
             ),
-      ) as _i2.Future<T>);
+            returnValue:
+                _i6.ifNotNull(
+                  _i6.dummyValueOrNull<T>(
+                    this,
+                    Invocation.method(
+                      #post,
+                      [path],
+                      {#data: data, #sessionContext: sessionContext},
+                    ),
+                  ),
+                  (T v) => _i2.Future<T>.value(v),
+                ) ??
+                _FakeFuture_0<T>(
+                  this,
+                  Invocation.method(
+                    #post,
+                    [path],
+                    {#data: data, #sessionContext: sessionContext},
+                  ),
+                ),
+          )
+          as _i2.Future<T>);
 
   @override
   _i2.Future<T> put<T>(
@@ -184,40 +162,33 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
     _i5.SessionRequestContext? sessionContext,
   }) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #put,
-          [path],
-          {
-            #data: data,
-            #sessionContext: sessionContext,
-          },
-        ),
-        returnValue: _i6.ifNotNull(
-              _i6.dummyValueOrNull<T>(
-                this,
-                Invocation.method(
-                  #put,
-                  [path],
-                  {
-                    #data: data,
-                    #sessionContext: sessionContext,
-                  },
-                ),
-              ),
-              (T v) => _i2.Future<T>.value(v),
-            ) ??
-            _FakeFuture_0<T>(
-              this,
-              Invocation.method(
-                #put,
-                [path],
-                {
-                  #data: data,
-                  #sessionContext: sessionContext,
-                },
-              ),
+            Invocation.method(
+              #put,
+              [path],
+              {#data: data, #sessionContext: sessionContext},
             ),
-      ) as _i2.Future<T>);
+            returnValue:
+                _i6.ifNotNull(
+                  _i6.dummyValueOrNull<T>(
+                    this,
+                    Invocation.method(
+                      #put,
+                      [path],
+                      {#data: data, #sessionContext: sessionContext},
+                    ),
+                  ),
+                  (T v) => _i2.Future<T>.value(v),
+                ) ??
+                _FakeFuture_0<T>(
+                  this,
+                  Invocation.method(
+                    #put,
+                    [path],
+                    {#data: data, #sessionContext: sessionContext},
+                  ),
+                ),
+          )
+          as _i2.Future<T>);
 
   @override
   _i2.Future<T?> patch<T>(
@@ -226,16 +197,14 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
     _i5.SessionRequestContext? sessionContext,
   }) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #patch,
-          [path],
-          {
-            #data: data,
-            #sessionContext: sessionContext,
-          },
-        ),
-        returnValue: _i2.Future<T?>.value(),
-      ) as _i2.Future<T?>);
+            Invocation.method(
+              #patch,
+              [path],
+              {#data: data, #sessionContext: sessionContext},
+            ),
+            returnValue: _i2.Future<T?>.value(),
+          )
+          as _i2.Future<T?>);
 
   @override
   _i2.Future<bool> delete(
@@ -244,16 +213,14 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
     _i5.SessionRequestContext? sessionContext,
   }) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #delete,
-          [path],
-          {
-            #data: data,
-            #sessionContext: sessionContext,
-          },
-        ),
-        returnValue: _i2.Future<bool>.value(false),
-      ) as _i2.Future<bool>);
+            Invocation.method(
+              #delete,
+              [path],
+              {#data: data, #sessionContext: sessionContext},
+            ),
+            returnValue: _i2.Future<bool>.value(false),
+          )
+          as _i2.Future<bool>);
 }
 
 /// A class which mocks [AuthService].
@@ -272,123 +239,108 @@ class MockAuthService extends _i1.Mock implements _i7.AuthService {
     required String? email,
   }) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #saveToken,
-          [],
-          {
-            #token: token,
-            #userId: userId,
-            #name: name,
-            #email: email,
-          },
-        ),
-        returnValue: _i2.Future<void>.value(),
-        returnValueForMissingStub: _i2.Future<void>.value(),
-      ) as _i2.Future<void>);
+            Invocation.method(#saveToken, [], {
+              #token: token,
+              #userId: userId,
+              #name: name,
+              #email: email,
+            }),
+            returnValue: _i2.Future<void>.value(),
+            returnValueForMissingStub: _i2.Future<void>.value(),
+          )
+          as _i2.Future<void>);
 
   @override
-  _i2.Future<String?> getToken() => (super.noSuchMethod(
-        Invocation.method(
-          #getToken,
-          [],
-        ),
-        returnValue: _i2.Future<String?>.value(),
-      ) as _i2.Future<String?>);
+  _i2.Future<String?> getToken() =>
+      (super.noSuchMethod(
+            Invocation.method(#getToken, []),
+            returnValue: _i2.Future<String?>.value(),
+          )
+          as _i2.Future<String?>);
 
   @override
-  _i2.Future<int?> getUserId() => (super.noSuchMethod(
-        Invocation.method(
-          #getUserId,
-          [],
-        ),
-        returnValue: _i2.Future<int?>.value(),
-      ) as _i2.Future<int?>);
+  _i2.Future<int?> getUserId() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUserId, []),
+            returnValue: _i2.Future<int?>.value(),
+          )
+          as _i2.Future<int?>);
 
   @override
-  _i2.Future<String?> getUserName() => (super.noSuchMethod(
-        Invocation.method(
-          #getUserName,
-          [],
-        ),
-        returnValue: _i2.Future<String?>.value(),
-      ) as _i2.Future<String?>);
+  _i2.Future<String?> getUserName() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUserName, []),
+            returnValue: _i2.Future<String?>.value(),
+          )
+          as _i2.Future<String?>);
 
   @override
-  _i2.Future<String?> getUserEmail() => (super.noSuchMethod(
-        Invocation.method(
-          #getUserEmail,
-          [],
-        ),
-        returnValue: _i2.Future<String?>.value(),
-      ) as _i2.Future<String?>);
+  _i2.Future<String?> getUserEmail() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUserEmail, []),
+            returnValue: _i2.Future<String?>.value(),
+          )
+          as _i2.Future<String?>);
 
   @override
-  _i2.Future<bool> isAuthenticated() => (super.noSuchMethod(
-        Invocation.method(
-          #isAuthenticated,
-          [],
-        ),
-        returnValue: _i2.Future<bool>.value(false),
-      ) as _i2.Future<bool>);
+  _i2.Future<bool> isAuthenticated() =>
+      (super.noSuchMethod(
+            Invocation.method(#isAuthenticated, []),
+            returnValue: _i2.Future<bool>.value(false),
+          )
+          as _i2.Future<bool>);
 
   @override
-  _i2.Future<void> clearToken() => (super.noSuchMethod(
-        Invocation.method(
-          #clearToken,
-          [],
-        ),
-        returnValue: _i2.Future<void>.value(),
-        returnValueForMissingStub: _i2.Future<void>.value(),
-      ) as _i2.Future<void>);
+  _i2.Future<void> clearToken() =>
+      (super.noSuchMethod(
+            Invocation.method(#clearToken, []),
+            returnValue: _i2.Future<void>.value(),
+            returnValueForMissingStub: _i2.Future<void>.value(),
+          )
+          as _i2.Future<void>);
 
   @override
-  _i2.Future<void> clearSessionCredentials() => (super.noSuchMethod(
-        Invocation.method(
-          #clearSessionCredentials,
-          [],
-        ),
-        returnValue: _i2.Future<void>.value(),
-        returnValueForMissingStub: _i2.Future<void>.value(),
-      ) as _i2.Future<void>);
+  _i2.Future<void> clearSessionCredentials() =>
+      (super.noSuchMethod(
+            Invocation.method(#clearSessionCredentials, []),
+            returnValue: _i2.Future<void>.value(),
+            returnValueForMissingStub: _i2.Future<void>.value(),
+          )
+          as _i2.Future<void>);
 
   @override
-  _i2.Future<void> saveThemePreference(String? theme) => (super.noSuchMethod(
-        Invocation.method(
-          #saveThemePreference,
-          [theme],
-        ),
-        returnValue: _i2.Future<void>.value(),
-        returnValueForMissingStub: _i2.Future<void>.value(),
-      ) as _i2.Future<void>);
+  _i2.Future<void> saveThemePreference(String? theme) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveThemePreference, [theme]),
+            returnValue: _i2.Future<void>.value(),
+            returnValueForMissingStub: _i2.Future<void>.value(),
+          )
+          as _i2.Future<void>);
 
   @override
-  _i2.Future<String?> getThemePreference() => (super.noSuchMethod(
-        Invocation.method(
-          #getThemePreference,
-          [],
-        ),
-        returnValue: _i2.Future<String?>.value(),
-      ) as _i2.Future<String?>);
+  _i2.Future<String?> getThemePreference() =>
+      (super.noSuchMethod(
+            Invocation.method(#getThemePreference, []),
+            returnValue: _i2.Future<String?>.value(),
+          )
+          as _i2.Future<String?>);
 
   @override
   _i2.Future<void> saveCachedProfile(String? profileJson) =>
       (super.noSuchMethod(
-        Invocation.method(
-          #saveCachedProfile,
-          [profileJson],
-        ),
-        returnValue: _i2.Future<void>.value(),
-        returnValueForMissingStub: _i2.Future<void>.value(),
-      ) as _i2.Future<void>);
+            Invocation.method(#saveCachedProfile, [profileJson]),
+            returnValue: _i2.Future<void>.value(),
+            returnValueForMissingStub: _i2.Future<void>.value(),
+          )
+          as _i2.Future<void>);
 
   @override
-  _i2.Future<String?> getCachedProfile() => (super.noSuchMethod(
-        Invocation.method(
-          #getCachedProfile,
-          [],
-        ),
-        returnValue: _i2.Future<String?>.value(),
-      ) as _i2.Future<String?>);
+  _i2.Future<String?> getCachedProfile() =>
+      (super.noSuchMethod(
+            Invocation.method(#getCachedProfile, []),
+            returnValue: _i2.Future<String?>.value(),
+          )
+          as _i2.Future<String?>);
 }
 
 /// A class which mocks [ConnectivityService].
@@ -401,93 +353,76 @@ class MockConnectivityService extends _i1.Mock
   }
 
   @override
-  bool get isOnline => (super.noSuchMethod(
-        Invocation.getter(#isOnline),
-        returnValue: false,
-      ) as bool);
+  bool get isOnline =>
+      (super.noSuchMethod(Invocation.getter(#isOnline), returnValue: false)
+          as bool);
 
   @override
-  bool get isOffline => (super.noSuchMethod(
-        Invocation.getter(#isOffline),
-        returnValue: false,
-      ) as bool);
+  bool get isOffline =>
+      (super.noSuchMethod(Invocation.getter(#isOffline), returnValue: false)
+          as bool);
 
   @override
-  _i2.Stream<bool> get connectivityStream => (super.noSuchMethod(
-        Invocation.getter(#connectivityStream),
-        returnValue: _i2.Stream<bool>.empty(),
-      ) as _i2.Stream<bool>);
-
-  @override
-  bool get hasListeners => (super.noSuchMethod(
-        Invocation.getter(#hasListeners),
-        returnValue: false,
-      ) as bool);
-
-  @override
-  _i2.Future<void> initialize() => (super.noSuchMethod(
-        Invocation.method(
-          #initialize,
-          [],
-        ),
-        returnValue: _i2.Future<void>.value(),
-        returnValueForMissingStub: _i2.Future<void>.value(),
-      ) as _i2.Future<void>);
-
-  @override
-  _i2.Future<bool> waitForConnection(
-          {Duration? timeout = const Duration(seconds: 30)}) =>
+  _i2.Stream<bool> get connectivityStream =>
       (super.noSuchMethod(
-        Invocation.method(
-          #waitForConnection,
-          [],
-          {#timeout: timeout},
-        ),
-        returnValue: _i2.Future<bool>.value(false),
-      ) as _i2.Future<bool>);
+            Invocation.getter(#connectivityStream),
+            returnValue: _i2.Stream<bool>.empty(),
+          )
+          as _i2.Stream<bool>);
 
   @override
-  _i2.Future<bool> checkConnectivity() => (super.noSuchMethod(
-        Invocation.method(
-          #checkConnectivity,
-          [],
-        ),
-        returnValue: _i2.Future<bool>.value(false),
-      ) as _i2.Future<bool>);
+  bool get hasListeners =>
+      (super.noSuchMethod(Invocation.getter(#hasListeners), returnValue: false)
+          as bool);
+
+  @override
+  _i2.Future<void> initialize() =>
+      (super.noSuchMethod(
+            Invocation.method(#initialize, []),
+            returnValue: _i2.Future<void>.value(),
+            returnValueForMissingStub: _i2.Future<void>.value(),
+          )
+          as _i2.Future<void>);
+
+  @override
+  _i2.Future<bool> waitForConnection({
+    Duration? timeout = const Duration(seconds: 30),
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#waitForConnection, [], {#timeout: timeout}),
+            returnValue: _i2.Future<bool>.value(false),
+          )
+          as _i2.Future<bool>);
+
+  @override
+  _i2.Future<bool> checkConnectivity() =>
+      (super.noSuchMethod(
+            Invocation.method(#checkConnectivity, []),
+            returnValue: _i2.Future<bool>.value(false),
+          )
+          as _i2.Future<bool>);
 
   @override
   void dispose() => super.noSuchMethod(
-        Invocation.method(
-          #dispose,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
+    Invocation.method(#dispose, []),
+    returnValueForMissingStub: null,
+  );
 
   @override
   void addListener(_i9.VoidCallback? listener) => super.noSuchMethod(
-        Invocation.method(
-          #addListener,
-          [listener],
-        ),
-        returnValueForMissingStub: null,
-      );
+    Invocation.method(#addListener, [listener]),
+    returnValueForMissingStub: null,
+  );
 
   @override
   void removeListener(_i9.VoidCallback? listener) => super.noSuchMethod(
-        Invocation.method(
-          #removeListener,
-          [listener],
-        ),
-        returnValueForMissingStub: null,
-      );
+    Invocation.method(#removeListener, [listener]),
+    returnValueForMissingStub: null,
+  );
 
   @override
   void notifyListeners() => super.noSuchMethod(
-        Invocation.method(
-          #notifyListeners,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
+    Invocation.method(#notifyListeners, []),
+    returnValueForMissingStub: null,
+  );
 }
