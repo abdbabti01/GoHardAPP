@@ -6,6 +6,8 @@
 import 'dart:async' as _i3;
 
 import 'package:dio/dio.dart' as _i10;
+import 'package:go_hard_app/core/services/session_request_coordinator.dart'
+    as _i14;
 import 'package:go_hard_app/data/local/services/local_database_service.dart'
     as _i13;
 import 'package:go_hard_app/data/models/auth_response.dart' as _i2;
@@ -466,4 +468,39 @@ class MockLocalDatabaseService extends _i1.Mock
             returnValue: _i3.Future<int>.value(0),
           )
           as _i3.Future<int>);
+}
+
+/// A class which mocks [SessionRequestCoordinator].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockSessionRequestCoordinator extends _i1.Mock
+    implements _i14.SessionRequestCoordinator {
+  MockSessionRequestCoordinator() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  set cancelTokenFactoryForTesting(
+    _i10.CancelToken Function()? _cancelTokenFactoryForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #cancelTokenFactoryForTesting,
+      _cancelTokenFactoryForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i3.Future<_i11.SessionRequestContext?> captureContext() =>
+      (super.noSuchMethod(
+            Invocation.method(#captureContext, []),
+            returnValue: _i3.Future<_i11.SessionRequestContext?>.value(),
+          )
+          as _i3.Future<_i11.SessionRequestContext?>);
+
+  @override
+  void cancelCurrentGeneration() => super.noSuchMethod(
+    Invocation.method(#cancelCurrentGeneration, []),
+    returnValueForMissingStub: null,
+  );
 }

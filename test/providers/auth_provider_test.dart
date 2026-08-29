@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
@@ -9,10 +11,52 @@ import 'package:go_hard_app/data/services/auth_service.dart';
 import 'package:go_hard_app/data/services/api_service.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/models/auth_response.dart';
+import 'package:go_hard_app/data/services/session_request_exceptions.dart';
+import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/user_session_epoch.dart';
 
-@GenerateMocks([AuthRepository, AuthService, ApiService, LocalDatabaseService])
+@GenerateMocks([
+  AuthRepository,
+  AuthService,
+  ApiService,
+  LocalDatabaseService,
+  SessionRequestCoordinator,
+])
 import 'auth_provider_test.mocks.dart';
+
+/// A deterministic fake Dio transport for the real end-to-end
+/// session-bound cancellation test below (PR C). Mirrors the fake used in
+/// api_service_session_context_test.dart: it can hang forever so a test
+/// can cancel a genuinely in-flight request and observe Dio's own
+/// cancellation race, rather than one that raced to completion on its own.
+class _FakeHttpClientAdapter implements HttpClientAdapter {
+  bool holdForever = false;
+  int statusCode = 200;
+  String body = '{}';
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) {
+    if (holdForever) {
+      return Completer<ResponseBody>().future;
+    }
+    return Future.value(
+      ResponseBody.fromString(
+        body,
+        statusCode,
+        headers: {
+          'content-type': ['application/json'],
+        },
+      ),
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
 
 void main() {
   late AuthProvider authProvider;
@@ -25,6 +69,13 @@ void main() {
   // activate()/invalidate()/capture()/isCurrent() behavior rather than
   // stubbing it.
   late UserSessionEpoch sessionEpoch;
+  // A Mockito mock by default for tests unrelated to cancellation
+  // (cancelCurrentGeneration() is void, so no stubbing is required for it
+  // to be a safe no-op here). Tests that specifically exercise
+  // cancellation ordering/counting/real-request behavior construct their
+  // own coordinator (mocked or real) locally instead of relying on this
+  // shared instance.
+  late MockSessionRequestCoordinator mockSessionRequestCoordinator;
 
   setUp(() {
     mockAuthRepository = MockAuthRepository();
@@ -32,6 +83,14 @@ void main() {
     mockApiService = MockApiService();
     mockLocalDb = MockLocalDatabaseService();
     sessionEpoch = UserSessionEpoch();
+    mockSessionRequestCoordinator = MockSessionRequestCoordinator();
+    // MockSessionRequestCoordinator throws on any unstubbed call
+    // (throwOnMissingStub) - give the void cancelCurrentGeneration() a
+    // default no-op stub since most tests in this file don't care about
+    // cancellation behavior at all.
+    when(
+      mockSessionRequestCoordinator.cancelCurrentGeneration(),
+    ).thenReturn(null);
 
     // Stub the auth check methods called in constructor
     when(mockAuthService.isAuthenticated()).thenAnswer((_) async => false);
@@ -45,6 +104,7 @@ void main() {
       mockApiService,
       mockLocalDb,
       sessionEpoch,
+      mockSessionRequestCoordinator,
     );
   });
 
@@ -267,6 +327,7 @@ void main() {
   // -------------------------------------------------------------------
   group('AuthProvider - Logout coordination (Logout PR 1)', () {
     late ApiService apiService;
+    late SessionRequestCoordinator sessionRequestCoordinator;
     late List<String> calls;
 
     Future<void> authenticate() async {
@@ -295,6 +356,10 @@ void main() {
     setUp(() {
       sessionEpoch = UserSessionEpoch();
       apiService = ApiService(mockAuthService, sessionEpoch);
+      sessionRequestCoordinator = SessionRequestCoordinator(
+        sessionEpoch,
+        mockAuthService,
+      );
       calls = [];
 
       authProvider = AuthProvider(
@@ -303,6 +368,7 @@ void main() {
         apiService,
         mockLocalDb,
         sessionEpoch,
+        sessionRequestCoordinator,
       );
 
       when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {
@@ -737,6 +803,7 @@ void main() {
         mockApiService,
         mockLocalDb,
         freshEpoch,
+        SessionRequestCoordinator(freshEpoch, mockAuthService),
       );
       await pumpUntilInitialized(restored);
 
@@ -767,6 +834,7 @@ void main() {
           mockApiService,
           mockLocalDb,
           freshEpoch,
+          SessionRequestCoordinator(freshEpoch, mockAuthService),
         );
         await pumpUntilInitialized(broken);
 
@@ -971,6 +1039,7 @@ void main() {
         apiService,
         mockLocalDb,
         coordinationEpoch,
+        SessionRequestCoordinator(coordinationEpoch, mockAuthService),
       );
 
       when(mockAuthRepository.login(any)).thenAnswer(
@@ -1004,6 +1073,339 @@ void main() {
       }
 
       expect(coordinationEpoch.capture(), isNull);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Logout PR C: cancel the active session-bound HTTP request generation
+  // during logout, immediately after epoch invalidation (SessionRequestCoordinator
+  // and its capture/cancel primitives already exist from PRs A/B - this PR
+  // only wires AuthProvider's logout pass to call
+  // SessionRequestCoordinator.cancelCurrentGeneration()).
+  // -------------------------------------------------------------------
+  group('AuthProvider - Logout cancels session-bound requests (PR C)', () {
+    late ApiService apiService;
+    late SessionRequestCoordinator realCoordinator;
+    late MockSessionRequestCoordinator mockCoordinator;
+    late List<String> calls;
+
+    Future<void> authenticate(
+      AuthProvider provider, {
+      String email = 'test@example.com',
+      int userId = 1,
+      String token = 'tok',
+    }) async {
+      when(mockAuthRepository.login(any)).thenAnswer(
+        (_) async => AuthResponse(
+          token: token,
+          userId: userId,
+          name: 'Test User',
+          email: email,
+        ),
+      );
+      when(
+        mockAuthService.saveToken(
+          token: anyNamed('token'),
+          userId: anyNamed('userId'),
+          name: anyNamed('name'),
+          email: anyNamed('email'),
+        ),
+      ).thenAnswer((_) async {});
+      provider.updateEmail(email);
+      provider.updatePassword('password123');
+      final ok = await provider.login();
+      expect(ok, isTrue, reason: 'test setup: login must succeed');
+    }
+
+    setUp(() {
+      sessionEpoch = UserSessionEpoch();
+      apiService = ApiService(mockAuthService, sessionEpoch);
+      realCoordinator = SessionRequestCoordinator(
+        sessionEpoch,
+        mockAuthService,
+      );
+      mockCoordinator = MockSessionRequestCoordinator();
+      // MockSessionRequestCoordinator throws on any unstubbed call
+      // (throwOnMissingStub), so give the void cancelCurrentGeneration() a
+      // default no-op stub here - tests that specifically want it to throw
+      // (see the failure-resilience test below) override this with their
+      // own when(...).thenThrow(...) afterward.
+      when(mockCoordinator.cancelCurrentGeneration()).thenReturn(null);
+      calls = [];
+
+      when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {
+        calls.add('clearSessionCredentials');
+      });
+      when(mockLocalDb.clearAll()).thenAnswer((_) async {
+        calls.add('clearAll');
+      });
+    });
+
+    test(
+      'epoch invalidation happens before cancellation is attempted',
+      () async {
+        bool? epochAlreadyInvalidWhenCancelled;
+        when(mockCoordinator.cancelCurrentGeneration()).thenAnswer((_) {
+          epochAlreadyInvalidWhenCancelled = sessionEpoch.capture() == null;
+        });
+        final provider = AuthProvider(
+          mockAuthRepository,
+          mockAuthService,
+          apiService,
+          mockLocalDb,
+          sessionEpoch,
+          mockCoordinator,
+        );
+        await authenticate(provider);
+
+        await provider.logout();
+
+        expect(epochAlreadyInvalidWhenCancelled, isTrue);
+      },
+    );
+
+    test('manual logout attempts cancellation exactly once', () async {
+      final provider = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        apiService,
+        mockLocalDb,
+        sessionEpoch,
+        mockCoordinator,
+      );
+      await authenticate(provider);
+
+      await provider.logout();
+
+      verify(mockCoordinator.cancelCurrentGeneration()).called(1);
+    });
+
+    test('forced 401 logout attempts cancellation exactly once', () async {
+      final provider = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        apiService,
+        mockLocalDb,
+        sessionEpoch,
+        mockCoordinator,
+      );
+      await authenticate(provider);
+
+      apiService.onUnauthorized?.call();
+      while (provider.isLoggingOut) {
+        await Future.delayed(Duration.zero);
+      }
+
+      verify(mockCoordinator.cancelCurrentGeneration()).called(1);
+    });
+
+    test('concurrent manual logout + manual logout collapses into one '
+        'cancellation attempt', () async {
+      final provider = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        apiService,
+        mockLocalDb,
+        sessionEpoch,
+        mockCoordinator,
+      );
+      await authenticate(provider);
+
+      final first = provider.logout();
+      final second = provider.logout();
+      await Future.wait([first, second]);
+
+      verify(mockCoordinator.cancelCurrentGeneration()).called(1);
+    });
+
+    test('concurrent manual logout + forced 401 collapses into one '
+        'cancellation attempt', () async {
+      final provider = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        apiService,
+        mockLocalDb,
+        sessionEpoch,
+        mockCoordinator,
+      );
+      await authenticate(provider);
+
+      final gate = Completer<void>();
+      provider.onSessionEnding = () async {
+        await gate.future;
+      };
+
+      final manualLogout = provider.logout();
+      apiService.onUnauthorized?.call();
+      await pumpEventQueue();
+
+      gate.complete();
+      await manualLogout;
+      await pumpEventQueue();
+
+      verify(mockCoordinator.cancelCurrentGeneration()).called(1);
+    });
+
+    test('concurrent forced 401 + forced 401 collapses into one cancellation '
+        'attempt', () async {
+      final provider = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        apiService,
+        mockLocalDb,
+        sessionEpoch,
+        mockCoordinator,
+      );
+      await authenticate(provider);
+
+      final gate = Completer<void>();
+      provider.onSessionEnding = () async {
+        await gate.future;
+      };
+
+      // Both forced triggers fire before either can complete - the
+      // second must find _logoutInFlight already set and await the same
+      // pass rather than starting a second one.
+      apiService.onUnauthorized?.call();
+      apiService.onUnauthorized?.call();
+
+      gate.complete();
+      await pumpEventQueue();
+      while (provider.isLoggingOut) {
+        await Future.delayed(Duration.zero);
+      }
+
+      verify(mockCoordinator.cancelCurrentGeneration()).called(1);
+    });
+
+    test('_logoutInFlight resets so a later session logout performs a fresh '
+        'cancellation attempt', () async {
+      final provider = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        apiService,
+        mockLocalDb,
+        sessionEpoch,
+        mockCoordinator,
+      );
+      await authenticate(provider);
+
+      await provider.logout();
+      verify(mockCoordinator.cancelCurrentGeneration()).called(1);
+
+      await authenticate(provider, email: 'second@example.com', userId: 2);
+      await provider.logout();
+      verify(mockCoordinator.cancelCurrentGeneration()).called(1);
+    });
+
+    test('cancellation throwing does not prevent SessionCleanupCoordinator '
+        'execution, credential clearing, Isar clearing, reaching the '
+        'unauthenticated state, navigation exactly once, or normal Future '
+        'completion', () async {
+      when(
+        mockCoordinator.cancelCurrentGeneration(),
+      ).thenThrow(StateError('cancellation machinery boom'));
+      final provider = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        apiService,
+        mockLocalDb,
+        sessionEpoch,
+        mockCoordinator,
+      );
+      await authenticate(provider);
+
+      var sessionEndingCalls = 0;
+      provider.onSessionEnding = () async {
+        sessionEndingCalls++;
+      };
+      var loggedOutCalls = 0;
+      provider.onLoggedOut = () => loggedOutCalls++;
+
+      await expectLater(provider.logout(), completes);
+
+      expect(
+        sessionEndingCalls,
+        1,
+        reason: 'SessionCleanupCoordinator must still run',
+      );
+      expect(calls, contains('clearSessionCredentials'));
+      expect(calls, contains('clearAll'));
+      expect(provider.isAuthenticated, isFalse);
+      expect(loggedOutCalls, 1);
+    });
+
+    test('a real session-bound ApiService request held by a Completer-backed '
+        'adapter is cancelled with RequestCancelledException when logout '
+        'begins, triggers no unauthorized/logout loop, and a later session '
+        'captures a fresh, unaffected scope', () async {
+      final adapter = _FakeHttpClientAdapter();
+      apiService.testHttpClientAdapter = adapter;
+      final provider = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        apiService,
+        mockLocalDb,
+        sessionEpoch,
+        realCoordinator,
+      );
+
+      var unauthorizedCalls = 0;
+      apiService.onUnauthorized = () => unauthorizedCalls++;
+      var loggedOutCalls = 0;
+      provider.onLoggedOut = () => loggedOutCalls++;
+
+      // --- User A captures a session-bound context and starts a
+      // request that never completes on its own. ---
+      await authenticate(provider, email: 'a@example.com', userId: 1);
+      when(mockAuthService.getToken()).thenAnswer((_) async => 'jwt-a');
+      final contextA = await realCoordinator.captureContext();
+      expect(contextA, isNotNull);
+
+      adapter.holdForever = true;
+      final requestA = apiService.get<Map<String, dynamic>>(
+        '/nutrition',
+        sessionContext: contextA,
+      );
+
+      // Logging out cancels A's in-flight request as an early step of
+      // the same pass.
+      await provider.logout();
+
+      await expectLater(requestA, throwsA(isA<RequestCancelledException>()));
+      expect(contextA!.cancelToken.isCancelled, isTrue);
+      expect(
+        unauthorizedCalls,
+        0,
+        reason:
+            'a cancelled request must never be mistaken for a 401 and '
+            'trigger another logout pass',
+      );
+      expect(loggedOutCalls, 1, reason: 'navigation happens exactly once');
+
+      // --- User B logs in afterward and captures a fresh scope. ---
+      adapter.holdForever = false;
+      await authenticate(provider, email: 'b@example.com', userId: 2);
+      when(mockAuthService.getToken()).thenAnswer((_) async => 'jwt-b');
+      final contextB = await realCoordinator.captureContext();
+      expect(contextB, isNotNull);
+      expect(
+        contextB!.cancelToken.isCancelled,
+        isFalse,
+        reason: "A's cancelled scope must never carry over to B",
+      );
+      expect(identical(contextA.cancelToken, contextB.cancelToken), isFalse);
+
+      final resultB = await apiService.get<Map<String, dynamic>>(
+        '/nutrition',
+        sessionContext: contextB,
+      );
+      expect(resultB, isA<Map<String, dynamic>>());
+
+      // A's stale scope can never reach into B's: cancelling it again
+      // (a no-op on an already-cancelled token) leaves B untouched.
+      contextA.cancelToken.cancel();
+      expect(contextB.cancelToken.isCancelled, isFalse);
     });
   });
 }
