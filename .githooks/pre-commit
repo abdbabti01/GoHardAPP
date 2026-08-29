@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+# Fast, non-mutating pre-commit checks: formatting and static analysis.
+# The full test suite is intentionally excluded here because it would make
+# every commit excessively slow; run it via tool/verify.ps1 before shipping.
+
+set -e
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "Running pre-commit checks (dart format, flutter analyze)..."
+
+if ! dart format --output=none --set-exit-if-changed .; then
+    echo ""
+    echo "Formatting check failed. Run 'dart format .' to fix the files above, then re-stage and commit again."
+    exit 1
+fi
+
+if ! flutter analyze; then
+    echo ""
+    echo "flutter analyze reported issues. Fix them, then re-stage and commit again."
+    exit 1
+fi
+
+echo "Pre-commit checks passed."

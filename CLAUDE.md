@@ -101,6 +101,8 @@ If the change affects an Isar collection, JSON-serializable model, Mockito mock,
 dart run build_runner build --delete-conflicting-outputs
 ```
 
+Immediately after regenerating, run `dart format .` — generated `.mocks.dart` and `.g.dart` files are included, since CI checks formatting across the full repository, not just hand-written source. Never format only production files when generated files were also touched.
+
 Then run final verification, in order:
 
 ```bash
@@ -110,3 +112,9 @@ flutter test --concurrency=1
 ```
 
 This is the canonical command order for this project; Skills and agents apply it rather than restating it. These commands approximate CI locally — they are not claimed to be a verbatim copy of `.github/workflows/`, which remains the source of truth for the actual pipeline.
+
+Before staging or committing, always run `dart format --output=none --set-exit-if-changed .` yourself, even if a pre-commit hook is installed — do not rely on the hook as the only check. When a generated diff is unexpectedly large, inspect it and exclude unrelated generator churn before committing.
+
+Before shipping a Flutter branch (opening a PR or handing off work), run `tool/verify.ps1` from the repository root. It applies formatting, then re-verifies formatting, analysis, and the full test suite in the same order as above, stopping at the first failure.
+
+A tracked pre-commit hook is available at `.githooks/pre-commit` (formatting check + `flutter analyze`, no auto-formatting, no tests — kept fast). Enable it once per clone with `tool/install-hooks.ps1`; see `tool/README.md` for details.

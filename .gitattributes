@@ -1,0 +1,3 @@
+# Git hook scripts must keep LF line endings so Git Bash's shell can
+# execute them correctly regardless of core.autocrlf on Windows checkouts.
+.githooks/* text eol=lf
