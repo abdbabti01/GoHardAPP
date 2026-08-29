@@ -333,12 +333,20 @@ void main() async {
           SyncService
         >(
           update:
-              (_, apiService, authService, localDb, connectivity, __) =>
+              (context, apiService, authService, localDb, connectivity, __) =>
                   SyncService(
                     apiService: apiService,
                     authService: authService,
                     localDb: localDb,
                     connectivity: connectivity,
+                    // UserSessionEpoch and SessionRequestCoordinator are
+                    // fixed .value()/ProxyProvider singletons, never
+                    // reactively watched, so they are read directly here
+                    // rather than added as formal ProxyProvider type
+                    // parameters.
+                    sessionEpoch: context.read<UserSessionEpoch>(),
+                    sessionCoordinator:
+                        context.read<SessionRequestCoordinator>(),
                   ),
         ),
 

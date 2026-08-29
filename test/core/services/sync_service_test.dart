@@ -6,7 +6,9 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
 import 'package:go_hard_app/core/services/connectivity_service.dart';
+import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/sync_service.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/local/models/local_exercise.dart';
 import 'package:go_hard_app/data/local/models/local_exercise_set.dart';
 import 'package:go_hard_app/data/local/models/local_session.dart';
@@ -24,6 +26,8 @@ void main() {
   late MockApiService mockApiService;
   late MockAuthService mockAuthService;
   late LocalDatabaseService localDb;
+  late UserSessionEpoch sessionEpoch;
+  late SessionRequestCoordinator sessionCoordinator;
   late SyncService syncService;
 
   const userId = 1;
@@ -50,15 +54,24 @@ void main() {
     mockApiService = MockApiService();
     mockAuthService = MockAuthService();
     when(mockAuthService.getUserId()).thenAnswer((_) async => userId);
+    when(mockAuthService.getToken()).thenAnswer((_) async => 'jwt-$userId');
 
     localDb = LocalDatabaseService.instance;
     localDb.setTestDatabase(isar);
+
+    sessionEpoch = UserSessionEpoch()..activate(userId);
+    sessionCoordinator = SessionRequestCoordinator(
+      sessionEpoch,
+      mockAuthService,
+    );
 
     syncService = SyncService(
       apiService: mockApiService,
       authService: mockAuthService,
       localDb: localDb,
       connectivity: ConnectivityService.instance,
+      sessionEpoch: sessionEpoch,
+      sessionCoordinator: sessionCoordinator,
     );
   });
 
@@ -128,7 +141,13 @@ void main() {
 
       await syncService.sync();
 
-      verifyNever(mockApiService.put<dynamic>(any, data: anyNamed('data')));
+      verifyNever(
+        mockApiService.put<dynamic>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
     });
   });
 
@@ -141,7 +160,12 @@ void main() {
         isSynced: true,
         name: 'Old clean row',
       );
-      when(mockApiService.get<Map<String, dynamic>>(any)).thenAnswer(
+      when(
+        mockApiService.get<Map<String, dynamic>>(
+          any,
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer(
         (_) async => serverSessionJson(version: 3, name: 'From server'),
       );
 
@@ -163,7 +187,12 @@ void main() {
         isSynced: true,
         name: 'Old clean row',
       );
-      when(mockApiService.get<Map<String, dynamic>>(any)).thenAnswer(
+      when(
+        mockApiService.get<Map<String, dynamic>>(
+          any,
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer(
         (_) async => serverSessionJson(version: 3, name: 'From server'),
       );
 
@@ -174,16 +203,38 @@ void main() {
       expect(afterFirst.name, 'From server');
       expect(afterFirst.isSynced, true);
       expect(afterFirst.syncStatus, 'synced');
-      verify(mockApiService.get<Map<String, dynamic>>(any)).called(1);
+      verify(
+        mockApiService.get<Map<String, dynamic>>(
+          any,
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).called(1);
 
       await syncService.sync();
 
       // The row now has a non-null version, so the versionIsNull() filter
       // excludes it from reconciliation on the second pass - no second
       // GET, and the hydrated row is untouched.
-      verifyNever(mockApiService.get<Map<String, dynamic>>(any));
-      verifyNever(mockApiService.put<dynamic>(any, data: anyNamed('data')));
-      verifyNever(mockApiService.patch<void>(any, data: anyNamed('data')));
+      verifyNever(
+        mockApiService.get<Map<String, dynamic>>(
+          any,
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      verifyNever(
+        mockApiService.put<dynamic>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      verifyNever(
+        mockApiService.patch<void>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
 
       final afterSecond = await isar.localSessions.get(session.localId);
       expect(afterSecond!.version, 3);
@@ -207,7 +258,12 @@ void main() {
           syncStatus: 'pending_update',
           name: 'My unsynced edit',
         );
-        when(mockApiService.get<Map<String, dynamic>>(any)).thenAnswer(
+        when(
+          mockApiService.get<Map<String, dynamic>>(
+            any,
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).thenAnswer(
           (_) async => serverSessionJson(version: 4, name: 'Someone else edit'),
         );
 
@@ -223,7 +279,13 @@ void main() {
           contains('Someone else edit'),
         );
         // The row must never have been PUT with a guessed version.
-        verifyNever(mockApiService.put<dynamic>(any, data: anyNamed('data')));
+        verifyNever(
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
       },
     );
 
@@ -235,7 +297,11 @@ void main() {
         name: 'To delete',
       );
       when(
-        mockApiService.delete(any, data: anyNamed('data')),
+        mockApiService.delete(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
       ).thenAnswer((_) async => true);
 
       await syncService.sync();
@@ -244,7 +310,12 @@ void main() {
       // should proceed through the normal delete path and be removed.
       final stored = await isar.localSessions.get(session.localId);
       expect(stored, isNull);
-      verifyNever(mockApiService.get<Map<String, dynamic>>(any));
+      verifyNever(
+        mockApiService.get<Map<String, dynamic>>(
+          any,
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
     });
 
     test(
@@ -260,6 +331,7 @@ void main() {
           mockApiService.post<Map<String, dynamic>>(
             any,
             data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
           ),
         ).thenThrow(ApiException('Network error - cannot connect to server'));
 
@@ -269,7 +341,12 @@ void main() {
         expect(all, hasLength(1));
         expect(all.first.syncStatus, 'pending_create');
         expect(all.first.serverId, isNull);
-        verifyNever(mockApiService.get<Map<String, dynamic>>(any));
+        verifyNever(
+          mockApiService.get<Map<String, dynamic>>(
+            any,
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
       },
     );
 
@@ -283,13 +360,20 @@ void main() {
           name: 'Still mine',
         );
         when(
-          mockApiService.get<Map<String, dynamic>>(any),
+          mockApiService.get<Map<String, dynamic>>(
+            any,
+            sessionContext: anyNamed('sessionContext'),
+          ),
         ).thenThrow(ApiException('Network error - cannot connect to server'));
         // Reconciliation leaves this row as pending_update, so the normal
         // pending-sync loop will also attempt a PUT on it in the same
         // sync() call; make that fail too rather than leaving it unstubbed.
         when(
-          mockApiService.put<dynamic>(any, data: anyNamed('data')),
+          mockApiService.put<dynamic>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
         ).thenThrow(ApiException('Network error - cannot connect to server'));
 
         await syncService.sync();
@@ -318,6 +402,7 @@ void main() {
             mockApiService.post<Map<String, dynamic>>(
               any,
               data: anyNamed('data'),
+              sessionContext: anyNamed('sessionContext'),
             ),
           ).thenAnswer(
             (_) async =>
@@ -381,7 +466,11 @@ void main() {
       );
 
       when(
-        mockApiService.post<Map<String, dynamic>>(any, data: anyNamed('data')),
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
       ).thenAnswer((_) async => serverSessionJson(id: 300, version: 1));
 
       await syncService.sync();
@@ -391,6 +480,7 @@ void main() {
             mockApiService.post<Map<String, dynamic>>(
               any,
               data: captureAnyNamed('data'),
+              sessionContext: anyNamed('sessionContext'),
             ),
           ).captured;
       expect(captured, hasLength(1));
@@ -459,7 +549,11 @@ void main() {
       );
 
       when(
-        mockApiService.post<Map<String, dynamic>>(any, data: anyNamed('data')),
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
       ).thenThrow(ApiException('Network error - cannot connect to server'));
 
       await syncService.sync();

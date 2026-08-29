@@ -8,6 +8,7 @@ import '../local/services/model_mapper.dart';
 import '../models/session.dart';
 import 'api_exception.dart';
 import 'api_service.dart';
+import 'session_request_context.dart';
 
 /// Result of pushing a full-session update to the server.
 enum SessionSyncOutcome {
@@ -35,6 +36,20 @@ enum SessionSyncOutcome {
 /// push a session update (periodic background sync, date edits, name
 /// edits) cannot drift from each other or from the server's version/409
 /// contract.
+///
+/// ## Optional session-binding parameters
+///
+/// [pushUpdate]'s `sessionContext`/`isSessionCurrent`/`scopeUserId`
+/// parameters are ALL optional and default to null/unused, so every
+/// existing call site (`SessionRepository`'s foreground edits) that omits
+/// them keeps its exact current behavior - unbound HTTP, no extra
+/// acknowledgment gating. Only a caller that supplies them (`SyncService`,
+/// for its session-owned background sync pass) gets the additional
+/// protection: the HTTP call is pinned to `sessionContext`, and every write
+/// this helper may perform is gated on [isSessionCurrent] immediately
+/// before its `writeTxn` and again as the first statement inside it, plus a
+/// fresh re-fetch-by-local-ID and [scopeUserId] ownership recheck so a
+/// stale response can never land on a since-replaced or foreign row.
 class SessionUpdateSyncHelper {
   final ApiService _apiService;
 
@@ -47,8 +62,11 @@ class SessionUpdateSyncHelper {
   /// [ModelMapper.buildSessionUpdateRequest].
   Future<SessionSyncOutcome> pushUpdate(
     Isar db,
-    LocalSession localSession,
-  ) async {
+    LocalSession localSession, {
+    SessionRequestContext? sessionContext,
+    bool Function()? isSessionCurrent,
+    int? scopeUserId,
+  }) async {
     final serverId = localSession.serverId;
     if (serverId == null) {
       throw StateError('Cannot push a session update without a serverId');
@@ -61,16 +79,35 @@ class SessionUpdateSyncHelper {
       result = await _apiService.put<dynamic>(
         ApiConfig.sessionById(serverId),
         data: payload,
+        sessionContext: sessionContext,
       );
     } on ApiException catch (e) {
       if (e.statusCode == 409) {
-        return _handleConflict(db, localSession, e);
+        return _handleConflict(
+          db,
+          localSession,
+          e,
+          isSessionCurrent: isSessionCurrent,
+          scopeUserId: scopeUserId,
+        );
       }
       rethrow;
     }
 
+    if (isSessionCurrent != null && !isSessionCurrent()) {
+      // Session ended between the HTTP call above and this point - never
+      // acknowledge under a session that is no longer current.
+      return SessionSyncOutcome.deferred;
+    }
+
     if (result is Map<String, dynamic>) {
-      await _applyServerSession(db, localSession, Session.fromJson(result));
+      await _applyServerSession(
+        db,
+        localSession,
+        Session.fromJson(result),
+        isSessionCurrent: isSessionCurrent,
+        scopeUserId: scopeUserId,
+      );
       return SessionSyncOutcome.synced;
     }
 
@@ -80,8 +117,18 @@ class SessionUpdateSyncHelper {
     try {
       final data = await _apiService.get<Map<String, dynamic>>(
         ApiConfig.sessionById(serverId),
+        sessionContext: sessionContext,
       );
-      await _applyServerSession(db, localSession, Session.fromJson(data));
+      if (isSessionCurrent != null && !isSessionCurrent()) {
+        return SessionSyncOutcome.deferred;
+      }
+      await _applyServerSession(
+        db,
+        localSession,
+        Session.fromJson(data),
+        isSessionCurrent: isSessionCurrent,
+        scopeUserId: scopeUserId,
+      );
       return SessionSyncOutcome.synced;
     } catch (_) {
       // Recovery failed - leave the pending local edit untouched for retry.
@@ -92,9 +139,16 @@ class SessionUpdateSyncHelper {
   Future<void> _applyServerSession(
     Isar db,
     LocalSession localSession,
-    Session serverSession,
-  ) async {
+    Session serverSession, {
+    bool Function()? isSessionCurrent,
+    int? scopeUserId,
+  }) async {
     await db.writeTxn(() async {
+      if (isSessionCurrent != null && !isSessionCurrent()) return;
+      if (scopeUserId != null) {
+        final existing = await db.localSessions.get(localSession.localId);
+        if (existing == null || existing.userId != scopeUserId) return;
+      }
       final updated = ModelMapper.sessionToLocal(
         serverSession,
         localId: localSession.localId,
@@ -107,8 +161,10 @@ class SessionUpdateSyncHelper {
   Future<SessionSyncOutcome> _handleConflict(
     Isar db,
     LocalSession localSession,
-    ApiException e,
-  ) async {
+    ApiException e, {
+    bool Function()? isSessionCurrent,
+    int? scopeUserId,
+  }) async {
     final data = e.responseData;
     final serverData = data is Map ? data['serverData'] : null;
     final currentVersion = data is Map ? data['currentVersion'] : null;
@@ -117,20 +173,34 @@ class SessionUpdateSyncHelper {
       // Malformed conflict payload - never overwrite the pending edit;
       // just record the failure so the row keeps retrying safely.
       await db.writeTxn(() async {
-        localSession.syncError = 'Malformed 409 conflict response';
-        localSession.lastSyncAttempt = DateTime.now().toUtc();
-        await db.localSessions.put(localSession);
+        if (isSessionCurrent != null && !isSessionCurrent()) return;
+        var target = localSession;
+        if (scopeUserId != null) {
+          final existing = await db.localSessions.get(localSession.localId);
+          if (existing == null || existing.userId != scopeUserId) return;
+          target = existing;
+        }
+        target.syncError = 'Malformed 409 conflict response';
+        target.lastSyncAttempt = DateTime.now().toUtc();
+        await db.localSessions.put(target);
       });
       return SessionSyncOutcome.conflictDataInvalid;
     }
 
     await db.writeTxn(() async {
-      localSession.conflictServerSnapshotJson = jsonEncode(serverData);
-      localSession.conflictServerVersion = currentVersion;
-      localSession.conflictDetectedAt = DateTime.now().toUtc();
-      localSession.syncStatus = 'conflict';
-      localSession.isSynced = false;
-      await db.localSessions.put(localSession);
+      if (isSessionCurrent != null && !isSessionCurrent()) return;
+      var target = localSession;
+      if (scopeUserId != null) {
+        final existing = await db.localSessions.get(localSession.localId);
+        if (existing == null || existing.userId != scopeUserId) return;
+        target = existing;
+      }
+      target.conflictServerSnapshotJson = jsonEncode(serverData);
+      target.conflictServerVersion = currentVersion;
+      target.conflictDetectedAt = DateTime.now().toUtc();
+      target.syncStatus = 'conflict';
+      target.isSynced = false;
+      await db.localSessions.put(target);
     });
     return SessionSyncOutcome.conflict;
   }
