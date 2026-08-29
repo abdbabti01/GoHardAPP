@@ -808,6 +808,24 @@ Build artifacts are stored for 30 days and can be downloaded from the Actions ta
 8. Push to branch: `git push origin feature/my-feature`
 9. Create a pull request
 
+### Local verification tooling
+
+Once per clone, enable the tracked pre-commit hook (formatting + analyze
+checks, repo-local only):
+
+```powershell
+.\tool\install-hooks.ps1
+```
+
+Before opening a PR, run the full verification sequence (format, analyze,
+test) with:
+
+```powershell
+.\tool\verify.ps1
+```
+
+See [`tool/README.md`](tool/README.md) for details.
+
 ## 📄 License
 
 This project is licensed under the MIT License.

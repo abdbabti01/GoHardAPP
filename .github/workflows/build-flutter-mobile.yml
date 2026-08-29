@@ -33,7 +33,15 @@ jobs:
       run: flutter pub get
 
     - name: Verify formatting
-      run: dart format --set-exit-if-changed .
+      run: |
+        if ! dart format --set-exit-if-changed .; then
+          echo "::error::Formatting check failed. Run 'dart format .' locally, then commit the result."
+          echo "--- git diff --stat ---"
+          git diff --stat
+          echo "--- git diff -- ---"
+          git diff --
+          exit 1
+        fi
 
     - name: Analyze code
       run: flutter analyze
