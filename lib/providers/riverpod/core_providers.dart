@@ -16,6 +16,7 @@ import '../../data/services/api_service.dart';
 import '../../data/services/auth_service.dart';
 import '../../core/services/connectivity_service.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/services/session_request_coordinator.dart';
 import '../../core/services/user_session_epoch.dart';
 
 // ============================================================
@@ -55,6 +56,18 @@ final authServiceProvider = Provider<AuthService>((ref) {
 /// so a dedicated instance here follows the file's existing pattern.
 final userSessionEpochProvider = Provider<UserSessionEpoch>((ref) {
   return UserSessionEpoch();
+});
+
+/// Session request coordinator provider. Same "unused/unmounted, separate
+/// instance" caveat as [userSessionEpochProvider] above - depends only on
+/// this file's own [userSessionEpochProvider]/[authServiceProvider], never
+/// on main.dart's MultiProvider-wired singletons.
+final sessionRequestCoordinatorProvider = Provider<SessionRequestCoordinator>((
+  ref,
+) {
+  final sessionEpoch = ref.watch(userSessionEpochProvider);
+  final authService = ref.watch(authServiceProvider);
+  return SessionRequestCoordinator(sessionEpoch, authService);
 });
 
 /// API service provider (depends on AuthService)
