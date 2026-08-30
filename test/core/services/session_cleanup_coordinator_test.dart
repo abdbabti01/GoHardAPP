@@ -350,6 +350,7 @@ void main() {
     sharedWorkoutProvider = SharedWorkoutProvider(
       mockSharedWorkoutRepo,
       ConnectivityService.instance,
+      sessionEpoch,
     );
 
     coordinator = SessionCleanupCoordinator(

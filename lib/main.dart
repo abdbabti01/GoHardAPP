@@ -235,12 +235,19 @@ void main() async {
           SharedWorkoutRepository
         >(
           update:
-              (_, apiService, localDb, connectivity, authService, __) =>
+              (context, apiService, localDb, connectivity, authService, __) =>
                   SharedWorkoutRepository(
                     apiService,
                     localDb,
                     connectivity,
                     authService,
+                    // UserSessionEpoch and SessionRequestCoordinator are
+                    // fixed .value()/ProxyProvider singletons, never
+                    // reactively watched, so they are read directly here
+                    // rather than added as formal ProxyProvider type
+                    // parameters.
+                    context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
                   ),
         ),
         ProxyProvider4<
@@ -525,11 +532,16 @@ void main() async {
               (context) => SharedWorkoutProvider(
                 context.read<SharedWorkoutRepository>(),
                 context.read<ConnectivityService>(),
+                context.read<UserSessionEpoch>(),
               ),
           update:
-              (_, sharedWorkoutRepo, connectivity, previous) =>
+              (context, sharedWorkoutRepo, connectivity, previous) =>
                   previous ??
-                  SharedWorkoutProvider(sharedWorkoutRepo, connectivity),
+                  SharedWorkoutProvider(
+                    sharedWorkoutRepo,
+                    connectivity,
+                    context.read<UserSessionEpoch>(),
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           WorkoutTemplateRepository,

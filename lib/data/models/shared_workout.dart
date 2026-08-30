@@ -13,11 +13,35 @@ class SharedWorkout {
   /// Type: 'session' or 'template'
   late String type;
 
-  /// User who shared it
+  /// User who shared it (the workout's author). This is server identity of
+  /// the creator and is the SAME value for every device that caches this
+  /// row - it can never identify which authenticated device user a cached,
+  /// personalized response was built for. Use [cachedForUserId] for that.
   @Index()
   late int sharedByUserId;
 
   late String sharedByUserName;
+
+  /// The authenticated device user for whom this cached row was
+  /// personalized, or `null` for a legacy row written before this field
+  /// existed. Always stamped from the captured
+  /// `SessionRequestContext.epochToken.userId` at write time - never from
+  /// response JSON and never from a live `AuthService` read.
+  ///
+  /// The requester-specific fields on this row ([isLikedByCurrentUser],
+  /// [isSavedByCurrentUser]) are only valid for this user, so every cache
+  /// read/write/sweep/delete is scoped to a matching [cachedForUserId].
+  /// The collection is keyed by the server ID (see [id]), so there is only
+  /// ever one row per shared workout - a valid full response for the
+  /// current user atomically replaces a legacy (`null`) or foreign-owned
+  /// row rather than coexisting with it.
+  ///
+  /// Backward compatibility: existing rows deserialize with
+  /// `cachedForUserId == null` and stay invisible to every authenticated
+  /// read until the next valid online refresh restamps them for the
+  /// current user. Isar treats a new nullable property as a
+  /// compatible schema upgrade, so no manual migration is required.
+  int? cachedForUserId;
 
   /// Workout details
   late String workoutName;
@@ -58,6 +82,7 @@ class SharedWorkout {
     this.isLikedByCurrentUser = false,
     this.isSavedByCurrentUser = false,
     required this.sharedAt,
+    this.cachedForUserId,
   });
 
   /// Format duration
@@ -105,6 +130,7 @@ class SharedWorkout {
     bool? isLikedByCurrentUser,
     bool? isSavedByCurrentUser,
     DateTime? sharedAt,
+    int? cachedForUserId,
   }) {
     return SharedWorkout(
       id: id ?? this.id,
@@ -124,6 +150,7 @@ class SharedWorkout {
       isLikedByCurrentUser: isLikedByCurrentUser ?? this.isLikedByCurrentUser,
       isSavedByCurrentUser: isSavedByCurrentUser ?? this.isSavedByCurrentUser,
       sharedAt: sharedAt ?? this.sharedAt,
+      cachedForUserId: cachedForUserId ?? this.cachedForUserId,
     );
   }
 }
