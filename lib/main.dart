@@ -212,12 +212,19 @@ void main() async {
           ChatRepository
         >(
           update:
-              (_, apiService, localDb, connectivity, authService, __) =>
+              (context, apiService, localDb, connectivity, authService, __) =>
                   ChatRepository(
                     apiService,
                     localDb,
                     connectivity,
                     authService,
+                    // UserSessionEpoch and SessionRequestCoordinator are
+                    // fixed .value()/ProxyProvider singletons, never
+                    // reactively watched, so they are read directly here
+                    // rather than added as formal ProxyProvider type
+                    // parameters.
+                    context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
                   ),
         ),
         ProxyProvider4<
