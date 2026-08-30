@@ -10,6 +10,7 @@ import '../data/repositories/running_repository.dart';
 import '../core/services/connectivity_service.dart';
 import '../core/services/health_service.dart';
 import '../core/services/calories_service.dart';
+import '../core/services/user_session_epoch.dart';
 
 /// Explicit lifecycle state for the GPS position-stream subscription
 /// backing an active run.
@@ -44,6 +45,37 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   // ignore: unused_field - Reserved for future online/offline status checks
   final ConnectivityService? _connectivity;
 
+  /// Shared app-wide session-identity service. Every async method below
+  /// that awaits a [RunningRepository] call captures a token via
+  /// [UserSessionEpoch.capture] before its first await and rechecks
+  /// `_sessionEpoch.isCurrent(token)` after every await - including inside
+  /// catch/finally, and between two sequential repository calls in the same
+  /// method - before touching currentRun/recentRuns/weeklyStats/
+  /// errorMessage/isLoading or calling notifyListeners(). This drops any
+  /// result that resolves after the session that requested it has ended
+  /// (logout, or a different user logging in) instead of writing it into
+  /// the shared provider instance the next session also uses.
+  ///
+  /// This is a SEPARATE boundary from [_gpsGeneration]/[_disposed]/
+  /// [_gpsCancellationFuture]: those guard "is this GPS stream callback
+  /// still current for the run/lifecycle this provider cares about, within
+  /// a single session" and are entirely unchanged by this - a stale
+  /// repository completion is dropped here, before it could ever reach the
+  /// GPS-generation machinery. Neither mechanism replaces the other. [clear]
+  /// is never itself gated by a captured token - it must always run
+  /// immediately and unconditionally, since it is what a real logout relies
+  /// on. In every real logout path (`AuthProvider._performLogout`),
+  /// `UserSessionEpoch.invalidate()` runs synchronously BEFORE
+  /// `SessionCleanupCoordinator.cleanUp()` calls [clear] - so by the time
+  /// [clear] runs, any token already captured by an in-flight call below is
+  /// already stale, and this class's own epoch checks are what keep that
+  /// in-flight call from then resurrecting state [clear] just reset.
+  ///
+  /// Does not protect [RunningRepository]'s own local Isar writes or
+  /// background sync pushes - see that class's own doc comment for that
+  /// half of the fix.
+  final UserSessionEpoch _sessionEpoch;
+
   // Injectable UTC clock, used only for lifecycle elapsed-time
   // recalculation so tests can control elapsed "time spent suspended"
   // deterministically. Defaults to the real clock in production. Mirrors
@@ -60,6 +92,25 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _timer;
   Duration _elapsedTime = Duration.zero;
   bool _isTimerRunning = false;
+
+  // Monotonically increasing identity for "whoever most recently claimed
+  // ownership of the ticker," bumped by EVERY _startTimer() call -
+  // including a call that idempotently no-ops because a timer is already
+  // running (see _startTimer()'s own doc comment for why a no-op call
+  // still must claim ownership). This is deliberately independent of
+  // whether a NEW physical Timer object was actually created: two
+  // different logical start operations (e.g. session A's startNewRun(),
+  // then session B's startNewRun() after A goes stale, arriving while
+  // A's ticker is still physically running) can end up sharing the exact
+  // same Timer instance via that idempotency, so object identity alone
+  // cannot distinguish "my ticker" from "someone else's ticker" the way
+  // it can for GPS subscriptions (_gpsGeneration). A stale A completion
+  // must only ever stop the ticker via _stopTimerIfOwned(myGeneration) -
+  // never the unconditional _stopTimer() - so that a generation mismatch
+  // (B has since claimed ownership) correctly leaves B's ticker running
+  // untouched, even when it is physically the same Timer object A
+  // started.
+  int _timerGeneration = 0;
 
   // GPS state
   StreamSubscription<Position>? _positionStream;
@@ -267,7 +318,8 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   RunningProvider(
-    this._runningRepository, [
+    this._runningRepository,
+    this._sessionEpoch, [
     this._connectivity,
     DateTime Function()? nowUtc,
   ]) : _nowUtc = nowUtc ?? _defaultNowUtc {
@@ -370,16 +422,25 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Recovers GPS tracking after an app-lifecycle resume if, and only if,
-  /// the current run is active/unpaused and its subscription is known to
-  /// be dead (`failed`) or was never started (`stopped`). A healthy
-  /// (`starting`/`active`) subscription is left completely alone - this is
-  /// what prevents a duplicate subscription on a routine resume, and what
-  /// lets a genuinely healthy background stream keep delivering
-  /// uninterrupted through the whole suspend/resume cycle. Calling this
-  /// repeatedly (e.g. repeated `resumed` events) is idempotent: once
-  /// recovery starts, `_startGpsTracking()`'s own guard prevents any
-  /// further duplicate.
+  /// the current run is active/unpaused, belongs to a currently active
+  /// session, and its subscription is known to be dead (`failed`) or was
+  /// never started (`stopped`). A healthy (`starting`/`active`)
+  /// subscription is left completely alone - this is what prevents a
+  /// duplicate subscription on a routine resume, and what lets a
+  /// genuinely healthy background stream keep delivering uninterrupted
+  /// through the whole suspend/resume cycle. Calling this repeatedly (e.g.
+  /// repeated `resumed` events) is idempotent: once recovery starts,
+  /// `_startGpsTracking()`'s own guard prevents any further duplicate.
+  ///
+  /// Captures its own [UserSessionToken] synchronously, the instant the
+  /// recovery event begins (before the `_currentRun` checks below, and
+  /// before the only await in this method) - a lifecycle resume can fire
+  /// at any point, including during a logged-out gap or immediately after
+  /// a different user has logged in, and must never recover tracking
+  /// attributed to a run/session pairing that no longer both hold.
   Future<void> _recoverGpsTrackingIfNeeded() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
     if (_currentRun == null) return;
     if (_currentRun!.status != 'in_progress') return;
     if (_currentRun!.pausedAt != null) return;
@@ -390,36 +451,62 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
         return; // healthy, or already being (re)established - never duplicate
       case GpsTrackingState.stopped:
       case GpsTrackingState.failed:
-        await _startGpsTracking();
+        await _startGpsTracking(token);
     }
   }
 
-  /// Load recent runs and weekly stats
+  /// Load recent runs and weekly stats.
+  ///
+  /// Session-epoch guarded: [token] is captured before any await, and
+  /// rechecked after each await - including between the two sequential
+  /// repository calls, so a session that ends after the first call never
+  /// dispatches the second on its behalf - before touching any field or
+  /// calling notifyListeners(). If the session that requested this load has
+  /// since ended, the response is dropped silently.
   Future<void> loadDashboardData() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+
     _isLoading = true;
     notifyListeners();
 
     try {
-      _recentRuns = await _runningRepository.getRecentRuns(limit: 5);
-      _weeklyStats = await _runningRepository.getWeeklyStats();
+      final recentRuns = await _runningRepository.getRecentRuns(limit: 5);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      final weeklyStats = await _runningRepository.getWeeklyStats();
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      _recentRuns = recentRuns;
+      _weeklyStats = weeklyStats;
       _errorMessage = null;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage = 'Failed to load running data: $e';
       debugPrint('Load dashboard error: $e');
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Load a specific run session
+  /// Load a specific run session.
+  ///
+  /// Session-epoch guarded: see [loadDashboardData]'s doc comment.
   Future<void> loadRun(int localId) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _currentRun = await _runningRepository.getRunSession(localId);
+      final run = await _runningRepository.getRunSession(localId);
+      if (!_sessionEpoch.isCurrent(token)) return;
+      _currentRun = run;
 
       if (_currentRun?.startedAt != null) {
         final Duration calculated;
@@ -454,19 +541,30 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
         _currentDistance = 0;
       }
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage = 'Failed to load run: $e';
       debugPrint('Load run error: $e');
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Create a draft run without starting (for navigation to active screen)
+  /// Create a draft run without starting (for navigation to active screen).
+  ///
+  /// Session-epoch guarded: [token] is captured before the FIRST await
+  /// (the permission check), since a session can end during that await too,
+  /// not only during the repository call.
   Future<int?> createDraftRun() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     try {
       // Check location permissions first
       final hasPermission = await _checkLocationPermission();
+      if (!_sessionEpoch.isCurrent(token)) return null;
       if (!hasPermission) {
         _errorMessage = 'Location permission required for running';
         notifyListeners();
@@ -474,7 +572,10 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       // Create new run session (draft status)
-      _currentRun = await _runningRepository.createRunSession();
+      final createdRun = await _runningRepository.createRunSession();
+      if (!_sessionEpoch.isCurrent(token)) return null;
+
+      _currentRun = createdRun;
       _elapsedTime = Duration.zero;
       _routePoints = [];
       _currentDistance = 0;
@@ -484,6 +585,7 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       return _currentRun!.id;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage = 'Failed to create run: $e';
       debugPrint('Create draft run error: $e');
       notifyListeners();
@@ -491,22 +593,43 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Start the current run (called after countdown)
+  /// Start the current run (called after countdown).
+  ///
+  /// Session-epoch guarded: see [createDraftRun]'s doc comment. GPS/timer
+  /// lifecycle (`_startTimer`/`_startGpsTracking`) is unchanged - it is
+  /// only reached at all once the repository result has already passed the
+  /// epoch check below.
   Future<bool> startCurrentRun() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
     if (_currentRun == null) return false;
 
     try {
       // Start the run
-      _currentRun = await _runningRepository.startRun(_currentRun!.id);
+      final startedRun = await _runningRepository.startRun(_currentRun!.id);
+      if (!_sessionEpoch.isCurrent(token)) return false;
+      _currentRun = startedRun;
       _elapsedTime = Duration.zero;
 
-      _startTimer();
-      await _startGpsTracking();
+      final timerGeneration = _startTimer();
+      await _startGpsTracking(token);
+      if (!_sessionEpoch.isCurrent(token) || _currentRun == null) {
+        // _startTimer() above ran while the token was still current, so a
+        // stale rejection here must undo it - but only the ticker THIS
+        // call started: a stale A here must never stop a newer session's
+        // ticker via the unconditional _stopTimer(), including the case
+        // where B's own _startTimer() call idempotently reused the exact
+        // same Timer object A's call above did (see _timerGeneration's
+        // field doc comment).
+        _stopTimerIfOwned(timerGeneration);
+        return false;
+      }
 
       debugPrint('🏃 Run started: ${_currentRun!.id}');
       notifyListeners();
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage = 'Failed to start run: $e';
       debugPrint('Start run error: $e');
       notifyListeners();
@@ -514,11 +637,19 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Create and start a new run (legacy method, still used for quick start)
+  /// Create and start a new run (legacy method, still used for quick start).
+  ///
+  /// Session-epoch guarded: see [createDraftRun]'s doc comment. Rechecked
+  /// between the create and start repository calls too, so a session that
+  /// ends after the create never dispatches the start call on its behalf.
   Future<int?> startNewRun() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     try {
       // Check location permissions first
       final hasPermission = await _checkLocationPermission();
+      if (!_sessionEpoch.isCurrent(token)) return null;
       if (!hasPermission) {
         _errorMessage = 'Location permission required for running';
         notifyListeners();
@@ -526,22 +657,39 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       // Create new run session
-      _currentRun = await _runningRepository.createRunSession();
+      final createdRun = await _runningRepository.createRunSession();
+      if (!_sessionEpoch.isCurrent(token)) return null;
+      _currentRun = createdRun;
 
       // Start the run
-      _currentRun = await _runningRepository.startRun(_currentRun!.id);
+      final startedRun = await _runningRepository.startRun(_currentRun!.id);
+      if (!_sessionEpoch.isCurrent(token)) return null;
+      _currentRun = startedRun;
+
       _elapsedTime = Duration.zero;
       _routePoints = [];
       _currentDistance = 0;
       _lastPosition = null;
 
-      _startTimer();
-      await _startGpsTracking();
+      final timerGeneration = _startTimer();
+      await _startGpsTracking(token);
+      if (!_sessionEpoch.isCurrent(token) || _currentRun == null) {
+        // _startTimer() above ran while the token was still current, so a
+        // stale rejection here must undo it - but only the ticker THIS
+        // call started: a stale A here must never stop a newer session's
+        // ticker via the unconditional _stopTimer(), including the case
+        // where B's own _startTimer() call idempotently reused the exact
+        // same Timer object A's call above did (see _timerGeneration's
+        // field doc comment).
+        _stopTimerIfOwned(timerGeneration);
+        return null;
+      }
 
       debugPrint('🏃 New run started: ${_currentRun!.id}');
       notifyListeners();
       return _currentRun!.id;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage = 'Failed to start run: $e';
       debugPrint('Start run error: $e');
       notifyListeners();
@@ -549,8 +697,19 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Pause the run
+  /// Pause the run.
+  ///
+  /// Session-epoch guarded: [token] is captured before the FIRST await
+  /// (`_stopGpsTracking`, unchanged GPS lifecycle logic). Rechecked
+  /// immediately after that await, together with a fresh `_currentRun !=
+  /// null` check, before ever touching `_currentRun` again - a concurrent
+  /// `clear()` (which always runs immediately and unconditionally on
+  /// logout, before this token's own epoch invalidation is even visible
+  /// here) may have already nulled it out from under this still-in-flight
+  /// call.
   Future<void> pauseRun() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
     if (_currentRun == null) return;
 
     if (_currentRun!.startedAt == null) {
@@ -562,22 +721,34 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _stopTimer();
     await _stopGpsTracking();
+    if (!_sessionEpoch.isCurrent(token) || _currentRun == null) return;
 
     _currentRun = _currentRun!.copyWith(pausedAt: nowUtc);
     notifyListeners();
 
     try {
       await _runningRepository.pauseRun(_currentRun!.id, nowUtc);
+      if (!_sessionEpoch.isCurrent(token)) return;
       debugPrint('⏸️ Run paused - saved to DB');
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage = 'Failed to pause run: $e';
       debugPrint('Pause run error: $e');
       notifyListeners();
     }
   }
 
-  /// Resume the run
+  /// Resume the run.
+  ///
+  /// Session-epoch guarded: see [pauseRun]'s doc comment. The optimistic
+  /// `_currentRun` update and `_startTimer()`/`_startGpsTracking()` call
+  /// happen before any await can occur (unchanged GPS/timer lifecycle), so
+  /// the epoch is rechecked right after that await instead, before
+  /// `notifyListeners()` or the repository call can reach a since-cleared
+  /// `_currentRun`.
   Future<void> resumeRun() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
     if (_currentRun == null) return;
 
     if (_currentRun!.startedAt == null) {
@@ -603,27 +774,52 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       clearPausedAt: true,
     );
 
-    _startTimer();
-    await _startGpsTracking();
+    final timerGeneration = _startTimer();
+    await _startGpsTracking(token);
+    if (!_sessionEpoch.isCurrent(token) || _currentRun == null) {
+      // _startTimer() above ran while the token was still current, so a
+      // stale rejection here must undo it - but only the ticker THIS call
+      // started: a stale A here must never stop a newer session's ticker
+      // via the unconditional _stopTimer(), including the case where B's
+      // own _startTimer() call idempotently reused the exact same Timer
+      // object A's call above did (see _timerGeneration's field doc
+      // comment).
+      _stopTimerIfOwned(timerGeneration);
+      return;
+    }
     notifyListeners();
 
     try {
       await _runningRepository.resumeRun(_currentRun!.id, newStartedAt);
+      if (!_sessionEpoch.isCurrent(token)) return;
       debugPrint('▶️ Run resumed - saved to DB');
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage = 'Failed to resume run: $e';
       debugPrint('Resume run error: $e');
       notifyListeners();
     }
   }
 
-  /// Finish the run
+  /// Finish the run.
+  ///
+  /// Session-epoch guarded: [token] is captured before the FIRST await
+  /// (`_stopGpsTracking`, unchanged GPS lifecycle logic), and rechecked
+  /// after every subsequent await - including before the unawaited
+  /// `_syncRunToHealth` fire-and-forget call and the nested
+  /// `loadDashboardData()` call (which is independently epoch-guarded on
+  /// its own, but must not even be dispatched on a stale session's behalf).
   Future<bool> finishRun() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
     if (_currentRun == null) return false;
 
     try {
       _stopTimer();
       await _stopGpsTracking();
+      if (!_sessionEpoch.isCurrent(token) || _currentRun == null) {
+        return false;
+      }
 
       final duration = _elapsedTime.inSeconds;
       final durationMinutes = (duration / 60).ceil();
@@ -641,7 +837,7 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       final runStartTime = _currentRun!.startedAt;
       final runEndTime = DateTime.now();
 
-      _currentRun = await _runningRepository.completeRun(
+      final completedRun = await _runningRepository.completeRun(
         _currentRun!.id,
         duration: duration,
         distance: distance,
@@ -649,6 +845,8 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
         calories: calories,
         route: _routePoints,
       );
+      if (!_sessionEpoch.isCurrent(token)) return false;
+      _currentRun = completedRun;
 
       // Sync to Apple Health / Google Fit
       _syncRunToHealth(
@@ -661,6 +859,7 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       // Reload dashboard data
       await loadDashboardData();
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
       debugPrint(
         '🏁 Run finished: ${distance.toStringAsFixed(2)} km in ${duration}s',
@@ -668,6 +867,7 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage = 'Failed to finish run: $e';
       debugPrint('Finish run error: $e');
       notifyListeners();
@@ -675,15 +875,25 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Discard current run
+  /// Discard current run.
+  ///
+  /// Session-epoch guarded: see [finishRun]'s doc comment. In particular,
+  /// `_currentRun = null` and the rest of the in-memory reset only happen
+  /// once the delete has been confirmed still current - a stale discard
+  /// must never null out a `_currentRun` that a fresh User B operation has
+  /// since populated.
   Future<void> discardRun() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
     if (_currentRun == null) return;
 
     try {
       _stopTimer();
       await _stopGpsTracking();
+      if (!_sessionEpoch.isCurrent(token) || _currentRun == null) return;
 
       await _runningRepository.deleteRun(_currentRun!.id);
+      if (!_sessionEpoch.isCurrent(token)) return;
 
       _currentRun = null;
       _elapsedTime = Duration.zero;
@@ -694,6 +904,7 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('🗑️ Run discarded');
       notifyListeners();
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage = 'Failed to discard run: $e';
       debugPrint('Discard run error: $e');
       notifyListeners();
@@ -726,7 +937,15 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
     return true;
   }
 
-  /// Start GPS tracking.
+  /// Start GPS tracking, bound to [token] - the SAME
+  /// [UserSessionToken] the caller already captured for its own operation,
+  /// never re-captured here. This is what makes GPS startup itself
+  /// session-aware: a start initiated by session A must never commit a
+  /// subscription once A's token is no longer current, including a
+  /// different user (B) having since logged in - passing the caller's
+  /// already-captured token (rather than calling
+  /// `_sessionEpoch.capture()` again inside this method) is what prevents
+  /// a resumed, formerly-A call from silently adopting B's token.
   ///
   /// Idempotent: safe to call repeatedly (explicit resume, lifecycle
   /// recovery) without ever creating more than one live subscription -
@@ -745,7 +964,21 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// synchronously - with no further `await` before that point - so every
   /// other awaiter's re-validation below sees the state already claimed
   /// and returns, guaranteeing at most one replacement subscription.
-  Future<void> _startGpsTracking() async {
+  ///
+  /// [_sessionEpoch.isCurrent(token)] is rechecked exactly once, as the
+  /// FIRST statement after the pending-cancellation await (and its own
+  /// pre-existing run-identity re-validation) resolves - covering both
+  /// "after any pending-cancellation await" and "immediately before
+  /// creating/listening to the new position stream" in a single
+  /// checkpoint, since nothing else in this method ever awaits between
+  /// that point and the synchronous `Geolocator.getPositionStream(...)
+  /// .listen(...)` call below. Because that entire remaining span is
+  /// synchronous (no `await`), Dart's single-threaded execution makes it
+  /// atomic with this check: nothing else can run and invalidate the
+  /// token between the check passing and the subscription actually being
+  /// created, so a stale token can never reach `.listen()` - there is no
+  /// narrower boundary left to close.
+  Future<void> _startGpsTracking(UserSessionToken token) async {
     if (_disposed) return;
     if (_gpsTrackingState == GpsTrackingState.starting ||
         _gpsTrackingState == GpsTrackingState.active) {
@@ -775,6 +1008,11 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (_currentRun!.status != 'in_progress') return;
       if (_currentRun!.pausedAt != null) return;
     }
+
+    // See this method's doc comment: this single checkpoint covers both
+    // "after the pending-cancellation await" and "immediately before
+    // listen()", since nothing awaits in between.
+    if (!_sessionEpoch.isCurrent(token)) return;
 
     final int generation = ++_gpsGeneration;
     final int? runId = expectedRunId;
@@ -1045,22 +1283,56 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   double _toRadians(double degrees) => degrees * pi / 180;
 
-  /// Start the timer
-  void _startTimer() {
-    if (_isTimerRunning) return;
+  /// Start the ticker, returning the [_timerGeneration] this call now
+  /// owns. ALWAYS bumps the generation, even when idempotently no-op'ing
+  /// because a ticker is already running - see [_timerGeneration]'s own
+  /// field doc comment for why a no-op call still claims ownership.
+  /// Callers on a session-epoch-guarded path (`startCurrentRun`,
+  /// `startNewRun`, `resumeRun`) that may later need to undo this specific
+  /// call after a stale rejection MUST capture the returned generation and
+  /// pass it to [_stopTimerIfOwned] - never call the unconditional
+  /// [_stopTimer] from a stale completion. Callers that are not gating a
+  /// later conditional stop (e.g. `loadRun`'s unconditional restore) may
+  /// simply ignore the return value, exactly as before this method
+  /// returned anything.
+  int _startTimer() {
+    final generation = ++_timerGeneration;
+    if (_isTimerRunning) return generation;
 
     _isTimerRunning = true;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _elapsedTime += const Duration(seconds: 1);
       notifyListeners();
     });
+    return generation;
   }
 
-  /// Stop the timer
+  /// Stop the ticker unconditionally. Reserved for a caller acting on its
+  /// OWN still-current session (pause/finish/discard/clear/dispose, all of
+  /// which call this before their own first await, or - for clear/dispose
+  /// - as the authoritative "everything stops now" reset) - never call
+  /// this from a stale completion path. See [_stopTimerIfOwned] for that
+  /// case.
   void _stopTimer() {
     _timer?.cancel();
     _timer = null;
     _isTimerRunning = false;
+  }
+
+  /// Stop the ticker only if [generation] still matches [_timerGeneration]
+  /// - i.e. only if nothing else has called [_startTimer] since this
+  /// caller's own call. Used exclusively by a stale rejection (in
+  /// `startCurrentRun`/`startNewRun`/`resumeRun`, after `await
+  /// _startGpsTracking(token)` finds the session no longer current) to
+  /// undo the ticker THAT SPECIFIC CALL started, without ever touching a
+  /// newer session's ticker - including the case where a newer session's
+  /// own `_startTimer()` call idempotently reused the exact same physical
+  /// `Timer` object (see [_timerGeneration]'s field doc comment): the
+  /// generation mismatch alone is what correctly leaves that ticker
+  /// running, independent of `Timer` object identity.
+  void _stopTimerIfOwned(int generation) {
+    if (generation != _timerGeneration) return;
+    _stopTimer();
   }
 
   /// Sync run to Apple Health / Google Fit
