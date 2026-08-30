@@ -17,85 +17,90 @@ const SharedWorkoutSchema = CollectionSchema(
   name: r'SharedWorkout',
   id: 5198773065541368135,
   properties: {
-    r'category': PropertySchema(
+    r'cachedForUserId': PropertySchema(
       id: 0,
+      name: r'cachedForUserId',
+      type: IsarType.long,
+    ),
+    r'category': PropertySchema(
+      id: 1,
       name: r'category',
       type: IsarType.string,
     ),
     r'commentCount': PropertySchema(
-      id: 1,
+      id: 2,
       name: r'commentCount',
       type: IsarType.long,
     ),
     r'description': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'description',
       type: IsarType.string,
     ),
     r'difficulty': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'difficulty',
       type: IsarType.string,
     ),
-    r'duration': PropertySchema(id: 4, name: r'duration', type: IsarType.long),
+    r'duration': PropertySchema(id: 5, name: r'duration', type: IsarType.long),
     r'exercisesJson': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'exercisesJson',
       type: IsarType.string,
     ),
     r'formattedDuration': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'formattedDuration',
       type: IsarType.string,
     ),
     r'isLikedByCurrentUser': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'isLikedByCurrentUser',
       type: IsarType.bool,
     ),
     r'isSavedByCurrentUser': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'isSavedByCurrentUser',
       type: IsarType.bool,
     ),
     r'likeCount': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'likeCount',
       type: IsarType.long,
     ),
     r'originalId': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'originalId',
       type: IsarType.long,
     ),
     r'saveCount': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'saveCount',
       type: IsarType.long,
     ),
     r'sharedAt': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'sharedAt',
       type: IsarType.dateTime,
     ),
     r'sharedByUserId': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'sharedByUserId',
       type: IsarType.long,
     ),
     r'sharedByUserName': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'sharedByUserName',
       type: IsarType.string,
     ),
     r'timeSinceShared': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'timeSinceShared',
       type: IsarType.string,
     ),
-    r'type': PropertySchema(id: 16, name: r'type', type: IsarType.string),
+    r'type': PropertySchema(id: 17, name: r'type', type: IsarType.string),
     r'workoutName': PropertySchema(
-      id: 17,
+      id: 18,
       name: r'workoutName',
       type: IsarType.string,
     ),
@@ -162,24 +167,25 @@ void _sharedWorkoutSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeString(offsets[0], object.category);
-  writer.writeLong(offsets[1], object.commentCount);
-  writer.writeString(offsets[2], object.description);
-  writer.writeString(offsets[3], object.difficulty);
-  writer.writeLong(offsets[4], object.duration);
-  writer.writeString(offsets[5], object.exercisesJson);
-  writer.writeString(offsets[6], object.formattedDuration);
-  writer.writeBool(offsets[7], object.isLikedByCurrentUser);
-  writer.writeBool(offsets[8], object.isSavedByCurrentUser);
-  writer.writeLong(offsets[9], object.likeCount);
-  writer.writeLong(offsets[10], object.originalId);
-  writer.writeLong(offsets[11], object.saveCount);
-  writer.writeDateTime(offsets[12], object.sharedAt);
-  writer.writeLong(offsets[13], object.sharedByUserId);
-  writer.writeString(offsets[14], object.sharedByUserName);
-  writer.writeString(offsets[15], object.timeSinceShared);
-  writer.writeString(offsets[16], object.type);
-  writer.writeString(offsets[17], object.workoutName);
+  writer.writeLong(offsets[0], object.cachedForUserId);
+  writer.writeString(offsets[1], object.category);
+  writer.writeLong(offsets[2], object.commentCount);
+  writer.writeString(offsets[3], object.description);
+  writer.writeString(offsets[4], object.difficulty);
+  writer.writeLong(offsets[5], object.duration);
+  writer.writeString(offsets[6], object.exercisesJson);
+  writer.writeString(offsets[7], object.formattedDuration);
+  writer.writeBool(offsets[8], object.isLikedByCurrentUser);
+  writer.writeBool(offsets[9], object.isSavedByCurrentUser);
+  writer.writeLong(offsets[10], object.likeCount);
+  writer.writeLong(offsets[11], object.originalId);
+  writer.writeLong(offsets[12], object.saveCount);
+  writer.writeDateTime(offsets[13], object.sharedAt);
+  writer.writeLong(offsets[14], object.sharedByUserId);
+  writer.writeString(offsets[15], object.sharedByUserName);
+  writer.writeString(offsets[16], object.timeSinceShared);
+  writer.writeString(offsets[17], object.type);
+  writer.writeString(offsets[18], object.workoutName);
 }
 
 SharedWorkout _sharedWorkoutDeserialize(
@@ -189,23 +195,24 @@ SharedWorkout _sharedWorkoutDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = SharedWorkout(
-    category: reader.readString(offsets[0]),
-    commentCount: reader.readLongOrNull(offsets[1]) ?? 0,
-    description: reader.readStringOrNull(offsets[2]),
-    difficulty: reader.readStringOrNull(offsets[3]),
-    duration: reader.readLong(offsets[4]),
-    exercisesJson: reader.readString(offsets[5]),
+    cachedForUserId: reader.readLongOrNull(offsets[0]),
+    category: reader.readString(offsets[1]),
+    commentCount: reader.readLongOrNull(offsets[2]) ?? 0,
+    description: reader.readStringOrNull(offsets[3]),
+    difficulty: reader.readStringOrNull(offsets[4]),
+    duration: reader.readLong(offsets[5]),
+    exercisesJson: reader.readString(offsets[6]),
     id: id,
-    isLikedByCurrentUser: reader.readBoolOrNull(offsets[7]) ?? false,
-    isSavedByCurrentUser: reader.readBoolOrNull(offsets[8]) ?? false,
-    likeCount: reader.readLongOrNull(offsets[9]) ?? 0,
-    originalId: reader.readLong(offsets[10]),
-    saveCount: reader.readLongOrNull(offsets[11]) ?? 0,
-    sharedAt: reader.readDateTime(offsets[12]),
-    sharedByUserId: reader.readLong(offsets[13]),
-    sharedByUserName: reader.readString(offsets[14]),
-    type: reader.readString(offsets[16]),
-    workoutName: reader.readString(offsets[17]),
+    isLikedByCurrentUser: reader.readBoolOrNull(offsets[8]) ?? false,
+    isSavedByCurrentUser: reader.readBoolOrNull(offsets[9]) ?? false,
+    likeCount: reader.readLongOrNull(offsets[10]) ?? 0,
+    originalId: reader.readLong(offsets[11]),
+    saveCount: reader.readLongOrNull(offsets[12]) ?? 0,
+    sharedAt: reader.readDateTime(offsets[13]),
+    sharedByUserId: reader.readLong(offsets[14]),
+    sharedByUserName: reader.readString(offsets[15]),
+    type: reader.readString(offsets[17]),
+    workoutName: reader.readString(offsets[18]),
   );
   return object;
 }
@@ -218,40 +225,42 @@ P _sharedWorkoutDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readString(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 1:
-      return (reader.readLongOrNull(offset) ?? 0) as P;
+      return (reader.readString(offset)) as P;
     case 2:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset) ?? 0) as P;
     case 3:
       return (reader.readStringOrNull(offset)) as P;
     case 4:
-      return (reader.readLong(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 6:
       return (reader.readString(offset)) as P;
     case 7:
-      return (reader.readBoolOrNull(offset) ?? false) as P;
+      return (reader.readString(offset)) as P;
     case 8:
       return (reader.readBoolOrNull(offset) ?? false) as P;
     case 9:
-      return (reader.readLongOrNull(offset) ?? 0) as P;
+      return (reader.readBoolOrNull(offset) ?? false) as P;
     case 10:
-      return (reader.readLong(offset)) as P;
-    case 11:
       return (reader.readLongOrNull(offset) ?? 0) as P;
-    case 12:
-      return (reader.readDateTime(offset)) as P;
-    case 13:
+    case 11:
       return (reader.readLong(offset)) as P;
+    case 12:
+      return (reader.readLongOrNull(offset) ?? 0) as P;
+    case 13:
+      return (reader.readDateTime(offset)) as P;
     case 14:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 15:
       return (reader.readString(offset)) as P;
     case 16:
       return (reader.readString(offset)) as P;
     case 17:
+      return (reader.readString(offset)) as P;
+    case 18:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -471,6 +480,79 @@ extension SharedWorkoutQueryWhere
 
 extension SharedWorkoutQueryFilter
     on QueryBuilder<SharedWorkout, SharedWorkout, QFilterCondition> {
+  QueryBuilder<SharedWorkout, SharedWorkout, QAfterFilterCondition>
+  cachedForUserIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'cachedForUserId'),
+      );
+    });
+  }
+
+  QueryBuilder<SharedWorkout, SharedWorkout, QAfterFilterCondition>
+  cachedForUserIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'cachedForUserId'),
+      );
+    });
+  }
+
+  QueryBuilder<SharedWorkout, SharedWorkout, QAfterFilterCondition>
+  cachedForUserIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'cachedForUserId', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<SharedWorkout, SharedWorkout, QAfterFilterCondition>
+  cachedForUserIdGreaterThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'cachedForUserId',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<SharedWorkout, SharedWorkout, QAfterFilterCondition>
+  cachedForUserIdLessThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'cachedForUserId',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<SharedWorkout, SharedWorkout, QAfterFilterCondition>
+  cachedForUserIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'cachedForUserId',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
   QueryBuilder<SharedWorkout, SharedWorkout, QAfterFilterCondition>
   categoryEqualTo(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2254,6 +2336,20 @@ extension SharedWorkoutQueryLinks
 
 extension SharedWorkoutQuerySortBy
     on QueryBuilder<SharedWorkout, SharedWorkout, QSortBy> {
+  QueryBuilder<SharedWorkout, SharedWorkout, QAfterSortBy>
+  sortByCachedForUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'cachedForUserId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedWorkout, SharedWorkout, QAfterSortBy>
+  sortByCachedForUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'cachedForUserId', Sort.desc);
+    });
+  }
+
   QueryBuilder<SharedWorkout, SharedWorkout, QAfterSortBy> sortByCategory() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'category', Sort.asc);
@@ -2498,6 +2594,20 @@ extension SharedWorkoutQuerySortBy
 
 extension SharedWorkoutQuerySortThenBy
     on QueryBuilder<SharedWorkout, SharedWorkout, QSortThenBy> {
+  QueryBuilder<SharedWorkout, SharedWorkout, QAfterSortBy>
+  thenByCachedForUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'cachedForUserId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedWorkout, SharedWorkout, QAfterSortBy>
+  thenByCachedForUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'cachedForUserId', Sort.desc);
+    });
+  }
+
   QueryBuilder<SharedWorkout, SharedWorkout, QAfterSortBy> thenByCategory() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'category', Sort.asc);
@@ -2754,6 +2864,13 @@ extension SharedWorkoutQuerySortThenBy
 
 extension SharedWorkoutQueryWhereDistinct
     on QueryBuilder<SharedWorkout, SharedWorkout, QDistinct> {
+  QueryBuilder<SharedWorkout, SharedWorkout, QDistinct>
+  distinctByCachedForUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'cachedForUserId');
+    });
+  }
+
   QueryBuilder<SharedWorkout, SharedWorkout, QDistinct> distinctByCategory({
     bool caseSensitive = true,
   }) {
@@ -2898,6 +3015,13 @@ extension SharedWorkoutQueryProperty
   QueryBuilder<SharedWorkout, int, QQueryOperations> idProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'id');
+    });
+  }
+
+  QueryBuilder<SharedWorkout, int?, QQueryOperations>
+  cachedForUserIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'cachedForUserId');
     });
   }
 

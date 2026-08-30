@@ -107,11 +107,15 @@ final sharedWorkoutRepositoryProvider = Provider<SharedWorkoutRepository>((
   final localDb = ref.watch(localDatabaseServiceProvider);
   final connectivity = ref.watch(connectivityServiceProvider);
   final authService = ref.watch(authServiceProvider);
+  final sessionEpoch = ref.watch(userSessionEpochProvider);
+  final sessionCoordinator = ref.watch(sessionRequestCoordinatorProvider);
   return SharedWorkoutRepository(
     apiService,
     localDb,
     connectivity,
     authService,
+    sessionEpoch,
+    sessionCoordinator,
   );
 });
 
