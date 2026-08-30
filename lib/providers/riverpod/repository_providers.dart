@@ -151,7 +151,16 @@ final runningRepositoryProvider = Provider<RunningRepository>((ref) {
   final connectivity = ref.watch(connectivityServiceProvider);
   final authService = ref.watch(authServiceProvider);
   final apiService = ref.watch(apiServiceProvider);
-  return RunningRepository(localDb, connectivity, authService, apiService);
+  final sessionEpoch = ref.watch(userSessionEpochProvider);
+  final sessionCoordinator = ref.watch(sessionRequestCoordinatorProvider);
+  return RunningRepository(
+    localDb,
+    connectivity,
+    authService,
+    apiService,
+    sessionEpoch,
+    sessionCoordinator,
+  );
 });
 
 /// Achievement repository provider

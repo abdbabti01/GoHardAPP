@@ -286,12 +286,19 @@ void main() async {
           RunningRepository
         >(
           update:
-              (_, apiService, localDb, connectivity, authService, __) =>
+              (context, apiService, localDb, connectivity, authService, __) =>
                   RunningRepository(
                     localDb,
                     connectivity,
                     authService,
                     apiService,
+                    // UserSessionEpoch and SessionRequestCoordinator are
+                    // fixed .value()/ProxyProvider singletons, never
+                    // reactively watched, so they are read directly here
+                    // rather than added as formal ProxyProvider type
+                    // parameters.
+                    context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
                   ),
         ),
         ProxyProvider4<
@@ -583,11 +590,20 @@ void main() async {
           create:
               (context) => RunningProvider(
                 context.read<RunningRepository>(),
+                // UserSessionEpoch is a fixed .value() singleton, never
+                // reactively watched, so it is read directly here rather
+                // than added as a formal ProxyProvider type parameter.
+                context.read<UserSessionEpoch>(),
                 context.read<ConnectivityService>(),
               ),
           update:
-              (_, runningRepo, connectivity, previous) =>
-                  previous ?? RunningProvider(runningRepo, connectivity),
+              (context, runningRepo, connectivity, previous) =>
+                  previous ??
+                  RunningProvider(
+                    runningRepo,
+                    context.read<UserSessionEpoch>(),
+                    connectivity,
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           NutritionRepository,

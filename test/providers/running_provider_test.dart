@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/models/run_session.dart';
 import 'package:go_hard_app/data/repositories/running_repository.dart';
 import 'package:go_hard_app/providers/running_provider.dart';
@@ -187,6 +188,36 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform
   /// instead of succeeding, then is cleared. See _FakePositionStream.
   Object? throwOnNextListen;
 
+  /// Controls `Geolocator.isLocationServiceEnabled()`. The base
+  /// `GeolocatorPlatform.isLocationServiceEnabled()` throws
+  /// `UnimplementedError` (verified directly in
+  /// geolocator_platform_interface's source), so any test that reaches
+  /// RunningProvider's `_checkLocationPermission()` - i.e. any test that
+  /// calls `createDraftRun()`/`startNewRun()` - MUST override this or the
+  /// call throws before ever reaching the repository. Defaults to true.
+  bool locationServiceEnabled = true;
+
+  /// Controls `Geolocator.checkPermission()` for the same reason as
+  /// [locationServiceEnabled]. Defaults to an already-granted permission so
+  /// a test that doesn't care about the permission flow itself doesn't
+  /// need to configure this.
+  LocationPermission checkPermissionResult = LocationPermission.whileInUse;
+
+  /// Controls `Geolocator.requestPermission()`, consulted only when
+  /// [checkPermissionResult] is `LocationPermission.denied` (mirrors
+  /// `_checkLocationPermission()`'s own request-on-denied flow).
+  LocationPermission requestPermissionResult = LocationPermission.whileInUse;
+
+  @override
+  Future<bool> isLocationServiceEnabled() async => locationServiceEnabled;
+
+  @override
+  Future<LocationPermission> checkPermission() async => checkPermissionResult;
+
+  @override
+  Future<LocationPermission> requestPermission() async =>
+      requestPermissionResult;
+
   @override
   Stream<Position> getPositionStream({LocationSettings? locationSettings}) {
     final subscription = _FakePositionSubscription();
@@ -237,18 +268,25 @@ void main() {
   late DateTime fakeNow;
   late RunningProvider provider;
   late _FakeGeolocatorPlatform fakePlatform;
+  // Real UserSessionEpoch, activated for a single test user - these tests
+  // are about GPS/timer/lifecycle behavior, not session-boundary behavior
+  // (that is covered separately), so it only needs to stay active/current
+  // throughout so the epoch-guarded provider methods actually reach their
+  // repository instead of no-op'ing on a null/stale capture().
+  late UserSessionEpoch sessionEpoch;
 
   setUp(() {
     fakePlatform = _FakeGeolocatorPlatform();
     GeolocatorPlatform.instance = fakePlatform;
     mockRepo = MockRunningRepository();
+    sessionEpoch = UserSessionEpoch()..activate(1);
     // loadRun() intentionally still uses the real wall clock (out of scope
     // for this fix - only lifecycle recalculation uses the injectable
     // clock). Anchor fakeNow to the real "now" at setup so the initial
     // load's elapsed time starts at ~0, then advance it deterministically
     // to represent time passing while the app is suspended.
     fakeNow = DateTime.now().toUtc();
-    provider = RunningProvider(mockRepo, null, () => fakeNow);
+    provider = RunningProvider(mockRepo, sessionEpoch, null, () => fakeNow);
   });
 
   tearDown(() {
@@ -650,12 +688,13 @@ void main() {
   });
 
   group('constructor compatibility', () {
-    test('existing call sites (repository-only, and repository + '
-        'connectivity) remain valid with no clock argument', () {
-      final p1 = RunningProvider(mockRepo);
+    test('repository + epoch (no connectivity, no clock) and repository + '
+        'epoch + connectivity call sites remain valid with no clock '
+        'argument', () {
+      final p1 = RunningProvider(mockRepo, sessionEpoch);
       p1.dispose();
 
-      final p2 = RunningProvider(mockRepo, null);
+      final p2 = RunningProvider(mockRepo, sessionEpoch, null);
       p2.dispose();
     });
   });
@@ -2368,6 +2407,1242 @@ void main() {
         async.flushMicrotasks();
         expect(provider.routePoints.length, 1);
       });
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // Session-epoch protection (Running session-ownership fix, PR 2)
+  //
+  // Proves that every public async RunningProvider operation drops a
+  // repository result that resolves after the session that requested it
+  // has ended (logout, or a different user logging in), instead of
+  // applying it to the shared provider instance the next session also
+  // uses. This is a SEPARATE boundary from the GPS-generation tests
+  // above - none of the tests below touch _gpsGeneration/GpsTrackingState
+  // directly; they only assert on the provider-level fields (currentRun,
+  // recentRuns, isLoading, errorMessage) an epoch-guarded await protects.
+  //
+  // `sessionEpoch` (activated for user 1 in the shared setUp()) is invalidated
+  // directly here rather than through a full AuthProvider/
+  // SessionCleanupCoordinator stack - `provider.clear()` is called
+  // immediately alongside every `sessionEpoch.invalidate()` below to mirror
+  // AuthProvider's real logout ordering (invalidate, then
+  // SessionCleanupCoordinator.cleanUp() -> RunningProvider.clear()).
+  // ---------------------------------------------------------------------
+  group('session-epoch protection', () {
+    test('logged-out calls do not invoke the repository (req 21)', () async {
+      sessionEpoch.invalidate();
+
+      await provider.loadDashboardData();
+      await provider.loadRun(1);
+      await provider.createDraftRun();
+      await provider.startCurrentRun();
+      await provider.startNewRun();
+      await provider.pauseRun();
+      await provider.resumeRun();
+      await provider.finishRun();
+      await provider.discardRun();
+
+      verifyZeroInteractions(mockRepo);
+    });
+
+    test(
+      'a dashboard load finishing after logout is discarded (req 22)',
+      () async {
+        final recentCompleter = Completer<List<RunSession>>();
+        when(
+          mockRepo.getRecentRuns(limit: anyNamed('limit')),
+        ).thenAnswer((_) => recentCompleter.future);
+        when(mockRepo.getWeeklyStats()).thenAnswer((_) async => {});
+
+        final future = provider.loadDashboardData();
+        expect(provider.isLoading, isTrue);
+
+        sessionEpoch.invalidate();
+        await provider.clear();
+        expect(provider.isLoading, isFalse);
+
+        recentCompleter.complete([_run()]);
+        await future;
+
+        expect(provider.recentRuns, isEmpty);
+        expect(provider.isLoading, isFalse);
+      },
+    );
+
+    test(
+      'a dashboard load finishing after B login is discarded (req 23)',
+      () async {
+        final recentCompleter = Completer<List<RunSession>>();
+        when(
+          mockRepo.getRecentRuns(limit: anyNamed('limit')),
+        ).thenAnswer((_) => recentCompleter.future);
+        when(mockRepo.getWeeklyStats()).thenAnswer((_) async => {});
+
+        final future = provider.loadDashboardData();
+
+        sessionEpoch.invalidate();
+        await provider.clear();
+        sessionEpoch.activate(2);
+
+        recentCompleter.complete([_run()]);
+        await future;
+
+        expect(
+          provider.recentRuns,
+          isEmpty,
+          reason: "A's stale dashboard data must not appear once B is active",
+        );
+      },
+    );
+
+    test('a stale loadRun cannot set currentRun (req 24)', () async {
+      final runCompleter = Completer<RunSession?>();
+      when(mockRepo.getRunSession(1)).thenAnswer((_) => runCompleter.future);
+
+      final future = provider.loadRun(1);
+
+      sessionEpoch.invalidate();
+      await provider.clear();
+
+      runCompleter.complete(_run(id: 1));
+      await future;
+
+      expect(provider.currentRun, isNull);
+    });
+
+    test('a stale resumeRun failure does not publish an error (extends req 28 '
+        'coverage to resumeRun specifically)', () {
+      fakeAsync((async) {
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+        when(mockRepo.startRun(1)).thenAnswer(
+          (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+        );
+        startTrackedRun(async, id: 1);
+
+        when(mockRepo.pauseRun(1, any)).thenAnswer(
+          (_) async => _run(
+            id: 1,
+            status: 'in_progress',
+            startedAt: fakeNow,
+            pausedAt: fakeNow,
+          ),
+        );
+        provider.pauseRun();
+        async.flushMicrotasks();
+
+        final resumeCompleter = Completer<RunSession>();
+        when(
+          mockRepo.resumeRun(1, any),
+        ).thenAnswer((_) => resumeCompleter.future);
+        provider.resumeRun();
+        async.flushMicrotasks();
+
+        sessionEpoch.invalidate();
+        provider.clear();
+        async.flushMicrotasks();
+
+        resumeCompleter.completeError(Exception('boom'));
+        async.flushMicrotasks();
+
+        expect(provider.errorMessage, isNull);
+      });
+    });
+
+    test('a stale finishRun failure does not publish an error (extends req 28 '
+        'coverage to finishRun specifically)', () {
+      fakeAsync((async) {
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+        when(mockRepo.startRun(1)).thenAnswer(
+          (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+        );
+        startTrackedRun(async, id: 1);
+
+        final completeCompleter = Completer<RunSession>();
+        when(
+          mockRepo.completeRun(
+            1,
+            duration: anyNamed('duration'),
+            distance: anyNamed('distance'),
+            averagePace: anyNamed('averagePace'),
+            calories: anyNamed('calories'),
+            route: anyNamed('route'),
+          ),
+        ).thenAnswer((_) => completeCompleter.future);
+
+        provider.finishRun();
+        async.flushMicrotasks();
+
+        sessionEpoch.invalidate();
+        provider.clear();
+        async.flushMicrotasks();
+
+        completeCompleter.completeError(Exception('boom'));
+        async.flushMicrotasks();
+
+        expect(provider.errorMessage, isNull);
+      });
+    });
+
+    test('a stale startCurrentRun cannot start timer or GPS (req 25)', () {
+      fakeAsync((async) {
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+        provider.loadRun(1);
+        async.flushMicrotasks();
+
+        final startCompleter = Completer<RunSession>();
+        when(mockRepo.startRun(1)).thenAnswer((_) => startCompleter.future);
+
+        provider.startCurrentRun();
+        async.flushMicrotasks();
+
+        sessionEpoch.invalidate();
+        provider.clear();
+        async.flushMicrotasks();
+
+        startCompleter.complete(
+          _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+        );
+        async.flushMicrotasks();
+
+        expect(provider.currentRun, isNull);
+        expect(provider.isTimerRunning, isFalse);
+        expect(provider.isGpsActive, isFalse);
+        expect(
+          fakePlatform.subscriptions,
+          isEmpty,
+          reason: 'GPS must never be started for a stale session',
+        );
+      });
+    });
+
+    test('the epoch checkpoint inside _startGpsTracking() prevents '
+        'startCurrentRun from ever creating a GPS subscription once the '
+        'session goes stale mid-transaction, and undoes the ticker it had '
+        'already started (GPS-ownership fix)', () {
+      fakeAsync((async) {
+        // Run 1's own GPS error leaves _gpsCancellationFuture pending on
+        // a gate, without blocking anything, so a LATER startCurrentRun()
+        // call for a different run has a genuine suspension point inside
+        // its own _startGpsTracking() to race against - a clean start
+        // with no pending cancellation completes _startGpsTracking()
+        // synchronously, leaving no gap for a test to land in.
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+        when(mockRepo.startRun(1)).thenAnswer(
+          (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+        );
+        startTrackedRun(async, id: 1);
+        final subscriptionA = fakePlatform.subscriptions.last;
+        subscriptionA.cancelGate = Completer<void>();
+        subscriptionA.deliverError(Exception('gps hiccup'));
+        async.flushMicrotasks();
+
+        // Load a second, different draft run (loadRun() never touches
+        // GPS state) and start IT - _currentRun is now run 2 by the time
+        // startCurrentRun() reaches _startGpsTracking(), so its internal
+        // run-identity re-validation would pass once the gate releases -
+        // isolating this test to the epoch checkpoint specifically, since
+        // nothing else would reject this attempt.
+        when(
+          mockRepo.getRunSession(2),
+        ).thenAnswer((_) async => _run(id: 2, status: 'draft'));
+        provider.loadRun(2);
+        async.flushMicrotasks();
+
+        when(mockRepo.startRun(2)).thenAnswer(
+          (_) async => _run(id: 2, status: 'in_progress', startedAt: fakeNow),
+        );
+
+        int notifyCount = 0;
+        provider.addListener(() => notifyCount++);
+
+        bool? result;
+        unawaited(provider.startCurrentRun().then((r) => result = r));
+        async.flushMicrotasks();
+
+        // startCurrentRun has already passed its earlier checkpoint
+        // (after startRun()) and called _startTimer() - it is now
+        // suspended inside _startGpsTracking()'s own await of the still-
+        // gated cancellation from run 1's subscription.
+        expect(provider.isTimerRunning, isTrue);
+        final notifyCountBeforeStale = notifyCount;
+        // Captured for comparison below, not asserted to be null here:
+        // run 1's own deliverError() call above already legitimately set
+        // this via _onPositionError, unrelated to the stale rejection this
+        // test targets.
+        final errorMessageBeforeStale = provider.errorMessage;
+
+        // The session ends while _startGpsTracking() is still suspended -
+        // deliberately WITHOUT calling clear(), so _currentRun/timer
+        // state stay exactly as startCurrentRun() already (validly) left
+        // them, isolating this checkpoint from the null-check most other
+        // guards in this file also rely on.
+        sessionEpoch.invalidate();
+
+        // Release the gate: _startGpsTracking()'s own pre-existing
+        // run-identity/generation re-validation (unrelated to session
+        // epoch, unchanged by this PR) would pass, since _currentRun is
+        // still run 2 - but the NEW epoch checkpoint immediately after
+        // that re-validation, and before the synchronous
+        // Geolocator.getPositionStream().listen() call, must reject
+        // first, so no second subscription is ever created at all.
+        subscriptionA.cancelGate!.complete();
+        async.flushMicrotasks();
+
+        expect(
+          fakePlatform.subscriptions.length,
+          1,
+          reason:
+              'a stale token must never reach the point of creating a '
+              'GPS subscription - the epoch checkpoint inside '
+              '_startGpsTracking() rejects before '
+              'Geolocator.getPositionStream().listen() is ever called, '
+              'so only run 1\'s original subscription should exist',
+        );
+        expect(
+          provider.isGpsActive,
+          isFalse,
+          reason: 'no active stale subscription may remain for run 2',
+        );
+        expect(
+          provider.isTimerRunning,
+          isFalse,
+          reason:
+              'a rejected stale startCurrentRun must not leave its own '
+              'ticker running, even though it started one before '
+              'discovering the session had gone stale',
+        );
+        expect(
+          result,
+          isFalse,
+          reason:
+              'the post-_startGpsTracking() checkpoint must still reject '
+              'once _startGpsTracking() resolves under a stale session',
+        );
+        expect(
+          provider.errorMessage,
+          errorMessageBeforeStale,
+          reason:
+              'a stale rejection must not publish or overwrite an error - '
+              'the message here (if any) must be unchanged from whatever '
+              "run 1's own unrelated GPS hiccup already set",
+        );
+        expect(
+          notifyCount,
+          notifyCountBeforeStale,
+          reason:
+              'a stale startCurrentRun must not call notifyListeners() '
+              'once rejected at this checkpoint',
+        );
+      });
+    });
+
+    test('a stale startNewRun cannot assign currentRun, start a ticker, start '
+        'GPS, notify with A\'s state, or overwrite B\'s state (dedicated '
+        'startNewRun coverage - mutation target: the first stale-session '
+        'check after the createRunSession() repository await)', () {
+      fakeAsync((async) {
+        // fakePlatform grants location permission by default (see its
+        // isLocationServiceEnabled/checkPermission overrides) - this is
+        // what makes it possible to invoke startNewRun() at all; without
+        // those overrides Geolocator.isLocationServiceEnabled() throws
+        // UnimplementedError (verified directly against
+        // geolocator_platform_interface's source) before ever reaching
+        // the repository.
+        final createCompleter = Completer<RunSession>();
+        when(
+          mockRepo.createRunSession(),
+        ).thenAnswer((_) => createCompleter.future);
+
+        int notifyCount = 0;
+        provider.addListener(() => notifyCount++);
+
+        int? result;
+        unawaited(provider.startNewRun().then((r) => result = r));
+        async.flushMicrotasks();
+
+        // startNewRun is suspended awaiting createRunSession() - session A
+        // is still active at this point, and nothing has been assigned or
+        // started yet.
+        expect(provider.currentRun, isNull);
+        expect(provider.isTimerRunning, isFalse);
+        expect(fakePlatform.subscriptions, isEmpty);
+
+        // A's session ends and B logs in and loads their own run while
+        // A's create is still in flight.
+        sessionEpoch.invalidate();
+        provider.clear();
+        sessionEpoch.activate(2);
+        when(
+          mockRepo.getRunSession(2),
+        ).thenAnswer((_) async => _run(id: 2, status: 'draft'));
+        provider.loadRun(2);
+        async.flushMicrotasks();
+        expect(provider.currentRun!.id, 2);
+        final notifyCountAfterBLoaded = notifyCount;
+
+        // A's stale createRunSession() now resolves.
+        createCompleter.complete(_run(id: 1, status: 'draft'));
+        async.flushMicrotasks();
+
+        expect(
+          result,
+          isNull,
+          reason:
+              'the post-createRunSession() checkpoint must reject a '
+              'stale session and return null, not A\'s new run id',
+        );
+        expect(
+          provider.currentRun!.id,
+          2,
+          reason: "A's stale startNewRun must not overwrite B's run",
+        );
+        expect(provider.isTimerRunning, isFalse);
+        expect(
+          fakePlatform.subscriptions,
+          isEmpty,
+          reason:
+              'GPS must never start for the stale A operation - it must '
+              'be rejected before reaching startRun()/_startGpsTracking() '
+              'at all',
+        );
+        expect(
+          provider.errorMessage,
+          isNull,
+          reason: "A's stale completion must not set B's error state",
+        );
+        expect(
+          notifyCount,
+          notifyCountAfterBLoaded,
+          reason:
+              "A's stale completion must not call notifyListeners() at "
+              "all once rejected, so it can never broadcast A's state "
+              "over B's",
+        );
+      });
+    });
+
+    test('the epoch checkpoint inside _startGpsTracking() prevents startNewRun '
+        'from ever creating a GPS subscription once the session goes stale '
+        'mid-transaction, and undoes the ticker it had already started '
+        '(GPS-ownership fix)', () {
+      fakeAsync((async) {
+        // Set up a PENDING, gated GPS-subscription cancellation before
+        // calling startNewRun(), so its own await _startGpsTracking()
+        // has a genuine suspension point to race against - a clean start
+        // with no pending cancellation completes _startGpsTracking()
+        // synchronously, leaving no gap for a test to land in.
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+        when(mockRepo.startRun(1)).thenAnswer(
+          (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+        );
+        startTrackedRun(async, id: 1);
+        final subscriptionA = fakePlatform.subscriptions.last;
+        subscriptionA.cancelGate = Completer<void>();
+        // Delivering an error marks tracking failed and fires an
+        // UNAWAITED cancellation (_onPositionError never awaits it) -
+        // this leaves _gpsCancellationFuture pending on cancelGate
+        // without blocking anything else, exactly like the existing
+        // "recovery serializes against an in-flight cancellation" group
+        // above uses to set up the same kind of race.
+        subscriptionA.deliverError(Exception('gps hiccup'));
+        async.flushMicrotasks();
+
+        when(
+          mockRepo.createRunSession(),
+        ).thenAnswer((_) async => _run(id: 2, status: 'draft'));
+        when(mockRepo.startRun(2)).thenAnswer(
+          (_) async => _run(id: 2, status: 'in_progress', startedAt: fakeNow),
+        );
+
+        int notifyCount = 0;
+        provider.addListener(() => notifyCount++);
+
+        int? result;
+        unawaited(provider.startNewRun().then((r) => result = r));
+        async.flushMicrotasks();
+
+        // startNewRun has already passed both of its earlier checkpoints
+        // (permission, createRunSession, startRun) and called
+        // _startTimer() - it is now suspended inside
+        // _startGpsTracking()'s own await of the still-gated
+        // cancellation from run 1's subscription.
+        expect(provider.isTimerRunning, isTrue);
+        final notifyCountBeforeStale = notifyCount;
+        // Captured for comparison below, not asserted to be null here:
+        // run 1's own deliverError() call above already legitimately set
+        // this via _onPositionError, unrelated to the stale rejection this
+        // test targets.
+        final errorMessageBeforeStale = provider.errorMessage;
+
+        // The session ends while _startGpsTracking() is still suspended -
+        // deliberately WITHOUT calling clear(), so _currentRun/timer
+        // state stay exactly as startNewRun() already (validly) left
+        // them, isolating this checkpoint from the null-check most other
+        // guards in this file also rely on.
+        sessionEpoch.invalidate();
+
+        // Release the gate: _startGpsTracking()'s own pre-existing
+        // run-identity/generation re-validation (unrelated to session
+        // epoch, unchanged by this PR) would pass, since _currentRun is
+        // still run 2 - but the NEW epoch checkpoint immediately after
+        // that re-validation, and before the synchronous
+        // Geolocator.getPositionStream().listen() call, must reject
+        // first, so no second subscription is ever created at all.
+        subscriptionA.cancelGate!.complete();
+        async.flushMicrotasks();
+
+        expect(
+          fakePlatform.subscriptions.length,
+          1,
+          reason:
+              'a stale token must never reach the point of creating a '
+              'GPS subscription - the epoch checkpoint inside '
+              '_startGpsTracking() rejects before '
+              'Geolocator.getPositionStream().listen() is ever called, '
+              'so only run 1\'s original subscription should exist',
+        );
+        expect(
+          provider.isGpsActive,
+          isFalse,
+          reason: 'no active stale subscription may remain for run 2',
+        );
+        expect(
+          provider.isTimerRunning,
+          isFalse,
+          reason:
+              'a rejected stale startNewRun must not leave its own ticker '
+              'running, even though it started one before discovering '
+              'the session had gone stale',
+        );
+        expect(
+          result,
+          isNull,
+          reason:
+              'the post-_startGpsTracking() checkpoint must still reject '
+              'once _startGpsTracking() resolves under a stale session',
+        );
+        expect(
+          provider.errorMessage,
+          errorMessageBeforeStale,
+          reason:
+              'a stale rejection must not publish or overwrite an error - '
+              'the message here (if any) must be unchanged from whatever '
+              "run 1's own unrelated GPS hiccup already set",
+        );
+        expect(
+          notifyCount,
+          notifyCountBeforeStale,
+          reason:
+              'a stale startNewRun must not call notifyListeners() once '
+              'rejected at this checkpoint',
+        );
+      });
+    });
+
+    test('the epoch checkpoint inside _startGpsTracking() prevents resumeRun '
+        'from ever creating a GPS subscription once the session goes stale '
+        'mid-transaction, and undoes the ticker it had already started '
+        '(GPS-ownership fix)', () {
+      fakeAsync((async) {
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+        when(mockRepo.startRun(1)).thenAnswer(
+          (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+        );
+        startTrackedRun(async, id: 1);
+
+        // Leave a pending, gated cancellation in flight (run 1's own GPS
+        // error, exactly as the startCurrentRun/startNewRun equivalents
+        // above), then pause the run - _stopGpsTracking() inside
+        // pauseRun() sees _positionStream already null (nulled by the
+        // error handler) and returns immediately without a new await, so
+        // pauseRun() itself completes normally and does not block on the
+        // still-gated cancellation.
+        final subscriptionA = fakePlatform.subscriptions.last;
+        subscriptionA.cancelGate = Completer<void>();
+        subscriptionA.deliverError(Exception('gps hiccup'));
+        async.flushMicrotasks();
+
+        when(mockRepo.pauseRun(1, any)).thenAnswer(
+          (_) async => _run(
+            id: 1,
+            status: 'in_progress',
+            startedAt: fakeNow,
+            pausedAt: fakeNow,
+          ),
+        );
+        provider.pauseRun();
+        async.flushMicrotasks();
+        expect(provider.currentRun!.pausedAt, isNotNull);
+
+        when(mockRepo.resumeRun(1, any)).thenAnswer(
+          (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+        );
+
+        int notifyCount = 0;
+        provider.addListener(() => notifyCount++);
+
+        provider.resumeRun();
+        async.flushMicrotasks();
+
+        // resumeRun's optimistic _currentRun update and _startTimer()
+        // both happen synchronously before _startGpsTracking() is ever
+        // called - it is now suspended inside _startGpsTracking()'s own
+        // await of the still-gated cancellation from run 1's earlier
+        // subscription.
+        expect(provider.isTimerRunning, isTrue);
+        final notifyCountBeforeStale = notifyCount;
+        final errorMessageBeforeStale = provider.errorMessage;
+
+        // The session ends while _startGpsTracking() is still suspended -
+        // deliberately WITHOUT calling clear(), so _currentRun/timer
+        // state stay exactly as resumeRun() already (validly) left them,
+        // isolating this checkpoint from the null-check most other
+        // guards in this file also rely on.
+        sessionEpoch.invalidate();
+
+        // Release the gate: _startGpsTracking()'s own pre-existing
+        // run-identity/generation re-validation (unrelated to session
+        // epoch, unchanged by this PR) would pass, since _currentRun
+        // still matches - but the NEW epoch checkpoint must reject
+        // first, so no second subscription is ever created at all.
+        subscriptionA.cancelGate!.complete();
+        async.flushMicrotasks();
+
+        expect(
+          fakePlatform.subscriptions.length,
+          1,
+          reason:
+              'a stale token must never reach the point of creating a '
+              'GPS subscription - the epoch checkpoint inside '
+              '_startGpsTracking() rejects before '
+              'Geolocator.getPositionStream().listen() is ever called',
+        );
+        expect(
+          provider.isGpsActive,
+          isFalse,
+          reason: 'no active stale subscription may remain',
+        );
+        expect(
+          provider.isTimerRunning,
+          isFalse,
+          reason:
+              'a rejected stale resumeRun must not leave its own ticker '
+              'running, even though it started one before discovering '
+              'the session had gone stale',
+        );
+        expect(
+          provider.errorMessage,
+          errorMessageBeforeStale,
+          reason: 'a stale rejection must not publish or overwrite an error',
+        );
+        expect(
+          notifyCount,
+          notifyCountBeforeStale,
+          reason:
+              'a stale resumeRun must not call notifyListeners() once '
+              'rejected at this checkpoint',
+        );
+      });
+    });
+
+    test('lifecycle-triggered GPS recovery cannot create or retain a GPS '
+        'subscription if the session goes stale and B activates while it is '
+        'awaiting an in-flight cancellation (GPS-ownership fix)', () {
+      fakeAsync((async) {
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+        when(mockRepo.startRun(1)).thenAnswer(
+          (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+        );
+        startTrackedRun(async, id: 1);
+
+        // Mark tracking failed and leave a pending, gated cancellation in
+        // flight - _recoverGpsTrackingIfNeeded() only attempts recovery
+        // at all when tracking is stopped/failed.
+        final subscriptionA = fakePlatform.subscriptions.last;
+        subscriptionA.cancelGate = Completer<void>();
+        subscriptionA.deliverError(Exception('gps hiccup'));
+        async.flushMicrotasks();
+        expect(provider.gpsTrackingState, GpsTrackingState.failed);
+
+        int notifyCount = 0;
+        provider.addListener(() => notifyCount++);
+        final errorMessageBeforeRecovery = provider.errorMessage;
+
+        // A lifecycle resume triggers _recoverGpsTrackingIfNeeded(),
+        // which captures its own token synchronously (session A still
+        // active at this exact instant) and calls _startGpsTracking(),
+        // which immediately hits the still-gated pending cancellation
+        // above and suspends.
+        provider.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        async.flushMicrotasks();
+        final notifyCountBeforeStale = notifyCount;
+
+        // A's session ends and B activates while recovery is suspended -
+        // deliberately WITHOUT calling clear(), so _currentRun stays
+        // exactly as it was, isolating this checkpoint from the
+        // run-identity re-validation _startGpsTracking() already
+        // performs for unrelated reasons.
+        sessionEpoch.invalidate();
+        sessionEpoch.activate(2);
+
+        subscriptionA.cancelGate!.complete();
+        async.flushMicrotasks();
+
+        expect(
+          fakePlatform.subscriptions.length,
+          1,
+          reason:
+              'a stale recovery attempt must never reach the point of '
+              'creating a GPS subscription - the epoch checkpoint '
+              'inside _startGpsTracking() rejects using the token '
+              'captured when recovery began, not whatever session is '
+              'active once the cancellation resolves',
+        );
+        expect(
+          provider.isGpsActive,
+          isFalse,
+          reason: 'no active stale subscription may remain',
+        );
+        expect(
+          provider.gpsTrackingState,
+          GpsTrackingState.failed,
+          reason:
+              'a rejected stale recovery must leave tracking exactly as '
+              'the original failure left it, not silently reclassify it',
+        );
+        expect(
+          provider.errorMessage,
+          errorMessageBeforeRecovery,
+          reason:
+              'a stale recovery rejection must not publish or overwrite an error',
+        );
+        expect(
+          notifyCount,
+          notifyCountBeforeStale,
+          reason:
+              'a stale recovery attempt must not call notifyListeners() '
+              'once rejected at this checkpoint',
+        );
+      });
+    });
+
+    test('lifecycle recovery captures its own token and does not attempt GPS '
+        'tracking at all once logged out entirely (GPS-ownership fix - '
+        'covers the null-token guard, distinct from the in-flight-'
+        "cancellation race the previous test covers)", () {
+      fakeAsync((async) {
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+        when(mockRepo.startRun(1)).thenAnswer(
+          (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+        );
+        startTrackedRun(async, id: 1);
+
+        // No cancelGate here - the subscription's cancellation completes
+        // immediately, leaving tracking cleanly `failed` with no pending
+        // cancellation in flight, so _recoverGpsTrackingIfNeeded()'s own
+        // token-capture guard (not _startGpsTracking()'s internal
+        // pending-cancellation checkpoint) is what this test isolates.
+        fakePlatform.subscriptions.last.deliverError(Exception('gps hiccup'));
+        async.flushMicrotasks();
+        expect(provider.gpsTrackingState, GpsTrackingState.failed);
+
+        // The session ends entirely - deliberately WITHOUT clear(), so
+        // _currentRun/status/pausedAt still pass every one of
+        // _recoverGpsTrackingIfNeeded()'s own run-state checks, isolating
+        // this test to whether it captures and honors a token at all
+        // before ever calling _startGpsTracking().
+        sessionEpoch.invalidate();
+
+        provider.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        async.flushMicrotasks();
+
+        expect(
+          fakePlatform.subscriptions,
+          hasLength(1),
+          reason:
+              'recovery must capture its own token and find no active '
+              'session before ever calling _startGpsTracking() - no new '
+              'subscription may be created while logged out',
+        );
+      });
+    });
+
+    // -----------------------------------------------------------------
+    // Cross-session ticker ownership (timer-race fix)
+    //
+    // _timer/_isTimerRunning are shared mutable provider state - a stale
+    // A completion calling the unconditional _stopTimer() could cancel a
+    // ticker B has since legitimately started, including the pathological
+    // case where B's own _startTimer() call idempotently reused the exact
+    // same Timer object A's call did (nothing about Timer object identity
+    // would distinguish them in that case). Each test below suspends A
+    // inside _startGpsTracking() via the existing gated-cancellation
+    // technique, lets B fully take over with a DIFFERENT, currently
+    // running ticker in the meantime, then proves A's eventual stale
+    // rejection leaves B's ticker running and B's state completely
+    // untouched.
+    // -----------------------------------------------------------------
+    group('cross-session ticker ownership (timer-race fix)', () {
+      test('startCurrentRun: a stale A completion cannot stop B\'s ticker', () {
+        fakeAsync((async) {
+          // Setup: an unrelated prior subscription (run 0) whose GPS
+          // error leaves _gpsCancellationFuture pending on a gate,
+          // without blocking anything else - this is what gives A's
+          // OWN later _startGpsTracking() call a genuine suspension
+          // point to land in.
+          when(
+            mockRepo.getRunSession(0),
+          ).thenAnswer((_) async => _run(id: 0, status: 'draft'));
+          when(mockRepo.startRun(0)).thenAnswer(
+            (_) async => _run(id: 0, status: 'in_progress', startedAt: fakeNow),
+          );
+          startTrackedRun(async, id: 0);
+          final subscription0 = fakePlatform.subscriptions.last;
+          subscription0.cancelGate = Completer<void>();
+          subscription0.deliverError(Exception('gps hiccup'));
+          async.flushMicrotasks();
+
+          // A: load run 1 as a draft, then start it.
+          when(
+            mockRepo.getRunSession(1),
+          ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+          when(mockRepo.startRun(1)).thenAnswer(
+            (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+          );
+          provider.loadRun(1);
+          async.flushMicrotasks();
+
+          unawaited(provider.startCurrentRun());
+          async.flushMicrotasks();
+
+          // A's startCurrentRun has started its own ticker and is now
+          // suspended inside _startGpsTracking()'s await of the
+          // still-gated cancellation left over from run 0.
+          expect(provider.isTimerRunning, isTrue);
+          expect(provider.currentRun!.id, 1);
+
+          // A's session ends and B activates while A is still suspended.
+          sessionEpoch.invalidate();
+          sessionEpoch.activate(2);
+
+          // B loads their OWN, already-in-progress run (a different
+          // identity from A's) - loadRun() legitimately stops whatever
+          // ticker was running (A's) and starts a fresh one for B, as
+          // its own current, valid session action - completely
+          // independent of, and not gated behind, A's still-pending
+          // GPS cancellation.
+          when(mockRepo.getRunSession(3)).thenAnswer(
+            (_) async => _run(id: 3, status: 'in_progress', startedAt: fakeNow),
+          );
+          provider.loadRun(3);
+          async.flushMicrotasks();
+
+          expect(provider.currentRun!.id, 3);
+          expect(provider.isTimerRunning, isTrue);
+          final elapsedWhenBStarted = provider.elapsedTime;
+          final errorMessageBeforeAStale = provider.errorMessage;
+          final gpsStateBeforeAStale = provider.gpsTrackingState;
+          int notifyCount = 0;
+          provider.addListener(() => notifyCount++);
+
+          // Prove B's ticker is genuinely still ticking, not merely
+          // flagged as running, before A's stale completion arrives. Each
+          // tick calls notifyListeners(), so the notifyCount baseline for
+          // the assertion below is captured AFTER this, not before.
+          async.elapse(const Duration(seconds: 5));
+          expect(
+            provider.elapsedTime,
+            elapsedWhenBStarted + const Duration(seconds: 5),
+          );
+          final notifyCountBeforeAStale = notifyCount;
+
+          // Release the gate: A's suspended _startGpsTracking() resumes,
+          // finds _currentRun no longer matches the run it started
+          // (B's run 3, not A's run 1) and rejects - then
+          // startCurrentRun()'s own post-await checkpoint finds A's
+          // token stale and must stop only A's ticker, never B's.
+          subscription0.cancelGate!.complete();
+          async.flushMicrotasks();
+
+          expect(
+            provider.currentRun!.id,
+            3,
+            reason: "A's stale completion must not overwrite B's run",
+          );
+          expect(
+            provider.isTimerRunning,
+            isTrue,
+            reason: "A's stale rejection must not stop B's ticker",
+          );
+          expect(
+            provider.gpsTrackingState,
+            gpsStateBeforeAStale,
+            reason: "A's stale completion must not alter B's GPS state",
+          );
+          expect(provider.errorMessage, errorMessageBeforeAStale);
+          expect(notifyCount, notifyCountBeforeAStale);
+
+          // Prove B's ticker is STILL genuinely ticking afterward - not
+          // just flagged as running while actually dead.
+          final elapsedAfterAStale = provider.elapsedTime;
+          async.elapse(const Duration(seconds: 3));
+          expect(
+            provider.elapsedTime,
+            elapsedAfterAStale + const Duration(seconds: 3),
+            reason:
+                "B's ticker must still be the real, live Timer - not a "
+                'cancelled one that merely reports isTimerRunning==true',
+          );
+        });
+      });
+
+      test('startNewRun: a stale A completion cannot stop B\'s ticker', () {
+        fakeAsync((async) {
+          when(
+            mockRepo.getRunSession(0),
+          ).thenAnswer((_) async => _run(id: 0, status: 'draft'));
+          when(mockRepo.startRun(0)).thenAnswer(
+            (_) async => _run(id: 0, status: 'in_progress', startedAt: fakeNow),
+          );
+          startTrackedRun(async, id: 0);
+          final subscription0 = fakePlatform.subscriptions.last;
+          subscription0.cancelGate = Completer<void>();
+          subscription0.deliverError(Exception('gps hiccup'));
+          async.flushMicrotasks();
+
+          when(
+            mockRepo.createRunSession(),
+          ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+          when(mockRepo.startRun(1)).thenAnswer(
+            (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+          );
+
+          unawaited(provider.startNewRun());
+          async.flushMicrotasks();
+
+          expect(provider.isTimerRunning, isTrue);
+          expect(provider.currentRun!.id, 1);
+
+          sessionEpoch.invalidate();
+          sessionEpoch.activate(2);
+
+          when(mockRepo.getRunSession(3)).thenAnswer(
+            (_) async => _run(id: 3, status: 'in_progress', startedAt: fakeNow),
+          );
+          provider.loadRun(3);
+          async.flushMicrotasks();
+
+          expect(provider.currentRun!.id, 3);
+          expect(provider.isTimerRunning, isTrue);
+          final elapsedWhenBStarted = provider.elapsedTime;
+          final errorMessageBeforeAStale = provider.errorMessage;
+          final gpsStateBeforeAStale = provider.gpsTrackingState;
+          int notifyCount = 0;
+          provider.addListener(() => notifyCount++);
+
+          // Prove B's ticker is genuinely still ticking, not merely
+          // flagged as running, before A's stale completion arrives. Each
+          // tick calls notifyListeners(), so the notifyCount baseline for
+          // the assertion below is captured AFTER this, not before.
+          async.elapse(const Duration(seconds: 5));
+          expect(
+            provider.elapsedTime,
+            elapsedWhenBStarted + const Duration(seconds: 5),
+          );
+          final notifyCountBeforeAStale = notifyCount;
+
+          subscription0.cancelGate!.complete();
+          async.flushMicrotasks();
+
+          expect(
+            provider.currentRun!.id,
+            3,
+            reason: "A's stale completion must not overwrite B's run",
+          );
+          expect(
+            provider.isTimerRunning,
+            isTrue,
+            reason: "A's stale rejection must not stop B's ticker",
+          );
+          expect(
+            provider.gpsTrackingState,
+            gpsStateBeforeAStale,
+            reason: "A's stale completion must not alter B's GPS state",
+          );
+          expect(provider.errorMessage, errorMessageBeforeAStale);
+          expect(notifyCount, notifyCountBeforeAStale);
+
+          final elapsedAfterAStale = provider.elapsedTime;
+          async.elapse(const Duration(seconds: 3));
+          expect(
+            provider.elapsedTime,
+            elapsedAfterAStale + const Duration(seconds: 3),
+            reason:
+                "B's ticker must still be the real, live Timer - not a "
+                'cancelled one that merely reports isTimerRunning==true',
+          );
+        });
+      });
+
+      test('resumeRun: a stale A completion cannot stop B\'s ticker', () {
+        fakeAsync((async) {
+          when(
+            mockRepo.getRunSession(0),
+          ).thenAnswer((_) async => _run(id: 0, status: 'draft'));
+          when(mockRepo.startRun(0)).thenAnswer(
+            (_) async => _run(id: 0, status: 'in_progress', startedAt: fakeNow),
+          );
+          startTrackedRun(async, id: 0);
+          final subscription0 = fakePlatform.subscriptions.last;
+          subscription0.cancelGate = Completer<void>();
+          subscription0.deliverError(Exception('gps hiccup'));
+          async.flushMicrotasks();
+
+          // A: a run already paused, ready to resume.
+          when(mockRepo.getRunSession(1)).thenAnswer(
+            (_) async => _run(
+              id: 1,
+              status: 'in_progress',
+              startedAt: fakeNow,
+              pausedAt: fakeNow,
+            ),
+          );
+          provider.loadRun(1);
+          async.flushMicrotasks();
+          when(mockRepo.resumeRun(1, any)).thenAnswer(
+            (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+          );
+
+          unawaited(provider.resumeRun());
+          async.flushMicrotasks();
+
+          expect(provider.isTimerRunning, isTrue);
+          expect(provider.currentRun!.id, 1);
+
+          sessionEpoch.invalidate();
+          sessionEpoch.activate(2);
+
+          when(mockRepo.getRunSession(3)).thenAnswer(
+            (_) async => _run(id: 3, status: 'in_progress', startedAt: fakeNow),
+          );
+          provider.loadRun(3);
+          async.flushMicrotasks();
+
+          expect(provider.currentRun!.id, 3);
+          expect(provider.isTimerRunning, isTrue);
+          final elapsedWhenBStarted = provider.elapsedTime;
+          final errorMessageBeforeAStale = provider.errorMessage;
+          final gpsStateBeforeAStale = provider.gpsTrackingState;
+          int notifyCount = 0;
+          provider.addListener(() => notifyCount++);
+
+          // Prove B's ticker is genuinely still ticking, not merely
+          // flagged as running, before A's stale completion arrives. Each
+          // tick calls notifyListeners(), so the notifyCount baseline for
+          // the assertion below is captured AFTER this, not before.
+          async.elapse(const Duration(seconds: 5));
+          expect(
+            provider.elapsedTime,
+            elapsedWhenBStarted + const Duration(seconds: 5),
+          );
+          final notifyCountBeforeAStale = notifyCount;
+
+          subscription0.cancelGate!.complete();
+          async.flushMicrotasks();
+
+          expect(
+            provider.currentRun!.id,
+            3,
+            reason: "A's stale completion must not overwrite B's run",
+          );
+          expect(
+            provider.isTimerRunning,
+            isTrue,
+            reason: "A's stale rejection must not stop B's ticker",
+          );
+          expect(
+            provider.gpsTrackingState,
+            gpsStateBeforeAStale,
+            reason: "A's stale completion must not alter B's GPS state",
+          );
+          expect(provider.errorMessage, errorMessageBeforeAStale);
+          expect(notifyCount, notifyCountBeforeAStale);
+
+          final elapsedAfterAStale = provider.elapsedTime;
+          async.elapse(const Duration(seconds: 3));
+          expect(
+            provider.elapsedTime,
+            elapsedAfterAStale + const Duration(seconds: 3),
+            reason:
+                "B's ticker must still be the real, live Timer - not a "
+                'cancelled one that merely reports isTimerRunning==true',
+          );
+        });
+      });
+    });
+
+    test(
+      'a stale pauseRun cannot repopulate a cleared currentRun (req 26)',
+      () {
+        fakeAsync((async) {
+          when(
+            mockRepo.getRunSession(1),
+          ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+          when(mockRepo.startRun(1)).thenAnswer(
+            (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+          );
+          startTrackedRun(async, id: 1);
+          expect(provider.currentRun, isNotNull);
+
+          // Gate the GPS subscription's cancellation so pauseRun()'s
+          // `await _stopGpsTracking()` stays suspended while logout runs.
+          final subscription = fakePlatform.subscriptions.last;
+          subscription.cancelGate = Completer<void>();
+
+          provider.pauseRun();
+          async.flushMicrotasks();
+
+          sessionEpoch.invalidate();
+          provider.clear();
+          async.flushMicrotasks();
+          expect(provider.currentRun, isNull);
+
+          subscription.cancelGate!.complete();
+          async.flushMicrotasks();
+
+          expect(
+            provider.currentRun,
+            isNull,
+            reason:
+                'a stale pauseRun must not resurrect currentRun after '
+                'clear() already nulled it out - without the post-await '
+                'null/epoch guard this would throw a null-check error on '
+                '_currentRun!.copyWith(...) instead',
+          );
+        });
+      },
+    );
+
+    test("a stale discardRun cannot modify a fresh B run (req 27)", () {
+      fakeAsync((async) {
+        when(
+          mockRepo.getRunSession(1),
+        ).thenAnswer((_) async => _run(id: 1, status: 'draft'));
+        when(mockRepo.startRun(1)).thenAnswer(
+          (_) async => _run(id: 1, status: 'in_progress', startedAt: fakeNow),
+        );
+        startTrackedRun(async, id: 1);
+
+        final subscription = fakePlatform.subscriptions.last;
+        subscription.cancelGate = Completer<void>();
+
+        when(mockRepo.deleteRun(1)).thenAnswer((_) async => true);
+        provider.discardRun();
+        async.flushMicrotasks();
+
+        sessionEpoch.invalidate();
+        provider.clear();
+        async.flushMicrotasks();
+
+        sessionEpoch.activate(2);
+        when(
+          mockRepo.getRunSession(2),
+        ).thenAnswer((_) async => _run(id: 2, status: 'draft'));
+        provider.loadRun(2);
+        async.flushMicrotasks();
+        expect(provider.currentRun!.id, 2);
+
+        subscription.cancelGate!.complete();
+        async.flushMicrotasks();
+
+        expect(
+          provider.currentRun!.id,
+          2,
+          reason:
+              "A's stale discardRun completion must not null out B's "
+              'freshly-loaded run',
+        );
+      });
+    });
+
+    test('a stale catch does not publish an error (req 28)', () async {
+      final completer = Completer<List<RunSession>>();
+      when(
+        mockRepo.getRecentRuns(limit: anyNamed('limit')),
+      ).thenAnswer((_) => completer.future);
+      when(mockRepo.getWeeklyStats()).thenAnswer((_) async => {});
+
+      final future = provider.loadDashboardData();
+
+      sessionEpoch.invalidate();
+      await provider.clear();
+
+      completer.completeError(Exception('boom'));
+      await future;
+
+      expect(provider.errorMessage, isNull);
+    });
+
+    test("a stale finally does not clear B's loading state, and B's own load "
+        'is unaffected by A remaining pending (req 29, req 30)', () async {
+      final completerA = Completer<List<RunSession>>();
+      when(
+        mockRepo.getRecentRuns(limit: anyNamed('limit')),
+      ).thenAnswer((_) => completerA.future);
+      when(mockRepo.getWeeklyStats()).thenAnswer((_) async => {});
+
+      final futureA = provider.loadDashboardData();
+
+      sessionEpoch.invalidate();
+      await provider.clear();
+      sessionEpoch.activate(2);
+
+      final completerB = Completer<List<RunSession>>();
+      when(
+        mockRepo.getRecentRuns(limit: anyNamed('limit')),
+      ).thenAnswer((_) => completerB.future);
+
+      final futureB = provider.loadDashboardData();
+      expect(
+        provider.isLoading,
+        isTrue,
+        reason: "B's own fresh load must not be blocked by A's stale one",
+      );
+
+      completerA.complete([_run(id: 1)]);
+      await futureA;
+
+      expect(
+        provider.isLoading,
+        isTrue,
+        reason:
+            "A's stale finally must not clear B's own in-progress "
+            'loading state',
+      );
+      expect(provider.recentRuns, isEmpty);
+
+      completerB.complete([_run(id: 2)]);
+      await futureB;
+
+      expect(provider.isLoading, isFalse);
+      expect(provider.recentRuns.single.id, 2);
     });
   });
 }
