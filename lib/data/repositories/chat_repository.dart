@@ -2,214 +2,296 @@ import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
+import '../../core/services/session_request_coordinator.dart';
+import '../../core/services/user_session_epoch.dart';
 import '../models/chat_conversation.dart';
 import '../models/chat_message.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/session_request_context.dart';
+import '../services/session_request_exceptions.dart';
 import '../local/services/local_database_service.dart';
 import '../local/models/local_chat_conversation.dart';
 import '../local/models/local_chat_message.dart';
 
-/// Repository for chat operations with offline support
-/// Note: Sending messages requires online connection (AI responses)
+/// Repository for chat operations with offline support.
+///
+/// Note: sending messages and generating plans require an online
+/// connection (AI responses) - this repository has no offline-write/queued
+/// -sync path for those, unlike [RunningRepository]. Only conversation
+/// *reads* are offline-first (cached list/detail, background refresh).
+///
+/// ## Session/ownership model
+///
+/// Every public asynchronous operation below that touches authenticated
+/// chat data captures a [SessionRequestContext] via [_sessionCoordinator]
+/// at operation entry (never after an internal `await`), and uses
+/// `context.epochToken.userId` as the sole authoritative user for the
+/// remainder of that operation - never a later, independently re-read
+/// `AuthService.getUserId()`. A `null` capture (logged out, or the session
+/// changed while the JWT read was in flight) follows the existing
+/// not-found/unauthenticated convention each method already used before
+/// this fix: `[]`/`null` for reads, `Exception('No authenticated user')`
+/// for every mutation that previously threw unconditionally on failure,
+/// and `false` for [deleteConversation] (which already returned a bool on
+/// failure).
+///
+/// Every [ApiService] call this repository makes - foreground (awaited
+/// inline, e.g. [sendMessage]) or background (fire-and-forget,
+/// [_syncConversationsFromServer]) - is bound to that captured context, so
+/// it carries the pinned JWT captured at entry rather than whatever the
+/// live token happens to be, and can never be dispatched after the session
+/// that started it has ended (see [ApiService]'s own class doc comment).
+/// The background refresh schedules with the context already captured at
+/// the public entry point that scheduled it ([getConversations]) - never a
+/// context (re)captured inside the closure itself - so it stays bound to
+/// the session that scheduled it, not whichever session happens to be
+/// active when it finally runs.
+///
+/// ## Local ownership
+///
+/// Every [LocalChatConversation] lookup and mutation is scoped by direct
+/// `userId` ownership via [_ownedConversationByServerId] (reads),
+/// [_cacheConversationWithMessages] (creates/updates), and
+/// [_deleteOwnedConversation] (deletes): the row is resolved AND verified
+/// to belong to `context.epochToken.userId` before anything about it is
+/// returned or changed. A foreign or missing target is always
+/// indistinguishable - the existing not-found convention (`null` return or
+/// `false`) never reveals whether a foreign row exists. This uses plain
+/// [Isar] `.filter()` queries (a full-collection scan, not an indexed
+/// `.where()` lookup) rather than adding a new `@Index()` to `userId` -
+/// the cached-conversation-list size this app deals with does not warrant
+/// a schema/migration change for this fix, matching how
+/// [LocalRunSession.userId] is filtered the same way in [RunningRepository]
+/// without an index.
+///
+/// ## Message parent-chain ownership
+///
+/// [LocalChatMessage] has no `userId` field of its own - ownership is
+/// always proven transitively through its parent [LocalChatConversation]
+/// via `conversationLocalId`, never invented as a redundant field on the
+/// message itself. Every message read/write freshly re-resolves that
+/// parent conversation (server-ID lookup + `userId` ownership check) first,
+/// and only then queries/writes messages scoped to the parent's own
+/// `localId` - never by a message's `serverId` alone, and never by trusting
+/// a message row's own `conversationServerId` field without having already
+/// verified the parent it claims to belong to is both present and owned.
+/// A message whose parent is missing, foreign, or was deleted between HTTP
+/// dispatch and acknowledgment is always silently dropped, never written as
+/// an orphan.
+///
+/// ## Transaction/logout race protection
+///
+/// [_cacheConversationWithMessages], [_cacheMessageAcknowledgment], and
+/// [_deleteOwnedConversation] are the SOLE way this repository writes to
+/// Isar, and all three apply the same checkpoint shape: immediately before
+/// entering `writeTxn`, as the FIRST statement inside `writeTxn`, and a
+/// fresh re-read of the target row(s) (never a possibly-stale reference a
+/// caller already resolved) with a repeated ownership check immediately
+/// inside that same `writeTxn`. Every public method that calls one of these
+/// also rechecks the epoch once more immediately after it returns, before
+/// returning any caller-visible result. This guarantees a logout landing
+/// anywhere in that window - including while Isar's write lock is being
+/// awaited, and including after `LocalDatabaseService.clearAll()` has
+/// already run on logout - never lets a write land against a
+/// foreign/replaced row, and never resurrects or overwrites a
+/// since-cleared user's data.
+///
+/// [SessionStaleException] and [RequestCancelledException] are expected
+/// lifecycle outcomes of a session ending mid-flight, not failures: for the
+/// background refresh they are classified by [_backgroundSync] as neither a
+/// success nor an error, never logged as a generic failure, and never
+/// grounds to retry or mark anything permanently failed. Foreground
+/// callers that hit either exception treat it the same as "the operation
+/// no longer has an authenticated session" - converting it to this
+/// repository's own [_unauthenticated] outcome rather than surfacing Dio's
+/// exception type to callers, and never logging it as an ordinary failure.
 class ChatRepository {
   final ApiService _apiService;
   final LocalDatabaseService _localDb;
   final ConnectivityService _connectivity;
+
+  // Kept for constructor-shape consistency with this repository's existing
+  // ProxyProvider4<ApiService, LocalDatabaseService, ConnectivityService,
+  // AuthService, ...> wiring in main.dart. No longer read directly - every
+  // userId lookup this repository needs now comes from the captured
+  // SessionRequestContext/UserSessionToken instead, per the class doc
+  // comment above.
+  // ignore: unused_field
   final AuthService _authService;
+
+  /// Shared app-wide session-identity instance - the SAME object handed to
+  /// every other Provider/repository that needs it (see main.dart). Only
+  /// AuthProvider ever calls activate()/invalidate() on it; this repository
+  /// only ever reads it via capture()/isCurrent().
+  final UserSessionEpoch _sessionEpoch;
+
+  /// Shared app-wide coordinator that captures a [SessionRequestContext]
+  /// (pinned JWT + generation-scoped CancelToken) for every session-bound
+  /// HTTP call this repository makes. The SAME instance handed to every
+  /// other consumer (see main.dart); never constructed privately.
+  final SessionRequestCoordinator _sessionCoordinator;
 
   ChatRepository(
     this._apiService,
     this._localDb,
     this._connectivity,
     this._authService,
+    this._sessionEpoch,
+    this._sessionCoordinator,
   );
 
-  /// Get all conversations for the current user
-  /// Offline-first: returns local cache immediately, syncs with server in background
-  Future<List<ChatConversation>> getConversations() async {
-    final Isar db = _localDb.database;
+  static const String _unauthenticated = 'No authenticated user';
 
-    // ALWAYS load from cache first for instant response
-    final cachedConversations = await _getLocalConversations(db);
+  // ============ Test-only session-race seams ============
+  //
+  // One hook per checkpoint, mirroring RunningRepository's identical seams.
+  // Each is @visibleForTesting, defaults to null, and is never assigned
+  // outside test code - production control flow/performance are unaffected.
+  @visibleForTesting
+  Future<void> Function()? beforeWriteTxnForTesting;
 
-    // Then sync with server in background if online (don't block)
-    if (_connectivity.isOnline) {
-      _syncConversationsFromServer(db)
-          .then((_) {
-            debugPrint('✅ Background sync: Conversations synced from server');
-          })
-          .catchError((e) {
-            debugPrint('⚠️ Background sync failed: $e');
-          });
+  @visibleForTesting
+  Future<void> Function()? insideWriteTxnForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? afterWriteTxnForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? beforeBackgroundHttpDispatchForTesting;
+
+  @visibleForTesting
+  Future<void> Function()? afterBackgroundHttpResponseForTesting;
+
+  /// Same purpose as [afterBackgroundHttpResponseForTesting], but for the
+  /// FOREGROUND acknowledgment paths ([_createConversationViaPost],
+  /// [sendMessage]): fired immediately after each one's own post-HTTP
+  /// epoch checkpoint passes, right before touching Isar. Lets a test
+  /// prove that checkpoint rejects and returns before ever reaching this
+  /// point, rather than merely relying on a later, structurally-shadowing
+  /// check (the acknowledgment helper's own internal checkpoints) to
+  /// produce the same externally-observable outcome.
+  @visibleForTesting
+  Future<void> Function()? afterForegroundHttpResponseForTesting;
+
+  Future<void> _runTestHook(Future<void> Function()? hook) async {
+    if (hook != null) {
+      await hook();
     }
-
-    return cachedConversations;
   }
 
-  /// Get local conversations from cache
-  Future<List<ChatConversation>> _getLocalConversations(Isar db) async {
-    final localConvos =
-        await db.localChatConversations
-            .filter()
-            .isArchivedEqualTo(false)
-            .sortByLastMessageAtDesc()
-            .findAll();
+  /// Fired synchronously, exactly once per [_backgroundSync] call, with the
+  /// Future that completes once THAT SPECIFIC detached operation has fully
+  /// settled - after its HTTP dispatch, its success/error handling, and any
+  /// acknowledgment writeTxn or guarded stale/cancelled exit inside
+  /// [operation] have all finished (it never rejects: the same
+  /// success/error handling [_backgroundSync] always applies runs first, so
+  /// this always completes, never throws). Tests use it to await
+  /// deterministic completion of detached work instead of guessing with a
+  /// delay - see `chat_repository_session_ownership_test.dart`.
+  ///
+  /// Defaults to null in production - a pure no-op that does not change
+  /// scheduling, timing, or error handling.
+  @visibleForTesting
+  void Function(Future<void> operationSettled)?
+  onBackgroundSyncScheduledForTesting;
 
-    return localConvos
-        .map(
-          (local) => ChatConversation(
-            id: local.serverId ?? 0,
-            userId: local.userId,
-            title: local.title,
-            type: local.type,
-            createdAt: local.createdAt,
-            lastMessageAt: local.lastMessageAt,
-            isArchived: local.isArchived,
-            messageCount: 0, // Will be loaded when conversation is opened
-          ),
-        )
-        .toList();
-  }
-
-  /// Background sync: Fetch conversations from server and update cache
-  Future<void> _syncConversationsFromServer(Isar db) async {
-    try {
-      final currentUserId = await _authService.getUserId();
-      if (currentUserId == null) {
-        debugPrint('⚠️ No authenticated user, skipping conversation sync');
-        return;
-      }
-
-      // Fetch from API
-      final data = await _apiService.get<List<dynamic>>(
-        ApiConfig.chatConversations,
-      );
-      final apiConversations =
-          data
-              .map(
-                (json) =>
-                    ChatConversation.fromJson(json as Map<String, dynamic>),
-              )
-              .toList();
-
-      // Update local cache
-      await db.writeTxn(() async {
-        for (final apiConvo in apiConversations) {
-          // Only cache conversations belonging to current user
-          if (apiConvo.userId != currentUserId) {
-            continue;
-          }
-
-          // Check if conversation already exists locally
-          final existingLocal =
-              await db.localChatConversations
-                  .filter()
-                  .serverIdEqualTo(apiConvo.id)
-                  .findFirst();
-
-          if (existingLocal != null &&
-              existingLocal.syncStatus == 'pending_delete') {
-            continue; // Skip conversations marked for deletion
-          }
-
-          if (existingLocal != null) {
-            // Update existing local conversation
-            existingLocal.title = apiConvo.title;
-            existingLocal.type = apiConvo.type;
-            existingLocal.lastMessageAt = apiConvo.lastMessageAt;
-            existingLocal.isArchived = apiConvo.isArchived;
-            existingLocal.isSynced = true;
-            existingLocal.syncStatus = 'synced';
-            existingLocal.lastModifiedServer = DateTime.now().toUtc();
-
-            await db.localChatConversations.put(existingLocal);
-          } else {
-            // Insert new conversation
-            final newLocal = LocalChatConversation(
-              serverId: apiConvo.id,
-              userId: apiConvo.userId,
-              title: apiConvo.title,
-              type: apiConvo.type,
-              createdAt: apiConvo.createdAt,
-              lastMessageAt: apiConvo.lastMessageAt,
-              isArchived: apiConvo.isArchived,
-              isSynced: true,
-              syncStatus: 'synced',
-              lastModifiedLocal: DateTime.now().toUtc(),
-              lastModifiedServer: DateTime.now().toUtc(),
+  /// Schedules [operation] to run detached from the caller. [operation]
+  /// must already be bound to a captured [SessionRequestContext]/
+  /// [UserSessionToken] - this helper only handles the fire-and-forget
+  /// execution and expected-lifecycle-outcome classification, mirroring
+  /// RunningRepository's identical helper.
+  void _backgroundSync(
+    Future<void> Function() operation,
+    String successMessage,
+  ) {
+    final settled = operation()
+        .then((_) {
+          debugPrint('✅ Background sync: $successMessage');
+        })
+        .catchError((e) {
+          if (e is SessionStaleException || e is RequestCancelledException) {
+            debugPrint(
+              'ℹ️ Background sync skipped (session ended): $successMessage',
             );
-
-            await db.localChatConversations.put(newLocal);
+            return;
           }
-        }
-      });
-    } catch (e) {
-      debugPrint('❌ Error syncing conversations: $e');
-      rethrow;
-    }
+          debugPrint('⚠️ Background sync failed, will retry later: $e');
+        });
+    onBackgroundSyncScheduledForTesting?.call(settled);
   }
 
-  /// Get a single conversation with all messages
-  /// Requires online connection to fetch messages
-  Future<ChatConversation?> getConversation(int conversationId) async {
+  /// Wraps a single background HTTP call with the before-dispatch test
+  /// seam. Staleness AT dispatch time is already enforced by [ApiService]
+  /// itself via the bound [SessionRequestContext.epochToken].
+  Future<T> _dispatchBackgroundHttp<T>(Future<T> Function() call) async {
+    await _runTestHook(beforeBackgroundHttpDispatchForTesting);
+    return call();
+  }
+
+  /// Captures a context for an operation that requires connectivity,
+  /// throwing this repository's existing per-operation conventions if
+  /// either precondition fails: [_unauthenticated] if there is no active
+  /// session, or [offlineMessage] if there is a session but no connection.
+  /// No Isar read/write and no HTTP request occurs in either case.
+  Future<SessionRequestContext> _requireOnlineContext(
+    String offlineMessage,
+  ) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      throw Exception(_unauthenticated);
+    }
     if (!_connectivity.isOnline) {
-      // Try to load from cache if offline
-      return await _getLocalConversation(conversationId);
+      throw Exception(offlineMessage);
     }
-
-    try {
-      final data = await _apiService.get<Map<String, dynamic>>(
-        ApiConfig.chatConversationById(conversationId),
-      );
-      final conversation = ChatConversation.fromJson(data);
-
-      // Cache the conversation and messages
-      await _cacheConversation(conversation);
-
-      return conversation;
-    } catch (e) {
-      debugPrint('❌ Error fetching conversation: $e');
-      // Fallback to cache if API fails
-      return await _getLocalConversation(conversationId);
-    }
+    return context;
   }
 
-  /// Get conversation from local cache
-  Future<ChatConversation?> _getLocalConversation(int conversationId) async {
-    final db = _localDb.database;
+  // ============ Session/ownership helpers ============
 
-    final localConvo =
+  /// Resolves [conversationId] (a server ID) to a [LocalChatConversation]
+  /// owned by [token.userId], or `null` if it is missing OR belongs to a
+  /// different user - the two cases are always indistinguishable to
+  /// callers, per the class doc comment.
+  Future<LocalChatConversation?> _ownedConversationByServerId(
+    Isar db,
+    int conversationId,
+    UserSessionToken token,
+  ) async {
+    final row =
         await db.localChatConversations
             .filter()
             .serverIdEqualTo(conversationId)
             .findFirst();
+    if (!_sessionEpoch.isCurrent(token)) return null;
+    if (row == null || row.userId != token.userId) return null;
+    return row;
+  }
 
+  /// Builds a full [ChatConversation] (with messages) from the local cache,
+  /// but only if [conversationId] is owned by [token.userId]. Messages are
+  /// looked up strictly via the already-verified parent's own `localId` -
+  /// the message parent-chain ownership check this class doc comment
+  /// describes - never by `conversationServerId` alone.
+  Future<ChatConversation?> _localConversationWithMessages(
+    Isar db,
+    int conversationId,
+    UserSessionToken token,
+  ) async {
+    final localConvo = await _ownedConversationByServerId(
+      db,
+      conversationId,
+      token,
+    );
     if (localConvo == null) return null;
 
-    // Load messages for this conversation
     final localMessages =
         await db.localChatMessages
             .filter()
-            .conversationServerIdEqualTo(conversationId)
+            .conversationLocalIdEqualTo(localConvo.localId)
             .sortByCreatedAt()
             .findAll();
-
-    final messages =
-        localMessages
-            .map(
-              (local) => ChatMessage(
-                id: local.serverId ?? 0,
-                conversationId: conversationId,
-                role: local.role,
-                content: local.content,
-                createdAt: local.createdAt,
-                inputTokens: local.inputTokens,
-                outputTokens: local.outputTokens,
-                model: local.model,
-              ),
-            )
-            .toList();
+    if (!_sessionEpoch.isCurrent(token)) return null;
 
     return ChatConversation(
       id: conversationId,
@@ -219,24 +301,46 @@ class ChatRepository {
       createdAt: localConvo.createdAt,
       lastMessageAt: localConvo.lastMessageAt,
       isArchived: localConvo.isArchived,
-      messages: messages,
+      messages:
+          localMessages
+              .map((local) => _localToMessage(local, conversationId))
+              .toList(),
     );
   }
 
-  /// Cache a conversation and its messages locally
-  Future<void> _cacheConversation(ChatConversation conversation) async {
-    final db = _localDb.database;
-    final currentUserId = await _authService.getUserId();
-    if (currentUserId == null) return;
+  /// Caches [conversation] and its messages, stamping/validating ownership
+  /// from [token] - never from `conversation.userId` (an untrusted response
+  /// field) and never from a live `AuthService` read. Applies the class doc
+  /// comment's four-checkpoint shape. A `serverId` collision with a row
+  /// already owned by a different user is skipped entirely rather than
+  /// overwritten.
+  Future<void> _cacheConversationWithMessages(
+    Isar db,
+    ChatConversation conversation,
+    UserSessionToken token,
+  ) async {
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) return;
 
     await db.writeTxn(() async {
-      // Cache conversation
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
       final existingLocal =
           await db.localChatConversations
               .filter()
               .serverIdEqualTo(conversation.id)
               .findFirst();
 
+      if (existingLocal != null && existingLocal.userId != token.userId) {
+        debugPrint(
+          '⏭️ Skipping conversation ${conversation.id} - local row owned '
+          'by a different user',
+        );
+        return;
+      }
+
+      final LocalChatConversation localConvo;
       if (existingLocal != null) {
         existingLocal.title = conversation.title;
         existingLocal.type = conversation.type;
@@ -244,41 +348,13 @@ class ChatRepository {
         existingLocal.isArchived = conversation.isArchived;
         existingLocal.isSynced = true;
         existingLocal.syncStatus = 'synced';
-
+        existingLocal.lastModifiedServer = DateTime.now().toUtc();
         await db.localChatConversations.put(existingLocal);
-
-        // Cache messages
-        for (final message in conversation.messages) {
-          final existingMessage =
-              await db.localChatMessages
-                  .filter()
-                  .serverIdEqualTo(message.id)
-                  .findFirst();
-
-          if (existingMessage == null) {
-            final newMessage = LocalChatMessage(
-              serverId: message.id,
-              conversationLocalId: existingLocal.localId,
-              conversationServerId: conversation.id,
-              role: message.role,
-              content: message.content,
-              createdAt: message.createdAt,
-              inputTokens: message.inputTokens,
-              outputTokens: message.outputTokens,
-              model: message.model,
-              isSynced: true,
-              syncStatus: 'synced',
-              lastModifiedLocal: DateTime.now().toUtc(),
-            );
-
-            await db.localChatMessages.put(newMessage);
-          }
-        }
+        localConvo = existingLocal;
       } else {
-        // Create new local conversation
         final newLocal = LocalChatConversation(
           serverId: conversation.id,
-          userId: conversation.userId,
+          userId: token.userId,
           title: conversation.title,
           type: conversation.type,
           createdAt: conversation.createdAt,
@@ -287,15 +363,24 @@ class ChatRepository {
           isSynced: true,
           syncStatus: 'synced',
           lastModifiedLocal: DateTime.now().toUtc(),
+          lastModifiedServer: DateTime.now().toUtc(),
         );
+        await db.localChatConversations.put(newLocal);
+        localConvo = newLocal;
+      }
 
-        final localId = await db.localChatConversations.put(newLocal);
+      for (final message in conversation.messages) {
+        final existingMessage =
+            await db.localChatMessages
+                .filter()
+                .serverIdEqualTo(message.id)
+                .conversationLocalIdEqualTo(localConvo.localId)
+                .findFirst();
 
-        // Cache messages
-        for (final message in conversation.messages) {
+        if (existingMessage == null) {
           final newMessage = LocalChatMessage(
             serverId: message.id,
-            conversationLocalId: localId,
+            conversationLocalId: localConvo.localId,
             conversationServerId: conversation.id,
             role: message.role,
             content: message.content,
@@ -307,87 +392,42 @@ class ChatRepository {
             syncStatus: 'synced',
             lastModifiedLocal: DateTime.now().toUtc(),
           );
-
           await db.localChatMessages.put(newMessage);
         }
       }
     });
+
+    await _runTestHook(afterWriteTxnForTesting);
   }
 
-  /// Create a new conversation
-  /// Requires online connection
-  Future<ChatConversation?> createConversation({
-    required String title,
-    required String type,
-  }) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot create conversations offline');
-    }
-
-    try {
-      final response = await _apiService.post<Map<String, dynamic>>(
-        ApiConfig.chatConversations,
-        data: {'title': title, 'type': type},
-      );
-
-      final conversation = ChatConversation.fromJson(response);
-
-      // Cache locally
-      await _cacheConversation(conversation);
-
-      return conversation;
-    } catch (e) {
-      debugPrint('❌ Error creating conversation: $e');
-      rethrow;
-    }
-  }
-
-  /// Send a message and get AI response
-  /// Requires online connection
-  Future<ChatMessage?> sendMessage({
+  /// Acknowledges a successful [sendMessage] HTTP response by caching the
+  /// user's message and the AI's response locally. The FIRST effective
+  /// operation inside the transaction is a fresh re-resolution of the
+  /// parent conversation by server ID + ownership - if it is missing (e.g.
+  /// deleted while the AI request was in flight) or foreign, both messages
+  /// are silently dropped rather than written as orphans.
+  Future<void> _cacheMessageAcknowledgment(
+    Isar db, {
     required int conversationId,
-    required String message,
+    required String userMessage,
+    required ChatMessage aiResponse,
+    required UserSessionToken token,
   }) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot send messages offline - AI requires connection');
-    }
-
-    try {
-      final response = await _apiService.post<Map<String, dynamic>>(
-        ApiConfig.chatMessages(conversationId),
-        data: {'message': message, 'stream': false},
-      );
-
-      final aiMessage = ChatMessage.fromJson(response);
-
-      // Cache the AI response locally
-      await _cacheMessage(conversationId, message, aiMessage);
-
-      return aiMessage;
-    } catch (e) {
-      debugPrint('❌ Error sending message: $e');
-      rethrow;
-    }
-  }
-
-  /// Cache user message and AI response locally
-  Future<void> _cacheMessage(
-    int conversationId,
-    String userMessage,
-    ChatMessage aiResponse,
-  ) async {
-    final db = _localDb.database;
-
-    final localConvo =
-        await db.localChatConversations
-            .filter()
-            .serverIdEqualTo(conversationId)
-            .findFirst();
-
-    if (localConvo == null) return;
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) return;
 
     await db.writeTxn(() async {
-      // Cache user message (it's not returned from API, create it locally)
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      // First effective operation: fresh parent-chain re-resolution.
+      final localConvo =
+          await db.localChatConversations
+              .filter()
+              .serverIdEqualTo(conversationId)
+              .findFirst();
+      if (localConvo == null || localConvo.userId != token.userId) return;
+
       final userMsg = LocalChatMessage(
         conversationLocalId: localConvo.localId,
         conversationServerId: conversationId,
@@ -400,7 +440,6 @@ class ChatRepository {
       );
       await db.localChatMessages.put(userMsg);
 
-      // Cache AI response
       final aiMsg = LocalChatMessage(
         serverId: aiResponse.id,
         conversationLocalId: localConvo.localId,
@@ -417,57 +456,316 @@ class ChatRepository {
       );
       await db.localChatMessages.put(aiMsg);
 
-      // Update conversation's lastMessageAt
       localConvo.lastMessageAt = aiResponse.createdAt;
       await db.localChatConversations.put(localConvo);
     });
+
+    await _runTestHook(afterWriteTxnForTesting);
   }
 
-  /// Delete a conversation
-  /// Requires online connection
-  Future<bool> deleteConversation(int conversationId) async {
+  /// Same checkpoint shape as [_cacheConversationWithMessages], but deletes
+  /// the conversation and every message scoped to its own `localId`
+  /// instead of caching. Returns `true` only if a row owned by
+  /// [token.userId] was actually found and deleted.
+  Future<bool> _deleteOwnedConversation(
+    Isar db,
+    int conversationId,
+    UserSessionToken token,
+  ) async {
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) return false;
+
+    var deleted = false;
+    await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      final current =
+          await db.localChatConversations
+              .filter()
+              .serverIdEqualTo(conversationId)
+              .findFirst();
+      if (current == null || current.userId != token.userId) return;
+
+      final messages =
+          await db.localChatMessages
+              .filter()
+              .conversationLocalIdEqualTo(current.localId)
+              .findAll();
+      for (final msg in messages) {
+        await db.localChatMessages.delete(msg.localId);
+      }
+
+      await db.localChatConversations.delete(current.localId);
+      deleted = true;
+    });
+
+    await _runTestHook(afterWriteTxnForTesting);
+    return deleted;
+  }
+
+  /// Shared shape for every "POST a prompt, get back a conversation +
+  /// initial AI message(s)" operation ([createConversation],
+  /// [generateWorkoutPlan], [generateMealPlan], [analyzeProgress]).
+  /// [SessionStaleException]/[RequestCancelledException] are converted to
+  /// this repository's [_unauthenticated] outcome without logging; every
+  /// other failure is logged and rethrown unchanged, matching each
+  /// method's pre-existing behavior.
+  Future<ChatConversation> _createConversationViaPost(
+    SessionRequestContext context,
+    UserSessionToken token,
+    Isar db,
+    String path,
+    Map<String, dynamic> data,
+    String errorLabel,
+  ) async {
+    final Map<String, dynamic> response;
+    try {
+      response = await _apiService.post<Map<String, dynamic>>(
+        path,
+        data: data,
+        sessionContext: context,
+      );
+    } on SessionStaleException {
+      throw Exception(_unauthenticated);
+    } on RequestCancelledException {
+      throw Exception(_unauthenticated);
+    } catch (e) {
+      debugPrint('❌ Error $errorLabel: $e');
+      rethrow;
+    }
+
+    // Checkpoint: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
+    await _runTestHook(afterForegroundHttpResponseForTesting);
+
+    final conversation = ChatConversation.fromJson(response);
+    await _cacheConversationWithMessages(db, conversation, token);
+
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
+    return conversation;
+  }
+
+  // ============ Public operations ============
+
+  /// Get all conversations for the current user.
+  /// Offline-first: returns local cache immediately, syncs with server in
+  /// background if online.
+  Future<List<ChatConversation>> getConversations() async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) {
+      debugPrint('⚠️ No authenticated session, returning empty list');
+      return [];
+    }
+    final token = context.epochToken;
+    final Isar db = _localDb.database;
+
+    final localConvos =
+        await db.localChatConversations
+            .filter()
+            .userIdEqualTo(token.userId)
+            .isArchivedEqualTo(false)
+            .sortByLastMessageAtDesc()
+            .findAll();
+    if (!_sessionEpoch.isCurrent(token)) return [];
+
+    if (_connectivity.isOnline) {
+      _backgroundSync(
+        () => _syncConversationsFromServer(db, context),
+        'Conversations synced from server',
+      );
+    }
+
+    return localConvos.map((local) => _localToConversation(local)).toList();
+  }
+
+  /// Get a single conversation with all messages. Returns `null` if it is
+  /// missing or belongs to a different user - the two are always
+  /// indistinguishable. Requires online connection to fetch fresh messages;
+  /// falls back to the local cache offline, or if the online fetch fails
+  /// for any reason (never to a foreign cached row either way).
+  Future<ChatConversation?> getConversation(int conversationId) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) return null;
+    final token = context.epochToken;
+    final Isar db = _localDb.database;
+
     if (!_connectivity.isOnline) {
-      throw Exception('Cannot delete conversations offline');
+      return _localConversationWithMessages(db, conversationId, token);
     }
 
     try {
-      await _apiService.delete(ApiConfig.chatConversationById(conversationId));
+      final data = await _apiService.get<Map<String, dynamic>>(
+        ApiConfig.chatConversationById(conversationId),
+        sessionContext: context,
+      );
+      // Checkpoint: post-HTTP, before touching Isar at all.
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
-      // Remove from local cache
-      final db = _localDb.database;
-      await db.writeTxn(() async {
-        final localConvo =
-            await db.localChatConversations
-                .filter()
-                .serverIdEqualTo(conversationId)
-                .findFirst();
+      final conversation = ChatConversation.fromJson(data);
+      if (conversation.userId != token.userId) {
+        // Defense-in-depth: never trust a response claiming a different
+        // owner than the session that requested it.
+        return null;
+      }
 
-        if (localConvo != null) {
-          // Delete messages first
-          final messages =
-              await db.localChatMessages
-                  .filter()
-                  .conversationLocalIdEqualTo(localConvo.localId)
-                  .findAll();
+      await _cacheConversationWithMessages(db, conversation, token);
+      // Checkpoint: after the acknowledgment writeTxn.
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
-          for (final msg in messages) {
-            await db.localChatMessages.delete(msg.localId);
-          }
+      return conversation;
+    } on SessionStaleException {
+      return null;
+    } on RequestCancelledException {
+      return null;
+    } catch (e) {
+      debugPrint('❌ Error fetching conversation: $e');
+      // Fallback to cache - but ONLY for this same, still-current
+      // session/user. An online failure (403/404 for a foreign ID,
+      // network error, etc.) must never expose another user's cached
+      // conversation; it can only ever surface what this user's own
+      // local cache already has for this ID, which is exactly what
+      // _localConversationWithMessages already scopes to.
+      if (!_sessionEpoch.isCurrent(token)) return null;
+      return _localConversationWithMessages(db, conversationId, token);
+    }
+  }
 
-          // Delete conversation
-          await db.localChatConversations.delete(localConvo.localId);
-        }
-      });
+  /// Create a new conversation, always owned by the captured user.
+  /// Requires online connection.
+  Future<ChatConversation?> createConversation({
+    required String title,
+    required String type,
+  }) async {
+    final context = await _requireOnlineContext(
+      'Cannot create conversations offline',
+    );
+    final token = context.epochToken;
+    final db = _localDb.database;
 
-      return true;
+    return _createConversationViaPost(
+      context,
+      token,
+      db,
+      ApiConfig.chatConversations,
+      {'title': title, 'type': type},
+      'creating conversation',
+    );
+  }
+
+  /// Send a message and get AI response. Requires online connection.
+  Future<ChatMessage?> sendMessage({
+    required int conversationId,
+    required String message,
+  }) async {
+    final context = await _requireOnlineContext(
+      'Cannot send messages offline - AI requires connection',
+    );
+    final token = context.epochToken;
+    final db = _localDb.database;
+
+    final Map<String, dynamic> response;
+    try {
+      response = await _apiService.post<Map<String, dynamic>>(
+        ApiConfig.chatMessages(conversationId),
+        data: {'message': message, 'stream': false},
+        sessionContext: context,
+      );
+    } on SessionStaleException {
+      throw Exception(_unauthenticated);
+    } on RequestCancelledException {
+      throw Exception(_unauthenticated);
+    } catch (e) {
+      debugPrint('❌ Error sending message: $e');
+      rethrow;
+    }
+
+    // Checkpoint: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
+    await _runTestHook(afterForegroundHttpResponseForTesting);
+
+    final aiMessage = ChatMessage.fromJson(response);
+
+    await _cacheMessageAcknowledgment(
+      db,
+      conversationId: conversationId,
+      userMessage: message,
+      aiResponse: aiMessage,
+      token: token,
+    );
+
+    // Checkpoint: after the acknowledgment writeTxn.
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception(_unauthenticated);
+    }
+
+    return aiMessage;
+  }
+
+  /// Delete a conversation. Returns `true` only if an owned row was
+  /// actually deleted server-side AND locally - a foreign or
+  /// already-missing target safely no-ops and returns `false`, never
+  /// deleting another user's row, and a server failure/staleness never
+  /// purges local data. Requires online connection.
+  Future<bool> deleteConversation(int conversationId) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) return false;
+    if (!_connectivity.isOnline) {
+      throw Exception('Cannot delete conversations offline');
+    }
+    final token = context.epochToken;
+    final Isar db = _localDb.database;
+
+    // Re-resolve the owned row BEFORE attempting the server delete - a
+    // foreign or already-missing conversation must never even reach the
+    // network call.
+    final owned = await _ownedConversationByServerId(db, conversationId, token);
+    if (owned == null) return false;
+
+    bool serverSucceeded;
+    try {
+      serverSucceeded = await _apiService.delete(
+        ApiConfig.chatConversationById(conversationId),
+        sessionContext: context,
+      );
+    } on SessionStaleException {
+      return false;
+    } on RequestCancelledException {
+      return false;
     } catch (e) {
       debugPrint('❌ Error deleting conversation: $e');
       return false;
     }
+
+    if (!serverSucceeded) return false;
+    // Checkpoint: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(token)) return false;
+
+    final deleted = await _deleteOwnedConversation(db, conversationId, token);
+    // Checkpoint: after the delete transaction, before reporting any
+    // caller-visible result - the session can end in the gap between
+    // _deleteOwnedConversation's own internal afterWriteTxnForTesting hook
+    // and this return, and a stale session by this point must not report a
+    // misleading success back to a caller that no longer represents the
+    // active session, regardless of whether the row was in fact deleted.
+    if (!_sessionEpoch.isCurrent(token)) return false;
+    if (deleted) {
+      debugPrint('🗑️ Conversation deleted: $conversationId');
+    }
+    return deleted;
   }
 
-  /// Generate workout plan (creates conversation + first AI response)
-  /// Requires online connection
+  /// Generate workout plan (creates conversation + first AI response).
+  /// Requires online connection.
   Future<ChatConversation?> generateWorkoutPlan({
     required String goal,
     required String experienceLevel,
@@ -475,36 +773,30 @@ class ChatRepository {
     required String equipment,
     String? limitations,
   }) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot generate workout plan offline');
-    }
+    final context = await _requireOnlineContext(
+      'Cannot generate workout plan offline',
+    );
+    final token = context.epochToken;
+    final db = _localDb.database;
 
-    try {
-      final response = await _apiService.post<Map<String, dynamic>>(
-        ApiConfig.chatWorkoutPlan,
-        data: {
-          'goal': goal,
-          'experienceLevel': experienceLevel,
-          'daysPerWeek': daysPerWeek,
-          'equipment': equipment,
-          'limitations': limitations ?? '',
-        },
-      );
-
-      final conversation = ChatConversation.fromJson(response);
-
-      // Cache locally
-      await _cacheConversation(conversation);
-
-      return conversation;
-    } catch (e) {
-      debugPrint('❌ Error generating workout plan: $e');
-      rethrow;
-    }
+    return _createConversationViaPost(
+      context,
+      token,
+      db,
+      ApiConfig.chatWorkoutPlan,
+      {
+        'goal': goal,
+        'experienceLevel': experienceLevel,
+        'daysPerWeek': daysPerWeek,
+        'equipment': equipment,
+        'limitations': limitations ?? '',
+      },
+      'generating workout plan',
+    );
   }
 
-  /// Generate meal plan (creates conversation + first AI response)
-  /// Requires online connection
+  /// Generate meal plan (creates conversation + first AI response).
+  /// Requires online connection.
   Future<ChatConversation?> generateMealPlan({
     required String dietaryGoal,
     int? targetCalories,
@@ -512,78 +804,67 @@ class ChatRepository {
     String? restrictions,
     String? preferences,
   }) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot generate meal plan offline');
-    }
+    final context = await _requireOnlineContext(
+      'Cannot generate meal plan offline',
+    );
+    final token = context.epochToken;
+    final db = _localDb.database;
 
-    try {
-      final response = await _apiService.post<Map<String, dynamic>>(
-        ApiConfig.chatMealPlan,
-        data: {
-          'dietaryGoal': dietaryGoal,
-          'targetCalories': targetCalories,
-          'macros': macros ?? '',
-          'restrictions': restrictions ?? '',
-          'preferences': preferences ?? '',
-        },
-      );
-
-      final conversation = ChatConversation.fromJson(response);
-
-      // Cache locally
-      await _cacheConversation(conversation);
-
-      return conversation;
-    } catch (e) {
-      debugPrint('❌ Error generating meal plan: $e');
-      rethrow;
-    }
+    return _createConversationViaPost(
+      context,
+      token,
+      db,
+      ApiConfig.chatMealPlan,
+      {
+        'dietaryGoal': dietaryGoal,
+        'targetCalories': targetCalories,
+        'macros': macros ?? '',
+        'restrictions': restrictions ?? '',
+        'preferences': preferences ?? '',
+      },
+      'generating meal plan',
+    );
   }
 
-  /// Analyze user's progress (creates conversation + AI analysis)
-  /// Requires online connection
+  /// Analyze user's progress (creates conversation + AI analysis).
+  /// Requires online connection.
   Future<ChatConversation?> analyzeProgress({
     DateTime? startDate,
     DateTime? endDate,
     String? focusArea,
   }) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot analyze progress offline');
-    }
+    final context = await _requireOnlineContext(
+      'Cannot analyze progress offline',
+    );
+    final token = context.epochToken;
+    final db = _localDb.database;
 
-    try {
-      final data = <String, dynamic>{};
-      if (startDate != null) data['startDate'] = startDate.toIso8601String();
-      if (endDate != null) data['endDate'] = endDate.toIso8601String();
-      if (focusArea != null) data['focusArea'] = focusArea;
+    final data = <String, dynamic>{};
+    if (startDate != null) data['startDate'] = startDate.toIso8601String();
+    if (endDate != null) data['endDate'] = endDate.toIso8601String();
+    if (focusArea != null) data['focusArea'] = focusArea;
 
-      final response = await _apiService.post<Map<String, dynamic>>(
-        ApiConfig.chatAnalyzeProgress,
-        data: data,
-      );
-
-      final conversation = ChatConversation.fromJson(response);
-
-      // Cache locally
-      await _cacheConversation(conversation);
-
-      return conversation;
-    } catch (e) {
-      debugPrint('❌ Error analyzing progress: $e');
-      rethrow;
-    }
+    return _createConversationViaPost(
+      context,
+      token,
+      db,
+      ApiConfig.chatAnalyzeProgress,
+      data,
+      'analyzing progress',
+    );
   }
 
-  /// Preview all 7 days of a meal plan for user selection
-  /// Requires online connection
+  /// Preview all 7 days of a meal plan for user selection.
+  /// Requires online connection.
   Future<MealPlanPreview> previewMealPlan(int conversationId) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot preview meal plan offline');
-    }
+    final context = await _requireOnlineContext(
+      'Cannot preview meal plan offline',
+    );
 
     try {
       final response = await _apiService.get<Map<String, dynamic>>(
         ApiConfig.chatPreviewMealPlan(conversationId),
+        sessionContext: context,
       );
 
       debugPrint(
@@ -591,26 +872,31 @@ class ChatRepository {
       );
 
       return MealPlanPreview.fromJson(response);
+    } on SessionStaleException {
+      throw Exception(_unauthenticated);
+    } on RequestCancelledException {
+      throw Exception(_unauthenticated);
     } catch (e) {
       debugPrint('❌ Error previewing meal plan: $e');
       rethrow;
     }
   }
 
-  /// Apply meal plan from a conversation to today's meal log
-  /// [day] specifies which day (1-7) of the meal plan to apply
-  /// Requires online connection
+  /// Apply meal plan from a conversation to today's meal log.
+  /// [day] specifies which day (1-7) of the meal plan to apply.
+  /// Requires online connection.
   Future<ApplyMealPlanResult> applyMealPlanToToday(
     int conversationId, {
     int day = 1,
   }) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot apply meal plan offline');
-    }
+    final context = await _requireOnlineContext(
+      'Cannot apply meal plan offline',
+    );
 
     try {
       final response = await _apiService.post<Map<String, dynamic>>(
         ApiConfig.chatApplyMealPlan(conversationId, day: day),
+        sessionContext: context,
       );
 
       debugPrint(
@@ -618,18 +904,22 @@ class ChatRepository {
       );
 
       return ApplyMealPlanResult.fromJson(response);
+    } on SessionStaleException {
+      throw Exception(_unauthenticated);
+    } on RequestCancelledException {
+      throw Exception(_unauthenticated);
     } catch (e) {
       debugPrint('❌ Error applying meal plan: $e');
       rethrow;
     }
   }
 
-  /// Apply multiple days of a meal plan
-  /// [applyAllDays] - if true, applies all 7 days
-  /// [days] - specific days to apply (1-7), ignored if applyAllDays is true
-  /// [startDate] - the date to start applying from (defaults to today)
-  /// [overwriteExisting] - if true, replaces existing meal entries
-  /// Requires online connection
+  /// Apply multiple days of a meal plan.
+  /// [applyAllDays] - if true, applies all 7 days.
+  /// [days] - specific days to apply (1-7), ignored if applyAllDays is true.
+  /// [startDate] - the date to start applying from (defaults to today).
+  /// [overwriteExisting] - if true, replaces existing meal entries.
+  /// Requires online connection.
   Future<ApplyMealPlanWeekResult> applyMealPlanWeek(
     int conversationId, {
     bool applyAllDays = false,
@@ -637,9 +927,9 @@ class ChatRepository {
     DateTime? startDate,
     bool overwriteExisting = true,
   }) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot apply meal plan offline');
-    }
+    final context = await _requireOnlineContext(
+      'Cannot apply meal plan offline',
+    );
 
     try {
       final data = <String, dynamic>{
@@ -656,29 +946,35 @@ class ChatRepository {
       final response = await _apiService.post<Map<String, dynamic>>(
         ApiConfig.chatApplyMealPlanWeek(conversationId),
         data: data,
+        sessionContext: context,
       );
 
       debugPrint('✅ Applied ${response['daysApplied']} days of meal plan');
 
       return ApplyMealPlanWeekResult.fromJson(response);
+    } on SessionStaleException {
+      throw Exception(_unauthenticated);
+    } on RequestCancelledException {
+      throw Exception(_unauthenticated);
     } catch (e) {
       debugPrint('❌ Error applying meal plan week: $e');
       rethrow;
     }
   }
 
-  /// Preview workout sessions from an AI-generated workout plan (without creating)
-  /// Requires online connection
+  /// Preview workout sessions from an AI-generated workout plan (without
+  /// creating). Requires online connection.
   Future<Map<String, dynamic>> previewSessionsFromPlan({
     required int conversationId,
   }) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot preview sessions offline');
-    }
+    final context = await _requireOnlineContext(
+      'Cannot preview sessions offline',
+    );
 
     try {
       final response = await _apiService.get<Map<String, dynamic>>(
         ApiConfig.chatPreviewSessions(conversationId),
+        sessionContext: context,
       );
 
       debugPrint(
@@ -686,21 +982,25 @@ class ChatRepository {
       );
 
       return response;
+    } on SessionStaleException {
+      throw Exception(_unauthenticated);
+    } on RequestCancelledException {
+      throw Exception(_unauthenticated);
     } catch (e) {
       debugPrint('❌ Error previewing sessions: $e');
       rethrow;
     }
   }
 
-  /// Create workout sessions from an AI-generated workout plan
-  /// Requires online connection - cannot create sessions offline
+  /// Create workout sessions from an AI-generated workout plan.
+  /// Requires online connection - cannot create sessions offline.
   Future<Map<String, dynamic>> createSessionsFromPlan({
     required int conversationId,
     DateTime? startDate,
   }) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot create sessions offline');
-    }
+    final context = await _requireOnlineContext(
+      'Cannot create sessions offline',
+    );
 
     try {
       final data = <String, dynamic>{};
@@ -711,6 +1011,7 @@ class ChatRepository {
       final response = await _apiService.post<Map<String, dynamic>>(
         ApiConfig.chatCreateSessions(conversationId),
         data: data,
+        sessionContext: context,
       );
 
       debugPrint(
@@ -718,14 +1019,18 @@ class ChatRepository {
       );
 
       return response;
+    } on SessionStaleException {
+      throw Exception(_unauthenticated);
+    } on RequestCancelledException {
+      throw Exception(_unauthenticated);
     } catch (e) {
       debugPrint('❌ Error creating sessions from plan: $e');
       rethrow;
     }
   }
 
-  /// Create a Program from an AI-generated workout plan
-  /// Requires online connection - cannot create programs offline
+  /// Create a Program from an AI-generated workout plan.
+  /// Requires online connection - cannot create programs offline.
   Future<Map<String, dynamic>> createProgramFromPlan({
     required int conversationId,
     String? title,
@@ -735,9 +1040,9 @@ class ChatRepository {
     int? daysPerWeek,
     DateTime? startDate,
   }) async {
-    if (!_connectivity.isOnline) {
-      throw Exception('Cannot create program offline');
-    }
+    final context = await _requireOnlineContext(
+      'Cannot create program offline',
+    );
 
     try {
       final data = <String, dynamic>{};
@@ -751,6 +1056,7 @@ class ChatRepository {
       final response = await _apiService.post<Map<String, dynamic>>(
         ApiConfig.chatCreateProgram(conversationId),
         data: data,
+        sessionContext: context,
       );
 
       debugPrint(
@@ -758,10 +1064,152 @@ class ChatRepository {
       );
 
       return response;
+    } on SessionStaleException {
+      throw Exception(_unauthenticated);
+    } on RequestCancelledException {
+      throw Exception(_unauthenticated);
     } catch (e) {
       debugPrint('❌ Error creating program from plan: $e');
       rethrow;
     }
+  }
+
+  // ============ Background refresh ============
+
+  /// Background sync: fetch conversations from server and update cache.
+  /// Bound to [context]: the HTTP call carries its pinned JWT, and every
+  /// cache write is gated behind the class doc comment's checkpoint shape
+  /// plus a direct [LocalChatConversation.userId] ownership check.
+  Future<void> _syncConversationsFromServer(
+    Isar db,
+    SessionRequestContext context,
+  ) async {
+    final token = context.epochToken;
+
+    final response = await _dispatchBackgroundHttp(
+      () => _apiService.get<List<dynamic>>(
+        ApiConfig.chatConversations,
+        sessionContext: context,
+      ),
+    );
+
+    // Checkpoint: post-HTTP, before touching Isar at all.
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    await _runTestHook(afterBackgroundHttpResponseForTesting);
+
+    final apiConversations =
+        response
+            .map(
+              (json) => ChatConversation.fromJson(json as Map<String, dynamic>),
+            )
+            .toList();
+
+    final currentUserId = token.userId;
+
+    // Checkpoint: immediately before entering the write transaction.
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
+      // Checkpoint: first statement inside the write transaction.
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      for (final apiConvo in apiConversations) {
+        // The server itself already scopes this list to the authenticated
+        // JWT (see GoHardAPI ChatController.GetConversations), but never
+        // trust the payload's own userId field over the captured session
+        // identity.
+        if (apiConvo.userId != currentUserId) {
+          continue;
+        }
+
+        final existingLocal =
+            await db.localChatConversations
+                .filter()
+                .serverIdEqualTo(apiConvo.id)
+                .findFirst();
+
+        // Never overwrite a row that no longer belongs to the current
+        // user - a serverId collision (or a foreign row somehow sharing
+        // it) must never be silently claimed by this refresh.
+        if (existingLocal != null && existingLocal.userId != currentUserId) {
+          debugPrint(
+            '⏭️ Skipping conversation ${apiConvo.id} - local row owned by '
+            'a different user',
+          );
+          continue;
+        }
+
+        // Never clobber a locally pending row that has not yet round
+        // -tripped through the server.
+        if (existingLocal != null &&
+            (existingLocal.syncStatus == 'pending_delete' ||
+                existingLocal.syncStatus == 'pending_update')) {
+          continue;
+        }
+
+        if (existingLocal != null) {
+          existingLocal.title = apiConvo.title;
+          existingLocal.type = apiConvo.type;
+          existingLocal.lastMessageAt = apiConvo.lastMessageAt;
+          existingLocal.isArchived = apiConvo.isArchived;
+          existingLocal.isSynced = true;
+          existingLocal.syncStatus = 'synced';
+          existingLocal.lastModifiedServer = DateTime.now().toUtc();
+
+          await db.localChatConversations.put(existingLocal);
+        } else {
+          final newLocal = LocalChatConversation(
+            serverId: apiConvo.id,
+            userId: currentUserId,
+            title: apiConvo.title,
+            type: apiConvo.type,
+            createdAt: apiConvo.createdAt,
+            lastMessageAt: apiConvo.lastMessageAt,
+            isArchived: apiConvo.isArchived,
+            isSynced: true,
+            syncStatus: 'synced',
+            lastModifiedLocal: DateTime.now().toUtc(),
+            lastModifiedServer: DateTime.now().toUtc(),
+          );
+
+          await db.localChatConversations.put(newLocal);
+        }
+      }
+    });
+
+    debugPrint(
+      '🔄 Synced ${apiConversations.length} conversations from server',
+    );
+  }
+
+  // ============ Local <-> model mapping ============
+
+  ChatConversation _localToConversation(LocalChatConversation local) {
+    return ChatConversation(
+      id: local.serverId ?? 0,
+      userId: local.userId,
+      title: local.title,
+      type: local.type,
+      createdAt: local.createdAt,
+      lastMessageAt: local.lastMessageAt,
+      isArchived: local.isArchived,
+      messageCount: 0, // Will be loaded when conversation is opened
+    );
+  }
+
+  ChatMessage _localToMessage(LocalChatMessage local, int conversationId) {
+    return ChatMessage(
+      id: local.serverId ?? 0,
+      conversationId: conversationId,
+      role: local.role,
+      content: local.content,
+      createdAt: local.createdAt,
+      inputTokens: local.inputTokens,
+      outputTokens: local.outputTokens,
+      model: local.model,
+    );
   }
 }
 
