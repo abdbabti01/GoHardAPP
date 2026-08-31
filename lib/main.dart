@@ -371,8 +371,17 @@ void main() async {
           DirectMessagesRepository
         >(
           update:
-              (_, apiService, connectivity, __) =>
-                  DirectMessagesRepository(apiService, connectivity),
+              (context, apiService, connectivity, __) =>
+                  DirectMessagesRepository(
+                    apiService,
+                    connectivity,
+                    // UserSessionEpoch and SessionRequestCoordinator are fixed
+                    // .value()/ProxyProvider singletons, never reactively
+                    // watched, so they are read directly here rather than added
+                    // as formal ProxyProvider type parameters.
+                    context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
+                  ),
         ),
 
         // Sync Service
@@ -738,11 +747,20 @@ void main() async {
         // Messages provider
         ChangeNotifierProxyProvider<DirectMessagesRepository, MessagesProvider>(
           create:
-              (context) =>
-                  MessagesProvider(context.read<DirectMessagesRepository>()),
+              (context) => MessagesProvider(
+                context.read<DirectMessagesRepository>(),
+                // UserSessionEpoch is a fixed .value() singleton, never
+                // reactively watched, so it is read directly here rather
+                // than added as a formal ProxyProvider type parameter.
+                context.read<UserSessionEpoch>(),
+              ),
           update:
-              (_, messagesRepo, previous) =>
-                  previous ?? MessagesProvider(messagesRepo),
+              (context, messagesRepo, previous) =>
+                  previous ??
+                  MessagesProvider(
+                    messagesRepo,
+                    context.read<UserSessionEpoch>(),
+                  ),
         ),
       ],
       child: SyncServiceInitializer(
