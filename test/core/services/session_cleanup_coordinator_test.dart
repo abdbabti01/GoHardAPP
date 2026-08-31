@@ -320,7 +320,7 @@ void main() {
       mockAuthService,
       ConnectivityService.instance,
     );
-    messagesProvider = MessagesProvider(mockMessagesRepo);
+    messagesProvider = MessagesProvider(mockMessagesRepo, sessionEpoch);
     nutritionProvider = NutritionProvider(
       mockNutritionRepo,
       sessionEpoch,
