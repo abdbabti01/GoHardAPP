@@ -2,13 +2,46 @@ import 'package:isar/isar.dart';
 
 part 'workout_template.g.dart';
 
-/// Workout template for creating recurring workout plans
+/// Workout template for creating recurring workout plans.
+///
+/// ## Identity
+///
+/// Three identities are kept strictly separate and never conflated:
+///
+/// - [localId] - the local Isar row identity. Auto-incremented, never sent
+///   to or received from the server.
+/// - [serverId] - the server-assigned template id, or `null` for a template
+///   created offline that has not yet been pushed. Server-round-tripping
+///   operations look a row up via [serverId], never via [localId].
+/// - [cachedForUserId] - the authenticated device user this row was cached
+///   for. Stamped from the captured session context at every write, never
+///   from response JSON. A legacy row written before this field existed
+///   deserializes with `cachedForUserId == null` and stays invisible to
+///   every authenticated read until the next valid online refresh restamps
+///   it. Isar treats a new nullable property as a compatible schema
+///   upgrade, so no manual migration is required.
+///
+/// [createdByUserId] is a fourth, unrelated identity: the server identity of
+/// the template's *creator* (`null` for system templates). It is identical
+/// on every device that caches the row and can never identify the cache
+/// owner - use [cachedForUserId] for that.
 @collection
 class WorkoutTemplate {
-  Id id = Isar.autoIncrement;
+  /// Local Isar identity. Never crosses the network boundary.
+  Id localId = Isar.autoIncrement;
 
+  /// Server-assigned id, or `null` for an offline-created template that has
+  /// not been pushed yet.
   @Index()
-  late int userId;
+  int? serverId;
+
+  /// The authenticated user this cached row was personalized for. Always
+  /// stamped from `SessionRequestContext.epochToken.userId` at write time -
+  /// never from response JSON, never from a live `AuthService` read. `null`
+  /// for a legacy row; such rows are invisible to every authenticated read
+  /// until the next valid online refresh restamps them.
+  @Index()
+  int? cachedForUserId;
 
   late String name;
   String? description;
@@ -35,27 +68,40 @@ class WorkoutTemplate {
   @Index()
   late bool isActive;
 
-  /// Is this a community/shared template?
-  late bool isCommunity;
+  /// Server-owned: user-created (`true`) vs system template (`false`).
+  late bool isCustom;
 
-  /// Original author user ID for community templates
+  /// Explicit community publication flag. Community visibility is never
+  /// inferred from [createdByUserId].
+  late bool isPublic;
+
+  /// Server identity of the template's creator; `null` for system
+  /// templates. Not the cache owner - see [cachedForUserId].
   int? createdByUserId;
+
+  /// Display name of the creator, or `null` for system templates.
+  String? createdByUserName;
 
   /// Number of times this template has been used
   late int usageCount;
 
-  /// Rating (1-5) for community templates
+  /// Average rating (1-5) for community templates
   double? rating;
 
   /// Number of ratings
-  int? ratingCount;
+  late int ratingCount;
 
   late DateTime createdAt;
-  DateTime? updatedAt;
+
+  /// UTC timestamp the template was last used (via increment-usage), or
+  /// `null`. Retains its real meaning - it is not an "updated at" audit
+  /// column.
+  DateTime? lastUsedAt;
 
   WorkoutTemplate({
-    this.id = Isar.autoIncrement,
-    required this.userId,
+    this.localId = Isar.autoIncrement,
+    this.serverId,
+    this.cachedForUserId,
     required this.name,
     this.description,
     required this.exercisesJson,
@@ -65,13 +111,19 @@ class WorkoutTemplate {
     this.estimatedDuration,
     this.category,
     this.isActive = true,
-    this.isCommunity = false,
+    // Defaults to the "system template" value, matching what Isar returns for
+    // a row persisted before this field existed. The server DTO always
+    // supplies `isCustom`, so `fromJson` never relies on this default; a
+    // client never constructs a custom template locally.
+    this.isCustom = false,
+    this.isPublic = false,
     this.createdByUserId,
+    this.createdByUserName,
     this.usageCount = 0,
     this.rating,
-    this.ratingCount,
+    this.ratingCount = 0,
     required this.createdAt,
-    this.updatedAt,
+    this.lastUsedAt,
   });
 
   /// Get days of week as list
@@ -134,8 +186,9 @@ class WorkoutTemplate {
 
   /// Copy with method
   WorkoutTemplate copyWith({
-    int? id,
-    int? userId,
+    int? localId,
+    int? serverId,
+    int? cachedForUserId,
     String? name,
     String? description,
     String? exercisesJson,
@@ -145,17 +198,20 @@ class WorkoutTemplate {
     int? estimatedDuration,
     String? category,
     bool? isActive,
-    bool? isCommunity,
+    bool? isCustom,
+    bool? isPublic,
     int? createdByUserId,
+    String? createdByUserName,
     int? usageCount,
     double? rating,
     int? ratingCount,
     DateTime? createdAt,
-    DateTime? updatedAt,
+    DateTime? lastUsedAt,
   }) {
     return WorkoutTemplate(
-      id: id ?? this.id,
-      userId: userId ?? this.userId,
+      localId: localId ?? this.localId,
+      serverId: serverId ?? this.serverId,
+      cachedForUserId: cachedForUserId ?? this.cachedForUserId,
       name: name ?? this.name,
       description: description ?? this.description,
       exercisesJson: exercisesJson ?? this.exercisesJson,
@@ -165,13 +221,78 @@ class WorkoutTemplate {
       estimatedDuration: estimatedDuration ?? this.estimatedDuration,
       category: category ?? this.category,
       isActive: isActive ?? this.isActive,
-      isCommunity: isCommunity ?? this.isCommunity,
+      isCustom: isCustom ?? this.isCustom,
+      isPublic: isPublic ?? this.isPublic,
       createdByUserId: createdByUserId ?? this.createdByUserId,
+      createdByUserName: createdByUserName ?? this.createdByUserName,
       usageCount: usageCount ?? this.usageCount,
       rating: rating ?? this.rating,
       ratingCount: ratingCount ?? this.ratingCount,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+    );
+  }
+}
+
+/// JSON mapping for [WorkoutTemplate] against the deployed
+/// `GoHardAPI` WorkoutTemplates contract.
+///
+/// Response fields (every read/create endpoint):
+/// `id, name, description, exercisesJson, recurrencePattern, daysOfWeek,
+/// intervalDays, estimatedDuration, category, isActive, isCustom, isPublic,
+/// createdByUserId, createdByUserName, usageCount, rating, ratingCount,
+/// createdAt, lastUsedAt`.
+///
+/// The client never sends `id`, `createdByUserId`, `isCustom`, `usageCount`,
+/// `rating`, `ratingCount`, `createdAt` or `lastUsedAt` - those are
+/// server-owned and not bindable on the create/update requests. There are no
+/// `userId`, `isCommunity` or `updatedAt` aliases in either direction.
+extension WorkoutTemplateJson on WorkoutTemplate {
+  /// Body for `POST`/`PUT /workouttemplates`. Only client-owned fields.
+  Map<String, dynamic> toRequestJson() {
+    return {
+      'name': name,
+      'description': description,
+      'exercisesJson': exercisesJson,
+      'recurrencePattern': recurrencePattern,
+      'daysOfWeek': daysOfWeek,
+      'intervalDays': intervalDays,
+      'estimatedDuration': estimatedDuration,
+      'category': category,
+      'isActive': isActive,
+      'isPublic': isPublic,
+    };
+  }
+
+  static WorkoutTemplate fromJson(Map<String, dynamic> json) {
+    return WorkoutTemplate(
+      // The server id lands in [serverId]; [localId] stays auto-incremented
+      // and [cachedForUserId] stays null until the repository stamps it.
+      serverId: json['id'] as int?,
+      name: json['name'] as String,
+      description: json['description'] as String?,
+      exercisesJson: json['exercisesJson'] as String,
+      recurrencePattern: json['recurrencePattern'] as String,
+      daysOfWeek: json['daysOfWeek'] as String?,
+      intervalDays: json['intervalDays'] as int?,
+      estimatedDuration: json['estimatedDuration'] as int?,
+      category: json['category'] as String?,
+      // The response DTO always supplies these three booleans and the two
+      // counts (see GoHardAPI WorkoutTemplateDto) - read them straight so a
+      // contract regression surfaces instead of being masked by a default.
+      isActive: json['isActive'] as bool,
+      isCustom: json['isCustom'] as bool,
+      isPublic: json['isPublic'] as bool,
+      createdByUserId: json['createdByUserId'] as int?,
+      createdByUserName: json['createdByUserName'] as String?,
+      usageCount: json['usageCount'] as int,
+      rating: (json['rating'] as num?)?.toDouble(),
+      ratingCount: json['ratingCount'] as int,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      lastUsedAt:
+          json['lastUsedAt'] != null
+              ? DateTime.parse(json['lastUsedAt'] as String)
+              : null,
     );
   }
 }
