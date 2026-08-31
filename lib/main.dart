@@ -506,10 +506,20 @@ void main() async {
         ),
         ChangeNotifierProxyProvider<ExerciseRepository, LogSetsProvider>(
           create:
-              (context) => LogSetsProvider(context.read<ExerciseRepository>()),
+              (context) => LogSetsProvider(
+                context.read<ExerciseRepository>(),
+                // UserSessionEpoch is a fixed .value() singleton, never
+                // reactively watched, so it is read directly here rather
+                // than added as a formal ProxyProvider type parameter.
+                context.read<UserSessionEpoch>(),
+              ),
           update:
-              (_, exerciseRepo, previous) =>
-                  previous ?? LogSetsProvider(exerciseRepo),
+              (context, exerciseRepo, previous) =>
+                  previous ??
+                  LogSetsProvider(
+                    exerciseRepo,
+                    context.read<UserSessionEpoch>(),
+                  ),
         ),
         ChangeNotifierProxyProvider3<
           ProfileRepository,
