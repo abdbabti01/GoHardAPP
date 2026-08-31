@@ -346,6 +346,7 @@ void main() {
     workoutTemplateProvider = WorkoutTemplateProvider(
       mockWorkoutTemplateRepo,
       ConnectivityService.instance,
+      sessionEpoch,
     );
     sharedWorkoutProvider = SharedWorkoutProvider(
       mockSharedWorkoutRepo,

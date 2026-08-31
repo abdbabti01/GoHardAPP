@@ -239,7 +239,7 @@ class _TemplatesScreenState extends State<TemplatesScreen>
                   if (isMyTemplate)
                     Switch(
                       value: template.isActive,
-                      onChanged: (_) => provider.toggleActive(template.id),
+                      onChanged: (_) => provider.toggleActive(template),
                     ),
                 ],
               ),
@@ -325,7 +325,7 @@ class _TemplatesScreenState extends State<TemplatesScreen>
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: () {
-                      provider.incrementUsageCount(template.id);
+                      provider.incrementUsageCount(template);
                       _useTemplate(template);
                     },
                     icon: const Icon(Icons.play_arrow, size: 18),
@@ -477,7 +477,7 @@ class _TemplatesScreenState extends State<TemplatesScreen>
                 onPressed: () async {
                   Navigator.pop(context);
                   final messenger = ScaffoldMessenger.of(context);
-                  final success = await provider.deleteTemplate(template.id);
+                  final success = await provider.deleteTemplate(template);
                   if (success && mounted) {
                     messenger.showSnackBar(
                       const SnackBar(content: Text('Template deleted')),
@@ -546,10 +546,7 @@ class _TemplatesScreenState extends State<TemplatesScreen>
                 onPressed: () async {
                   Navigator.pop(context);
                   final messenger = ScaffoldMessenger.of(context);
-                  final success = await provider.rateTemplate(
-                    template.id,
-                    rating,
-                  );
+                  final success = await provider.rateTemplate(template, rating);
                   if (success && mounted) {
                     messenger.showSnackBar(
                       const SnackBar(content: Text('Rating submitted')),

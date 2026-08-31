@@ -3,11 +3,35 @@ import 'package:flutter/foundation.dart';
 import '../data/models/workout_template.dart';
 import '../data/repositories/workout_template_repository.dart';
 import '../core/services/connectivity_service.dart';
+import '../core/services/user_session_epoch.dart';
 
-/// Provider for workout templates management
+/// Provider for workout templates management.
+///
+/// ## Session-epoch guard
+///
+/// Every async method and the connectivity-restored callback captures a
+/// [UserSessionToken] before its first await and rechecks
+/// `_sessionEpoch.isCurrent(token)` after every await - including inside
+/// catch/finally - before touching any list, loading flag, error field,
+/// filter, or calling `notifyListeners()`. A result, error, or
+/// finally-cleanup from a session that has since ended is dropped.
+///
+/// ## Per-load request generations
+///
+/// The three independent load paths - the owner list ([loadTemplates]), the
+/// community list ([loadCommunityTemplates]) and the selected-template detail
+/// ([loadTemplateById]) - each own a monotonically increasing request id
+/// ([_ownerListRequestId] / [_communityRequestId] / [_selectedTemplateRequestId]).
+/// Each load captures its id at entry and, after every await, commits its
+/// result only if that id is still the latest. So an older request that
+/// completes last (slow network, a connectivity-triggered refresh overtaken
+/// by a manual pull-to-refresh, template A's detail resolving after template
+/// B's) can never overwrite the newer request's result. [clear] bumps all
+/// three ids, invalidating every pending load.
 class WorkoutTemplateProvider extends ChangeNotifier {
   final WorkoutTemplateRepository _repository;
   final ConnectivityService _connectivity;
+  final UserSessionEpoch _sessionEpoch;
 
   List<WorkoutTemplate> _templates = [];
   List<WorkoutTemplate> _communityTemplates = [];
@@ -16,15 +40,28 @@ class WorkoutTemplateProvider extends ChangeNotifier {
   String? _errorMessage;
   StreamSubscription<bool>? _connectivitySubscription;
 
+  // Latest-request-wins generations, one per independent load path.
+  int _ownerListRequestId = 0;
+  int _communityRequestId = 0;
+  int _selectedTemplateRequestId = 0;
+
   // Filter state
   String? _selectedCategory;
   bool _showActiveOnly = true;
 
-  WorkoutTemplateProvider(this._repository, this._connectivity) {
-    // Listen for connectivity changes
+  WorkoutTemplateProvider(
+    this._repository,
+    this._connectivity,
+    this._sessionEpoch,
+  ) {
+    // This callback can fire at any point, including during a logged-out gap.
+    // Capture a token fresh on every invocation and skip if there is no
+    // active session.
     _connectivitySubscription = _connectivity.connectivityStream.listen((
       isOnline,
     ) {
+      final token = _sessionEpoch.capture();
+      if (token == null) return;
       if (isOnline) {
         debugPrint('📡 Connection restored - refreshing templates');
         loadTemplates(showLoading: false);
@@ -50,9 +87,20 @@ class WorkoutTemplateProvider extends ChangeNotifier {
   String? get selectedCategory => _selectedCategory;
   bool get showActiveOnly => _showActiveOnly;
 
-  /// Load all templates for current user
+  bool _ownerListCurrent(UserSessionToken token, int requestId) =>
+      _sessionEpoch.isCurrent(token) && requestId == _ownerListRequestId;
+
+  bool _communityCurrent(UserSessionToken token, int requestId) =>
+      _sessionEpoch.isCurrent(token) && requestId == _communityRequestId;
+
+  bool _selectedTemplateCurrent(UserSessionToken token, int requestId) =>
+      _sessionEpoch.isCurrent(token) && requestId == _selectedTemplateRequestId;
+
+  /// Load the current user's own templates. Latest call wins.
   Future<void> loadTemplates({bool showLoading = true}) async {
-    if (_isLoading) return;
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+    final requestId = ++_ownerListRequestId;
 
     if (showLoading) {
       _isLoading = true;
@@ -64,22 +112,30 @@ class WorkoutTemplateProvider extends ChangeNotifier {
       final templateList = await _repository.getTemplates(
         activeOnly: _showActiveOnly,
       );
+      if (!_ownerListCurrent(token, requestId)) return;
       _templates = templateList;
       debugPrint('✅ Loaded ${_templates.length} templates');
     } catch (e) {
+      if (!_ownerListCurrent(token, requestId)) return;
       _errorMessage =
           'Failed to load templates: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('❌ Load templates error: $e');
     } finally {
-      if (showLoading) {
-        _isLoading = false;
+      if (_ownerListCurrent(token, requestId)) {
+        if (showLoading) {
+          _isLoading = false;
+        }
+        notifyListeners();
       }
-      notifyListeners();
     }
   }
 
-  /// Load community templates
+  /// Load community templates. Latest call wins.
   Future<void> loadCommunityTemplates({bool showLoading = true}) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+    final requestId = ++_communityRequestId;
+
     if (showLoading) {
       _isLoading = true;
       _errorMessage = null;
@@ -91,24 +147,35 @@ class WorkoutTemplateProvider extends ChangeNotifier {
         category: _selectedCategory,
         limit: 50,
       );
+      if (!_communityCurrent(token, requestId)) return;
       _communityTemplates = templates;
       debugPrint('✅ Loaded ${_communityTemplates.length} community templates');
     } catch (e) {
+      if (!_communityCurrent(token, requestId)) return;
       _errorMessage =
           'Failed to load community templates: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('❌ Load community templates error: $e');
     } finally {
-      if (showLoading) {
-        _isLoading = false;
+      if (_communityCurrent(token, requestId)) {
+        if (showLoading) {
+          _isLoading = false;
+        }
+        notifyListeners();
       }
-      notifyListeners();
     }
   }
 
-  /// Get a specific template by ID
-  Future<void> loadTemplateById(int id) async {
+  /// Load a specific template by its server ID into [selectedTemplate].
+  /// Latest call wins, so template A's response arriving after template B's
+  /// cannot replace B.
+  Future<void> loadTemplateById(int serverId) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+    final requestId = ++_selectedTemplateRequestId;
+
     try {
-      final template = await _repository.getTemplateById(id);
+      final template = await _repository.getTemplateById(serverId);
+      if (!_selectedTemplateCurrent(token, requestId)) return;
       _selectedTemplate = template;
       notifyListeners();
     } catch (e) {
@@ -116,7 +183,8 @@ class WorkoutTemplateProvider extends ChangeNotifier {
     }
   }
 
-  /// Create a new template
+  /// Create a new template. Online only - an offline attempt surfaces an
+  /// explicit error and changes nothing.
   Future<WorkoutTemplate?> createTemplate({
     required String name,
     String? description,
@@ -126,7 +194,12 @@ class WorkoutTemplateProvider extends ChangeNotifier {
     int? intervalDays,
     int? estimatedDuration,
     String? category,
+    bool isActive = true,
+    bool isPublic = false,
   }) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return null;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -141,75 +214,82 @@ class WorkoutTemplateProvider extends ChangeNotifier {
         intervalDays: intervalDays,
         estimatedDuration: estimatedDuration,
         category: category,
+        isActive: isActive,
+        isPublic: isPublic,
       );
+      if (!_sessionEpoch.isCurrent(token)) return null;
 
-      // Add to local list
       _templates.insert(0, template);
       _selectedTemplate = template;
-
       debugPrint('✅ Created template: ${template.name}');
-      _isLoading = false;
-      notifyListeners();
       return template;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =
           'Failed to create template: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('❌ Create template error: $e');
-      _isLoading = false;
-      notifyListeners();
       return null;
+    } finally {
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Update an existing template
+  /// Update an existing template. Online only.
   Future<bool> updateTemplate(WorkoutTemplate template) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       final updated = await _repository.updateTemplate(template);
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
-      // Update in local list
-      final index = _templates.indexWhere((t) => t.id == updated.id);
-      if (index != -1) {
-        _templates[index] = updated;
-      }
-
-      if (_selectedTemplate?.id == updated.id) {
+      _replaceInList(_templates, updated);
+      _replaceInList(_communityTemplates, updated);
+      if (_selectedTemplate?.localId == updated.localId) {
         _selectedTemplate = updated;
       }
-
       debugPrint('✅ Updated template: ${updated.name}');
-      _isLoading = false;
-      notifyListeners();
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to update template: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('❌ Update template error: $e');
-      _isLoading = false;
-      notifyListeners();
       return false;
+    } finally {
+      if (_sessionEpoch.isCurrent(token)) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  /// Toggle active status of a template
-  Future<void> toggleActive(int id) async {
+  /// Toggle active status of a template. Online only.
+  Future<void> toggleActive(WorkoutTemplate template) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+
     try {
-      await _repository.toggleActive(id);
+      final updated = await _repository.toggleActive(template);
+      if (!_sessionEpoch.isCurrent(token)) return;
+      if (updated == null) return;
 
-      // Update local list
-      final template = _templates.firstWhere((t) => t.id == id);
-      template.isActive = !template.isActive;
-
-      if (_selectedTemplate?.id == id) {
-        _selectedTemplate = template;
+      _replaceInList(_templates, updated);
+      _replaceInList(_communityTemplates, updated);
+      if (_selectedTemplate?.localId == updated.localId) {
+        _selectedTemplate = updated;
       }
-
       notifyListeners();
-      debugPrint('✅ Toggled active status for template $id');
+      debugPrint('✅ Toggled active status for template ${updated.localId}');
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage =
           'Failed to toggle active status: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('❌ Toggle active error: $e');
@@ -217,23 +297,26 @@ class WorkoutTemplateProvider extends ChangeNotifier {
     }
   }
 
-  /// Delete a template
-  Future<bool> deleteTemplate(int id) async {
+  /// Delete a template. Online only.
+  Future<bool> deleteTemplate(WorkoutTemplate template) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     try {
-      await _repository.deleteTemplate(id);
+      final deleted = await _repository.deleteTemplate(template);
+      if (!_sessionEpoch.isCurrent(token)) return false;
+      if (!deleted) return false;
 
-      // Remove from local lists
-      _templates.removeWhere((t) => t.id == id);
-      _communityTemplates.removeWhere((t) => t.id == id);
-
-      if (_selectedTemplate?.id == id) {
+      _templates.removeWhere((t) => t.localId == template.localId);
+      _communityTemplates.removeWhere((t) => t.localId == template.localId);
+      if (_selectedTemplate?.localId == template.localId) {
         _selectedTemplate = null;
       }
-
       notifyListeners();
-      debugPrint('✅ Deleted template $id');
+      debugPrint('✅ Deleted template ${template.localId}');
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to delete template: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('❌ Delete template error: $e');
@@ -242,41 +325,55 @@ class WorkoutTemplateProvider extends ChangeNotifier {
     }
   }
 
-  /// Increment usage count for a template
-  Future<void> incrementUsageCount(int id) async {
-    try {
-      await _repository.incrementUsageCount(id);
+  /// Increment usage count for a template. Online only - the repository
+  /// throws (and writes nothing) when offline. This provider deliberately
+  /// does not surface that failure: the count is a best-effort stat bumped
+  /// as a side effect of "Use template", and routing it into `_errorMessage`
+  /// would replace the whole templates screen with an error view for a tap
+  /// that otherwise succeeded. The failure is logged only.
+  Future<void> incrementUsageCount(WorkoutTemplate template) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
 
-      // Update local list
-      final template = _findTemplateById(id);
-      if (template != null) {
-        template.usageCount++;
+    try {
+      await _repository.incrementUsageCount(template);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      final target = _findByLocalId(template.localId);
+      if (target != null) {
+        target.usageCount++;
+        target.lastUsedAt = DateTime.now();
         notifyListeners();
       }
-
-      debugPrint('✅ Incremented usage count for template $id');
+      debugPrint('✅ Incremented usage count for template ${template.localId}');
     } catch (e) {
       debugPrint('❌ Increment usage count error: $e');
     }
   }
 
-  /// Rate a community template
-  Future<bool> rateTemplate(int id, double rating) async {
+  /// Rate a community template. Online only.
+  Future<bool> rateTemplate(WorkoutTemplate template, double rating) async {
     if (!_connectivity.isOnline) {
       _errorMessage = 'Cannot rate template while offline';
       notifyListeners();
       return false;
     }
 
+    final serverId = template.serverId;
+    if (serverId == null) return false;
+
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+
     try {
-      await _repository.rateTemplate(id, rating);
+      await _repository.rateTemplate(serverId, rating);
+      if (!_sessionEpoch.isCurrent(token)) return false;
 
-      // Reload the template to get updated rating
-      await loadTemplateById(id);
-
-      debugPrint('✅ Rated template $id with $rating stars');
+      await loadTemplateById(serverId);
+      debugPrint('✅ Rated template $serverId with $rating stars');
       return true;
     } catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return false;
       _errorMessage =
           'Failed to rate template: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('❌ Rate template error: $e');
@@ -297,7 +394,7 @@ class WorkoutTemplateProvider extends ChangeNotifier {
 
   /// Get templates scheduled for today
   Future<List<WorkoutTemplate>> getTodayTemplates() async {
-    return await getTemplatesForDate(DateTime.now());
+    return getTemplatesForDate(DateTime.now());
   }
 
   /// Set category filter
@@ -337,8 +434,12 @@ class WorkoutTemplateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clear all workout-template data (called on logout)
+  /// Clear all workout-template data (called on logout). Bumps every request
+  /// generation so any in-flight load is discarded when it resolves.
   void clear() {
+    _ownerListRequestId++;
+    _communityRequestId++;
+    _selectedTemplateRequestId++;
     _templates = [];
     _communityTemplates = [];
     _selectedTemplate = null;
@@ -352,16 +453,20 @@ class WorkoutTemplateProvider extends ChangeNotifier {
 
   // === PRIVATE HELPERS ===
 
-  /// Find a template by ID across all lists
-  WorkoutTemplate? _findTemplateById(int id) {
-    try {
-      return _templates.firstWhere((t) => t.id == id);
-    } catch (e) {
-      try {
-        return _communityTemplates.firstWhere((t) => t.id == id);
-      } catch (e) {
-        return null;
-      }
+  void _replaceInList(List<WorkoutTemplate> list, WorkoutTemplate updated) {
+    final index = list.indexWhere((t) => t.localId == updated.localId);
+    if (index != -1) {
+      list[index] = updated;
     }
+  }
+
+  WorkoutTemplate? _findByLocalId(int localId) {
+    for (final t in _templates) {
+      if (t.localId == localId) return t;
+    }
+    for (final t in _communityTemplates) {
+      if (t.localId == localId) return t;
+    }
+    return null;
   }
 }

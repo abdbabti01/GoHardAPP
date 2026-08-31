@@ -258,12 +258,34 @@ void main() async {
           WorkoutTemplateRepository
         >(
           update:
-              (_, apiService, localDb, connectivity, authService, __) =>
+              (
+                context,
+                apiService,
+                localDb,
+                connectivity,
+                authService,
+                previous,
+              ) =>
+                  // Unlike the sibling session-ownership repositories, this one
+                  // holds cross-operation instance state (its per-serverId write
+                  // clock), so it must be a stable singleton: `previous ??` keeps
+                  // the first instance rather than rebuilding it on every
+                  // ConnectivityService notification. All four dependencies above
+                  // are themselves stable singletons (`Provider`/`.value`), so a
+                  // retained `previous` can never hold a stale collaborator.
+                  previous ??
                   WorkoutTemplateRepository(
                     apiService,
                     localDb,
                     connectivity,
                     authService,
+                    // UserSessionEpoch and SessionRequestCoordinator are
+                    // fixed .value()/ProxyProvider singletons, never
+                    // reactively watched, so they are read directly here
+                    // rather than added as formal ProxyProvider type
+                    // parameters.
+                    context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
                   ),
         ),
         ProxyProvider2<ApiService, ConnectivityService, GoalsRepository>(
@@ -552,11 +574,16 @@ void main() async {
               (context) => WorkoutTemplateProvider(
                 context.read<WorkoutTemplateRepository>(),
                 context.read<ConnectivityService>(),
+                context.read<UserSessionEpoch>(),
               ),
           update:
-              (_, workoutTemplateRepo, connectivity, previous) =>
+              (context, workoutTemplateRepo, connectivity, previous) =>
                   previous ??
-                  WorkoutTemplateProvider(workoutTemplateRepo, connectivity),
+                  WorkoutTemplateProvider(
+                    workoutTemplateRepo,
+                    connectivity,
+                    context.read<UserSessionEpoch>(),
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           GoalsRepository,

@@ -444,6 +444,85 @@ class MockSessionRepository extends _i1.Mock implements _i27.SessionRepository {
   }
 
   @override
+  set beforeWriteTxnForTesting(
+    _i25.Future<void> Function()? _beforeWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#beforeWriteTxnForTesting, _beforeWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideWriteTxnForTesting(
+    _i25.Future<void> Function()? _insideWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#insideWriteTxnForTesting, _insideWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterWriteTxnForTesting(
+    _i25.Future<void> Function()? _afterWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#afterWriteTxnForTesting, _afterWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeBackgroundHttpDispatchForTesting(
+    _i25.Future<void> Function()? _beforeBackgroundHttpDispatchForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeBackgroundHttpDispatchForTesting,
+      _beforeBackgroundHttpDispatchForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterBackgroundHttpResponseForTesting(
+    _i25.Future<void> Function()? _afterBackgroundHttpResponseForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterBackgroundHttpResponseForTesting,
+      _afterBackgroundHttpResponseForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideBackgroundWriteTxnForTesting(
+    _i25.Future<void> Function()? _insideBackgroundWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #insideBackgroundWriteTxnForTesting,
+      _insideBackgroundWriteTxnForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeChildDeleteForTesting(
+    _i25.Future<void> Function()? _beforeChildDeleteForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeChildDeleteForTesting,
+      _beforeChildDeleteForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set onBackgroundSyncScheduledForTesting(
+    void Function(_i25.Future<void>)? _onBackgroundSyncScheduledForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #onBackgroundSyncScheduledForTesting,
+      _onBackgroundSyncScheduledForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   _i25.Future<List<_i3.Session>> getSessions({bool? waitForSync = false}) =>
       (super.noSuchMethod(
             Invocation.method(#getSessions, [], {#waitForSync: waitForSync}),
@@ -1124,6 +1203,74 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
   MockChatRepository() {
     _i1.throwOnMissingStub(this);
   }
+
+  @override
+  set beforeWriteTxnForTesting(
+    _i25.Future<void> Function()? _beforeWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#beforeWriteTxnForTesting, _beforeWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideWriteTxnForTesting(
+    _i25.Future<void> Function()? _insideWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#insideWriteTxnForTesting, _insideWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterWriteTxnForTesting(
+    _i25.Future<void> Function()? _afterWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#afterWriteTxnForTesting, _afterWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeBackgroundHttpDispatchForTesting(
+    _i25.Future<void> Function()? _beforeBackgroundHttpDispatchForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeBackgroundHttpDispatchForTesting,
+      _beforeBackgroundHttpDispatchForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterBackgroundHttpResponseForTesting(
+    _i25.Future<void> Function()? _afterBackgroundHttpResponseForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterBackgroundHttpResponseForTesting,
+      _afterBackgroundHttpResponseForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterForegroundHttpResponseForTesting(
+    _i25.Future<void> Function()? _afterForegroundHttpResponseForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterForegroundHttpResponseForTesting,
+      _afterForegroundHttpResponseForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set onBackgroundSyncScheduledForTesting(
+    void Function(_i25.Future<void>)? _onBackgroundSyncScheduledForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #onBackgroundSyncScheduledForTesting,
+      _onBackgroundSyncScheduledForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i25.Future<List<_i29.ChatConversation>> getConversations() =>
@@ -2082,6 +2229,74 @@ class MockWorkoutTemplateRepository extends _i1.Mock
   }
 
   @override
+  set beforeWriteTxnForTesting(
+    _i25.Future<void> Function()? _beforeWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#beforeWriteTxnForTesting, _beforeWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideWriteTxnForTesting(
+    _i25.Future<void> Function()? _insideWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#insideWriteTxnForTesting, _insideWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterWriteTxnForTesting(
+    _i25.Future<void> Function()? _afterWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#afterWriteTxnForTesting, _afterWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeBackgroundHttpDispatchForTesting(
+    _i25.Future<void> Function()? _beforeBackgroundHttpDispatchForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeBackgroundHttpDispatchForTesting,
+      _beforeBackgroundHttpDispatchForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterBackgroundHttpResponseForTesting(
+    _i25.Future<void> Function()? _afterBackgroundHttpResponseForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterBackgroundHttpResponseForTesting,
+      _afterBackgroundHttpResponseForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterForegroundHttpResponseForTesting(
+    _i25.Future<void> Function()? _afterForegroundHttpResponseForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterForegroundHttpResponseForTesting,
+      _afterForegroundHttpResponseForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set onBackgroundSyncScheduledForTesting(
+    void Function(_i25.Future<void>)? _onBackgroundSyncScheduledForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #onBackgroundSyncScheduledForTesting,
+      _onBackgroundSyncScheduledForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   _i25.Future<List<_i22.WorkoutTemplate>> getTemplates({
     bool? activeOnly = false,
   }) =>
@@ -2092,14 +2307,6 @@ class MockWorkoutTemplateRepository extends _i1.Mock
             ),
           )
           as _i25.Future<List<_i22.WorkoutTemplate>>);
-
-  @override
-  _i25.Future<_i22.WorkoutTemplate?> getTemplateById(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#getTemplateById, [id]),
-            returnValue: _i25.Future<_i22.WorkoutTemplate?>.value(),
-          )
-          as _i25.Future<_i22.WorkoutTemplate?>);
 
   @override
   _i25.Future<List<_i22.WorkoutTemplate>> getCommunityTemplates({
@@ -2118,6 +2325,24 @@ class MockWorkoutTemplateRepository extends _i1.Mock
           as _i25.Future<List<_i22.WorkoutTemplate>>);
 
   @override
+  _i25.Future<_i22.WorkoutTemplate?> getTemplateById(int? serverId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getTemplateById, [serverId]),
+            returnValue: _i25.Future<_i22.WorkoutTemplate?>.value(),
+          )
+          as _i25.Future<_i22.WorkoutTemplate?>);
+
+  @override
+  _i25.Future<List<_i22.WorkoutTemplate>> getTemplatesForDate(DateTime? date) =>
+      (super.noSuchMethod(
+            Invocation.method(#getTemplatesForDate, [date]),
+            returnValue: _i25.Future<List<_i22.WorkoutTemplate>>.value(
+              <_i22.WorkoutTemplate>[],
+            ),
+          )
+          as _i25.Future<List<_i22.WorkoutTemplate>>);
+
+  @override
   _i25.Future<_i22.WorkoutTemplate> createTemplate({
     required String? name,
     String? description,
@@ -2127,6 +2352,8 @@ class MockWorkoutTemplateRepository extends _i1.Mock
     int? intervalDays,
     int? estimatedDuration,
     String? category,
+    bool? isActive = true,
+    bool? isPublic = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#createTemplate, [], {
@@ -2138,6 +2365,8 @@ class MockWorkoutTemplateRepository extends _i1.Mock
               #intervalDays: intervalDays,
               #estimatedDuration: estimatedDuration,
               #category: category,
+              #isActive: isActive,
+              #isPublic: isPublic,
             }),
             returnValue: _i25.Future<_i22.WorkoutTemplate>.value(
               _FakeWorkoutTemplate_23(
@@ -2151,6 +2380,8 @@ class MockWorkoutTemplateRepository extends _i1.Mock
                   #intervalDays: intervalDays,
                   #estimatedDuration: estimatedDuration,
                   #category: category,
+                  #isActive: isActive,
+                  #isPublic: isPublic,
                 }),
               ),
             ),
@@ -2173,50 +2404,40 @@ class MockWorkoutTemplateRepository extends _i1.Mock
           as _i25.Future<_i22.WorkoutTemplate>);
 
   @override
-  _i25.Future<void> toggleActive(int? id) =>
+  _i25.Future<_i22.WorkoutTemplate?> toggleActive(
+    _i22.WorkoutTemplate? template,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#toggleActive, [id]),
+            Invocation.method(#toggleActive, [template]),
+            returnValue: _i25.Future<_i22.WorkoutTemplate?>.value(),
+          )
+          as _i25.Future<_i22.WorkoutTemplate?>);
+
+  @override
+  _i25.Future<bool> deleteTemplate(_i22.WorkoutTemplate? template) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteTemplate, [template]),
+            returnValue: _i25.Future<bool>.value(false),
+          )
+          as _i25.Future<bool>);
+
+  @override
+  _i25.Future<void> incrementUsageCount(_i22.WorkoutTemplate? template) =>
+      (super.noSuchMethod(
+            Invocation.method(#incrementUsageCount, [template]),
             returnValue: _i25.Future<void>.value(),
             returnValueForMissingStub: _i25.Future<void>.value(),
           )
           as _i25.Future<void>);
 
   @override
-  _i25.Future<void> deleteTemplate(int? id) =>
+  _i25.Future<void> rateTemplate(int? serverId, double? rating) =>
       (super.noSuchMethod(
-            Invocation.method(#deleteTemplate, [id]),
+            Invocation.method(#rateTemplate, [serverId, rating]),
             returnValue: _i25.Future<void>.value(),
             returnValueForMissingStub: _i25.Future<void>.value(),
           )
           as _i25.Future<void>);
-
-  @override
-  _i25.Future<void> incrementUsageCount(int? id) =>
-      (super.noSuchMethod(
-            Invocation.method(#incrementUsageCount, [id]),
-            returnValue: _i25.Future<void>.value(),
-            returnValueForMissingStub: _i25.Future<void>.value(),
-          )
-          as _i25.Future<void>);
-
-  @override
-  _i25.Future<void> rateTemplate(int? id, double? rating) =>
-      (super.noSuchMethod(
-            Invocation.method(#rateTemplate, [id, rating]),
-            returnValue: _i25.Future<void>.value(),
-            returnValueForMissingStub: _i25.Future<void>.value(),
-          )
-          as _i25.Future<void>);
-
-  @override
-  _i25.Future<List<_i22.WorkoutTemplate>> getTemplatesForDate(DateTime? date) =>
-      (super.noSuchMethod(
-            Invocation.method(#getTemplatesForDate, [date]),
-            returnValue: _i25.Future<List<_i22.WorkoutTemplate>>.value(
-              <_i22.WorkoutTemplate>[],
-            ),
-          )
-          as _i25.Future<List<_i22.WorkoutTemplate>>);
 }
 
 /// A class which mocks [SharedWorkoutRepository].
@@ -2227,6 +2448,74 @@ class MockSharedWorkoutRepository extends _i1.Mock
   MockSharedWorkoutRepository() {
     _i1.throwOnMissingStub(this);
   }
+
+  @override
+  set beforeWriteTxnForTesting(
+    _i25.Future<void> Function()? _beforeWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#beforeWriteTxnForTesting, _beforeWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideWriteTxnForTesting(
+    _i25.Future<void> Function()? _insideWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#insideWriteTxnForTesting, _insideWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterWriteTxnForTesting(
+    _i25.Future<void> Function()? _afterWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#afterWriteTxnForTesting, _afterWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeBackgroundHttpDispatchForTesting(
+    _i25.Future<void> Function()? _beforeBackgroundHttpDispatchForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeBackgroundHttpDispatchForTesting,
+      _beforeBackgroundHttpDispatchForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterBackgroundHttpResponseForTesting(
+    _i25.Future<void> Function()? _afterBackgroundHttpResponseForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterBackgroundHttpResponseForTesting,
+      _afterBackgroundHttpResponseForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterForegroundHttpResponseForTesting(
+    _i25.Future<void> Function()? _afterForegroundHttpResponseForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterForegroundHttpResponseForTesting,
+      _afterForegroundHttpResponseForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set onBackgroundSyncScheduledForTesting(
+    void Function(_i25.Future<void>)? _onBackgroundSyncScheduledForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #onBackgroundSyncScheduledForTesting,
+      _onBackgroundSyncScheduledForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i25.Future<List<_i23.SharedWorkout>> getSharedWorkouts({
