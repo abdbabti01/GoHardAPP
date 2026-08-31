@@ -7,6 +7,7 @@ import '../../providers/body_metrics_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/friends_provider.dart';
 import '../../providers/goals_provider.dart';
+import '../../providers/log_sets_provider.dart';
 import '../../providers/messages_provider.dart';
 import '../../providers/nutrition_provider.dart';
 import '../../providers/profile_provider.dart';
@@ -36,11 +37,14 @@ import 'notification_service.dart';
 /// that is still awaiting a repository call when logout begins later
 /// re-populating a cleared Provider once it resolves - per-Provider
 /// generation/staleness guards for that are deferred to Logout PR 2 and are
-/// deliberately not attempted here. `RunningProvider` is the sole
-/// exception: it already has that protection from the earlier GPS
-/// subscription-lifecycle hardening, which this coordinator relies on (by
-/// awaiting `RunningProvider.clear()` first) but does not itself add
-/// anywhere else.
+/// deliberately not attempted here, EXCEPT for the two Providers that
+/// already carry it: `RunningProvider` (from the earlier GPS
+/// subscription-lifecycle hardening, which this coordinator relies on by
+/// awaiting `RunningProvider.clear()` first) and `LogSetsProvider` (from
+/// the log-sets session-cleanup PR: its `clear()` invalidates a
+/// session/request-generation guard so an in-flight `loadSets` or set
+/// mutation cannot repopulate the cleared list). This coordinator only
+/// invokes their `clear()`; it does not add that protection anywhere else.
 ///
 /// Deliberately excludes `ExercisesProvider`: its exercise-template library
 /// is shared, unauthenticated reference content
@@ -59,6 +63,7 @@ class SessionCleanupCoordinator {
     required MessagesProvider messagesProvider,
     required NutritionProvider nutritionProvider,
     required GoalsProvider goalsProvider,
+    required LogSetsProvider logSetsProvider,
     required ChatProvider chatProvider,
     required ProfileProvider profileProvider,
     required BodyMetricsProvider bodyMetricsProvider,
@@ -75,6 +80,7 @@ class SessionCleanupCoordinator {
        _messagesProvider = messagesProvider,
        _nutritionProvider = nutritionProvider,
        _goalsProvider = goalsProvider,
+       _logSetsProvider = logSetsProvider,
        _chatProvider = chatProvider,
        _profileProvider = profileProvider,
        _bodyMetricsProvider = bodyMetricsProvider,
@@ -92,6 +98,7 @@ class SessionCleanupCoordinator {
   final MessagesProvider _messagesProvider;
   final NutritionProvider _nutritionProvider;
   final GoalsProvider _goalsProvider;
+  final LogSetsProvider _logSetsProvider;
   final ChatProvider _chatProvider;
   final ProfileProvider _profileProvider;
   final BodyMetricsProvider _bodyMetricsProvider;
@@ -162,6 +169,7 @@ class SessionCleanupCoordinator {
 
     await _guard('NutritionProvider', () async => _nutritionProvider.clear());
     await _guard('GoalsProvider', () async => _goalsProvider.clear());
+    await _guard('LogSetsProvider', () async => _logSetsProvider.clear());
     await _guard('ChatProvider', () async => _chatProvider.clear());
     await _guard('ProfileProvider', () async => _profileProvider.clear());
     await _guard(

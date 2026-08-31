@@ -37,6 +37,7 @@ import 'package:go_hard_app/providers/body_metrics_provider.dart';
 import 'package:go_hard_app/providers/chat_provider.dart';
 import 'package:go_hard_app/providers/friends_provider.dart';
 import 'package:go_hard_app/providers/goals_provider.dart';
+import 'package:go_hard_app/providers/log_sets_provider.dart';
 import 'package:go_hard_app/providers/messages_provider.dart';
 import 'package:go_hard_app/providers/nutrition_provider.dart';
 import 'package:go_hard_app/providers/profile_provider.dart';
@@ -47,6 +48,13 @@ import 'package:go_hard_app/providers/shared_workout_provider.dart';
 import 'package:go_hard_app/providers/workout_template_provider.dart';
 
 import 'session_cleanup_coordinator_test.mocks.dart';
+// LogSetsProvider's ExerciseRepository dependency is mocked once, for the
+// LogSets provider suite. Reusing that generated MockExerciseRepository
+// here (rather than adding ExerciseRepository to this file's
+// @GenerateMocks) keeps this file's large multi-repository mock free of a
+// full import-prefix renumber.
+import '../../providers/log_sets_provider_session_cleanup_test.mocks.dart'
+    show MockExerciseRepository;
 
 /// Coverage for Logout PR 1's `SessionCleanupCoordinator`.
 ///
@@ -251,6 +259,7 @@ void main() {
   late MockSessionRepository mockSessionRepo;
   late MockNutritionRepository mockNutritionRepo;
   late MockGoalsRepository mockGoalsRepo;
+  late MockExerciseRepository mockExerciseRepo;
   late MockChatRepository mockChatRepo;
   late MockProfileRepository mockProfileRepo;
   late MockBodyMetricsRepository mockBodyMetricsRepo;
@@ -269,6 +278,7 @@ void main() {
   late MessagesProvider messagesProvider;
   late NutritionProvider nutritionProvider;
   late GoalsProvider goalsProvider;
+  late LogSetsProvider logSetsProvider;
   late ChatProvider chatProvider;
   late ProfileProvider profileProvider;
   late BodyMetricsProvider bodyMetricsProvider;
@@ -295,6 +305,7 @@ void main() {
     mockSessionRepo = MockSessionRepository();
     mockNutritionRepo = MockNutritionRepository();
     mockGoalsRepo = MockGoalsRepository();
+    mockExerciseRepo = MockExerciseRepository();
     mockChatRepo = MockChatRepository();
     mockProfileRepo = MockProfileRepository();
     mockBodyMetricsRepo = MockBodyMetricsRepository();
@@ -327,6 +338,7 @@ void main() {
       null,
     );
     goalsProvider = GoalsProvider(mockGoalsRepo, null);
+    logSetsProvider = LogSetsProvider(mockExerciseRepo, sessionEpoch);
     chatProvider = ChatProvider(
       mockChatRepo,
       ConnectivityService.instance,
@@ -361,6 +373,7 @@ void main() {
       messagesProvider: messagesProvider,
       nutritionProvider: nutritionProvider,
       goalsProvider: goalsProvider,
+      logSetsProvider: logSetsProvider,
       chatProvider: chatProvider,
       profileProvider: profileProvider,
       bodyMetricsProvider: bodyMetricsProvider,
@@ -386,6 +399,7 @@ void main() {
       messagesProvider,
       nutritionProvider,
       goalsProvider,
+      logSetsProvider,
       chatProvider,
       profileProvider,
       bodyMetricsProvider,
@@ -589,6 +603,9 @@ void main() {
             limit: anyNamed('limit'),
           ),
         ).thenThrow(Exception('boom'));
+        when(
+          mockExerciseRepo.getExerciseSets(any),
+        ).thenThrow(Exception('boom'));
         when(mockNutritionRepo.getTodaysMealLog()).thenThrow(Exception('boom'));
         when(
           mockNutritionRepo.getNutritionDashboard(),
@@ -601,6 +618,7 @@ void main() {
         bodyMetricsProvider.loadBodyMetrics();
         analyticsProvider.loadAnalytics();
         friendsProvider.loadFriends();
+        logSetsProvider.loadSets(1);
         programsProvider.loadPrograms();
         workoutTemplateProvider.loadTemplates();
         sharedWorkoutProvider.loadSharedWorkouts();
@@ -613,6 +631,7 @@ void main() {
         expect(bodyMetricsProvider.errorMessage, isNotNull);
         expect(analyticsProvider.errorMessage, isNotNull);
         expect(friendsProvider.errorMessage, isNotNull);
+        expect(logSetsProvider.errorMessage, isNotNull);
         expect(programsProvider.errorMessage, isNotNull);
         expect(workoutTemplateProvider.errorMessage, isNotNull);
         expect(sharedWorkoutProvider.errorMessage, isNotNull);
@@ -632,6 +651,8 @@ void main() {
         expect(analyticsProvider.workoutStats, isNull);
         expect(friendsProvider.errorMessage, isNull);
         expect(friendsProvider.friends, isEmpty);
+        expect(logSetsProvider.errorMessage, isNull);
+        expect(logSetsProvider.sets, isEmpty);
         expect(programsProvider.errorMessage, isNull);
         expect(programsProvider.programs, isEmpty);
         expect(workoutTemplateProvider.errorMessage, isNull);

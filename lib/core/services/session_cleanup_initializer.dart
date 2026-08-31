@@ -9,6 +9,7 @@ import '../../providers/body_metrics_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/friends_provider.dart';
 import '../../providers/goals_provider.dart';
+import '../../providers/log_sets_provider.dart';
 import '../../providers/messages_provider.dart';
 import '../../providers/nutrition_provider.dart';
 import '../../providers/profile_provider.dart';
@@ -83,6 +84,7 @@ class _SessionCleanupInitializerState extends State<SessionCleanupInitializer> {
       messagesProvider: context.read<MessagesProvider>(),
       nutritionProvider: context.read<NutritionProvider>(),
       goalsProvider: context.read<GoalsProvider>(),
+      logSetsProvider: context.read<LogSetsProvider>(),
       chatProvider: context.read<ChatProvider>(),
       profileProvider: context.read<ProfileProvider>(),
       bodyMetricsProvider: context.read<BodyMetricsProvider>(),
