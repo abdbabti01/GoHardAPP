@@ -362,8 +362,16 @@ void main() async {
         ),
         ProxyProvider2<ApiService, ConnectivityService, FriendsRepository>(
           update:
-              (_, apiService, connectivity, __) =>
-                  FriendsRepository(apiService, connectivity),
+              (context, apiService, connectivity, __) => FriendsRepository(
+                apiService,
+                connectivity,
+                // UserSessionEpoch and SessionRequestCoordinator are fixed
+                // .value()/ProxyProvider singletons, never reactively
+                // watched, so they are read directly here rather than added
+                // as formal ProxyProvider type parameters.
+                context.read<UserSessionEpoch>(),
+                context.read<SessionRequestCoordinator>(),
+              ),
         ),
         ProxyProvider2<
           ApiService,
@@ -738,10 +746,20 @@ void main() async {
         // Friends provider
         ChangeNotifierProxyProvider<FriendsRepository, FriendsProvider>(
           create:
-              (context) => FriendsProvider(context.read<FriendsRepository>()),
+              (context) => FriendsProvider(
+                context.read<FriendsRepository>(),
+                // UserSessionEpoch is a fixed .value() singleton, never
+                // reactively watched, so it is read directly here rather
+                // than added as a formal ProxyProvider type parameter.
+                context.read<UserSessionEpoch>(),
+              ),
           update:
-              (_, friendsRepo, previous) =>
-                  previous ?? FriendsProvider(friendsRepo),
+              (context, friendsRepo, previous) =>
+                  previous ??
+                  FriendsProvider(
+                    friendsRepo,
+                    context.read<UserSessionEpoch>(),
+                  ),
         ),
 
         // Messages provider
