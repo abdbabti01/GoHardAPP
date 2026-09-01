@@ -15,6 +15,7 @@ import 'package:go_hard_app/core/services/session_cleanup_coordinator.dart';
 import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/models/run_session.dart';
 import 'package:go_hard_app/data/models/session.dart';
+import 'package:go_hard_app/data/models/workout_stats.dart';
 import 'package:go_hard_app/data/repositories/achievement_repository.dart';
 import 'package:go_hard_app/data/repositories/analytics_repository.dart';
 import 'package:go_hard_app/data/repositories/body_metrics_repository.dart';
@@ -351,7 +352,7 @@ void main() {
       null,
     );
     bodyMetricsProvider = BodyMetricsProvider(mockBodyMetricsRepo, null);
-    analyticsProvider = AnalyticsProvider(mockAnalyticsRepo);
+    analyticsProvider = AnalyticsProvider(mockAnalyticsRepo, sessionEpoch);
     achievementsProvider = AchievementsProvider(mockAchievementRepo);
     friendsProvider = FriendsProvider(mockFriendsRepo, sessionEpoch);
     programsProvider = ProgramsProvider(mockProgramsRepo, null);
@@ -762,6 +763,76 @@ void main() {
         );
         verifyNever(mockRunningRepo.deleteRun(any));
         verifyNever(mockRunningRepo.pauseRun(any, any));
+      });
+    });
+  });
+
+  group('14. AnalyticsProvider cleanup', () {
+    test('the real app-lifetime AnalyticsProvider is cleared even when an '
+        'earlier cleanup step throws, and an in-flight aggregate load cannot '
+        'repopulate it afterwards', () {
+      fakeAsync((async) {
+        // An earlier step (SessionsProvider, step 3) fails hard: its
+        // watch-stream subscription cancel() throws.
+        when(
+          mockSessionRepo.getSessions(waitForSync: anyNamed('waitForSync')),
+        ).thenAnswer((_) async => [_session()]);
+        when(
+          mockSessionRepo.watchSessions(1),
+        ).thenAnswer((_) => _ThrowingCancelStream());
+        when(mockAuthService.getUserId()).thenAnswer((_) async => 1);
+        sessionsProvider.loadSessions();
+
+        // A slow analytics aggregate load, still in flight when cleanup runs.
+        final gate = Completer<WorkoutStats>();
+        when(
+          mockAnalyticsRepo.getWorkoutStats(),
+        ).thenAnswer((_) => gate.future);
+        when(
+          mockAnalyticsRepo.getExerciseProgress(),
+        ).thenAnswer((_) async => <ExerciseProgress>[]);
+        when(
+          mockAnalyticsRepo.getPersonalRecords(),
+        ).thenAnswer((_) async => <PersonalRecord>[]);
+        when(
+          mockAnalyticsRepo.getMuscleGroupVolume(days: anyNamed('days')),
+        ).thenAnswer((_) async => <MuscleGroupVolume>[]);
+        analyticsProvider.loadAnalytics();
+        async.flushMicrotasks();
+        expect(analyticsProvider.isLoading, isTrue);
+
+        var rejected = false;
+        coordinator.cleanUp().catchError((_) => rejected = true);
+        async.flushMicrotasks();
+
+        expect(rejected, isFalse, reason: 'cleanUp() never rejects');
+        expect(
+          analyticsProvider.isLoading,
+          isFalse,
+          reason: 'analytics cleared despite the earlier step throwing',
+        );
+        expect(analyticsProvider.workoutStats, isNull);
+
+        // The in-flight load resolving now must not repopulate cleared state
+        // (clear() invalidated the aggregate generation).
+        gate.complete(
+          WorkoutStats(
+            totalWorkouts: 9,
+            totalDuration: 9,
+            averageDuration: 1,
+            currentStreak: 1,
+            longestStreak: 1,
+            workoutsThisWeek: 1,
+            workoutsThisMonth: 1,
+            totalSets: 1,
+            totalReps: 1,
+            totalVolume: 1,
+          ),
+        );
+        async.flushMicrotasks();
+
+        expect(analyticsProvider.workoutStats, isNull);
+        expect(analyticsProvider.isLoading, isFalse);
       });
     });
   });

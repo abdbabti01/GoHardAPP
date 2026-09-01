@@ -85,8 +85,15 @@ final analyticsRepositoryProvider = Provider<AnalyticsRepository>((ref) {
   final apiService = ref.watch(apiServiceProvider);
   final localDb = ref.watch(localDatabaseServiceProvider);
   final connectivity = ref.watch(connectivityServiceProvider);
-  final authService = ref.watch(authServiceProvider);
-  return AnalyticsRepository(apiService, localDb, connectivity, authService);
+  final sessionEpoch = ref.watch(userSessionEpochProvider);
+  final sessionCoordinator = ref.watch(sessionRequestCoordinatorProvider);
+  return AnalyticsRepository(
+    apiService,
+    localDb,
+    connectivity,
+    sessionEpoch,
+    sessionCoordinator,
+  );
 });
 
 /// Chat repository provider
