@@ -435,6 +435,20 @@ class SyncService {
     debugPrint('✅ Sync completed successfully');
   }
 
+  /// A real (positive) server id, or `null` for "no server identity" - `null`,
+  /// `0` (the legacy pre-public-id-namespace sentinel written by app versions
+  /// before `ModelMapper.publicRowId`), or any non-positive value.
+  ///
+  /// Used ONLY in the exercise / exercise-set sync phases below: a legacy row
+  /// persisted with `serverId == 0` must be treated exactly like a
+  /// never-synced (`serverId == null`) row - a `pending_update` becomes an
+  /// initial CREATE carrying its latest state, a `pending_delete` is removed
+  /// locally with no server call, and a non-positive id is never placed in a
+  /// route or a server-identity request field. `ExerciseRepository`
+  /// additionally canonicalizes `serverId <= 0` to `null` whenever it writes
+  /// such a row, so this is defense in depth, not the only guard.
+  static int? _positiveServerId(int? id) => (id != null && id > 0) ? id : null;
+
   // ============ Parent-chain ownership resolvers (cached) ============
   //
   // Each resolver takes a per-phase-call cache Map so a phase with many
@@ -1001,7 +1015,7 @@ class SyncService {
         debugPrint('    ! Skipping exercise - not owned by current user');
         continue;
       }
-      if (parentSession.serverId == null) {
+      if (_positiveServerId(parentSession.serverId) == null) {
         debugPrint('    ! Skipping exercise - parent session not synced yet');
         continue;
       }
@@ -1116,11 +1130,12 @@ class SyncService {
     SessionRequestContext context,
     Map<int, int?> sessionCache,
   ) async {
-    if (exercise.serverId == null) {
-      // Convert to create
+    if (_positiveServerId(exercise.serverId) == null) {
+      // No server identity (never synced, or a legacy `serverId == 0`):
+      // convert to an initial CREATE carrying the row's latest state.
       final parentSession = await db.localSessions.get(exercise.sessionLocalId);
       if (parentSession != null &&
-          parentSession.serverId != null &&
+          _positiveServerId(parentSession.serverId) != null &&
           parentSession.userId == context.epochToken.userId) {
         await _syncCreateExercise(
           db,
@@ -1173,7 +1188,9 @@ class SyncService {
     SessionRequestContext context,
     Map<int, int?> sessionCache,
   ) async {
-    if (exercise.serverId != null) {
+    // A never-synced row (or a legacy `serverId == 0`) has nothing on the
+    // server: skip the DELETE, remove it locally only.
+    if (_positiveServerId(exercise.serverId) != null) {
       await _apiService.delete(
         '${ApiConfig.exercises}/${exercise.serverId}',
         sessionContext: context,
@@ -1237,7 +1254,7 @@ class SyncService {
         debugPrint('    ! Skipping set - not owned by current user');
         continue;
       }
-      if (parentExercise.serverId == null) {
+      if (_positiveServerId(parentExercise.serverId) == null) {
         debugPrint('    ! Skipping set - parent exercise not synced yet');
         continue;
       }
@@ -1361,10 +1378,15 @@ class SyncService {
     Map<int, int?> sessionCache,
     Map<int, int?> exerciseCache,
   ) async {
-    if (set.serverId == null) {
-      // Convert to create
+    if (_positiveServerId(set.serverId) == null) {
+      // No server identity (never synced, or a legacy `serverId == 0`):
+      // convert to an initial CREATE. `_syncCreateSet` sends the set's latest
+      // `isCompleted` / `completedAt` / reps / weight, so a legacy pending
+      // row that was completed offline before its first sync reaches the
+      // server with its completed state.
       final parentExercise = await db.localExercises.get(set.exerciseLocalId);
-      if (parentExercise != null && parentExercise.serverId != null) {
+      if (parentExercise != null &&
+          _positiveServerId(parentExercise.serverId) != null) {
         final owner = await _sessionOwner(
           db,
           parentExercise.sessionLocalId,
@@ -1428,7 +1450,9 @@ class SyncService {
     Map<int, int?> sessionCache,
     Map<int, int?> exerciseCache,
   ) async {
-    if (set.serverId != null) {
+    // A never-synced row (or a legacy `serverId == 0`) has nothing on the
+    // server: skip the DELETE, remove it locally only - no `DELETE /0`.
+    if (_positiveServerId(set.serverId) != null) {
       await _apiService.delete(
         '${ApiConfig.exerciseSets}/${set.serverId}',
         sessionContext: context,

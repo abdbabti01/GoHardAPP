@@ -55,7 +55,15 @@ final exerciseRepositoryProvider = Provider<ExerciseRepository>((ref) {
   final apiService = ref.watch(apiServiceProvider);
   final localDb = ref.watch(localDatabaseServiceProvider);
   final connectivity = ref.watch(connectivityServiceProvider);
-  return ExerciseRepository(apiService, localDb, connectivity);
+  final sessionEpoch = ref.watch(userSessionEpochProvider);
+  final sessionCoordinator = ref.watch(sessionRequestCoordinatorProvider);
+  return ExerciseRepository(
+    apiService,
+    localDb,
+    connectivity,
+    sessionEpoch,
+    sessionCoordinator,
+  );
 });
 
 /// User repository provider

@@ -172,8 +172,19 @@ void main() async {
           ExerciseRepository
         >(
           update:
-              (_, apiService, localDb, connectivity, __) =>
-                  ExerciseRepository(apiService, localDb, connectivity),
+              (context, apiService, localDb, connectivity, __) =>
+                  ExerciseRepository(
+                    apiService,
+                    localDb,
+                    connectivity,
+                    // UserSessionEpoch and SessionRequestCoordinator are
+                    // fixed .value()/ProxyProvider singletons, never
+                    // reactively watched, so they are read directly here
+                    // rather than added as formal ProxyProvider type
+                    // parameters (matches SessionRepository's wiring above).
+                    context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
+                  ),
         ),
         ProxyProvider<ApiService, UserRepository>(
           update: (_, apiService, __) => UserRepository(apiService),

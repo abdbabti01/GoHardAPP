@@ -6,6 +6,7 @@ import 'package:isar/isar.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
+import 'package:go_hard_app/core/constants/api_config.dart';
 import 'package:go_hard_app/core/services/connectivity_service.dart';
 import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/sync_service.dart';
@@ -344,27 +345,30 @@ void main() {
       );
       await isar.writeTxn(() => isar.localExercises.put(exercise));
 
-      final completer = Completer<Map<String, dynamic>>();
+      // The POST answer runs the instant `sync()` dispatches it - i.e. after
+      // the pre-dispatch owner filter has already cached the parent as
+      // A-owned. It reassigns the parent session to B, then hands back the
+      // test-released response, so the acknowledgment path (which runs after
+      // the response) sees the reassigned owner - exactly a mid-flight
+      // reassignment, with no event-queue pumping.
+      final release = Completer<Map<String, dynamic>>();
       when(
         mockApiService.post<Map<String, dynamic>>(
           any,
           data: anyNamed('data'),
           sessionContext: anyNamed('sessionContext'),
         ),
-      ).thenAnswer((_) => completer.future);
-
-      final syncFuture = syncService.sync();
-      await pumpEventQueue();
-
-      // The parent session's owner changes to B AFTER dispatch (already
-      // filtered/cached as A-owned) but BEFORE the response resolves.
-      final reassigned = await isar.localSessions.get(sessionA.localId);
-      await isar.writeTxn(() async {
-        reassigned!.userId = userB;
-        await isar.localSessions.put(reassigned);
+      ).thenAnswer((_) async {
+        await isar.writeTxn(() async {
+          final s = await isar.localSessions.get(sessionA.localId);
+          s!.userId = userB;
+          await isar.localSessions.put(s);
+        });
+        return release.future;
       });
 
-      completer.complete({'id': 5050});
+      final syncFuture = syncService.sync();
+      release.complete({'id': 5050});
       await syncFuture;
 
       final stored = await isar.localExercises.get(exercise.localId);
@@ -751,28 +755,30 @@ void main() {
         );
         await isar.writeTxn(() => isar.localFoodItems.put(item));
 
-        final completer = Completer<Map<String, dynamic>>();
+        // The POST answer runs the instant `sync()` dispatches it - after the
+        // pre-dispatch owner filter has cached the grandparent as A-owned. It
+        // reassigns the grandparent meal log to B, then hands back the
+        // test-released response, so the two-level reacquire checkpoint (which
+        // runs after the response) reads the reassigned owner - a mid-flight
+        // reassignment with no event-queue pumping.
+        final release = Completer<Map<String, dynamic>>();
         when(
           mockApiService.post<Map<String, dynamic>>(
             any,
             data: anyNamed('data'),
             sessionContext: anyNamed('sessionContext'),
           ),
-        ).thenAnswer((_) => completer.future);
-
-        final syncFuture = syncService.sync();
-        await pumpEventQueue();
-
-        // The grandparent meal log's owner changes to B AFTER dispatch
-        // (already filtered/cached as A-owned) but BEFORE the response
-        // resolves.
-        final reassigned = await isar.localMealLogs.get(logA.localId);
-        await isar.writeTxn(() async {
-          reassigned!.userId = userB;
-          await isar.localMealLogs.put(reassigned);
+        ).thenAnswer((_) async {
+          await isar.writeTxn(() async {
+            final l = await isar.localMealLogs.get(logA.localId);
+            l!.userId = userB;
+            await isar.localMealLogs.put(l);
+          });
+          return release.future;
         });
 
-        completer.complete({'id': 9101});
+        final syncFuture = syncService.sync();
+        release.complete({'id': 9101});
         await syncFuture;
 
         final stored = await isar.localFoodItems.get(item.localId);
@@ -784,6 +790,745 @@ void main() {
               'chain fresh and reject, not trust a cached A-owned result',
         );
         expect(stored.serverId, isNull);
+      },
+    );
+  });
+
+  // ================================================================
+  // Legacy `serverId == 0` compatibility (exercise / set sync phases)
+  // ================================================================
+  //
+  // App versions before `ModelMapper.publicRowId` persisted offline-created
+  // LocalExercise / LocalExerciseSet rows with `serverId == 0` (the raw
+  // `apiSet.id` of a `ExerciseSet(id: 0, ...)`). After upgrading, such a row
+  // can also transition into `pending_update` (completed offline) or
+  // `pending_delete` (deleted offline). SyncService must treat `serverId == 0`
+  // exactly like `serverId == null` in these phases and never emit a
+  // `/exercises/0` or `/exercisesets/0` route or a `exerciseId: 0` body.
+
+  group('legacy serverId == 0 - exercise sets', () {
+    Future<LocalExercise> insertSyncedExercise({
+      required int sessionLocalId,
+      required int? sessionServerId,
+      required int serverId,
+    }) async {
+      final ex = LocalExercise(
+        sessionLocalId: sessionLocalId,
+        sessionServerId: sessionServerId,
+        serverId: serverId,
+        name: 'Bench',
+        lastModifiedLocal: DateTime.now(),
+        isSynced: true,
+        syncStatus: 'synced',
+      );
+      await isar.writeTxn(() => isar.localExercises.put(ex));
+      return ex;
+    }
+
+    Future<LocalExerciseSet> insertLegacyZeroSet({
+      required int exerciseLocalId,
+      int? exerciseServerId,
+      required String syncStatus,
+      bool isCompleted = false,
+      DateTime? completedAt,
+    }) async {
+      final s = LocalExerciseSet(
+        serverId: 0, // legacy sentinel
+        exerciseLocalId: exerciseLocalId,
+        exerciseServerId: exerciseServerId,
+        setNumber: 1,
+        reps: 10,
+        weight: 100,
+        isCompleted: isCompleted,
+        completedAt: completedAt,
+        lastModifiedLocal: DateTime.now(),
+        isSynced: false,
+        syncStatus: syncStatus,
+      );
+      await isar.writeTxn(() => isar.localExerciseSets.put(s));
+      return s;
+    }
+
+    void stubPost(int returnedId) {
+      when(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async => {'id': returnedId});
+    }
+
+    void expectNoZeroRoute() {
+      verifyNever(
+        mockApiService.put<void>(
+          argThat(contains('/0')),
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      verifyNever(
+        mockApiService.delete(
+          argThat(contains('/0')),
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+    }
+
+    test('legacy serverId==0, pending_create: sends CREATE (no /0), assigns '
+        'the returned positive server id, marks synced', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertLegacyZeroSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        syncStatus: 'pending_create',
+      );
+      stubPost(6001);
+
+      await syncService.sync();
+
+      expectNoZeroRoute();
+      final captured =
+          verify(
+            mockApiService.post<Map<String, dynamic>>(
+              captureAny,
+              data: captureAnyNamed('data'),
+              sessionContext: anyNamed('sessionContext'),
+            ),
+          ).captured;
+      expect(captured[0], ApiConfig.exerciseSets);
+      expect((captured[1] as Map)['exerciseId'], 100);
+
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.serverId, 6001);
+      expect(stored.isSynced, isTrue);
+      expect(stored.syncStatus, 'synced');
+    });
+
+    test('legacy serverId==0, completed offline (pending_update): sends CREATE '
+        'with isCompleted, NOT PUT /exercisesets/0', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final completedAt = DateTime.utc(2026, 1, 2, 3, 4, 5);
+      final set = await insertLegacyZeroSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        syncStatus: 'pending_update',
+        isCompleted: true,
+        completedAt: completedAt,
+      );
+      stubPost(6002);
+
+      await syncService.sync();
+
+      expectNoZeroRoute();
+      final captured =
+          verify(
+            mockApiService.post<Map<String, dynamic>>(
+              captureAny,
+              data: captureAnyNamed('data'),
+              sessionContext: anyNamed('sessionContext'),
+            ),
+          ).captured;
+      expect(captured[0], ApiConfig.exerciseSets);
+      final body = captured[1] as Map;
+      expect(body['exerciseId'], 100);
+      // The CREATE carries the latest completed state (Isar returns the
+      // timestamp local-flagged but instant-correct; the point is it is sent).
+      expect(body['isCompleted'], isTrue);
+      expect(body['completedAt'], isA<String>());
+      expect(
+        DateTime.parse(body['completedAt'] as String).microsecondsSinceEpoch,
+        completedAt.microsecondsSinceEpoch,
+      );
+
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.serverId, 6002);
+      expect(stored.isCompleted, isTrue);
+      expect(stored.syncStatus, 'synced');
+    });
+
+    test('legacy serverId==0, deleted offline (pending_delete): NO DELETE /0, '
+        'the row is removed locally and not left stuck', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertLegacyZeroSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        syncStatus: 'pending_delete',
+      );
+
+      await syncService.sync();
+
+      expectNoZeroRoute();
+      verifyNever(
+        mockApiService.delete(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      expect(await isar.localExerciseSets.get(set.localId), isNull);
+    });
+
+    test(
+      'legacy parent exercise serverId==0: parent CREATEs first, then the '
+      'child set CREATEs against the REAL parent id, never exerciseId 0',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final legacyEx = LocalExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 0, // legacy
+          name: 'Legacy',
+          lastModifiedLocal: DateTime.now(),
+          isSynced: false,
+          syncStatus: 'pending_create',
+        );
+        await isar.writeTxn(() => isar.localExercises.put(legacyEx));
+        final set = await insertLegacyZeroSet(
+          exerciseLocalId: legacyEx.localId,
+          exerciseServerId: 0,
+          syncStatus: 'pending_create',
+        );
+        // The exercise phase runs before the set phase: the legacy-0 parent is
+        // resolved to a real positive id (111) first, so the child set CREATE
+        // then carries exerciseId 111 - never 0.
+        var call = 0;
+        when(
+          mockApiService.post<Map<String, dynamic>>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).thenAnswer((_) async {
+          call++;
+          return {'id': call == 1 ? 111 : 6003};
+        });
+
+        await syncService.sync();
+
+        expectNoZeroRoute();
+        final storedEx = await isar.localExercises.get(legacyEx.localId);
+        expect(storedEx!.serverId, 111);
+        final storedSet = await isar.localExerciseSets.get(set.localId);
+        expect(storedSet!.serverId, 6003);
+        expect(storedSet.syncStatus, 'synced');
+        final captured =
+            verify(
+              mockApiService.post<Map<String, dynamic>>(
+                captureAny,
+                data: captureAnyNamed('data'),
+                sessionContext: anyNamed('sessionContext'),
+              ),
+            ).captured;
+        for (var i = 0; i + 1 < captured.length; i += 2) {
+          expect(captured[i], isNot(contains('/0')));
+          final body = captured[i + 1];
+          if (body is Map && body.containsKey('exerciseId')) {
+            expect(
+              body['exerciseId'],
+              111,
+              reason: 'child never posts exerciseId 0',
+            );
+          }
+        }
+      },
+    );
+
+    test(
+      'valid serverId 42 pending_update still PUTs /exercisesets/42',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final ex = await insertSyncedExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 100,
+        );
+        final set = LocalExerciseSet(
+          serverId: 42,
+          exerciseLocalId: ex.localId,
+          exerciseServerId: 100,
+          setNumber: 1,
+          reps: 8,
+          weight: 90,
+          lastModifiedLocal: DateTime.now(),
+          isSynced: false,
+          syncStatus: 'pending_update',
+        );
+        await isar.writeTxn(() => isar.localExerciseSets.put(set));
+        when(
+          mockApiService.put<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).thenAnswer((_) async {});
+
+        await syncService.sync();
+
+        final captured =
+            verify(
+              mockApiService.put<void>(
+                captureAny,
+                data: anyNamed('data'),
+                sessionContext: anyNamed('sessionContext'),
+              ),
+            ).captured;
+        expect(captured.single, '${ApiConfig.exerciseSets}/42');
+        verifyNever(
+          mockApiService.post<Map<String, dynamic>>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
+      },
+    );
+
+    test(
+      'valid serverId 42 pending_delete still DELETEs /exercisesets/42',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final ex = await insertSyncedExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 100,
+        );
+        final set = LocalExerciseSet(
+          serverId: 42,
+          exerciseLocalId: ex.localId,
+          exerciseServerId: 100,
+          setNumber: 1,
+          lastModifiedLocal: DateTime.now(),
+          isSynced: false,
+          syncStatus: 'pending_delete',
+        );
+        await isar.writeTxn(() => isar.localExerciseSets.put(set));
+        when(
+          mockApiService.delete(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).thenAnswer((_) async => true);
+
+        await syncService.sync();
+
+        final captured =
+            verify(
+              mockApiService.delete(
+                captureAny,
+                data: anyNamed('data'),
+                sessionContext: anyNamed('sessionContext'),
+              ),
+            ).captured;
+        expect(captured.single, '${ApiConfig.exerciseSets}/42');
+        expect(await isar.localExerciseSets.get(set.localId), isNull);
+      },
+    );
+
+    test('foreign-owner legacy zero set is skipped (never uploaded)', () async {
+      final sessionB = await insertSession(uid: userB, serverId: 20);
+      final exB = await insertSyncedExercise(
+        sessionLocalId: sessionB.localId,
+        sessionServerId: 20,
+        serverId: 200,
+      );
+      final set = await insertLegacyZeroSet(
+        exerciseLocalId: exB.localId,
+        exerciseServerId: 200,
+        syncStatus: 'pending_update',
+        isCompleted: true,
+      );
+
+      await syncService.sync();
+
+      verifyNever(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      expectNoZeroRoute();
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.syncStatus, 'pending_update');
+      expect(stored.serverId, 0);
+    });
+
+    test('orphan legacy zero set (no parent exercise) is skipped', () async {
+      final set = await insertLegacyZeroSet(
+        exerciseLocalId: 999999,
+        syncStatus: 'pending_update',
+        isCompleted: true,
+      );
+
+      await syncService.sync();
+
+      verifyNever(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      expectNoZeroRoute();
+      expect(
+        (await isar.localExerciseSets.get(set.localId))!.syncStatus,
+        'pending_update',
+      );
+    });
+
+    test('logout during the legacy-zero create pass writes nothing '
+        'afterward', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertLegacyZeroSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        syncStatus: 'pending_update',
+        isCompleted: true,
+      );
+
+      // The POST answer runs the instant `sync()` dispatches the (converted)
+      // CREATE - after all pre-dispatch filtering. It logs out, then hands
+      // back the test-released response, so the post-dispatch `_assertCurrent`
+      // sees the ended session and aborts the acknowledgment write - a
+      // mid-flight logout with no event-queue pumping.
+      final release = Completer<Map<String, dynamic>>();
+      when(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) {
+        sessionEpoch.invalidate();
+        return release.future;
+      });
+
+      final syncFuture = syncService.sync();
+      release.complete({'id': 6004});
+      await syncFuture;
+
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.syncStatus, 'pending_update');
+      expect(stored.serverId, 0);
+    });
+  });
+
+  group('legacy serverId == 0 - exercises', () {
+    test('legacy exercise serverId==0 pending_update converts to CREATE, '
+        'no PUT /exercises/0', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = LocalExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 0, // legacy
+        name: 'Legacy edited',
+        lastModifiedLocal: DateTime.now(),
+        isSynced: false,
+        syncStatus: 'pending_update',
+      );
+      await isar.writeTxn(() => isar.localExercises.put(ex));
+      when(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async => {'id': 500});
+
+      await syncService.sync();
+
+      verifyNever(
+        mockApiService.put<void>(
+          argThat(contains('/0')),
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      final captured =
+          verify(
+            mockApiService.post<Map<String, dynamic>>(
+              captureAny,
+              data: anyNamed('data'),
+              sessionContext: anyNamed('sessionContext'),
+            ),
+          ).captured;
+      expect(captured.single, '${ApiConfig.sessions}/10/exercises');
+      final stored = await isar.localExercises.get(ex.localId);
+      expect(stored!.serverId, 500);
+      expect(stored.syncStatus, 'synced');
+    });
+
+    test('legacy exercise serverId==0 pending_delete: NO DELETE /exercises/0, '
+        'removed locally', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = LocalExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 0,
+        name: 'Legacy deleted',
+        lastModifiedLocal: DateTime.now(),
+        isSynced: false,
+        syncStatus: 'pending_delete',
+      );
+      await isar.writeTxn(() => isar.localExercises.put(ex));
+
+      await syncService.sync();
+
+      verifyNever(
+        mockApiService.delete(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      expect(await isar.localExercises.get(ex.localId), isNull);
+    });
+  });
+
+  group('legacy serverId == 0 - parent-chain gates', () {
+    Future<LocalExerciseSet> insertLegacyZeroSet({
+      required int exerciseLocalId,
+      int? exerciseServerId,
+      required String syncStatus,
+      bool isCompleted = false,
+    }) async {
+      final s = LocalExerciseSet(
+        serverId: 0,
+        exerciseLocalId: exerciseLocalId,
+        exerciseServerId: exerciseServerId,
+        setNumber: 1,
+        reps: 10,
+        weight: 100,
+        isCompleted: isCompleted,
+        lastModifiedLocal: DateTime.now(),
+        isSynced: false,
+        syncStatus: syncStatus,
+      );
+      await isar.writeTxn(() => isar.localExerciseSets.put(s));
+      return s;
+    }
+
+    void stubPost(int returnedId) {
+      when(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async => {'id': returnedId});
+    }
+
+    void expectNoZeroRoute() {
+      verifyNever(
+        mockApiService.put<void>(
+          argThat(contains('/0')),
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      verifyNever(
+        mockApiService.delete(
+          argThat(contains('/0')),
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+    }
+
+    Future<LocalExercise> insertSyncedLegacyZeroExercise({
+      required int sessionLocalId,
+      int? sessionServerId,
+    }) async {
+      final ex = LocalExercise(
+        sessionLocalId: sessionLocalId,
+        sessionServerId: sessionServerId,
+        serverId: 0, // legacy sentinel, but the row is marked synced
+        name: 'LegacyParent',
+        lastModifiedLocal: DateTime.now(),
+        isSynced: true,
+        syncStatus: 'synced',
+      );
+      await isar.writeTxn(() => isar.localExercises.put(ex));
+      return ex;
+    }
+
+    void expectNoZeroSessionRoute() {
+      verifyNever(
+        mockApiService.post<Map<String, dynamic>>(
+          argThat(contains('/0/')),
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+    }
+
+    test('legacy session serverId==0: a pending_create child exercise waits, '
+        'never POSTs /sessions/0/exercises', () async {
+      final session = await insertSession(uid: userA, serverId: 0);
+      final ex = LocalExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 0,
+        name: 'Child',
+        lastModifiedLocal: DateTime.now(),
+        isSynced: false,
+        syncStatus: 'pending_create',
+      );
+      await isar.writeTxn(() => isar.localExercises.put(ex));
+      stubPost(777);
+
+      await syncService.sync();
+
+      expectNoZeroSessionRoute();
+      final stored = await isar.localExercises.get(ex.localId);
+      expect(stored!.syncStatus, 'pending_create');
+      expect(stored.serverId, anyOf(isNull, 0));
+    });
+
+    test('legacy session serverId==0: a pending_update child exercise with no '
+        'server id is NOT converted to a CREATE against /sessions/0', () async {
+      final session = await insertSession(uid: userA, serverId: 0);
+      final ex = LocalExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 0,
+        serverId: 0,
+        name: 'Child edited',
+        lastModifiedLocal: DateTime.now(),
+        isSynced: false,
+        syncStatus: 'pending_update',
+      );
+      await isar.writeTxn(() => isar.localExercises.put(ex));
+      stubPost(778);
+
+      await syncService.sync();
+
+      expectNoZeroSessionRoute();
+      verifyNever(
+        mockApiService.put<void>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      expect(
+        (await isar.localExercises.get(ex.localId))!.syncStatus,
+        'pending_update',
+      );
+    });
+
+    test('legacy parent exercise serverId==0 (marked synced): a pending_create '
+        'child set waits, never POSTs a set with exerciseId 0', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final parent = await insertSyncedLegacyZeroExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+      );
+      final set = await insertLegacyZeroSet(
+        exerciseLocalId: parent.localId,
+        exerciseServerId: 0,
+        syncStatus: 'pending_create',
+      );
+      stubPost(9001);
+
+      await syncService.sync();
+
+      expectNoZeroRoute();
+      verifyNever(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: argThat(containsPair('exerciseId', 0), named: 'data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.syncStatus, 'pending_create');
+      expect(stored.serverId, anyOf(isNull, 0));
+    });
+
+    test(
+      'legacy parent exercise serverId==0 (marked synced): a pending_update '
+      'child set with no server id is NOT created against exerciseId 0',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final parent = await insertSyncedLegacyZeroExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+        );
+        final set = await insertLegacyZeroSet(
+          exerciseLocalId: parent.localId,
+          exerciseServerId: 0,
+          syncStatus: 'pending_update',
+          isCompleted: true,
+        );
+        stubPost(9002);
+
+        await syncService.sync();
+
+        expectNoZeroRoute();
+        verifyNever(
+          mockApiService.post<Map<String, dynamic>>(
+            any,
+            data: argThat(containsPair('exerciseId', 0), named: 'data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
+        final stored = await isar.localExerciseSets.get(set.localId);
+        expect(stored!.syncStatus, 'pending_update');
+      },
+    );
+
+    test(
+      '_syncCreateSet: a logout landing inside the acknowledgment writeTxn '
+      'aborts the write - the set stays pending_create, not synced',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final ex = LocalExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 100,
+          name: 'Bench',
+          lastModifiedLocal: DateTime.now(),
+          isSynced: true,
+          syncStatus: 'synced',
+        );
+        await isar.writeTxn(() => isar.localExercises.put(ex));
+        final set = await insertLegacyZeroSet(
+          exerciseLocalId: ex.localId,
+          exerciseServerId: 100,
+          syncStatus: 'pending_create',
+        );
+        stubPost(7777);
+        syncService.insideAckWriteTxnForTesting =
+            () async => sessionEpoch.invalidate();
+
+        await syncService.sync();
+
+        final stored = await isar.localExerciseSets.get(set.localId);
+        expect(stored!.syncStatus, 'pending_create');
+        expect(stored.isSynced, isFalse);
+        expect(stored.serverId, anyOf(isNull, 0));
       },
     );
   });
