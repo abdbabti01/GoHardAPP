@@ -160,6 +160,35 @@ class ModelMapper {
     };
   }
 
+  // ========== Exercise / ExerciseSet public-id namespace ==========
+
+  /// The single collision-free public-id contract for [Exercise] / [ExerciseSet]
+  /// DTOs produced from local rows:
+  ///
+  /// - a synced row (positive server id) is exposed as that positive server id;
+  /// - an unsynced row (server id `null`, or the legacy sentinel `0`) is
+  ///   exposed as the NEGATION of its always-positive Isar local id;
+  /// - `0` is never a valid public id.
+  ///
+  /// A positive input therefore means "server id" unambiguously and a negative
+  /// input means "the encoded local id" - the two namespaces never overlap, and
+  /// an Isar local id (always positive internally) is never sent to the API.
+  ///
+  /// A row that has neither a positive server id nor a positive local id (an
+  /// unpersisted / skipped-write placeholder) maps to `0` - the invalid /
+  /// unset sentinel that every resolver rejects.
+  static int publicRowId({required int? serverId, required int localId}) {
+    if (serverId != null && serverId > 0) return serverId;
+    return localId > 0 ? -localId : 0;
+  }
+
+  /// True if [publicId] denotes an unsynced (encoded-local-id) row.
+  static bool isOfflinePublicId(int publicId) => publicId < 0;
+
+  /// The Isar local id encoded in a negative [publicId] (see [publicRowId]).
+  /// A non-negative [publicId] has no encoded local id and yields `0`.
+  static int localIdFromPublicId(int publicId) => publicId < 0 ? -publicId : 0;
+
   // ========== Exercise Mapping ==========
 
   /// Convert API Exercise to LocalExercise
@@ -172,7 +201,9 @@ class ModelMapper {
     bool isSynced = true,
   }) {
     final exercise = LocalExercise(
-      serverId: apiExercise.id,
+      // Only a positive id is a real server id; `0` / a negative encoded-local
+      // id (see [publicRowId]) means "not yet synced".
+      serverId: apiExercise.id > 0 ? apiExercise.id : null,
       sessionLocalId: sessionLocalId,
       sessionServerId: sessionServerId ?? apiExercise.sessionId,
       name: apiExercise.name,
@@ -200,7 +231,10 @@ class ModelMapper {
     List<ExerciseSet> exerciseSets = const [],
   }) {
     return Exercise(
-      id: localExercise.serverId ?? localExercise.localId,
+      id: publicRowId(
+        serverId: localExercise.serverId,
+        localId: localExercise.localId,
+      ),
       sessionId: localExercise.sessionServerId ?? 0,
       name: localExercise.name,
       duration: localExercise.duration,
@@ -223,7 +257,9 @@ class ModelMapper {
     bool isSynced = true,
   }) {
     final set = LocalExerciseSet(
-      serverId: apiSet.id,
+      // Only a positive id is a real server id; `0` / a negative encoded-local
+      // id (see [publicRowId]) means "not yet synced".
+      serverId: apiSet.id > 0 ? apiSet.id : null,
       exerciseLocalId: exerciseLocalId,
       exerciseServerId: exerciseServerId ?? apiSet.exerciseId,
       setNumber: apiSet.setNumber,
@@ -250,8 +286,11 @@ class ModelMapper {
   /// Convert LocalExerciseSet to API ExerciseSet
   static ExerciseSet localToExerciseSet(LocalExerciseSet localSet) {
     return ExerciseSet(
-      id: localSet.serverId ?? 0,
-      exerciseId: localSet.exerciseServerId ?? 0,
+      id: publicRowId(serverId: localSet.serverId, localId: localSet.localId),
+      exerciseId: publicRowId(
+        serverId: localSet.exerciseServerId,
+        localId: localSet.exerciseLocalId,
+      ),
       setNumber: localSet.setNumber,
       reps: localSet.reps,
       weight: localSet.weight,

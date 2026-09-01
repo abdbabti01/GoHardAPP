@@ -439,6 +439,47 @@ void main() {
       expect(apiExercise.notes, 'Heavy day');
       expect(apiExercise.exerciseTemplateId, 5);
     });
+
+    test(
+      'localToExercise exposes an unsynced exercise under the collision-free '
+      'namespace: id == -localId (never a positive local id, never 0)',
+      () {
+        final offline = LocalExercise(
+          serverId: null,
+          sessionLocalId: 100,
+          name: 'Squat',
+          isSynced: false,
+          syncStatus: 'pending_create',
+          lastModifiedLocal: DateTime.now(),
+        );
+        offline.localId = 7;
+
+        expect(ModelMapper.localToExercise(offline).id, -7);
+
+        // A legacy `serverId == 0` sentinel is also "unsynced".
+        final legacyZero = LocalExercise(
+          serverId: 0,
+          sessionLocalId: 100,
+          name: 'Squat',
+          isSynced: false,
+          syncStatus: 'pending_create',
+          lastModifiedLocal: DateTime.now(),
+        );
+        legacyZero.localId = 9;
+        expect(ModelMapper.localToExercise(legacyZero).id, -9);
+      },
+    );
+
+    test('publicRowId / decode helpers round-trip', () {
+      expect(ModelMapper.publicRowId(serverId: 42, localId: 5), 42);
+      expect(ModelMapper.publicRowId(serverId: null, localId: 5), -5);
+      expect(ModelMapper.publicRowId(serverId: 0, localId: 5), -5);
+      expect(ModelMapper.publicRowId(serverId: null, localId: 0), 0);
+      expect(ModelMapper.isOfflinePublicId(-5), isTrue);
+      expect(ModelMapper.isOfflinePublicId(42), isFalse);
+      expect(ModelMapper.localIdFromPublicId(-5), 5);
+      expect(ModelMapper.localIdFromPublicId(42), 0);
+    });
   });
 
   group('ModelMapper - ExerciseSet Conversion', () {
@@ -516,6 +557,57 @@ void main() {
         expect(apiSet.notes, null);
       },
     );
+
+    test('localToExerciseSet exposes an unsynced set as id == -localId (never '
+        '0), and its parent id likewise', () {
+      final offline = LocalExerciseSet(
+        serverId: null,
+        exerciseLocalId: 3,
+        exerciseServerId: null,
+        setNumber: 1,
+        reps: 10,
+        weight: 100,
+        isSynced: false,
+        syncStatus: 'pending_create',
+        lastModifiedLocal: DateTime.now(),
+      );
+      offline.localId = 7;
+
+      final api = ModelMapper.localToExerciseSet(offline);
+      expect(api.id, -7);
+      expect(api.exerciseId, -3);
+
+      // A synced set keeps its positive server ids.
+      final synced = LocalExerciseSet(
+        serverId: 42,
+        exerciseLocalId: 3,
+        exerciseServerId: 200,
+        setNumber: 1,
+        reps: 10,
+        weight: 100,
+        isSynced: true,
+        syncStatus: 'synced',
+        lastModifiedLocal: DateTime.now(),
+      );
+      synced.localId = 7;
+      final syncedApi = ModelMapper.localToExerciseSet(synced);
+      expect(syncedApi.id, 42);
+      expect(syncedApi.exerciseId, 200);
+    });
+
+    test('exerciseSetToLocal maps a non-positive incoming id to a null '
+        'serverId', () {
+      final zeroId = ExerciseSet(id: 0, exerciseId: 200, setNumber: 1);
+      expect(
+        ModelMapper.exerciseSetToLocal(zeroId, exerciseLocalId: 3).serverId,
+        isNull,
+      );
+      final negId = ExerciseSet(id: -7, exerciseId: 200, setNumber: 1);
+      expect(
+        ModelMapper.exerciseSetToLocal(negId, exerciseLocalId: 3).serverId,
+        isNull,
+      );
+    });
   });
 
   group('ModelMapper - ExerciseTemplate Conversion', () {

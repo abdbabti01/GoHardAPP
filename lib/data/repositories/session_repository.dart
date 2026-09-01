@@ -1131,7 +1131,18 @@ class SessionRepository {
         );
         final exerciseLocalId = await db.localExercises.put(localExercise);
 
-        exercises.add(exercise.copyWith(id: exerciseLocalId));
+        // Offline exercise: expose it under the collision-free public-id
+        // namespace (`-localId`), matching ModelMapper.localToExercise, so a
+        // later ExerciseRepository lookup resolves it as a local id, never as
+        // a server id.
+        exercises.add(
+          exercise.copyWith(
+            id: ModelMapper.publicRowId(
+              serverId: null,
+              localId: exerciseLocalId,
+            ),
+          ),
+        );
       }
     });
     await _runTestHook(afterWriteTxnForTesting);
@@ -2025,7 +2036,9 @@ class SessionRepository {
     });
 
     final newExercise = Exercise(
-      id: localId,
+      // Offline exercise: collision-free public id (`-localId`), matching
+      // ModelMapper.localToExercise.
+      id: ModelMapper.publicRowId(serverId: null, localId: localId),
       sessionId: sessionId,
       name: exerciseName,
       exerciseTemplateId: exerciseTemplateId,
@@ -2036,7 +2049,7 @@ class SessionRepository {
     );
 
     debugPrint(
-      '➕ Created exercise "$exerciseName" locally (offline), id=$localId, will sync later',
+      '➕ Created exercise "$exerciseName" locally (offline), id=-$localId, will sync later',
     );
     return newExercise;
   }
