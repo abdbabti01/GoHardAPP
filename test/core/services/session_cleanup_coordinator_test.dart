@@ -351,7 +351,10 @@ void main() {
       sessionEpoch,
       null,
     );
-    bodyMetricsProvider = BodyMetricsProvider(mockBodyMetricsRepo, null);
+    bodyMetricsProvider = BodyMetricsProvider(
+      mockBodyMetricsRepo,
+      sessionEpoch,
+    );
     analyticsProvider = AnalyticsProvider(mockAnalyticsRepo, sessionEpoch);
     achievementsProvider = AchievementsProvider(mockAchievementRepo);
     friendsProvider = FriendsProvider(mockFriendsRepo, sessionEpoch);

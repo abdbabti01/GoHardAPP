@@ -165,7 +165,14 @@ final goalsRepositoryProvider = Provider<GoalsRepository>((ref) {
 final bodyMetricsRepositoryProvider = Provider<BodyMetricsRepository>((ref) {
   final apiService = ref.watch(apiServiceProvider);
   final connectivity = ref.watch(connectivityServiceProvider);
-  return BodyMetricsRepository(apiService, connectivity);
+  final sessionEpoch = ref.watch(userSessionEpochProvider);
+  final sessionCoordinator = ref.watch(sessionRequestCoordinatorProvider);
+  return BodyMetricsRepository(
+    apiService,
+    sessionEpoch,
+    sessionCoordinator,
+    connectivity,
+  );
 });
 
 /// Programs repository provider

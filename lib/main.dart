@@ -311,8 +311,17 @@ void main() async {
         ),
         ProxyProvider2<ApiService, ConnectivityService, BodyMetricsRepository>(
           update:
-              (_, apiService, connectivity, __) =>
-                  BodyMetricsRepository(apiService, connectivity),
+              (context, apiService, connectivity, __) => BodyMetricsRepository(
+                apiService,
+                // UserSessionEpoch and SessionRequestCoordinator are fixed
+                // .value()/ProxyProvider singletons, never reactively
+                // watched, so they are read directly here rather than added
+                // as formal ProxyProvider type parameters (matches
+                // DirectMessagesRepository's wiring above).
+                context.read<UserSessionEpoch>(),
+                context.read<SessionRequestCoordinator>(),
+                connectivity,
+              ),
         ),
         ProxyProvider4<
           ApiService,
@@ -656,12 +665,20 @@ void main() async {
           create:
               (context) => BodyMetricsProvider(
                 context.read<BodyMetricsRepository>(),
+                // UserSessionEpoch is a fixed .value() singleton, never
+                // reactively watched, so it is read directly here rather
+                // than added as a formal ProxyProvider type parameter.
+                context.read<UserSessionEpoch>(),
                 context.read<ConnectivityService>(),
               ),
           update:
-              (_, bodyMetricsRepo, connectivity, previous) =>
+              (context, bodyMetricsRepo, connectivity, previous) =>
                   previous ??
-                  BodyMetricsProvider(bodyMetricsRepo, connectivity),
+                  BodyMetricsProvider(
+                    bodyMetricsRepo,
+                    context.read<UserSessionEpoch>(),
+                    connectivity,
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           ProgramsRepository,
