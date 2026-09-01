@@ -199,20 +199,25 @@ void main() async {
               (_, apiService, authService, connectivity, __) =>
                   ProfileRepository(apiService, authService, connectivity),
         ),
-        ProxyProvider4<
+        ProxyProvider3<
           ApiService,
           LocalDatabaseService,
           ConnectivityService,
-          AuthService,
           AnalyticsRepository
         >(
           update:
-              (_, apiService, localDb, connectivity, authService, __) =>
+              (context, apiService, localDb, connectivity, __) =>
                   AnalyticsRepository(
                     apiService,
                     localDb,
                     connectivity,
-                    authService,
+                    // UserSessionEpoch and SessionRequestCoordinator are
+                    // fixed .value()/ProxyProvider singletons, never
+                    // reactively watched, so they are read directly here
+                    // rather than added as formal ProxyProvider type
+                    // parameters (matches ExerciseRepository's wiring above).
+                    context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
                   ),
         ),
         ProxyProvider4<
@@ -557,11 +562,17 @@ void main() async {
         ),
         ChangeNotifierProxyProvider<AnalyticsRepository, AnalyticsProvider>(
           create:
-              (context) =>
-                  AnalyticsProvider(context.read<AnalyticsRepository>()),
+              (context) => AnalyticsProvider(
+                context.read<AnalyticsRepository>(),
+                context.read<UserSessionEpoch>(),
+              ),
           update:
-              (_, analyticsRepo, previous) =>
-                  previous ?? AnalyticsProvider(analyticsRepo),
+              (context, analyticsRepo, previous) =>
+                  previous ??
+                  AnalyticsProvider(
+                    analyticsRepo,
+                    context.read<UserSessionEpoch>(),
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           ChatRepository,
