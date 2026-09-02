@@ -53,7 +53,9 @@ class ApiConfig {
   static const String sessions = 'sessions';
   static const String sessionsFromProgramWorkout =
       'sessions/from-program-workout';
-  static const String exercises = 'exercises';
+  // Exercises are created through the nested `sessions/{id}/exercises` route
+  // (see `sessionExercises`); the API exposes no top-level `exercises/{id}`
+  // update or delete route, so there is no bare `exercises` collection constant.
   static const String exerciseSets = 'exercisesets';
   static const String exerciseTemplates = 'exercisetemplates';
   static const String profile = 'profile';
