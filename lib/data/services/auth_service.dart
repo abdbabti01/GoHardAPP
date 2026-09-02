@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -17,6 +19,11 @@ class AuthService {
   static const String _userEmailKey = 'user_email';
   static const String _themePreferenceKey = 'theme_preference';
   static const String _cachedProfileKey = 'cached_user_profile';
+
+  /// Top-level field names of the owner-tagged profile-cache envelope written
+  /// by [writeCachedProfile] and validated by [readCachedProfile].
+  static const String _cachedProfileOwnerField = 'cachedForUserId';
+  static const String _cachedProfileDataField = 'profile';
 
   /// Save authentication data to secure storage
   Future<void> saveToken({
@@ -156,7 +163,11 @@ class AuthService {
     }
   }
 
-  /// Save user profile JSON to secure storage for offline access
+  /// Legacy **unowned** profile cache write. Retained only so the committed
+  /// generated `MockAuthService`s across the test suite keep compiling
+  /// without a full mock regen; production writes exclusively through
+  /// [writeCachedProfile]. A value stored here carries no owner id and is
+  /// therefore rejected by [readCachedProfile].
   Future<void> saveCachedProfile(String profileJson) async {
     try {
       await _storage.write(key: _cachedProfileKey, value: profileJson);
@@ -165,10 +176,70 @@ class AuthService {
     }
   }
 
-  /// Get cached user profile JSON from secure storage
+  /// Legacy **unowned** profile cache read. Superseded by [readCachedProfile]
+  /// (which enforces ownership); retained for generated-mock ABI
+  /// compatibility. Returns the raw stored value, which for a
+  /// [writeCachedProfile] entry is the owner envelope, not a bare profile -
+  /// callers must use [readCachedProfile] instead.
   Future<String?> getCachedProfile() async {
     try {
       return await _storage.read(key: _cachedProfileKey);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Persist [profileJson] for offline access, stamped with the id of the
+  /// user it belongs to.
+  ///
+  /// [ownerUserId] MUST be supplied by the caller from its captured session
+  /// context (`SessionRequestContext.epochToken.userId`) - it is never
+  /// derived from the profile body, so a forged `cachedForUserId` inside the
+  /// server JSON cannot influence ownership. The stored value is an envelope:
+  /// `{"cachedForUserId": <owner>, "profile": <the profile JSON>}`.
+  ///
+  /// Overwrites any previous entry (including a legacy unowned one). This is
+  /// deliberately owner-tagged rather than user-keyed: a single key keeps
+  /// logout cleanup and storage-format handling simple, and an entry that a
+  /// stale write recreates after logout can still only ever be read back by
+  /// the same user (see [readCachedProfile]). Best-effort: a storage failure
+  /// or an unparseable [profileJson] is swallowed - the cache is not
+  /// critical.
+  Future<void> writeCachedProfile(String profileJson, int ownerUserId) async {
+    try {
+      final envelope = jsonEncode({
+        _cachedProfileOwnerField: ownerUserId,
+        _cachedProfileDataField: jsonDecode(profileJson),
+      });
+      await _storage.write(key: _cachedProfileKey, value: envelope);
+    } catch (e) {
+      // Fail silently - cache is not critical
+    }
+  }
+
+  /// Return the cached profile JSON **only** if the stored envelope is
+  /// owner-tagged for [expectedUserId].
+  ///
+  /// Every other case fails closed (returns `null`): no entry, a legacy
+  /// untagged entry, a missing or non-integer `cachedForUserId`, an owner
+  /// mismatch, a missing `profile` payload, or any decode error. An offline
+  /// fallback must never hand one user another user's profile, so a stale
+  /// cross-user entry surfaces as a cache miss, never as data.
+  Future<String?> readCachedProfile(int expectedUserId) async {
+    try {
+      final raw = await _storage.read(key: _cachedProfileKey);
+      if (raw == null) return null;
+
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+
+      final owner = decoded[_cachedProfileOwnerField];
+      if (owner is! int || owner != expectedUserId) return null;
+
+      final profile = decoded[_cachedProfileDataField];
+      if (profile == null) return null;
+
+      return jsonEncode(profile);
     } catch (e) {
       return null;
     }

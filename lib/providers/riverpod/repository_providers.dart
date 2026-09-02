@@ -77,7 +77,15 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
   final apiService = ref.watch(apiServiceProvider);
   final authService = ref.watch(authServiceProvider);
   final connectivity = ref.watch(connectivityServiceProvider);
-  return ProfileRepository(apiService, authService, connectivity);
+  final sessionEpoch = ref.watch(userSessionEpochProvider);
+  final sessionCoordinator = ref.watch(sessionRequestCoordinatorProvider);
+  return ProfileRepository(
+    apiService,
+    authService,
+    sessionEpoch,
+    sessionCoordinator,
+    connectivity,
+  );
 });
 
 /// Analytics repository provider
