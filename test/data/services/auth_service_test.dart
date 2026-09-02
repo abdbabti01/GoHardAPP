@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_hard_app/data/services/auth_service.dart';
@@ -205,5 +207,85 @@ void main() {
             'survive logout',
       );
     });
+  });
+
+  group('owner-tagged profile cache', () {
+    const profileJson = '{"id":1,"name":"Alice"}';
+
+    test(
+      'writeCachedProfile / readCachedProfile round-trip for the owner',
+      () async {
+        await authService.writeCachedProfile(profileJson, 1);
+
+        final read = await authService.readCachedProfile(1);
+        expect(read, isNotNull);
+        expect((jsonDecode(read!) as Map)['name'], 'Alice');
+      },
+    );
+
+    test('readCachedProfile fails closed for a different user', () async {
+      await authService.writeCachedProfile(profileJson, 1);
+
+      expect(await authService.readCachedProfile(2), isNull);
+    });
+
+    test('the owner id is stamped from the caller argument, never from the '
+        'profile body', () async {
+      const forged = '{"id":1,"cachedForUserId":999,"name":"Alice"}';
+      await authService.writeCachedProfile(forged, 1);
+
+      expect(await authService.readCachedProfile(999), isNull);
+      expect(await authService.readCachedProfile(1), isNotNull);
+    });
+
+    test('a legacy unowned entry (written via saveCachedProfile) is rejected '
+        'by readCachedProfile', () async {
+      await authService.saveCachedProfile(profileJson);
+
+      expect(await authService.readCachedProfile(1), isNull);
+    });
+
+    test('malformed envelope, missing owner, and non-int owner all fail '
+        'closed', () async {
+      final platform = _FakeSecureStoragePlatform();
+      FlutterSecureStoragePlatform.instance = platform;
+      final svc = AuthService();
+
+      platform.data['cached_user_profile'] = 'definitely not json';
+      expect(await svc.readCachedProfile(1), isNull);
+
+      platform.data['cached_user_profile'] = jsonEncode({
+        'profile': {'id': 1},
+      });
+      expect(await svc.readCachedProfile(1), isNull);
+
+      platform.data['cached_user_profile'] = jsonEncode({
+        'cachedForUserId': '1',
+        'profile': {'id': 1},
+      });
+      expect(await svc.readCachedProfile(1), isNull);
+
+      platform.data['cached_user_profile'] = jsonEncode({'cachedForUserId': 1});
+      expect(await svc.readCachedProfile(1), isNull);
+    });
+
+    test('clearSessionCredentials removes the owner-tagged entry', () async {
+      await authService.writeCachedProfile(profileJson, 1);
+
+      await authService.clearSessionCredentials();
+
+      expect(await authService.readCachedProfile(1), isNull);
+    });
+
+    test(
+      'writeCachedProfile swallows an unparseable payload without throwing',
+      () async {
+        await expectLater(
+          authService.writeCachedProfile('not json', 1),
+          completes,
+        );
+        expect(await authService.readCachedProfile(1), isNull);
+      },
+    );
   });
 }

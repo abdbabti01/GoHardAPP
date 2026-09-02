@@ -196,8 +196,19 @@ void main() async {
           ProfileRepository
         >(
           update:
-              (_, apiService, authService, connectivity, __) =>
-                  ProfileRepository(apiService, authService, connectivity),
+              (context, apiService, authService, connectivity, __) =>
+                  ProfileRepository(
+                    apiService,
+                    authService,
+                    // UserSessionEpoch and SessionRequestCoordinator are
+                    // fixed .value()/ProxyProvider singletons, never
+                    // reactively watched, so they are read directly here
+                    // rather than added as formal ProxyProvider type
+                    // parameters (matches GoalsRepository's wiring below).
+                    context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
+                    connectivity,
+                  ),
         ),
         ProxyProvider3<
           ApiService,
