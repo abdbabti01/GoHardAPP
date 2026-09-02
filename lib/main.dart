@@ -332,20 +332,25 @@ void main() async {
                 connectivity,
               ),
         ),
-        ProxyProvider4<
+        ProxyProvider3<
           ApiService,
           ConnectivityService,
           LocalDatabaseService,
-          AuthService,
           ProgramsRepository
         >(
           update:
-              (_, apiService, connectivity, localDb, authService, __) =>
+              (context, apiService, connectivity, localDb, __) =>
                   ProgramsRepository(
                     apiService,
+                    // UserSessionEpoch and SessionRequestCoordinator are fixed
+                    // .value()/ProxyProvider singletons, never reactively
+                    // watched, so they are read directly here rather than added
+                    // as formal ProxyProvider type parameters (matches
+                    // GoalsRepository's wiring above).
+                    context.read<UserSessionEpoch>(),
+                    context.read<SessionRequestCoordinator>(),
                     connectivity,
                     localDb,
-                    authService,
                   ),
         ),
         ProxyProvider4<
@@ -706,11 +711,20 @@ void main() async {
           create:
               (context) => ProgramsProvider(
                 context.read<ProgramsRepository>(),
+                // UserSessionEpoch is a fixed .value() singleton, never
+                // reactively watched, so it is read directly here rather
+                // than added as a formal ProxyProvider type parameter.
+                context.read<UserSessionEpoch>(),
                 context.read<ConnectivityService>(),
               ),
           update:
-              (_, programsRepo, connectivity, previous) =>
-                  previous ?? ProgramsProvider(programsRepo, connectivity),
+              (context, programsRepo, connectivity, previous) =>
+                  previous ??
+                  ProgramsProvider(
+                    programsRepo,
+                    context.read<UserSessionEpoch>(),
+                    connectivity,
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           RunningRepository,
