@@ -1046,10 +1046,10 @@ class SyncService {
             );
             break;
           case 'pending_update':
-            await _syncUpdateExercise(db, exercise, context, sessionCache);
+            await _syncUpdateExercise(db, exercise, parentSession, context);
             break;
           case 'pending_delete':
-            await _syncDeleteExercise(db, exercise, context, sessionCache);
+            await _syncDeleteExercise(db, exercise, context);
             break;
         }
       } on SessionStaleException {
@@ -1124,78 +1124,51 @@ class SyncService {
     debugPrint('    ✅ Created exercise ${exercise.serverId}');
   }
 
+  /// There is no `PUT /exercises/{id}` route on the API. A [LocalExercise] is
+  /// only ever created locally - `ModelMapper.exerciseToLocal` emits `synced` or
+  /// `pending_create`, and no repository path marks one `pending_update`. The
+  /// single case still handled here is a legacy `serverId == 0` row that
+  /// predates `ModelMapper.publicRowId`: it carries no server identity, so it is
+  /// converted to an initial CREATE against its (already validated) parent
+  /// session. A row that holds a real, positive server id has no update route -
+  /// it is left pending and untouched rather than dispatched to a 404.
   Future<void> _syncUpdateExercise(
     Isar db,
     LocalExercise exercise,
+    LocalSession parentSession,
     SessionRequestContext context,
-    Map<int, int?> sessionCache,
   ) async {
-    if (_positiveServerId(exercise.serverId) == null) {
-      // No server identity (never synced, or a legacy `serverId == 0`):
-      // convert to an initial CREATE carrying the row's latest state.
-      final parentSession = await db.localSessions.get(exercise.sessionLocalId);
-      if (parentSession != null &&
-          _positiveServerId(parentSession.serverId) != null &&
-          parentSession.userId == context.epochToken.userId) {
-        await _syncCreateExercise(
-          db,
-          exercise,
-          parentSession,
-          context,
-          sessionCache,
-        );
-      }
+    if (_positiveServerId(exercise.serverId) != null) {
       return;
     }
 
-    await _apiService.put<void>(
-      '${ApiConfig.exercises}/${exercise.serverId}',
-      data: {
-        'name': exercise.name,
-        'duration': exercise.duration,
-        'restTime': exercise.restTime,
-        'notes': exercise.notes,
-      },
-      sessionContext: context,
-    );
-    _assertCurrent(context);
-
-    final target = await _reacquireOwnedExercise(
-      db,
-      exercise.localId,
-      context.epochToken.userId,
-    );
-    _assertCurrent(context);
-    if (target == null) return;
-
-    await _runTestHook(beforeAckWriteTxnForTesting);
-    await db.writeTxn(() async {
-      await _runTestHook(insideAckWriteTxnForTesting);
-      _assertCurrent(context);
-      final reFetched = await db.localExercises.get(exercise.localId);
-      if (reFetched == null) return;
-      reFetched.isSynced = true;
-      reFetched.syncStatus = 'synced';
-      await db.localExercises.put(reFetched);
-    });
-
-    debugPrint('    ✅ Updated exercise ${exercise.serverId}');
+    // The caller (`_syncExercises`) has already gated on a positive parent
+    // `serverId` and current-user ownership; re-assert defensively before
+    // spending a CREATE.
+    if (_positiveServerId(parentSession.serverId) != null &&
+        parentSession.userId == context.epochToken.userId) {
+      await _syncCreateExercise(
+        db,
+        exercise,
+        parentSession,
+        context,
+        <int, int?>{},
+      );
+    }
   }
 
+  /// There is no `DELETE /exercises/{id}` route on the API. As with
+  /// [_syncUpdateExercise] the only real case is a legacy `serverId == 0` row:
+  /// it has nothing on the server, so it is removed locally only - never
+  /// `DELETE /exercises/0`. A row with a real, positive server id has no delete
+  /// route and is left pending and untouched.
   Future<void> _syncDeleteExercise(
     Isar db,
     LocalExercise exercise,
     SessionRequestContext context,
-    Map<int, int?> sessionCache,
   ) async {
-    // A never-synced row (or a legacy `serverId == 0`) has nothing on the
-    // server: skip the DELETE, remove it locally only.
     if (_positiveServerId(exercise.serverId) != null) {
-      await _apiService.delete(
-        '${ApiConfig.exercises}/${exercise.serverId}',
-        sessionContext: context,
-      );
-      _assertCurrent(context);
+      return;
     }
 
     final target = await _reacquireOwnedExercise(
@@ -1215,7 +1188,7 @@ class SyncService {
       await db.localExercises.delete(reFetched.localId);
     });
 
-    debugPrint('    ✅ Deleted exercise');
+    debugPrint('    ✅ Removed legacy unsynced exercise locally');
   }
 
   // ========== Exercise Set Sync Methods (grandchild of Session) ==========
@@ -1286,7 +1259,14 @@ class SyncService {
             );
             break;
           case 'pending_update':
-            await _syncUpdateSet(db, set, context, sessionCache, exerciseCache);
+            await _syncUpdateSet(
+              db,
+              set,
+              parentExercise,
+              context,
+              sessionCache,
+              exerciseCache,
+            );
             break;
           case 'pending_delete':
             await _syncDeleteSet(db, set, context, sessionCache, exerciseCache);
@@ -1374,6 +1354,7 @@ class SyncService {
   Future<void> _syncUpdateSet(
     Isar db,
     LocalExerciseSet set,
+    LocalExercise parentExercise,
     SessionRequestContext context,
     Map<int, int?> sessionCache,
     Map<int, int?> exerciseCache,
@@ -1381,34 +1362,36 @@ class SyncService {
     if (_positiveServerId(set.serverId) == null) {
       // No server identity (never synced, or a legacy `serverId == 0`):
       // convert to an initial CREATE. `_syncCreateSet` sends the set's latest
-      // `isCompleted` / `completedAt` / reps / weight, so a legacy pending
-      // row that was completed offline before its first sync reaches the
-      // server with its completed state.
-      final parentExercise = await db.localExercises.get(set.exerciseLocalId);
-      if (parentExercise != null &&
-          _positiveServerId(parentExercise.serverId) != null) {
-        final owner = await _sessionOwner(
-          db,
-          parentExercise.sessionLocalId,
-          sessionCache,
-        );
-        if (owner == context.epochToken.userId) {
-          await _syncCreateSet(
-            db,
-            set,
-            parentExercise,
-            context,
-            sessionCache,
-            exerciseCache,
-          );
-        }
-      }
+      // `isCompleted` / `completedAt` / reps / weight, so a legacy pending row
+      // completed offline before its first sync reaches the server with its
+      // completed state. `_syncExerciseSets` has already gated on a positive
+      // parent `serverId` and current-user ownership of the grandparent session.
+      await _syncCreateSet(
+        db,
+        set,
+        parentExercise,
+        context,
+        sessionCache,
+        exerciseCache,
+      );
       return;
     }
 
+    // The API's `PUT /exercisesets/{id}` (ExerciseSetsController.UpdateExerciseSet)
+    // requires `body.id == {route id}` - a mismatch is a deterministic 400 - and
+    // requires the set's parent `exerciseId` so it is never reparented. Send the
+    // resolved positive server ids for both; never a local id or `0`. Success is
+    // 204 No Content and `put<void>` discards the (absent) body.
+    //
+    // `dispatchedAt` pins the exact local revision being synced so the
+    // acknowledgment below can detect a same-session mutation that raced in
+    // during the await.
+    final dispatchedAt = set.lastModifiedLocal;
     await _apiService.put<void>(
       '${ApiConfig.exerciseSets}/${set.serverId}',
       data: {
+        'id': set.serverId,
+        'exerciseId': parentExercise.serverId,
         'setNumber': set.setNumber,
         'reps': set.reps,
         'weight': set.weight,
@@ -1435,6 +1418,12 @@ class SyncService {
       _assertCurrent(context);
       final reFetched = await db.localExerciseSets.get(set.localId);
       if (reFetched == null) return;
+      // Only acknowledge the exact local revision that was dispatched. Every
+      // same-session mutation of a set (`_applyLocalComplete`,
+      // `_markPendingDelete`) advances `lastModifiedLocal`, so a changed value
+      // here means a newer edit or a queued delete raced in during the await -
+      // leave it for the next pass rather than overwrite newer local intent.
+      if (reFetched.lastModifiedLocal != dispatchedAt) return;
       reFetched.isSynced = true;
       reFetched.syncStatus = 'synced';
       await db.localExerciseSets.put(reFetched);
