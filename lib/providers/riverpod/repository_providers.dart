@@ -187,8 +187,15 @@ final programsRepositoryProvider = Provider<ProgramsRepository>((ref) {
   final apiService = ref.watch(apiServiceProvider);
   final connectivity = ref.watch(connectivityServiceProvider);
   final localDb = ref.watch(localDatabaseServiceProvider);
-  final authService = ref.watch(authServiceProvider);
-  return ProgramsRepository(apiService, connectivity, localDb, authService);
+  final sessionEpoch = ref.watch(userSessionEpochProvider);
+  final sessionCoordinator = ref.watch(sessionRequestCoordinatorProvider);
+  return ProgramsRepository(
+    apiService,
+    sessionEpoch,
+    sessionCoordinator,
+    connectivity,
+    localDb,
+  );
 });
 
 /// Running repository provider

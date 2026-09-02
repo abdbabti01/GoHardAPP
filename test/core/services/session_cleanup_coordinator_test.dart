@@ -358,7 +358,7 @@ void main() {
     analyticsProvider = AnalyticsProvider(mockAnalyticsRepo, sessionEpoch);
     achievementsProvider = AchievementsProvider(mockAchievementRepo);
     friendsProvider = FriendsProvider(mockFriendsRepo, sessionEpoch);
-    programsProvider = ProgramsProvider(mockProgramsRepo, null);
+    programsProvider = ProgramsProvider(mockProgramsRepo, sessionEpoch, null);
     workoutTemplateProvider = WorkoutTemplateProvider(
       mockWorkoutTemplateRepo,
       ConnectivityService.instance,

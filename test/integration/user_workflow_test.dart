@@ -1184,6 +1184,7 @@ void main() {
 
       final provider = ProgramsProvider(
         mockProgramsRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1231,6 +1232,7 @@ void main() {
 
       final provider = ProgramsProvider(
         mockProgramsRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1266,6 +1268,7 @@ void main() {
 
       final provider = ProgramsProvider(
         mockProgramsRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1888,6 +1891,7 @@ void main() {
 
       final provider = ProgramsProvider(
         mockProgramsRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1932,6 +1936,7 @@ void main() {
 
       final provider = ProgramsProvider(
         mockProgramsRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2019,6 +2024,7 @@ void main() {
 
       final provider = ProgramsProvider(
         mockProgramsRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2608,6 +2614,7 @@ void main() {
 
       final provider = ProgramsProvider(
         mockProgramsRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
