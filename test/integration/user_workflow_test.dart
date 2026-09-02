@@ -286,6 +286,7 @@ void main() {
 
         final activeWorkoutProvider = ActiveWorkoutProvider(
           mockSessionRepository,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -404,6 +405,7 @@ void main() {
 
         final provider = ActiveWorkoutProvider(
           mockSessionRepository,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -454,6 +456,7 @@ void main() {
 
         final provider = ActiveWorkoutProvider(
           mockSessionRepository,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -1338,6 +1341,7 @@ void main() {
 
       final provider = ActiveWorkoutProvider(
         mockSessionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1431,6 +1435,7 @@ void main() {
 
       final provider = ActiveWorkoutProvider(
         mockSessionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1526,6 +1531,7 @@ void main() {
 
         final provider = ActiveWorkoutProvider(
           mockSessionRepository,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -1564,6 +1570,7 @@ void main() {
 
       final provider = ActiveWorkoutProvider(
         mockSessionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1601,6 +1608,7 @@ void main() {
 
         final provider = ActiveWorkoutProvider(
           mockSessionRepository,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -1663,6 +1671,7 @@ void main() {
 
       final provider = ActiveWorkoutProvider(
         mockSessionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2361,6 +2370,7 @@ void main() {
 
       final provider = ActiveWorkoutProvider(
         mockSessionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2496,6 +2506,7 @@ void main() {
 
       final provider = ActiveWorkoutProvider(
         mockSessionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2536,6 +2547,7 @@ void main() {
 
       final provider = ActiveWorkoutProvider(
         mockSessionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2649,6 +2661,7 @@ void main() {
 
       final provider = ActiveWorkoutProvider(
         mockSessionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2711,6 +2724,7 @@ void main() {
 
       final provider = ActiveWorkoutProvider(
         mockSessionRepository,
+        sessionEpoch,
         mockConnectivity,
       );
 

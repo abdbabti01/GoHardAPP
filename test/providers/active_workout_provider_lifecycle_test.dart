@@ -2,6 +2,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/models/session.dart';
 import 'package:go_hard_app/providers/active_workout_provider.dart';
 
@@ -43,11 +44,13 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late MockSessionRepository mockRepo;
+  late UserSessionEpoch epoch;
   late DateTime fakeNow;
   late ActiveWorkoutProvider provider;
 
   setUp(() {
     mockRepo = MockSessionRepository();
+    epoch = UserSessionEpoch()..activate(1);
     // loadSession() intentionally still uses the real wall clock (out of
     // scope for this narrowly-targeted fix - only lifecycle recalculation
     // uses the injectable clock). Anchor fakeNow to the real "now" at
@@ -55,7 +58,7 @@ void main() {
     // it deterministically from there to represent time passing while the
     // app is suspended.
     fakeNow = DateTime.now().toUtc();
-    provider = ActiveWorkoutProvider(mockRepo, null, () => fakeNow);
+    provider = ActiveWorkoutProvider(mockRepo, epoch, null, () => fakeNow);
   });
 
   tearDown(() {

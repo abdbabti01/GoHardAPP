@@ -4,6 +4,7 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:go_hard_app/data/models/session.dart';
 import 'package:go_hard_app/data/models/exercise.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/repositories/session_repository.dart';
 import 'package:go_hard_app/providers/active_workout_provider.dart';
 
@@ -34,11 +35,13 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late MockSessionRepository mockRepo;
+  late UserSessionEpoch epoch;
   late ActiveWorkoutProvider provider;
 
   setUp(() {
     mockRepo = MockSessionRepository();
-    provider = ActiveWorkoutProvider(mockRepo);
+    epoch = UserSessionEpoch()..activate(1);
+    provider = ActiveWorkoutProvider(mockRepo, epoch);
   });
 
   tearDown(() {

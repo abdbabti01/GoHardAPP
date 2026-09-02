@@ -326,7 +326,11 @@ void main() {
     sessionEpoch = UserSessionEpoch()..activate(1);
 
     runningProvider = RunningProvider(mockRunningRepo, sessionEpoch, null);
-    activeWorkoutProvider = ActiveWorkoutProvider(mockSessionRepo, null);
+    activeWorkoutProvider = ActiveWorkoutProvider(
+      mockSessionRepo,
+      sessionEpoch,
+      null,
+    );
     sessionsProvider = SessionsProvider(
       mockSessionRepo,
       sessionEpoch,

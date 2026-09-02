@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:go_hard_app/data/models/session.dart';
 import 'package:go_hard_app/data/models/exercise.dart';
 import 'package:go_hard_app/core/services/connectivity_service.dart';
+import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/repositories/session_repository.dart';
 import 'package:go_hard_app/providers/active_workout_provider.dart';
 import 'package:go_hard_app/providers/music_player_provider.dart';
@@ -70,7 +71,11 @@ Future<void> _pumpActiveWorkoutScreen(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<ActiveWorkoutProvider>(
-          create: (_) => ActiveWorkoutProvider(mockRepo),
+          create:
+              (_) => ActiveWorkoutProvider(
+                mockRepo,
+                UserSessionEpoch()..activate(1),
+              ),
         ),
         ChangeNotifierProvider<MusicPlayerProvider>(
           create: (_) => MusicPlayerProvider(),
