@@ -490,22 +490,28 @@ void main() async {
                     context.read<SessionRequestCoordinator>(),
                   ),
         ),
-        ChangeNotifierProxyProvider3<
+        ChangeNotifierProxyProvider2<
           SessionRepository,
-          AuthService,
           ConnectivityService,
           SessionsProvider
         >(
           create:
               (context) => SessionsProvider(
                 context.read<SessionRepository>(),
-                context.read<AuthService>(),
+                // UserSessionEpoch is a fixed .value() singleton, never
+                // reactively watched, so it is read directly here rather
+                // than added as a formal ProxyProvider type parameter.
+                context.read<UserSessionEpoch>(),
                 context.read<ConnectivityService>(),
               ),
           update:
-              (_, sessionRepo, authService, connectivity, previous) =>
+              (context, sessionRepo, connectivity, previous) =>
                   previous ??
-                  SessionsProvider(sessionRepo, authService, connectivity),
+                  SessionsProvider(
+                    sessionRepo,
+                    context.read<UserSessionEpoch>(),
+                    connectivity,
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           SessionRepository,

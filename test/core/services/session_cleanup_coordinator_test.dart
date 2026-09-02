@@ -329,7 +329,7 @@ void main() {
     activeWorkoutProvider = ActiveWorkoutProvider(mockSessionRepo, null);
     sessionsProvider = SessionsProvider(
       mockSessionRepo,
-      mockAuthService,
+      sessionEpoch,
       ConnectivityService.instance,
     );
     messagesProvider = MessagesProvider(mockMessagesRepo, sessionEpoch);
