@@ -338,7 +338,7 @@ void main() {
       sessionEpoch,
       null,
     );
-    goalsProvider = GoalsProvider(mockGoalsRepo, null);
+    goalsProvider = GoalsProvider(mockGoalsRepo, sessionEpoch, null);
     logSetsProvider = LogSetsProvider(mockExerciseRepo, sessionEpoch);
     chatProvider = ChatProvider(
       mockChatRepo,
