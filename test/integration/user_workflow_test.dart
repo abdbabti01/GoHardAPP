@@ -280,7 +280,7 @@ void main() {
         // Create providers
         final sessionsProvider = SessionsProvider(
           mockSessionRepository,
-          mockAuthService,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -510,7 +510,7 @@ void main() {
 
         final provider = SessionsProvider(
           mockSessionRepository,
-          mockAuthService,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -547,7 +547,7 @@ void main() {
 
       final provider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -591,7 +591,7 @@ void main() {
 
         final provider = SessionsProvider(
           mockSessionRepository,
-          mockAuthService,
+          sessionEpoch,
           mockConnectivity,
         );
 
@@ -654,7 +654,7 @@ void main() {
 
       final provider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -722,7 +722,7 @@ void main() {
 
       final provider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -811,7 +811,7 @@ void main() {
 
       final provider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1299,7 +1299,7 @@ void main() {
 
       final provider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1397,7 +1397,7 @@ void main() {
 
       final provider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1714,7 +1714,7 @@ void main() {
 
       final provider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1764,7 +1764,7 @@ void main() {
 
       final provider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1828,7 +1828,7 @@ void main() {
 
       final provider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -1983,7 +1983,7 @@ void main() {
 
       final sessionsProvider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
@@ -2458,7 +2458,7 @@ void main() {
 
       final provider = SessionsProvider(
         mockSessionRepository,
-        mockAuthService,
+        sessionEpoch,
         mockConnectivity,
       );
 
