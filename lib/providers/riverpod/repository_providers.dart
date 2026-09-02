@@ -158,7 +158,14 @@ final workoutTemplateRepositoryProvider = Provider<WorkoutTemplateRepository>((
 final goalsRepositoryProvider = Provider<GoalsRepository>((ref) {
   final apiService = ref.watch(apiServiceProvider);
   final connectivity = ref.watch(connectivityServiceProvider);
-  return GoalsRepository(apiService, connectivity);
+  final sessionEpoch = ref.watch(userSessionEpochProvider);
+  final sessionCoordinator = ref.watch(sessionRequestCoordinatorProvider);
+  return GoalsRepository(
+    apiService,
+    sessionEpoch,
+    sessionCoordinator,
+    connectivity,
+  );
 });
 
 /// Body metrics repository provider
