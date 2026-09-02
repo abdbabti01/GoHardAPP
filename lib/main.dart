@@ -521,11 +521,17 @@ void main() async {
           create:
               (context) => ActiveWorkoutProvider(
                 context.read<SessionRepository>(),
+                context.read<UserSessionEpoch>(),
                 context.read<ConnectivityService>(),
               ),
           update:
-              (_, sessionRepo, connectivity, previous) =>
-                  previous ?? ActiveWorkoutProvider(sessionRepo, connectivity),
+              (context, sessionRepo, connectivity, previous) =>
+                  previous ??
+                  ActiveWorkoutProvider(
+                    sessionRepo,
+                    context.read<UserSessionEpoch>(),
+                    connectivity,
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           ExerciseRepository,
