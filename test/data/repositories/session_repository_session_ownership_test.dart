@@ -9,6 +9,7 @@ import 'package:isar/isar.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
+import 'package:go_hard_app/core/constants/api_config.dart';
 import 'package:go_hard_app/core/services/connectivity_service.dart';
 import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/user_session_epoch.dart';
@@ -1292,6 +1293,280 @@ void main() {
       expect(stored.syncStatus, 'pending_update');
     });
   });
+
+  // ============ Foreground CREATE in-flight-edit revision guard ============
+  //
+  // _syncCreateSessionToServer must not overwrite a local edit / completion /
+  // queued delete that raced its POST await, and must never re-create a row
+  // once a positive serverId is attached. dispatchedAt is pinned by
+  // createSession from the owned row it just persisted, BEFORE scheduling.
+  group('foreground CREATE revision guard', () {
+    test(
+      '17. online createSession schedules exactly one CREATE POST',
+      () async {
+        loginAs(userA);
+        adapter.responder =
+            (_) async => jsonResponse(sessionJson(id: 300, userId: userA));
+
+        await repository.createSession(
+          _sessionModel(userId: userA, name: 'Fresh'),
+        );
+        await scheduledBackgroundSyncs.single;
+
+        expect(adapter.capturedRequests, hasLength(1));
+        expect(adapter.capturedRequests.single.method, 'POST');
+        expect(adapter.capturedRequests.single.path, ApiConfig.sessions);
+      },
+    );
+
+    test('18. a normal foreground acknowledgment becomes synced with the '
+        'server id and version', () async {
+      loginAs(userA);
+      adapter.responder =
+          (_) async =>
+              jsonResponse(sessionJson(id: 301, userId: userA, version: 3));
+
+      final created = await repository.createSession(
+        _sessionModel(userId: userA, name: 'Fresh'),
+      );
+      await scheduledBackgroundSyncs.single;
+
+      final stored = await isar.localSessions.get(created.id);
+      expect(stored!.isSynced, isTrue);
+      expect(stored.syncStatus, 'synced');
+      expect(stored.serverId, 301);
+      expect(stored.version, 3);
+    });
+
+    test(
+      '19/20. a completion racing the foreground POST is preserved; the '
+      'server id/version are attached and the row stays pending_update',
+      () async {
+        loginAs(userA);
+        final responseCompleter = Completer<ResponseBody>();
+        adapter.responder = (_) => responseCompleter.future;
+
+        final dispatched = adapter.nextDispatch();
+        final created = await repository.createSession(
+          _sessionModel(userId: userA, name: 'Fresh'),
+        );
+        await dispatched;
+
+        // Completion lands while the CREATE POST is outstanding.
+        await repository.updateSessionStatus(
+          created.id,
+          'completed',
+          duration: 3600,
+        );
+
+        responseCompleter.complete(
+          jsonResponse(sessionJson(id: 302, userId: userA, version: 1)),
+        );
+        await scheduledBackgroundSyncs.single;
+
+        final stored = await isar.localSessions.get(created.id);
+        expect(stored!.serverId, 302);
+        expect(stored.version, 1);
+        expect(stored.isSynced, isFalse);
+        expect(stored.syncStatus, 'pending_update');
+        expect(stored.status, 'completed');
+        expect(stored.duration, 3600);
+      },
+    );
+
+    test('20b. the raced foreground acknowledgment advances lastModifiedServer '
+        'from a seeded prior value - it records that the server accepted the '
+        'CREATE, not leaves the stale timestamp', () async {
+      loginAs(userA);
+      final responseCompleter = Completer<ResponseBody>();
+      adapter.responder = (_) => responseCompleter.future;
+
+      final dispatched = adapter.nextDispatch();
+      final created = await repository.createSession(
+        _sessionModel(userId: userA, name: 'Fresh'),
+      );
+      await dispatched;
+
+      // _createLocalSession leaves lastModifiedServer null; seed a
+      // distinguishable prior server-confirmation instant (years in the
+      // past, so DateTime.now() in the ack is unambiguously after it - no
+      // clock seam or wall-clock delay needed). Only lastModifiedServer is
+      // touched, so dispatchedAt still matches the row's lastModifiedLocal
+      // until the racing edit below advances it.
+      final seededServerStamp = DateTime.utc(2020, 1, 1);
+      await isar.writeTxn(() async {
+        final row = await isar.localSessions.get(created.id);
+        row!.lastModifiedServer = seededServerStamp;
+        await isar.localSessions.put(row);
+      });
+
+      // Completion lands while the CREATE POST is still outstanding.
+      await repository.updateSessionStatus(
+        created.id,
+        'completed',
+        duration: 3600,
+      );
+
+      responseCompleter.complete(
+        jsonResponse(sessionJson(id: 305, userId: userA, version: 7)),
+      );
+      await scheduledBackgroundSyncs.single;
+
+      final stored = await isar.localSessions.get(created.id);
+      // Local edited fields survive the raced acknowledgment.
+      expect(stored!.status, 'completed');
+      expect(stored.duration, 3600);
+      // Server identity + authoritative version are attached.
+      expect(stored.serverId, 305);
+      expect(stored.version, 7);
+      // The row is re-queued for a follow-up PUT, not marked synced.
+      expect(stored.isSynced, isFalse);
+      expect(stored.syncStatus, 'pending_update');
+      // The server-acceptance timestamp advanced from the seeded value.
+      // isAfter compares the instant regardless of the isUtc flag.
+      expect(stored.lastModifiedServer, isNotNull);
+      expect(
+        stored.lastModifiedServer!.isAfter(seededServerStamp),
+        isTrue,
+        reason:
+            'the raced ack handled a successful server CREATE and must '
+            'stamp lastModifiedServer, not leave the stale seeded value',
+      );
+    });
+
+    test('21. after the raced ack the next edit issues a PUT, never a second '
+        'CREATE POST', () async {
+      loginAs(userA);
+      final responseCompleter = Completer<ResponseBody>();
+      adapter.responder = (options) {
+        if (options.method == 'PUT') {
+          return Future.value(
+            jsonResponse(
+              sessionJson(
+                id: 303,
+                userId: userA,
+                name: 'Renamed',
+                status: 'completed',
+                version: 2,
+              ),
+            ),
+          );
+        }
+        return responseCompleter.future;
+      };
+
+      final dispatched = adapter.nextDispatch();
+      final created = await repository.createSession(
+        _sessionModel(userId: userA, name: 'Fresh'),
+      );
+      await dispatched;
+      await repository.updateSessionStatus(created.id, 'completed');
+      responseCompleter.complete(
+        jsonResponse(sessionJson(id: 303, userId: userA)),
+      );
+      await scheduledBackgroundSyncs.single;
+
+      adapter.capturedRequests.clear();
+      await repository.updateSessionName(created.id, 'Renamed');
+      await scheduledBackgroundSyncs.last;
+
+      expect(
+        adapter.capturedRequests.any((r) => r.method == 'POST'),
+        isFalse,
+        reason: 'the row already carries serverId 303 - never re-create it',
+      );
+      expect(
+        adapter.capturedRequests.any(
+          (r) => r.method == 'PUT' && r.path == ApiConfig.sessionById(303),
+        ),
+        isTrue,
+      );
+      final stored = await isar.localSessions.get(created.id);
+      expect(stored!.isSynced, isTrue);
+      expect(stored.syncStatus, 'synced');
+    });
+
+    test('22. B logging in during the detached CREATE POST causes no '
+        'cross-session write', () async {
+      loginAs(userA);
+      final responseCompleter = Completer<ResponseBody>();
+      adapter.responder = (_) => responseCompleter.future;
+
+      final dispatched = adapter.nextDispatch();
+      final created = await repository.createSession(
+        _sessionModel(userId: userA, name: 'Fresh'),
+      );
+      await dispatched;
+
+      logout();
+      loginAs(userB);
+      responseCompleter.complete(
+        jsonResponse(sessionJson(id: 304, userId: userA)),
+      );
+      await scheduledBackgroundSyncs.single;
+
+      final stored = await isar.localSessions.get(created.id);
+      expect(stored!.serverId, isNull);
+      expect(stored.isSynced, isFalse);
+      expect(stored.syncStatus, 'pending_create');
+      expect(stored.userId, userA);
+    });
+
+    test('23. a foreground CREATE HTTP failure leaves the row pending_create '
+        'with no serverId', () async {
+      loginAs(userA);
+      adapter.responder =
+          (_) async => jsonResponse({'message': 'boom'}, statusCode: 500);
+
+      final created = await repository.createSession(
+        _sessionModel(userId: userA, name: 'Fresh'),
+      );
+      await scheduledBackgroundSyncs.single;
+
+      final stored = await isar.localSessions.get(created.id);
+      expect(stored!.serverId, isNull);
+      expect(stored.isSynced, isFalse);
+      expect(stored.syncStatus, 'pending_create');
+    });
+
+    test(
+      '35. every routine local Session edit advances lastModifiedLocal',
+      () async {
+        loginAs(userA);
+        // Offline so each edit is purely local (no serverId, no push).
+        when(mockConnectivity.isOnline).thenReturn(false);
+        final created = await repository.createSession(
+          _sessionModel(userId: userA, name: 'Fresh'),
+        );
+
+        Future<DateTime> rev(int id) async =>
+            (await isar.localSessions.get(id))!.lastModifiedLocal;
+
+        final r0 = await rev(created.id);
+        await repository.updateSessionStatus(created.id, 'in_progress');
+        final r1 = await rev(created.id);
+        await repository.updateSessionName(created.id, 'Renamed');
+        final r2 = await rev(created.id);
+        await repository.pauseSession(created.id, DateTime.now().toUtc());
+        final r3 = await rev(created.id);
+
+        expect(r1.isAfter(r0) || r1.isAtSameMomentAs(r0), isTrue);
+        expect(r2.isAfter(r1) || r2.isAtSameMomentAs(r1), isTrue);
+        expect(r3.isAfter(r2) || r3.isAtSameMomentAs(r2), isTrue);
+        // And at least one strictly advanced (edits are not all same-instant).
+        expect(r3.isAfter(r0), isTrue);
+      },
+    );
+  });
+
+  // Delete-during-CREATE compensation is NOT part of this PR - the
+  // foreground CREATE POST and an independent SyncService pass share no
+  // coordination, so a delete of a still-server-id-less session while its
+  // CREATE is in flight can orphan a committed server row. That is a
+  // pre-existing gap (unchanged `_markForDeletion` hard-deletes the local
+  // row) and is deferred to the Session idempotency / operation-identity PR.
+  // The reproducing trace lives in
+  // `session_create_delete_cross_operation_race_test.dart`.
 }
 
 /// Minimal Session-model builder for [SessionRepository.createSession].
