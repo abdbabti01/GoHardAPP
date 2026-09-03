@@ -5,7 +5,31 @@
 
 set -e
 
-cd "$(git rev-parse --show-toplevel)"
+# Resolve the repo root while Git's exported environment is still intact.
+repo_root="$(git rev-parse --show-toplevel)"
+
+# Git exports repo-local variables (GIT_DIR, GIT_INDEX_FILE, GIT_WORK_TREE,
+# GIT_PREFIX, GIT_CONFIG_PARAMETERS, ...) into the hook's environment. Any
+# `git` invocation a child process makes then targets THIS repository,
+# regardless of that process's own -C flag or working directory.
+#
+# `flutter` / `dart` shell out to git internally. In particular Flutter's
+# bin/internal/update_engine_version.{ps1,sh} runs
+#   git -C "$FLUTTER_ROOT" ls-files bin/internal/engine.version
+# to decide whether engine.version is tracked (and so must be left alone).
+# Under the inherited GIT_DIR that query resolves against THIS repo - which
+# has no such file - so the "already tracked, skip" guard is bypassed, the
+# fallback engine-version computation yields an empty string (this is not a
+# Flutter fusion checkout), and the script overwrites the real Flutter SDK's
+# bin/internal/engine.version with "", breaking `dart` / `flutter` globally.
+#
+# Clear Git's repo-local variables before launching any tool so their own
+# git calls resolve against their own repositories. `git rev-parse
+# --local-env-vars` is Git's authoritative list (the same technique as
+# Git's own git-sh-setup `clear_local_git_env`).
+unset $(git rev-parse --local-env-vars)
+
+cd "$repo_root"
 
 echo "Running pre-commit checks (dart format, flutter analyze)..."
 
