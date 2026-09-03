@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -65,13 +66,63 @@ class _CountingSessionEpoch extends UserSessionEpoch {
 /// the real interceptor pipeline produced - never a stub of it. Mirrors the
 /// fake adapter used in api_service_session_context_test.dart and
 /// nutrition_repository_background_session_test.dart.
+///
+/// ## Causal dispatch synchronization ([nextDispatch])
+///
+/// Tests that need to act on an in-flight request (assert the captured
+/// request, invalidate the session, start a concurrent call, release a
+/// held response) must wait for a signal that means EXACTLY "the request
+/// reached this transport and was captured" - not "some number of
+/// event-loop turns elapsed". [nextDispatch] is that signal:
+///
+/// - each call enqueues one FIFO waiter and returns its `Future`;
+/// - the next [fetch] invocation completes the oldest waiter, from inside
+///   `fetch()`, AFTER the request has been added to [capturedRequests], with
+///   that exact [RequestOptions];
+/// - N `nextDispatch()` calls resolve, in order, for the next N requests.
+///
+/// It never resolves on a turn count, a timer, or a wall-clock deadline, so
+/// GC / heavy-suite pressure cannot make it fire early or late. Any waiter
+/// still unclaimed at `tearDown` is failed via [failPendingDispatchWaiters]
+/// so a converted test that never issues its expected request fails fast
+/// instead of hanging until the per-test timeout.
 class _FakeHttpClientAdapter implements HttpClientAdapter {
   final List<RequestOptions> capturedRequests = [];
+
+  final Queue<Completer<RequestOptions>> _dispatchWaiters =
+      Queue<Completer<RequestOptions>>();
 
   /// Called for every request; return a Future that resolves (or never
   /// resolves, for pending/cancellation scenarios) with the response to
   /// hand back. Defaults to an immediate empty 200 JSON body.
   Future<ResponseBody> Function(RequestOptions options)? responder;
+
+  /// Resolves (with the captured [RequestOptions]) the next time [fetch]
+  /// receives a request. FIFO across multiple pending waiters. Purely
+  /// causal - see the class doc comment. Call this BEFORE starting the
+  /// operation that issues the request, so the waiter is armed when
+  /// [fetch] runs; an unclaimed waiter is failed (not hung) by
+  /// [failPendingDispatchWaiters] in `tearDown`.
+  Future<RequestOptions> nextDispatch() {
+    final completer = Completer<RequestOptions>();
+    _dispatchWaiters.add(completer);
+    return completer.future;
+  }
+
+  /// Fails every still-unclaimed [nextDispatch] waiter. Called from
+  /// `tearDown` so a test that registered a waiter but never triggered the
+  /// matching request surfaces a fast, explicit error rather than a
+  /// timeout-driven "did not complete" cascade.
+  void failPendingDispatchWaiters() {
+    while (_dispatchWaiters.isNotEmpty) {
+      final completer = _dispatchWaiters.removeFirst();
+      if (!completer.isCompleted) {
+        completer.completeError(
+          StateError('nextDispatch() waiter never received a request'),
+        );
+      }
+    }
+  }
 
   @override
   Future<ResponseBody> fetch(
@@ -80,6 +131,9 @@ class _FakeHttpClientAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) {
     capturedRequests.add(options);
+    if (_dispatchWaiters.isNotEmpty) {
+      _dispatchWaiters.removeFirst().complete(options);
+    }
     final respond = responder;
     if (respond != null) {
       return respond(options);
@@ -113,6 +167,31 @@ void main() {
   late ApiService apiService;
   late _FakeHttpClientAdapter adapter;
   late SyncService syncService;
+
+  /// Every held response `Completer` a test creates via [heldResponse].
+  /// `tearDown` completes any that a failing assertion left pending, so one
+  /// broken expectation can never hang the isolate and time out every test
+  /// after it in this file.
+  late List<Completer<ResponseBody>> heldResponses;
+
+  /// Completes every not-yet-completed [heldResponses] entry with an empty
+  /// 200 body. Idempotent (skips already-completed completers). Run by
+  /// `tearDown`; also invoked directly by a regression test.
+  void releaseHeldResponses() {
+    for (final held in heldResponses) {
+      if (!held.isCompleted) {
+        held.complete(
+          ResponseBody.fromString(
+            '{}',
+            200,
+            headers: {
+              'content-type': ['application/json'],
+            },
+          ),
+        );
+      }
+    }
+  }
 
   const userA = 1;
   const userB = 2;
@@ -152,6 +231,7 @@ void main() {
       inspector: false,
     );
 
+    heldResponses = [];
     currentAuthUserId = null;
     mockAuthService = MockAuthService();
     when(
@@ -189,6 +269,12 @@ void main() {
     syncService.beforeAckWriteTxnForTesting = null;
     syncService.insideAckWriteTxnForTesting = null;
     syncService.beforePhaseCheckForTesting = null;
+    // Failure-safe: release any held response a failing assertion skipped,
+    // and fail (rather than hang on) any unclaimed dispatch waiter, BEFORE
+    // resetting the service / closing Isar so the freed continuations run
+    // against still-valid state.
+    releaseHeldResponses();
+    adapter.failPendingDispatchWaiters();
     SyncService.reset();
     await isar.close();
     if (await tempDir.exists()) {
@@ -235,6 +321,16 @@ void main() {
           'content-type': ['application/json'],
         },
       );
+
+  /// A `Completer<ResponseBody>` whose response the test releases explicitly
+  /// (`completer.complete(...)`), registered with [heldResponses] so
+  /// `tearDown` completes it even if an assertion fails first. Use this
+  /// instead of `Completer<ResponseBody>()` for any held/pending response.
+  Completer<ResponseBody> heldResponse() {
+    final completer = Completer<ResponseBody>();
+    heldResponses.add(completer);
+    return completer;
+  }
 
   Map<String, dynamic> sessionJson({
     required int id,
@@ -287,21 +383,47 @@ void main() {
       loginAs(userA);
       await insertSession(uid: userA, name: 'Only');
 
-      final completer = Completer<ResponseBody>();
+      final completer = heldResponse();
       adapter.responder = (_) => completer.future;
 
+      final dispatched = adapter.nextDispatch();
       final first = syncService.sync();
-      await pumpEventQueue();
+      await dispatched;
       expect(adapter.capturedRequests, hasLength(1));
 
-      final second = syncService.sync();
-      await pumpEventQueue();
-      // No second dispatch was made for the concurrent call.
-      expect(adapter.capturedRequests, hasLength(1));
+      // The concurrent same-session call returns the in-flight pass's future
+      // and issues no HTTP of its own. `sync()` takes that decision
+      // synchronously - the active-operation dedup runs before its first
+      // await - so no event-loop settling is needed to observe it.
+      final logs = <String>[];
+      final originalDebugPrint = debugPrint;
+      debugPrint = (String? m, {int? wrapWidth}) {
+        if (m != null) logs.add(m);
+      };
+      late final Future<void> second;
+      try {
+        second = syncService.sync();
+      } finally {
+        debugPrint = originalDebugPrint;
+      }
+      expect(
+        adapter.capturedRequests,
+        hasLength(1),
+        reason: 'the concurrent call issued no second HTTP request',
+      );
+      expect(
+        logs.any((l) => l.contains('Sync already in progress')),
+        isTrue,
+        reason: 'the concurrent call hit the active-operation dedup branch',
+      );
 
       completer.complete(jsonResponse(sessionJson(id: 500, userId: userA)));
       await first;
       await second;
+
+      // Still exactly one dispatch after both futures settled - the two
+      // calls resolved off one physical pass.
+      expect(adapter.capturedRequests, hasLength(1));
 
       final stored = await isar.localSessions.get(
         (await isar.localSessions.where().findFirst())!.localId,
@@ -315,11 +437,12 @@ void main() {
       loginAs(userA);
       await insertSession(uid: userA, name: 'A session');
 
-      final aCompleter = Completer<ResponseBody>();
+      final aCompleter = heldResponse();
       adapter.responder = (_) => aCompleter.future;
 
+      final aDispatched = adapter.nextDispatch();
       final aFuture = syncService.sync();
-      await pumpEventQueue();
+      await aDispatched;
       expect(adapter.capturedRequests, hasLength(1));
       expect(syncService.isSyncing, isTrue);
 
@@ -329,11 +452,12 @@ void main() {
       loginAs(userB);
       await insertSession(uid: userB, name: 'B session');
 
-      final bCompleter = Completer<ResponseBody>();
+      final bCompleter = heldResponse();
       adapter.responder = (_) => bCompleter.future;
 
+      final bDispatched = adapter.nextDispatch();
       final bFuture = syncService.sync();
-      await pumpEventQueue();
+      await bDispatched;
       expect(
         adapter.capturedRequests,
         hasLength(2),
@@ -392,11 +516,12 @@ void main() {
         );
         await isar.writeTxn(() => isar.localPrograms.put(program));
 
-        final completer = Completer<ResponseBody>();
+        final completer = heldResponse();
         adapter.responder = (_) => completer.future;
 
+        final dispatched = adapter.nextDispatch();
         final future = syncService.sync();
-        await pumpEventQueue();
+        await dispatched;
         expect(adapter.capturedRequests, hasLength(1));
 
         // Invalidate while the session-create HTTP call is still pending -
@@ -486,11 +611,12 @@ void main() {
 
         loginAs(userA);
         await insertSession(uid: userA);
-        final completer = Completer<ResponseBody>();
+        final completer = heldResponse();
         adapter.responder = (_) => completer.future;
 
+        final dispatched = adapter.nextDispatch();
         final future = syncService.sync();
-        await pumpEventQueue();
+        await dispatched;
         expect(syncService.isSyncing, isTrue);
 
         // A superseded session must never see isSyncing as true for its own
@@ -626,11 +752,12 @@ void main() {
       loginAs(userA);
       await insertSession(uid: userA, name: 'A session');
 
-      final completer = Completer<ResponseBody>();
+      final completer = heldResponse();
       adapter.responder = (_) => completer.future;
 
+      final dispatched = adapter.nextDispatch();
       final future = syncService.sync();
-      await pumpEventQueue();
+      await dispatched;
 
       logout();
       loginAs(userB);
@@ -658,11 +785,12 @@ void main() {
       final session = await insertSession(uid: userA, name: 'A session');
       final staleLocalId = session.localId;
 
-      final completer = Completer<ResponseBody>();
+      final completer = heldResponse();
       adapter.responder = (_) => completer.future;
 
+      final dispatched = adapter.nextDispatch();
       final future = syncService.sync();
-      await pumpEventQueue();
+      await dispatched;
 
       // Replace the row at the exact same local ID before the response
       // arrives, simulating Isar reissuing an ID after a clearAll() wipe
@@ -701,10 +829,15 @@ void main() {
       loginAs(userA);
       final session = await insertSession(uid: userA, name: 'A session');
 
-      adapter.responder = (_) => Completer<ResponseBody>().future;
+      // Held and never explicitly completed - the transport "hangs" until
+      // the request scope is cancelled. `tearDown` releases it so the
+      // isolate never carries a permanently-pending Future.
+      final hung = heldResponse();
+      adapter.responder = (_) => hung.future;
 
+      final dispatched = adapter.nextDispatch();
       final future = syncService.sync();
-      await pumpEventQueue();
+      await dispatched;
       expect(adapter.capturedRequests, hasLength(1));
 
       sessionCoordinator.cancelCurrentGeneration();
@@ -743,11 +876,12 @@ void main() {
       );
       final staleLocalId = session.localId;
 
-      final completer = Completer<ResponseBody>();
+      final completer = heldResponse();
       adapter.responder = (_) => completer.future;
 
+      final dispatched = adapter.nextDispatch();
       final future = syncService.sync();
-      await pumpEventQueue();
+      await dispatched;
 
       // Replace the row at the same local ID with one owned by B before
       // the DELETE response arrives.
@@ -789,12 +923,13 @@ void main() {
         loginAs(userA);
         await insertSession(uid: userA, name: 'A session');
 
-        final aCompleter = Completer<ResponseBody>();
+        final aCompleter = heldResponse();
         adapter.responder = (_) => aCompleter.future;
 
         // 1 & 2. A starts sync and owns operation A, waiting on HTTP.
+        final aDispatched = adapter.nextDispatch();
         final aFuture = syncService.sync();
-        await pumpEventQueue();
+        await aDispatched;
         expect(adapter.capturedRequests, hasLength(1));
         expect(syncService.isSyncing, isTrue);
 
@@ -804,13 +939,16 @@ void main() {
         sessionCoordinator.cancelCurrentGeneration();
 
         // 4/5. B logs in and starts a fresh operation without waiting for A.
+        // B's response is held too, so B is deterministically mid-pass (its
+        // POST dispatched) when the assertions below observe `isSyncing`.
         loginAs(userB);
         await insertSession(uid: userB, name: 'B session');
-        adapter.responder =
-            (_) async => jsonResponse(sessionJson(id: 42, userId: userB));
+        final bCompleter = heldResponse();
+        adapter.responder = (_) => bCompleter.future;
 
+        final bDispatched = adapter.nextDispatch();
         final bFuture = syncService.sync();
-        await pumpEventQueue();
+        await bDispatched;
 
         // 6. B is active without waiting for A.
         expect(syncService.isSyncing, isTrue);
@@ -833,6 +971,7 @@ void main() {
         expect(syncService.isSyncing, isTrue);
 
         // 10. B remains active and completes normally.
+        bCompleter.complete(jsonResponse(sessionJson(id: 42, userId: userB)));
         await bFuture;
         expect(syncService.isSyncing, isFalse);
         final bRow =
@@ -841,6 +980,126 @@ void main() {
         expect(bRow.serverId, 42);
       },
     );
+  });
+
+  // ============ Deterministic dispatch primitive (regression) ============
+  //
+  // These lock in that `_FakeHttpClientAdapter.nextDispatch()` is a causal
+  // transport signal - it resolves exactly when (and with what) `fetch()`
+  // captures a request, in FIFO order - so the ownership tests above never
+  // again depend on a bounded `pumpEventQueue()` turn count to observe an
+  // in-flight request.
+  group('nextDispatch() dispatch primitive', () {
+    test('resolves only when fetch() captures the request, and with that '
+        'exact captured RequestOptions', () async {
+      loginAs(userA);
+      await insertSession(uid: userA, name: 'Only');
+      final held = heldResponse();
+      adapter.responder = (_) => held.future;
+
+      final dispatched = adapter.nextDispatch();
+      var resolved = false;
+      unawaited(dispatched.then((_) => resolved = true));
+
+      // Nothing has issued a request yet - the signal must not be resolved,
+      // and nothing is captured.
+      expect(adapter.capturedRequests, isEmpty);
+      expect(resolved, isFalse);
+
+      final future = syncService.sync();
+      final opts = await dispatched;
+
+      // It resolved *because* fetch() ran: the capture list went 0 -> 1 in
+      // lock-step, and the signal carries the very object that was captured.
+      expect(adapter.capturedRequests, hasLength(1));
+      expect(identical(opts, adapter.capturedRequests.single), isTrue);
+      expect(opts.method, 'POST');
+
+      held.complete(jsonResponse(sessionJson(id: 1, userId: userA)));
+      await future;
+    });
+
+    test('two waiters and two requests resolve in FIFO order', () async {
+      // Request 1 is A's session-create; request 2 is B's, after a
+      // logout/login. Both responses are held so both are simultaneously
+      // in flight when the waiters are inspected.
+      final first = adapter.nextDispatch();
+      final second = adapter.nextDispatch();
+
+      loginAs(userA);
+      await insertSession(uid: userA, name: 'A only');
+      final aHeld = heldResponse();
+      adapter.responder = (_) => aHeld.future;
+      final aFuture = syncService.sync();
+      final r1 = await first;
+
+      logout();
+      loginAs(userB);
+      await insertSession(uid: userB, name: 'B only');
+      final bHeld = heldResponse();
+      adapter.responder = (_) => bHeld.future;
+      final bFuture = syncService.sync();
+      final r2 = await second;
+
+      // FIFO, not LIFO: the first waiter got the first (A) request.
+      expect(r1.headers['Authorization'], 'Bearer jwt-user-$userA');
+      expect(r2.headers['Authorization'], 'Bearer jwt-user-$userB');
+      expect(identical(r1, adapter.capturedRequests[0]), isTrue);
+      expect(identical(r2, adapter.capturedRequests[1]), isTrue);
+
+      aHeld.complete(jsonResponse(sessionJson(id: 10, userId: userA)));
+      bHeld.complete(jsonResponse(sessionJson(id: 11, userId: userB)));
+      await aFuture;
+      await bFuture;
+    });
+
+    test('an unclaimed waiter is failed (not left hanging) by tearDown\'s '
+        'failPendingDispatchWaiters()', () async {
+      // Register a waiter but never issue a matching request. Prove the
+      // teardown hook turns it into an error rather than a silent
+      // never-completing Future. (The real tearDown also runs this; here we
+      // invoke it directly so the assertion is inside a test body.)
+      final orphan = adapter.nextDispatch();
+      adapter.failPendingDispatchWaiters();
+      await expectLater(orphan, throwsA(isA<StateError>()));
+    });
+
+    test('releaseHeldResponses() completes every pending held response and is '
+        'idempotent for already-completed ones', () {
+      final pending = heldResponse();
+      final alreadyDone =
+          heldResponse()
+            ..complete(jsonResponse(sessionJson(id: 1, userId: userA)));
+      expect(pending.isCompleted, isFalse);
+
+      releaseHeldResponses(); // the exact routine tearDown runs
+
+      expect(pending.isCompleted, isTrue);
+      expect(alreadyDone.isCompleted, isTrue);
+      // Idempotent: a second sweep must not throw (no double-complete).
+      releaseHeldResponses();
+    });
+
+    test('a held response left pending by the test body does not hang the '
+        'isolate - tearDown releases it', () async {
+      loginAs(userA);
+      await insertSession(uid: userA, name: 'Only');
+      final held = heldResponse();
+      adapter.responder = (_) => held.future;
+
+      final dispatched = adapter.nextDispatch();
+      // Start the pass, confirm its POST is genuinely in flight, then end
+      // the test WITHOUT completing `held` or awaiting the pass. `logout()`
+      // makes the freed continuation hit `_syncCreateSession`'s post-HTTP
+      // epoch check and return via the expected `SessionStaleException`
+      // (no acknowledgment writeTxn), so tearDown's releaseHeldResponses()
+      // - which runs before isar.close() - settles it cleanly and nothing
+      // hangs.
+      unawaited(syncService.sync());
+      await dispatched;
+      expect(adapter.capturedRequests, hasLength(1));
+      logout();
+    });
   });
 
   // ============ Regression: no duplicate upload (test 34) ============
