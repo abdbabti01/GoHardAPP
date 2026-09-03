@@ -517,12 +517,19 @@ void main() {
       expect((await isar.localExerciseSets.get(7))!.isCompleted, isTrue);
       expect((await isar.localExerciseSets.get(3))!.isCompleted, isFalse);
 
-      // Delete the OFFLINE set via its negative public id: no HTTP, only it.
+      // Delete the OFFLINE set via its negative public id: no HTTP, and it
+      // leaves a serverId-less pending_delete tombstone (its CREATE may be
+      // mid-flight in SyncService while online) - never touching the synced
+      // sibling.
       final ok = await repository.deleteExerciseSet(offline(7));
       expect(ok, isTrue);
       expect(adapter.capturedRequests, isEmpty);
-      expect(await isar.localExerciseSets.get(7), isNull);
-      expect(await isar.localExerciseSets.get(3), isNotNull);
+      final tombstone = await isar.localExerciseSets.get(7);
+      expect(tombstone, isNotNull);
+      expect(tombstone!.syncStatus, 'pending_delete');
+      expect(tombstone.serverId, isNull);
+      expect(tombstone.isSynced, isFalse);
+      expect((await isar.localExerciseSets.get(3))!.serverId, 7);
     });
 
     test('completing / deleting POSITIVE id 7 targets only the synced '
@@ -837,9 +844,17 @@ void main() {
         true,
       );
 
+      // Delete leaves a serverId-less `pending_delete` tombstone (not a hard
+      // delete): connectivity cannot prove a CREATE was not already dispatched.
+      // The row stays queryable for the CREATE ack; `_syncDeleteSet` reaps it
+      // on the next pass with no HTTP while it has no server id.
       final ok = await repository.deleteExerciseSet(reloaded.single.id);
       expect(ok, isTrue);
-      expect(await isar.localExerciseSets.get(-created.id), isNull);
+      final tombstone = await isar.localExerciseSets.get(-created.id);
+      expect(tombstone, isNotNull);
+      expect(tombstone!.syncStatus, 'pending_delete');
+      expect(tombstone.serverId, isNull);
+      expect(tombstone.isSynced, isFalse);
       expect(adapter.capturedRequests, isEmpty);
     });
   });
@@ -2099,6 +2114,215 @@ void main() {
       },
     );
   });
+
+  // ==================================================================
+  // fix/sync-create-set-revision-guard - connectivity-independent tombstone
+  // ==================================================================
+  //
+  // `_connectivity.isOnline` at delete time does NOT prove whether
+  // SyncService already dispatched a CREATE POST for a not-yet-synced set
+  // (the network can drop AFTER dispatch). So deleting an owned set with no
+  // positive server id must leave a serverId-less `pending_delete` tombstone
+  // whenever the row is unsynced (or already a tombstone) - regardless of
+  // connectivity - so an in-flight `_syncCreateSet` acknowledgment can still
+  // find the row and attach the returned id. Only a contradictory
+  // `isSynced == true` no-id row (never in the `isSyncedEqualTo(false)` sync
+  // queue) is removed immediately. `SyncService._syncDeleteSet` reaps the
+  // tombstone later: no HTTP while it has no positive id, DELETE + removal
+  // once a CREATE ack attached one.
+  group(
+    'deleteExerciseSet - connectivity-independent no-server-id tombstone',
+    () {
+      Future<LocalExerciseSet> seedNoId({
+        required int exerciseLocalId,
+        required String syncStatus,
+        int? serverId,
+        bool synced = false,
+        DateTime? lastModifiedLocal,
+      }) async {
+        final s = await insertSet(
+          exerciseLocalId: exerciseLocalId,
+          serverId: serverId,
+          explicitLocalId: 7,
+          synced: synced,
+          syncStatus: syncStatus,
+        );
+        if (lastModifiedLocal != null) {
+          await isar.writeTxn(() async {
+            final row = await isar.localExerciseSets.get(s.localId);
+            row!.lastModifiedLocal = lastModifiedLocal;
+            await isar.localExerciseSets.put(row);
+          });
+        }
+        return s;
+      }
+
+      void expectNoHttp() => expect(adapter.capturedRequests, isEmpty);
+
+      for (final online in [true, false]) {
+        test(
+          'pending_create + serverId null, isOnline=$online -> serverId-less '
+          'pending_delete tombstone, no HTTP',
+          () async {
+            loginAs(userA);
+            when(mockConnectivity.isOnline).thenReturn(online);
+            final ex = await ownedExercise(exerciseServerId: 200);
+            final before = DateTime.utc(2020, 1, 1);
+            await seedNoId(
+              exerciseLocalId: ex.localId,
+              syncStatus: 'pending_create',
+              lastModifiedLocal: before,
+            );
+
+            final ok = await repository.deleteExerciseSet(offline(7));
+
+            expect(ok, isTrue);
+            expectNoHttp();
+            final row = await isar.localExerciseSets.get(7);
+            expect(row, isNotNull);
+            expect(row!.syncStatus, 'pending_delete');
+            expect(row.serverId, isNull);
+            expect(row.isSynced, isFalse);
+            expect(row.lastModifiedLocal.isAfter(before), isTrue);
+          },
+        );
+      }
+
+      test(
+        'pending_create + serverId 0 -> tombstone, id canonicalized to null, '
+        'never /exercisesets/0',
+        () async {
+          loginAs(userA);
+          final ex = await ownedExercise(exerciseServerId: 200);
+          await seedNoId(
+            exerciseLocalId: ex.localId,
+            syncStatus: 'pending_create',
+            serverId: 0,
+          );
+
+          final ok = await repository.deleteExerciseSet(offline(7));
+
+          expect(ok, isTrue);
+          expect(
+            adapter.capturedRequests.where(
+              (r) => r.path.contains('exercisesets/0'),
+            ),
+            isEmpty,
+          );
+          expectNoHttp();
+          final row = await isar.localExerciseSets.get(7);
+          expect(row!.syncStatus, 'pending_delete');
+          expect(row.serverId, isNull);
+        },
+      );
+
+      test(
+        'legacy pending_update + serverId 0 (routed to CREATE by _syncUpdateSet) '
+        '-> tombstone, no /0',
+        () async {
+          loginAs(userA);
+          when(mockConnectivity.isOnline).thenReturn(false);
+          final ex = await ownedExercise(exerciseServerId: 200);
+          await seedNoId(
+            exerciseLocalId: ex.localId,
+            syncStatus: 'pending_update',
+            serverId: 0,
+          );
+
+          final ok = await repository.deleteExerciseSet(offline(7));
+
+          expect(ok, isTrue);
+          expectNoHttp();
+          final row = await isar.localExerciseSets.get(7);
+          expect(row!.syncStatus, 'pending_delete');
+          expect(row.serverId, isNull);
+          expect(row.isSynced, isFalse);
+        },
+      );
+
+      test('isSynced == false with an unexpected status -> tombstone (fail '
+          'closed)', () async {
+        loginAs(userA);
+        final ex = await ownedExercise(exerciseServerId: 200);
+        await seedNoId(exerciseLocalId: ex.localId, syncStatus: 'weird_state');
+
+        final ok = await repository.deleteExerciseSet(offline(7));
+
+        expect(ok, isTrue);
+        expectNoHttp();
+        final row = await isar.localExerciseSets.get(7);
+        expect(row, isNotNull);
+        expect(row!.syncStatus, 'pending_delete');
+        expect(row.serverId, isNull);
+      });
+
+      test('contradictory isSynced == true + serverId 0 + status synced -> '
+          'immediate local delete (not in the sync queue, no CREATE possible), '
+          'no /0', () async {
+        loginAs(userA);
+        final ex = await ownedExercise(exerciseServerId: 200);
+        await insertSet(
+          exerciseLocalId: ex.localId,
+          serverId: 0,
+          explicitLocalId: 7,
+          synced: true,
+          syncStatus: 'synced',
+        );
+
+        final ok = await repository.deleteExerciseSet(offline(7));
+
+        expect(ok, isTrue);
+        expect(await isar.localExerciseSets.get(7), isNull);
+        expect(
+          adapter.capturedRequests.where(
+            (r) => r.path.contains('exercisesets/0'),
+          ),
+          isEmpty,
+        );
+        expectNoHttp();
+      });
+
+      test('repeated delete of a serverId-less pending_delete tombstone is a '
+          'no-op: the row is never removed, its revision never churns, no HTTP '
+          '(so an in-flight CREATE ack can never find null)', () async {
+        loginAs(userA);
+        final ex = await ownedExercise(exerciseServerId: 200);
+        final r0 = DateTime.utc(2021, 1, 1);
+        await seedNoId(
+          exerciseLocalId: ex.localId,
+          syncStatus: 'pending_create',
+          lastModifiedLocal: r0,
+        );
+
+        final ok1 = await repository.deleteExerciseSet(offline(7));
+        final afterFirst = await isar.localExerciseSets.get(7);
+        expect(ok1, isTrue);
+        expect(afterFirst!.syncStatus, 'pending_delete');
+        final tombstoneRev = afterFirst.lastModifiedLocal;
+
+        when(mockConnectivity.isOnline).thenReturn(false);
+        final ok2 = await repository.deleteExerciseSet(offline(7));
+        final ok3 = await repository.deleteExerciseSet(offline(7));
+
+        expect(ok2, isTrue);
+        expect(ok3, isTrue);
+        final afterRepeats = await isar.localExerciseSets.get(7);
+        expect(
+          afterRepeats,
+          isNotNull,
+          reason: 'CREATE ack must still find it',
+        );
+        expect(afterRepeats!.syncStatus, 'pending_delete');
+        expect(afterRepeats.serverId, isNull);
+        expect(
+          afterRepeats.lastModifiedLocal,
+          tombstoneRev,
+          reason: 'no revision churn on repeat delete',
+        );
+        expectNoHttp();
+      });
+    },
+  );
 }
 
 /// Fake Dio transport. [nextDispatch] fires the instant a request reaches

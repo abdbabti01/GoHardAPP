@@ -1311,6 +1311,36 @@ class SyncService {
     Map<int, int?> sessionCache,
     Map<int, int?> exerciseCache,
   ) async {
+    // A row that already carries a real server id must never be POSTed again -
+    // that would create a duplicate server record. Route it by its CURRENT
+    // local intent instead. In the normal flow the phase-level `switch`
+    // already sends `pending_update` / `pending_delete` rows elsewhere; this
+    // guards a row whose CREATE a prior pass acknowledged by attaching only
+    // its server id (see the revision-mismatch branch below), plus any
+    // legacy/corrupt `pending_create` row that somehow holds a positive id.
+    if (_positiveServerId(set.serverId) != null) {
+      if (set.syncStatus == 'pending_delete') {
+        await _syncDeleteSet(db, set, context, sessionCache, exerciseCache);
+      } else {
+        await _syncUpdateSet(
+          db,
+          set,
+          parentExercise,
+          context,
+          sessionCache,
+          exerciseCache,
+        );
+      }
+      return;
+    }
+
+    // Pin the exact local revision being dispatched. `_applyLocalComplete` and
+    // `_markPendingDelete` advance `lastModifiedLocal` on every same-session
+    // set mutation, so a changed value in the acknowledgment below means a
+    // completion / edit / queued delete raced in during the POST await and the
+    // create-request snapshot is already stale.
+    final dispatchedAt = set.lastModifiedLocal;
+
     final response = await _apiService.post<Map<String, dynamic>>(
       ApiConfig.exerciseSets,
       data: {
@@ -1326,6 +1356,7 @@ class SyncService {
       sessionContext: context,
     );
     _assertCurrent(context);
+    final assignedServerId = response['id'] as int;
 
     final target = await _reacquireOwnedSet(
       db,
@@ -1341,14 +1372,36 @@ class SyncService {
       _assertCurrent(context);
       final reFetched = await db.localExerciseSets.get(set.localId);
       if (reFetched == null) return;
-      reFetched.serverId = response['id'] as int;
+
+      // The server row now exists: always attach its identity so no later
+      // pass can CREATE it again. Only the pending state varies below.
+      reFetched.serverId = assignedServerId;
       reFetched.exerciseServerId = parentExercise.serverId;
+
+      if (reFetched.lastModifiedLocal != dispatchedAt) {
+        // A same-session mutation raced in during the POST await. Do NOT mark
+        // it synced and do NOT restore any field from the now-stale POST
+        // snapshot - keep whatever the newer local edit left in place and
+        // re-queue by its current intent so the next pass carries it over.
+        reFetched.isSynced = false;
+        if (reFetched.syncStatus != 'pending_delete') {
+          // A completion / content edit: the next pass PUTs the current state.
+          // Never leave it 'pending_create' - that would duplicate the row.
+          reFetched.syncStatus = 'pending_update';
+        }
+        // else: newer intent is deletion - keep the 'pending_delete' tombstone
+        // (now carrying a real server id); the next pass's `_syncDeleteSet`
+        // issues DELETE /exercisesets/{id} and removes it.
+        await db.localExerciseSets.put(reFetched);
+        return;
+      }
+
       reFetched.isSynced = true;
       reFetched.syncStatus = 'synced';
       await db.localExerciseSets.put(reFetched);
     });
 
-    debugPrint('    ✅ Created set ${set.serverId}');
+    debugPrint('    ✅ Created set $assignedServerId');
   }
 
   Future<void> _syncUpdateSet(
@@ -1439,6 +1492,10 @@ class SyncService {
     Map<int, int?> sessionCache,
     Map<int, int?> exerciseCache,
   ) async {
+    // Pin the dispatched revision so the acknowledgment can detect a
+    // same-session re-edit that raced the DELETE round-trip.
+    final dispatchedAt = set.lastModifiedLocal;
+
     // A never-synced row (or a legacy `serverId == 0`) has nothing on the
     // server: skip the DELETE, remove it locally only - no `DELETE /0`.
     if (_positiveServerId(set.serverId) != null) {
@@ -1463,6 +1520,20 @@ class SyncService {
       _assertCurrent(context);
       final reFetched = await db.localExerciseSets.get(set.localId);
       if (reFetched == null) return;
+
+      if (reFetched.lastModifiedLocal != dispatchedAt &&
+          reFetched.syncStatus != 'pending_delete') {
+        // A same-session completion / edit raced in during the DELETE await.
+        // The server row (if any) is already gone and cannot be un-deleted, so
+        // honour the newer local intent: drop the now-invalid server identity
+        // and re-queue as a CREATE so the next pass recreates it deliberately.
+        reFetched.serverId = null;
+        reFetched.isSynced = false;
+        reFetched.syncStatus = 'pending_create';
+        await db.localExerciseSets.put(reFetched);
+        return;
+      }
+
       await db.localExerciseSets.delete(reFetched.localId);
     });
 
