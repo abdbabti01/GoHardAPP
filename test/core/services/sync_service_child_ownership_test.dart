@@ -2759,4 +2759,302 @@ void main() {
       },
     );
   });
+
+  // `_syncCreateSet` and `_syncUpdateSet` build their request bodies by hand
+  // from a LocalExerciseSet that SyncService just read from Isar - and Isar
+  // hands every DateTime back local-flagged. `completedAt` is an absolute
+  // instant (the API stamps it with DateTime.UtcNow and always serializes it
+  // with a `Z` suffix), so both paths must send it as UTC ISO-8601 with `Z`,
+  // never a raw unzoned local wall-clock string. These tests seed an explicit
+  // instant, so the expected wire value (14:15:30Z) is fixed regardless of the
+  // host timezone.
+  group('completedAt UTC wire serialization (offline sync paths)', () {
+    // Same instant three ways; the wire must always be exactly this:
+    const expectedUtcIso = '2026-09-03T14:15:30.000Z';
+    final utcInstant = DateTime.utc(2026, 9, 3, 14, 15, 30);
+    final offsetInstant = DateTime.parse('2026-09-03T10:15:30.000-04:00');
+
+    Future<LocalExercise> insertSyncedExercise() async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = LocalExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+        name: 'Bench',
+        lastModifiedLocal: DateTime.now(),
+        isSynced: true,
+        syncStatus: 'synced',
+      );
+      await isar.writeTxn(() => isar.localExercises.put(ex));
+      return ex;
+    }
+
+    Future<LocalExerciseSet> insertSet({
+      required int exerciseLocalId,
+      int? serverId,
+      required String syncStatus,
+      required DateTime? completedAt,
+      DateTime? lastModifiedLocal,
+    }) async {
+      final s = LocalExerciseSet(
+        serverId: serverId,
+        exerciseLocalId: exerciseLocalId,
+        exerciseServerId: 100,
+        setNumber: 1,
+        reps: 10,
+        weight: 100,
+        isCompleted: completedAt != null,
+        completedAt: completedAt,
+        lastModifiedLocal: lastModifiedLocal ?? DateTime.now().toUtc(),
+        isSynced: false,
+        syncStatus: syncStatus,
+      );
+      await isar.writeTxn(() => isar.localExerciseSets.put(s));
+      return s;
+    }
+
+    void stubPost(int id) {
+      when(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async => {'id': id});
+    }
+
+    void stubPutOk() {
+      when(
+        mockApiService.put<void>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async {});
+    }
+
+    /// Captures `[data, sessionContext]` of the single POST /exercisesets.
+    List<Object?> capturePost() =>
+        verify(
+          mockApiService.post<Map<String, dynamic>>(
+            any,
+            data: captureAnyNamed('data'),
+            sessionContext: captureAnyNamed('sessionContext'),
+          ),
+        ).captured;
+
+    /// Captures `[data, sessionContext]` of the single PUT /exercisesets/{id}.
+    List<Object?> capturePut() =>
+        verify(
+          mockApiService.put<void>(
+            any,
+            data: captureAnyNamed('data'),
+            sessionContext: captureAnyNamed('sessionContext'),
+          ),
+        ).captured;
+
+    Map capturePostBody() => capturePost()[0] as Map;
+    Map capturePutBody() => capturePut()[0] as Map;
+
+    test('14. offline CREATE sync sends completedAt as UTC (Z) and stays '
+        'session-bound', () async {
+      final ex = await insertSyncedExercise();
+      await insertSet(
+        exerciseLocalId: ex.localId,
+        syncStatus: 'pending_create',
+        completedAt: utcInstant,
+      );
+      stubPost(900);
+
+      await syncService.sync();
+
+      final captured = capturePost();
+      final body = captured[0] as Map;
+      expect(body['completedAt'], expectedUtcIso);
+      expect((body['completedAt'] as String).endsWith('Z'), isTrue);
+      expect(
+        captured[1],
+        isNotNull,
+        reason: 'the POST must still carry its SessionRequestContext',
+      );
+    });
+
+    test('15. offline UPDATE sync sends completedAt as UTC (Z) and stays '
+        'session-bound', () async {
+      final ex = await insertSyncedExercise();
+      await insertSet(
+        exerciseLocalId: ex.localId,
+        serverId: 42,
+        syncStatus: 'pending_update',
+        completedAt: utcInstant,
+      );
+      stubPutOk();
+
+      await syncService.sync();
+
+      final captured = capturePut();
+      final body = captured[0] as Map;
+      expect(body['completedAt'], expectedUtcIso);
+      expect((body['completedAt'] as String).endsWith('Z'), isTrue);
+      expect(
+        captured[1],
+        isNotNull,
+        reason: 'the PUT must still carry its SessionRequestContext',
+      );
+    });
+
+    test('16. an already-UTC value is unchanged in meaning on the CREATE '
+        'wire', () async {
+      final ex = await insertSyncedExercise();
+      await insertSet(
+        exerciseLocalId: ex.localId,
+        syncStatus: 'pending_create',
+        completedAt: utcInstant,
+      );
+      stubPost(900);
+
+      await syncService.sync();
+
+      final wire = capturePostBody()['completedAt'] as String;
+      expect(
+        DateTime.parse(wire).millisecondsSinceEpoch,
+        utcInstant.millisecondsSinceEpoch,
+      );
+    });
+
+    test('17. an offset-bearing value is converted to the exact expected UTC '
+        'instant on both wires', () async {
+      final exCreate = await insertSyncedExercise();
+      await insertSet(
+        exerciseLocalId: exCreate.localId,
+        syncStatus: 'pending_create',
+        completedAt: offsetInstant,
+      );
+      stubPost(900);
+      await syncService.sync();
+      expect(capturePostBody()['completedAt'], expectedUtcIso);
+
+      reset(mockApiService);
+      when(mockAuthService.getUserId()).thenAnswer((_) async => userA);
+      when(mockAuthService.getToken()).thenAnswer((_) async => 'jwt-$userA');
+      final exUpdate = await insertSyncedExercise();
+      await insertSet(
+        exerciseLocalId: exUpdate.localId,
+        serverId: 43,
+        syncStatus: 'pending_update',
+        completedAt: offsetInstant,
+      );
+      stubPutOk();
+      await syncService.sync();
+      expect(capturePutBody()['completedAt'], expectedUtcIso);
+    });
+
+    test('18. the CREATE revision guard still fires when completedAt changes '
+        'mid-flight - the dispatched body carried the original instant as Z, '
+        'the row stays pending_update with the newer instant', () async {
+      final ex = await insertSyncedExercise();
+      final r0 = DateTime.utc(2026, 1, 1, 8);
+      final r1 = DateTime.utc(2026, 1, 1, 9);
+      final newerInstant = DateTime.utc(2026, 9, 3, 20, 15, 30);
+      final set = await insertSet(
+        exerciseLocalId: ex.localId,
+        syncStatus: 'pending_create',
+        completedAt: utcInstant,
+        lastModifiedLocal: r0,
+      );
+      stubPost(900);
+      syncService.beforeAckWriteTxnForTesting = () async {
+        await isar.writeTxn(() async {
+          final row = await isar.localExerciseSets.get(set.localId);
+          row!
+            ..completedAt = newerInstant
+            ..isSynced = false
+            ..syncStatus = 'pending_create'
+            ..lastModifiedLocal = r1;
+          await isar.localExerciseSets.put(row);
+        });
+      };
+
+      await syncService.sync();
+
+      // dispatched snapshot: original instant, UTC-encoded
+      expect(capturePostBody()['completedAt'], expectedUtcIso);
+      // guard intact: id attached, still pending, newer instant preserved
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.isSynced, isFalse);
+      expect(stored.syncStatus, 'pending_update');
+      expect(stored.serverId, 900);
+      expect(stored.completedAt!.toUtc(), newerInstant);
+    });
+
+    test('19. delete-during-CREATE compensation is intact and the CREATE body '
+        'still carried completedAt as Z', () async {
+      final ex = await insertSyncedExercise();
+      final r0 = DateTime.utc(2026, 1, 1, 8);
+      final r1 = DateTime.utc(2026, 1, 1, 9);
+      final set = await insertSet(
+        exerciseLocalId: ex.localId,
+        syncStatus: 'pending_create',
+        completedAt: utcInstant,
+        lastModifiedLocal: r0,
+      );
+      stubPost(900);
+      when(
+        mockApiService.delete(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async => true);
+      syncService.beforeAckWriteTxnForTesting = () async {
+        await isar.writeTxn(() async {
+          final row = await isar.localExerciseSets.get(set.localId);
+          row!
+            ..isSynced = false
+            ..syncStatus = 'pending_delete'
+            ..lastModifiedLocal = r1;
+          await isar.localExerciseSets.put(row);
+        });
+      };
+
+      await syncService.sync();
+
+      expect(capturePostBody()['completedAt'], expectedUtcIso);
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.syncStatus, 'pending_delete');
+      expect(stored.serverId, 900);
+    });
+
+    test('20. serialization does not change the normal CREATE / UPDATE '
+        'acknowledgement - both rows still settle to synced', () async {
+      final exCreate = await insertSyncedExercise();
+      final createdSet = await insertSet(
+        exerciseLocalId: exCreate.localId,
+        syncStatus: 'pending_create',
+        completedAt: utcInstant,
+      );
+      stubPost(900);
+      await syncService.sync();
+      final storedCreate = await isar.localExerciseSets.get(createdSet.localId);
+      expect(storedCreate!.isSynced, isTrue);
+      expect(storedCreate.syncStatus, 'synced');
+      expect(storedCreate.serverId, 900);
+
+      reset(mockApiService);
+      when(mockAuthService.getUserId()).thenAnswer((_) async => userA);
+      when(mockAuthService.getToken()).thenAnswer((_) async => 'jwt-$userA');
+      final exUpdate = await insertSyncedExercise();
+      final updatedSet = await insertSet(
+        exerciseLocalId: exUpdate.localId,
+        serverId: 44,
+        syncStatus: 'pending_update',
+        completedAt: utcInstant,
+      );
+      stubPutOk();
+      await syncService.sync();
+      final storedUpdate = await isar.localExerciseSets.get(updatedSet.localId);
+      expect(storedUpdate!.isSynced, isTrue);
+      expect(storedUpdate.syncStatus, 'synced');
+    });
+  });
 }

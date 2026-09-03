@@ -30,6 +30,6 @@ Map<String, dynamic> _$ExerciseSetToJson(ExerciseSet instance) =>
       'weight': instance.weight,
       'duration': instance.duration,
       'isCompleted': instance.isCompleted,
-      'completedAt': instance.completedAt?.toIso8601String(),
+      'completedAt': DateTimeHelper.formatTimestampOrNull(instance.completedAt),
       'notes': instance.notes,
     };
