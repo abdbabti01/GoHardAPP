@@ -8,6 +8,7 @@ import '../../data/services/auth_service.dart';
 import '../../data/services/session_request_context.dart';
 import '../../data/services/session_request_exceptions.dart';
 import '../../data/services/session_update_sync_helper.dart';
+import '../utils/datetime_helper.dart';
 import '../../data/local/services/local_database_service.dart';
 import '../../data/local/services/model_mapper.dart';
 import '../../data/local/services/local_nutrition_totals_calculator.dart';
@@ -1350,7 +1351,9 @@ class SyncService {
         'weight': set.weight,
         'duration': set.duration,
         'isCompleted': set.isCompleted,
-        'completedAt': set.completedAt?.toIso8601String(),
+        // completedAt is an absolute instant: send it as UTC (`...Z`), never a
+        // raw local wall-clock string. Isar returns it local-flagged.
+        'completedAt': DateTimeHelper.formatTimestampOrNull(set.completedAt),
         'notes': set.notes,
       },
       sessionContext: context,
@@ -1450,7 +1453,9 @@ class SyncService {
         'weight': set.weight,
         'duration': set.duration,
         'isCompleted': set.isCompleted,
-        'completedAt': set.completedAt?.toIso8601String(),
+        // completedAt is an absolute instant: send it as UTC (`...Z`), never a
+        // raw local wall-clock string. Isar returns it local-flagged.
+        'completedAt': DateTimeHelper.formatTimestampOrNull(set.completedAt),
         'notes': set.notes,
       },
       sessionContext: context,

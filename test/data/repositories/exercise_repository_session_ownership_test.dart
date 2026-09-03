@@ -2323,6 +2323,204 @@ void main() {
       });
     },
   );
+
+  // ==================================================================
+  // completedAt UTC wire serialization (this PR)
+  //
+  // `completedAt` is an absolute instant. Every ExerciseSet request path that
+  // carries it must send UTC ISO-8601 with a `Z` suffix, never an unzoned
+  // local wall-clock string. Two input kinds are exercised:
+  //  - a LOCAL-flagged value (`isUtc == false`): a bare `.toIso8601String()`
+  //    drops the `Z`, so `endsWith('Z')` fails on ANY host (that is the
+  //    regression this PR targets); the epoch-equality assertion then confirms
+  //    the correct code preserves the instant.
+  //  - an explicit-offset `DateTime.parse(...)`: pinned Dart 3.7.2 returns this
+  //    already `isUtc == true`, normalised to the UTC instant, so it pins that
+  //    the offset is honoured and the output is canonical `…Z` (14:15:30Z).
+  // A relabel-instead-of-convert mutation diverges only by the host offset and
+  // is not counted as killed here - see the model test file's NOTE.
+  // ==================================================================
+
+  group('completedAt UTC wire serialization', () {
+    // Same instant, two ways. `localCompletedAt.isUtc == false`.
+    final localCompletedAt = DateTime.utc(2026, 9, 3, 14, 15, 30).toLocal();
+    final offsetCompletedAt = DateTime.parse('2026-09-03T10:15:30.000-04:00');
+    const expectedUtcIso = '2026-09-03T14:15:30.000Z';
+    final expectedEpoch =
+        DateTime.utc(2026, 9, 3, 14, 15, 30).millisecondsSinceEpoch;
+
+    test('8. online create sends completedAt as UTC (Z) - local-flagged '
+        'converted, explicit offset honoured; route/body ids and '
+        'sessionContext unchanged', () async {
+      loginAs(userA);
+      final ex = await ownedExercise(exerciseServerId: 200);
+      adapter.responder =
+          (_) async => jsonBody(setJson(id: 900, exerciseId: 200));
+
+      // (a) local-flagged input -> host-independent conversion check
+      await repository.createExerciseSet(
+        ExerciseSet(
+          id: 0,
+          exerciseId: 200,
+          setNumber: 1,
+          reps: 10,
+          weight: 50,
+          isCompleted: true,
+          completedAt: localCompletedAt,
+        ),
+      );
+      var sent = onlyRequest();
+      expect(sent.method, 'POST');
+      expect(sent.path, endsWith('exercisesets'));
+      var body = sent.data as Map<String, dynamic>;
+      expect((body['completedAt'] as String).endsWith('Z'), isTrue);
+      expect(
+        DateTime.parse(body['completedAt'] as String).millisecondsSinceEpoch,
+        expectedEpoch,
+      );
+      // unchanged: normalized parent id, ownership binding, session context
+      expect(body['exerciseId'], 200);
+      expect(ex.serverId, 200);
+      expect(sent.headers['Authorization'], 'Bearer jwt-$userA');
+      expect(sent.extra[ApiService.sessionEpochExtraKey], isNotNull);
+
+      // (b) explicit-offset input -> canonical UTC-Z, offset honoured
+      adapter.capturedRequests.clear();
+      await repository.createExerciseSet(
+        ExerciseSet(
+          id: 0,
+          exerciseId: 200,
+          setNumber: 2,
+          reps: 10,
+          weight: 50,
+          isCompleted: true,
+          completedAt: offsetCompletedAt,
+        ),
+      );
+      body = onlyRequest().data as Map<String, dynamic>;
+      expect(body['completedAt'], expectedUtcIso);
+    });
+
+    test('9. direct update sends completedAt as UTC (Z) - local-flagged '
+        'converted, explicit offset honoured; body id == route id, parent id '
+        'and sessionContext unchanged', () async {
+      loginAs(userA);
+      final ex = await ownedExercise(exerciseServerId: 200);
+      await insertSet(
+        exerciseLocalId: ex.localId,
+        serverId: 42,
+        exerciseServerId: 200,
+        explicitLocalId: 4,
+      );
+      adapter.responder = (_) async => ResponseBody.fromString('', 204);
+
+      // (a) local-flagged input
+      await repository.updateExerciseSet(
+        42,
+        ExerciseSet(
+          id: 999,
+          exerciseId: 200,
+          setNumber: 1,
+          reps: 12,
+          weight: 80,
+          isCompleted: true,
+          completedAt: localCompletedAt,
+        ),
+      );
+      var sent = onlyRequest();
+      expect(sent.method, 'PUT');
+      expect(sent.path, endsWith('exercisesets/42'));
+      var body = sent.data as Map<String, dynamic>;
+      expect((body['completedAt'] as String).endsWith('Z'), isTrue);
+      expect(
+        DateTime.parse(body['completedAt'] as String).millisecondsSinceEpoch,
+        expectedEpoch,
+      );
+      expect(body['id'], 42);
+      expect(body['exerciseId'], 200);
+      expect(sent.headers['Authorization'], 'Bearer jwt-$userA');
+      expect(sent.extra[ApiService.sessionEpochExtraKey], isNotNull);
+
+      // (b) explicit-offset input
+      adapter.capturedRequests.clear();
+      await repository.updateExerciseSet(
+        42,
+        ExerciseSet(
+          id: 999,
+          exerciseId: 200,
+          setNumber: 1,
+          reps: 12,
+          weight: 80,
+          isCompleted: true,
+          completedAt: offsetCompletedAt,
+        ),
+      );
+      body = onlyRequest().data as Map<String, dynamic>;
+      expect(body['completedAt'], expectedUtcIso);
+    });
+
+    test('10. complete/PATCH payload does not carry completedAt (the server '
+        'stamps DateTime.UtcNow) - nothing to convert', () async {
+      loginAs(userA);
+      final ex = await ownedExercise(exerciseServerId: 200);
+      await insertSet(
+        exerciseLocalId: ex.localId,
+        serverId: 77,
+        exerciseServerId: 200,
+        explicitLocalId: 4,
+      );
+      adapter.responder = (_) async => ResponseBody.fromString('', 204);
+
+      await repository.completeExerciseSet(77);
+
+      final sent = onlyRequest();
+      expect(sent.method, 'PATCH');
+      expect(sent.path, endsWith('exercisesets/77/complete'));
+      expect(sent.data as Map, isEmpty);
+      expect((sent.data as Map).containsKey('completedAt'), isFalse);
+    });
+
+    test('11. a null completedAt stays null on the create wire body', () async {
+      loginAs(userA);
+      await ownedExercise(exerciseServerId: 200);
+      adapter.responder =
+          (_) async => jsonBody(setJson(id: 901, exerciseId: 200));
+
+      await repository.createExerciseSet(
+        ExerciseSet(id: 0, exerciseId: 200, setNumber: 1, reps: 10, weight: 50),
+      );
+
+      final body = onlyRequest().data as Map<String, dynamic>;
+      expect(body.containsKey('completedAt'), isTrue);
+      expect(body['completedAt'], isNull);
+    });
+
+    test('13. a lifecycle change before dispatch still throws '
+        'SessionStaleException with completedAt set - no HTTP, no local row, '
+        'no unauthorized callback', () async {
+      loginAs(userA);
+      await ownedExercise(exerciseServerId: 200);
+      apiService.beforeDispatchEpochCheckForTesting = () async => logout();
+
+      await expectLater(
+        repository.createExerciseSet(
+          ExerciseSet(
+            id: 0,
+            exerciseId: 200,
+            setNumber: 1,
+            reps: 10,
+            weight: 50,
+            isCompleted: true,
+            completedAt: offsetCompletedAt,
+          ),
+        ),
+        throwsA(isA<SessionStaleException>()),
+      );
+      expect(adapter.capturedRequests, isEmpty);
+      expect(await isar.localExerciseSets.count(), 0);
+      expect(unauthorizedCalls, 0);
+    });
+  });
 }
 
 /// Fake Dio transport. [nextDispatch] fires the instant a request reaches

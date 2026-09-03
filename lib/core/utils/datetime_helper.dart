@@ -123,6 +123,19 @@ class DateTimeHelper {
     return utc.toIso8601String();
   }
 
+  /// Nullable variant of [formatTimestamp] for optional instant fields such as
+  /// `ExerciseSet.completedAt` - a moment in time the server records and
+  /// serializes as UTC, never a floating wall-clock value.
+  ///
+  /// `null` stays `null`; a non-null value is converted with
+  /// `value.toUtc().toIso8601String()`, so the encoded string represents the
+  /// same instant and always carries the `Z` suffix. `toUtc()` relabels an
+  /// already-UTC value without shifting it and converts an Isar-local-flagged
+  /// value (Isar returns every `DateTime` in local time while preserving the
+  /// absolute instant) rather than reinterpreting its clock components.
+  static String? formatTimestampOrNull(DateTime? timestamp) =>
+      timestamp == null ? null : formatTimestamp(timestamp);
+
   /// Convert UTC timestamp to local for display.
   static DateTime toLocal(DateTime utcTimestamp) {
     return utcTimestamp.toLocal();
