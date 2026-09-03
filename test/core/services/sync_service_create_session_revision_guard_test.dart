@@ -139,6 +139,7 @@ void main() {
     int? serverId,
     int? version,
     DateTime? lastModifiedLocal,
+    DateTime? lastModifiedServer,
     DateTime? completedAt,
     int? duration,
   }) async {
@@ -153,6 +154,7 @@ void main() {
       isSynced: false,
       syncStatus: syncStatus,
       lastModifiedLocal: lastModifiedLocal ?? DateTime(2026, 1, 1, 8),
+      lastModifiedServer: lastModifiedServer,
       version: version,
     );
     await isar.writeTxn(() => isar.localSessions.put(session));
@@ -401,6 +403,71 @@ void main() {
       expect(stored!.name, 'Edited My workout');
       expect(stored.syncStatus, 'pending_update');
     });
+
+    test(
+      '10b. the raced acknowledgment advances lastModifiedServer from its '
+      'seeded value - it must record that the server accepted the CREATE, '
+      'exactly as the unchanged-path ModelMapper.sessionToLocal does',
+      () async {
+        // A distinguishable prior server-confirmation instant, years in the
+        // past so DateTime.now() in the ack is unambiguously after it (no
+        // clock seam or wall-clock delay needed).
+        final seededServerStamp = DateTime.utc(2020, 1, 1);
+        final s = await insertPendingCreateSession(
+          lastModifiedServer: seededServerStamp,
+        );
+
+        final release = Completer<Map<String, dynamic>>();
+        when(
+          mockApiService.post<Map<String, dynamic>>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).thenAnswer((_) async {
+          await raceLocalEdit(
+            s.localId,
+            status: 'completed',
+            completedAt: DateTime.utc(2026, 1, 1, 10, 30),
+            duration: 3600,
+          );
+          return release.future;
+        });
+
+        final f = syncService.sync();
+        release.complete(serverSessionJson(id: 702, version: 5));
+        await f;
+
+        final stored = await isar.localSessions.get(s.localId);
+        // Local edited fields survive the raced acknowledgment.
+        expect(stored!.status, 'completed');
+        expect(
+          stored.completedAt!.isAtSameMomentAs(
+            DateTime.utc(2026, 1, 1, 10, 30),
+          ),
+          isTrue,
+        );
+        expect(stored.duration, 3600);
+        // Server identity + authoritative version are attached.
+        expect(stored.serverId, 702);
+        expect(stored.version, 5);
+        // The row is re-queued for a follow-up PUT, not marked synced.
+        expect(stored.isSynced, isFalse);
+        expect(stored.syncStatus, 'pending_update');
+        // The server-acceptance timestamp advanced from the seeded value.
+        // isAfter compares the instant regardless of the isUtc flag, so the
+        // Isar-local-flagged read still compares correctly against the UTC
+        // seed.
+        expect(stored.lastModifiedServer, isNotNull);
+        expect(
+          stored.lastModifiedServer!.isAfter(seededServerStamp),
+          isTrue,
+          reason:
+              'the raced ack handled a successful server CREATE and must '
+              'stamp lastModifiedServer, not leave the stale seeded value',
+        );
+      },
+    );
 
     test(
       '16b. a completion landing AFTER the post-dispatch re-resolve but '

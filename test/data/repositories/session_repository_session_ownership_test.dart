@@ -1374,6 +1374,66 @@ void main() {
       },
     );
 
+    test('20b. the raced foreground acknowledgment advances lastModifiedServer '
+        'from a seeded prior value - it records that the server accepted the '
+        'CREATE, not leaves the stale timestamp', () async {
+      loginAs(userA);
+      final responseCompleter = Completer<ResponseBody>();
+      adapter.responder = (_) => responseCompleter.future;
+
+      final dispatched = adapter.nextDispatch();
+      final created = await repository.createSession(
+        _sessionModel(userId: userA, name: 'Fresh'),
+      );
+      await dispatched;
+
+      // _createLocalSession leaves lastModifiedServer null; seed a
+      // distinguishable prior server-confirmation instant (years in the
+      // past, so DateTime.now() in the ack is unambiguously after it - no
+      // clock seam or wall-clock delay needed). Only lastModifiedServer is
+      // touched, so dispatchedAt still matches the row's lastModifiedLocal
+      // until the racing edit below advances it.
+      final seededServerStamp = DateTime.utc(2020, 1, 1);
+      await isar.writeTxn(() async {
+        final row = await isar.localSessions.get(created.id);
+        row!.lastModifiedServer = seededServerStamp;
+        await isar.localSessions.put(row);
+      });
+
+      // Completion lands while the CREATE POST is still outstanding.
+      await repository.updateSessionStatus(
+        created.id,
+        'completed',
+        duration: 3600,
+      );
+
+      responseCompleter.complete(
+        jsonResponse(sessionJson(id: 305, userId: userA, version: 7)),
+      );
+      await scheduledBackgroundSyncs.single;
+
+      final stored = await isar.localSessions.get(created.id);
+      // Local edited fields survive the raced acknowledgment.
+      expect(stored!.status, 'completed');
+      expect(stored.duration, 3600);
+      // Server identity + authoritative version are attached.
+      expect(stored.serverId, 305);
+      expect(stored.version, 7);
+      // The row is re-queued for a follow-up PUT, not marked synced.
+      expect(stored.isSynced, isFalse);
+      expect(stored.syncStatus, 'pending_update');
+      // The server-acceptance timestamp advanced from the seeded value.
+      // isAfter compares the instant regardless of the isUtc flag.
+      expect(stored.lastModifiedServer, isNotNull);
+      expect(
+        stored.lastModifiedServer!.isAfter(seededServerStamp),
+        isTrue,
+        reason:
+            'the raced ack handled a successful server CREATE and must '
+            'stamp lastModifiedServer, not leave the stale seeded value',
+      );
+    });
+
     test('21. after the raced ack the next edit issues a PUT, never a second '
         'CREATE POST', () async {
       loginAs(userA);
