@@ -922,8 +922,14 @@ class ExerciseRepository {
   }
 
   /// Delete an exercise set.
-  /// Offline-first: marks as pending_delete (or hard-deletes a never-synced
-  /// row), deletes from the server when online.
+  ///
+  /// Offline-first. A synced set (positive server id) is deleted on the server
+  /// when online, otherwise queued as `pending_delete`. A set with no positive
+  /// server id is left as a serverId-less `pending_delete` tombstone whenever it
+  /// is unsynced (a CREATE for it may already be in flight in
+  /// `SyncService._syncCreateSet`, regardless of current connectivity - see the
+  /// `!hadServerId` branch); only a contradictory `isSynced == true` no-id row,
+  /// which was never in the sync queue, is removed locally right away.
   Future<bool> deleteExerciseSet(int id) async {
     final context = await _sessionCoordinator.captureContext();
     if (context == null) throw const SessionStaleException();
@@ -965,7 +971,41 @@ class ExerciseRepository {
     }
 
     if (!hadServerId) {
-      debugPrint('✅ Local-only set deleted');
+      // A row with no positive server id can only be mid-flight in
+      // `SyncService._syncCreateSet` if it is UNSYNCED: `_syncExerciseSets`
+      // dispatches strictly from `isSyncedEqualTo(false)`, routing
+      // `pending_create` and (legacy) non-positive-id `pending_update` rows
+      // through a CREATE POST. `_connectivity.isOnline` AT THIS MOMENT says
+      // nothing about whether that POST was already dispatched before the
+      // network dropped, so it must NOT gate this decision - hard-deleting a
+      // row whose CREATE is already in flight would orphan the server row its
+      // acknowledgment can no longer find.
+      //
+      //  - `isSynced == false` (pending_create / legacy pending_update / an
+      //    already-`pending_delete` tombstone a prior delete left while that
+      //    same CREATE is still in flight / any unexpected unsynced status):
+      //    a CREATE may be in flight or its acknowledgment may still need this
+      //    row. Preserve a serverId-less `pending_delete` tombstone.
+      //    `_markPendingDelete` is idempotent - a repeat delete never removes
+      //    an existing tombstone and never churns its revision.
+      //  - `isSynced == true` with no positive server id: a contradictory
+      //    legacy state (e.g. a legacy `serverId == 0` row wrongly marked
+      //    `synced`). It is absent from the `isSyncedEqualTo(false)` sync
+      //    queue, so no CREATE can be in flight for it - remove it locally now.
+      //
+      // On a later pass `_syncDeleteSet` reaps the tombstone: no HTTP while it
+      // still has no positive id, or DELETE + local removal once an in-flight
+      // CREATE acknowledgment has attached one.
+      final couldBeInFlightCreate =
+          !localSet.isSynced || localSet.syncStatus == 'pending_delete';
+      if (couldBeInFlightCreate) {
+        debugPrint('✅ Set marked for deletion (a CREATE may be in flight)');
+        return _deleteResult(
+          await _markPendingDelete(db, setLocalId, token),
+          id,
+        );
+      }
+      debugPrint('✅ Local-only (legacy synced-without-id) set deleted');
       return _deleteResult(await _deleteLocalSet(db, setLocalId, token), id);
     }
     debugPrint('✅ Set marked for deletion, will sync when online');
@@ -1033,6 +1073,14 @@ class ExerciseRepository {
         return;
       }
       if (!_sessionEpoch.isCurrent(token)) throw const SessionStaleException();
+      if (set.syncStatus == 'pending_delete') {
+        // Already a tombstone - deleting again is a no-op. Do NOT re-`put` or
+        // advance `lastModifiedLocal`: repeated deletion must not churn the
+        // revision of the compensation record an in-flight CREATE
+        // acknowledgment may still be matching against.
+        ack = _Ack.applied;
+        return;
+      }
       _canonicalizeLegacyServerIds(set);
       set.isSynced = false;
       set.syncStatus = 'pending_delete';

@@ -1968,4 +1968,795 @@ void main() {
       expect(stored.reps, 15);
     });
   });
+
+  // ================================================================
+  // fix/sync-create-set-revision-guard
+  // ================================================================
+  //
+  // `_syncCreateSet` and `_syncDeleteSet` must pin the dispatched local
+  // revision (`lastModifiedLocal`) - like `_syncUpdateSet` already does - so a
+  // same-session completion / edit / delete that races the network round-trip
+  // is never clobbered by a stale acknowledgment. A row whose CREATE is
+  // acknowledged after such a race keeps the server id (so it is never
+  // re-created) but stays pending; the next pass carries the newer state via
+  // PUT or DELETE. A positive-server-id row is never POSTed again.
+  group('_syncCreateSet / _syncDeleteSet same-session revision guard', () {
+    Future<LocalExercise> insertSyncedExercise({
+      required int sessionLocalId,
+      required int sessionServerId,
+      required int serverId,
+    }) async {
+      final ex = LocalExercise(
+        sessionLocalId: sessionLocalId,
+        sessionServerId: sessionServerId,
+        serverId: serverId,
+        name: 'Bench',
+        lastModifiedLocal: DateTime.now(),
+        isSynced: true,
+        syncStatus: 'synced',
+      );
+      await isar.writeTxn(() => isar.localExercises.put(ex));
+      return ex;
+    }
+
+    Future<LocalExerciseSet> insertSet({
+      required int exerciseLocalId,
+      int? exerciseServerId,
+      int? serverId,
+      String syncStatus = 'pending_create',
+      bool isCompleted = false,
+      DateTime? completedAt,
+      int reps = 10,
+      double weight = 100,
+      int setNumber = 1,
+      required DateTime lastModifiedLocal,
+    }) async {
+      final s = LocalExerciseSet(
+        serverId: serverId,
+        exerciseLocalId: exerciseLocalId,
+        exerciseServerId: exerciseServerId,
+        setNumber: setNumber,
+        reps: reps,
+        weight: weight,
+        isCompleted: isCompleted,
+        completedAt: completedAt,
+        lastModifiedLocal: lastModifiedLocal,
+        isSynced: false,
+        syncStatus: syncStatus,
+      );
+      await isar.writeTxn(() => isar.localExerciseSets.put(s));
+      return s;
+    }
+
+    void stubPost(int id) {
+      when(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async => {'id': id});
+    }
+
+    void stubPutOk() {
+      when(
+        mockApiService.put<void>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async {});
+    }
+
+    void stubDeleteOk() {
+      when(
+        mockApiService.delete(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async => true);
+    }
+
+    void verifyNoPost() {
+      verifyNever(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+    }
+
+    final r0 = DateTime.utc(2026, 1, 1, 8, 0, 0);
+    final r1 = DateTime.utc(2026, 1, 1, 8, 0, 5);
+
+    // ---- completion racing the first CREATE ----
+
+    test('a completion that races the first CREATE POST is NOT stamped synced '
+        '- the row becomes pending_update, unsynced, with the returned server '
+        'id attached and the newer completed fields preserved (tests 1, 2, 3, '
+        '17, 18)', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        lastModifiedLocal: r0,
+      );
+      stubPost(900);
+      // The same still-current session completes the set after the POST returns
+      // but before the acknowledgment write lands.
+      syncService.beforeAckWriteTxnForTesting = () async {
+        await isar.writeTxn(() async {
+          final row = await isar.localExerciseSets.get(set.localId);
+          row!
+            ..isCompleted = true
+            ..completedAt = r1
+            ..reps = 12
+            ..isSynced = false
+            ..syncStatus = 'pending_create'
+            ..lastModifiedLocal = r1;
+          await isar.localExerciseSets.put(row);
+        });
+      };
+
+      await syncService.sync();
+
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.isSynced, isFalse);
+      expect(stored.syncStatus, 'pending_update');
+      expect(stored.serverId, 900, reason: 'id attached - never re-created');
+      expect(stored.exerciseServerId, 100);
+      expect(stored.isCompleted, isTrue, reason: 'newer completion preserved');
+      // Isar round-trips DateTimes through local time - compare the instant.
+      expect(stored.completedAt!.toUtc(), r1);
+      expect(stored.reps, 12, reason: 'stale POST snapshot must not overwrite');
+      expect(
+        stored.lastModifiedLocal.toUtc(),
+        r1,
+        reason: 'a stale ack must never reduce lastModifiedLocal',
+      );
+    });
+
+    test('a completion that lands DURING the CREATE POST await (before the '
+        'response) is still detected - dispatchedAt is pinned before the POST, '
+        'not after (test 2)', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        lastModifiedLocal: r0,
+      );
+      // The completion write happens while the POST is still in flight, i.e.
+      // strictly before the response is observed and before any ack hook.
+      when(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async {
+        await isar.writeTxn(() async {
+          final row = await isar.localExerciseSets.get(set.localId);
+          row!
+            ..isCompleted = true
+            ..completedAt = r1
+            ..lastModifiedLocal = r1;
+          await isar.localExerciseSets.put(row);
+        });
+        return {'id': 900};
+      });
+
+      await syncService.sync();
+
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.isSynced, isFalse);
+      expect(stored.syncStatus, 'pending_update');
+      expect(stored.serverId, 900);
+      expect(stored.isCompleted, isTrue);
+    });
+
+    test(
+      'after the completion race, a SECOND sync PUTs the completed state and '
+      'marks the row synced - and never POSTs a second time (tests 4, 5, 6)',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final ex = await insertSyncedExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 100,
+        );
+        final set = await insertSet(
+          exerciseLocalId: ex.localId,
+          exerciseServerId: 100,
+          lastModifiedLocal: r0,
+        );
+        stubPost(900);
+        syncService.beforeAckWriteTxnForTesting = () async {
+          await isar.writeTxn(() async {
+            final row = await isar.localExerciseSets.get(set.localId);
+            row!
+              ..isCompleted = true
+              ..completedAt = r1
+              ..lastModifiedLocal = r1;
+            await isar.localExerciseSets.put(row);
+          });
+        };
+        await syncService.sync();
+
+        // Second pass: no race.
+        syncService.beforeAckWriteTxnForTesting = null;
+        stubPutOk();
+        await syncService.sync();
+
+        final put =
+            verify(
+              mockApiService.put<void>(
+                captureAny,
+                data: captureAnyNamed('data'),
+                sessionContext: anyNamed('sessionContext'),
+              ),
+            ).captured;
+        expect(put[0], '${ApiConfig.exerciseSets}/900');
+        final body = put[1] as Map;
+        expect(body['id'], 900);
+        expect(body['exerciseId'], 100);
+        expect(body['isCompleted'], true);
+        expect((put[0] as String), isNot(contains('/0')));
+        expect((put[0] as String), isNot(contains('/-')));
+
+        verify(
+          mockApiService.post<Map<String, dynamic>>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).called(1);
+
+        final stored = await isar.localExerciseSets.get(set.localId);
+        expect(stored!.isSynced, isTrue);
+        expect(stored.syncStatus, 'synced');
+      },
+    );
+
+    test(
+      'a CREATE with no race attaches the server id and marks the row synced '
+      '(test 13)',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final ex = await insertSyncedExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 100,
+        );
+        final set = await insertSet(
+          exerciseLocalId: ex.localId,
+          exerciseServerId: 100,
+          lastModifiedLocal: r0,
+        );
+        stubPost(900);
+
+        await syncService.sync();
+
+        final stored = await isar.localExerciseSets.get(set.localId);
+        expect(stored!.serverId, 900);
+        expect(stored.exerciseServerId, 100);
+        expect(stored.isSynced, isTrue);
+        expect(stored.syncStatus, 'synced');
+      },
+    );
+
+    test('a race on one set does not disturb a sibling pending_create set in '
+        'the same pass (test 20)', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final setA = await insertSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        setNumber: 1,
+        lastModifiedLocal: r0,
+      );
+      final setB = await insertSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        setNumber: 2,
+        lastModifiedLocal: r0,
+      );
+      var next = 900;
+      when(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async => {'id': next++});
+      var raced = false;
+      syncService.beforeAckWriteTxnForTesting = () async {
+        if (raced) return;
+        raced = true;
+        await isar.writeTxn(() async {
+          final row = await isar.localExerciseSets.get(setA.localId);
+          row!
+            ..isCompleted = true
+            ..lastModifiedLocal = r1;
+          await isar.localExerciseSets.put(row);
+        });
+      };
+
+      await syncService.sync();
+
+      final a = await isar.localExerciseSets.get(setA.localId);
+      final b = await isar.localExerciseSets.get(setB.localId);
+      expect(a!.syncStatus, 'pending_update', reason: 'raced -> re-queued');
+      expect(a.serverId, isNotNull);
+      expect(b!.syncStatus, 'synced', reason: 'sibling unaffected');
+      expect(b.isSynced, isTrue);
+      expect(b.serverId, isNotNull);
+    });
+
+    // ---- delete racing the first CREATE ----
+
+    test('a delete racing the first CREATE POST keeps the pending_delete '
+        'tombstone and attaches the returned server id (tests 7, 8)', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        lastModifiedLocal: r0,
+      );
+      stubPost(900);
+      syncService.beforeAckWriteTxnForTesting = () async {
+        await isar.writeTxn(() async {
+          final row = await isar.localExerciseSets.get(set.localId);
+          row!
+            ..isSynced = false
+            ..syncStatus = 'pending_delete'
+            ..lastModifiedLocal = r1;
+          await isar.localExerciseSets.put(row);
+        });
+      };
+
+      await syncService.sync();
+
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored, isNotNull, reason: 'tombstone must survive');
+      expect(stored!.syncStatus, 'pending_delete');
+      expect(stored.isSynced, isFalse);
+      expect(
+        stored.serverId,
+        900,
+        reason: 'id attached so the next pass can DELETE the server row',
+      );
+    });
+
+    test(
+      'after the delete race, a SECOND sync DELETEs /exercisesets/{id} using '
+      'the attached id and removes the tombstone (tests 9, 10, 11)',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final ex = await insertSyncedExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 100,
+        );
+        final set = await insertSet(
+          exerciseLocalId: ex.localId,
+          exerciseServerId: 100,
+          lastModifiedLocal: r0,
+        );
+        stubPost(900);
+        syncService.beforeAckWriteTxnForTesting = () async {
+          await isar.writeTxn(() async {
+            final row = await isar.localExerciseSets.get(set.localId);
+            row!
+              ..isSynced = false
+              ..syncStatus = 'pending_delete'
+              ..lastModifiedLocal = r1;
+            await isar.localExerciseSets.put(row);
+          });
+        };
+        await syncService.sync();
+
+        syncService.beforeAckWriteTxnForTesting = null;
+        stubDeleteOk();
+        await syncService.sync();
+
+        final del =
+            verify(
+              mockApiService.delete(
+                captureAny,
+                data: anyNamed('data'),
+                sessionContext: anyNamed('sessionContext'),
+              ),
+            ).captured;
+        expect(del.single, '${ApiConfig.exerciseSets}/900');
+        expect((del.single as String), isNot(contains('/0')));
+        expect((del.single as String), isNot(contains('/-')));
+        expect(await isar.localExerciseSets.get(set.localId), isNull);
+      },
+    );
+
+    test('a pending_delete set with no server id is removed locally with no '
+        'HTTP at all (test 12)', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        serverId: null,
+        syncStatus: 'pending_delete',
+        lastModifiedLocal: r0,
+      );
+
+      await syncService.sync();
+
+      verifyNoPost();
+      verifyNever(
+        mockApiService.delete(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      expect(await isar.localExerciseSets.get(set.localId), isNull);
+    });
+
+    test('a legacy serverId==0 pending_delete set is removed locally with no '
+        '/exercisesets/0 route (test 11/12)', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        serverId: 0,
+        syncStatus: 'pending_delete',
+        lastModifiedLocal: r0,
+      );
+
+      await syncService.sync();
+
+      verifyNever(
+        mockApiService.delete(
+          argThat(contains('/0')),
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      verifyNever(
+        mockApiService.delete(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      expect(await isar.localExerciseSets.get(set.localId), isNull);
+    });
+
+    test(
+      'a completion racing a DELETE dispatch recreates the set - the newer '
+      'local intent wins over the irreversible server delete (delete-policy)',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final ex = await insertSyncedExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 100,
+        );
+        final set = await insertSet(
+          exerciseLocalId: ex.localId,
+          exerciseServerId: 100,
+          serverId: 55,
+          syncStatus: 'pending_delete',
+          lastModifiedLocal: r0,
+        );
+        stubDeleteOk();
+        syncService.beforeAckWriteTxnForTesting = () async {
+          await isar.writeTxn(() async {
+            final row = await isar.localExerciseSets.get(set.localId);
+            row!
+              ..isCompleted = true
+              ..completedAt = r1
+              ..isSynced = false
+              ..syncStatus = 'pending_update'
+              ..lastModifiedLocal = r1;
+            await isar.localExerciseSets.put(row);
+          });
+        };
+
+        await syncService.sync();
+
+        final afterP1 = await isar.localExerciseSets.get(set.localId);
+        expect(afterP1, isNotNull);
+        expect(afterP1!.syncStatus, 'pending_create');
+        expect(
+          afterP1.serverId,
+          isNull,
+          reason: 'the deleted server id is dropped',
+        );
+        expect(afterP1.isCompleted, isTrue, reason: 'newer content preserved');
+        expect(afterP1.completedAt!.toUtc(), r1);
+        verify(
+          mockApiService.delete(
+            '${ApiConfig.exerciseSets}/55',
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).called(1);
+
+        // Second pass deliberately recreates it.
+        syncService.beforeAckWriteTxnForTesting = null;
+        stubPost(56);
+        await syncService.sync();
+
+        final afterP2 = await isar.localExerciseSets.get(set.localId);
+        expect(afterP2!.serverId, 56);
+        expect(afterP2.isSynced, isTrue);
+        expect(afterP2.syncStatus, 'synced');
+        final post =
+            verify(
+              mockApiService.post<Map<String, dynamic>>(
+                captureAny,
+                data: captureAnyNamed('data'),
+                sessionContext: anyNamed('sessionContext'),
+              ),
+            ).captured;
+        expect(post[0], ApiConfig.exerciseSets);
+        expect((post[1] as Map)['isCompleted'], true);
+      },
+    );
+
+    // ---- positive-server-id pending_create must never POST again ----
+
+    test(
+      'a pending_create row that already holds a positive server id is never '
+      'POSTed again - it is routed as an update (tests 6, 19)',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final ex = await insertSyncedExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 100,
+        );
+        final set = await insertSet(
+          exerciseLocalId: ex.localId,
+          exerciseServerId: 100,
+          serverId: 900,
+          syncStatus: 'pending_create',
+          isCompleted: true,
+          completedAt: r1,
+          lastModifiedLocal: r1,
+        );
+        stubPutOk();
+
+        await syncService.sync();
+
+        verifyNoPost();
+        final put =
+            verify(
+              mockApiService.put<void>(
+                captureAny,
+                data: captureAnyNamed('data'),
+                sessionContext: anyNamed('sessionContext'),
+              ),
+            ).captured;
+        expect(put[0], '${ApiConfig.exerciseSets}/900');
+        expect((put[1] as Map)['id'], 900);
+
+        final stored = await isar.localExerciseSets.get(set.localId);
+        expect(stored!.isSynced, isTrue);
+        expect(stored.syncStatus, 'synced');
+      },
+    );
+
+    test('a pending_delete row with a positive server id issues DELETE, never '
+        'PUT (test 11)', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        serverId: 900,
+        syncStatus: 'pending_delete',
+        lastModifiedLocal: r0,
+      );
+      stubDeleteOk();
+
+      await syncService.sync();
+
+      verify(
+        mockApiService.delete(
+          '${ApiConfig.exerciseSets}/900',
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).called(1);
+      verifyNever(
+        mockApiService.put<void>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      );
+      verifyNoPost();
+      expect(await isar.localExerciseSets.get(set.localId), isNull);
+    });
+
+    // ---- session / ownership guards preserved ----
+
+    test('a logout landing inside the CREATE acknowledgment writeTxn writes '
+        'nothing - the set stays pending_create (test 15)', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        lastModifiedLocal: r0,
+      );
+      stubPost(900);
+      syncService.insideAckWriteTxnForTesting =
+          () async => sessionEpoch.invalidate();
+
+      await syncService.sync();
+
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.syncStatus, 'pending_create');
+      expect(stored.isSynced, isFalse);
+      expect(stored.serverId, isNull);
+    });
+
+    test(
+      'a logout during the CREATE POST await writes nothing (test 15)',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final ex = await insertSyncedExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 100,
+        );
+        final set = await insertSet(
+          exerciseLocalId: ex.localId,
+          exerciseServerId: 100,
+          lastModifiedLocal: r0,
+        );
+        when(
+          mockApiService.post<Map<String, dynamic>>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).thenAnswer((_) async {
+          sessionEpoch.invalidate();
+          return {'id': 900};
+        });
+
+        await syncService.sync();
+
+        final stored = await isar.localExerciseSets.get(set.localId);
+        expect(stored!.syncStatus, 'pending_create');
+        expect(stored.isSynced, isFalse);
+        expect(stored.serverId, isNull);
+      },
+    );
+
+    test('a parent-chain reassignment during the CREATE POST writes nothing '
+        '(test 16)', () async {
+      final session = await insertSession(uid: userA, serverId: 10);
+      final ex = await insertSyncedExercise(
+        sessionLocalId: session.localId,
+        sessionServerId: 10,
+        serverId: 100,
+      );
+      final set = await insertSet(
+        exerciseLocalId: ex.localId,
+        exerciseServerId: 100,
+        lastModifiedLocal: r0,
+      );
+      when(
+        mockApiService.post<Map<String, dynamic>>(
+          any,
+          data: anyNamed('data'),
+          sessionContext: anyNamed('sessionContext'),
+        ),
+      ).thenAnswer((_) async {
+        // The parent exercise is deleted while the POST is in flight.
+        await isar.writeTxn(() => isar.localExercises.delete(ex.localId));
+        return {'id': 900};
+      });
+
+      await syncService.sync();
+
+      final stored = await isar.localExerciseSets.get(set.localId);
+      expect(stored!.syncStatus, 'pending_create');
+      expect(stored.isSynced, isFalse);
+      expect(stored.serverId, isNull);
+    });
+
+    test(
+      'delete-during-CREATE then a FAILED compensating DELETE: the tombstone '
+      'is retained (pending_delete, id kept) for the next retry (test 8)',
+      () async {
+        final session = await insertSession(uid: userA, serverId: 10);
+        final ex = await insertSyncedExercise(
+          sessionLocalId: session.localId,
+          sessionServerId: 10,
+          serverId: 100,
+        );
+        final set = await insertSet(
+          exerciseLocalId: ex.localId,
+          exerciseServerId: 100,
+          lastModifiedLocal: r0,
+        );
+        stubPost(900);
+        // Pass 1: user deletes while the CREATE POST is in flight -> tombstone.
+        syncService.beforeAckWriteTxnForTesting = () async {
+          await isar.writeTxn(() async {
+            final row = await isar.localExerciseSets.get(set.localId);
+            row!
+              ..isSynced = false
+              ..syncStatus = 'pending_delete'
+              ..lastModifiedLocal = r1;
+            await isar.localExerciseSets.put(row);
+          });
+        };
+        await syncService.sync();
+
+        final afterP1 = await isar.localExerciseSets.get(set.localId);
+        expect(afterP1!.syncStatus, 'pending_delete');
+        expect(afterP1.serverId, 900);
+
+        // Pass 2: the compensating DELETE fails.
+        syncService.beforeAckWriteTxnForTesting = null;
+        when(
+          mockApiService.delete(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).thenThrow(ApiException('boom', statusCode: 500));
+
+        await syncService.sync();
+
+        final afterP2 = await isar.localExerciseSets.get(set.localId);
+        expect(afterP2, isNotNull, reason: 'tombstone retained for retry');
+        expect(afterP2!.syncStatus, 'pending_delete');
+        expect(afterP2.isSynced, isFalse);
+        expect(afterP2.serverId, 900);
+      },
+    );
+  });
 }
