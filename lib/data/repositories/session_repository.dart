@@ -826,8 +826,36 @@ class SessionRepository {
     // Then sync to server in background if online (don't block). Bound to
     // the context captured at entry.
     if (_connectivity.isOnline) {
+      // Pin the exact local revision the background CREATE will serialize
+      // BEFORE scheduling it, re-read from the row just persisted. `session`
+      // is immutable and was copied verbatim into this row by
+      // `_createLocalSession`, so this `lastModifiedLocal` corresponds
+      // exactly to the bytes `_syncCreateSessionToServer` sends. The
+      // acknowledgment compares against it: a local edit / completion that
+      // races the POST await advances `lastModifiedLocal` and is preserved
+      // instead of being overwritten by the stale create response. (A delete
+      // of a still-server-id-less row hard-deletes it - not this PR's
+      // concern; see the doc comment on `_syncCreateSessionToServer`.)
+      final createdRow = await _ownedSessionByLocalId(
+        db,
+        localResult.id,
+        token,
+      );
+      if (createdRow == null) {
+        // Already gone (deleted / logged out between the write and here) -
+        // nothing to sync.
+        return localResult;
+      }
+      final dispatchedAt = createdRow.lastModifiedLocal;
+
       _backgroundSync(
-        () => _syncCreateSessionToServer(session, db, localResult.id, context),
+        () => _syncCreateSessionToServer(
+          session,
+          db,
+          localResult.id,
+          dispatchedAt,
+          context,
+        ),
         'Created session on server',
       );
     } else {
@@ -1177,10 +1205,27 @@ class SessionRepository {
   /// gated behind the class doc comment's three-checkpoint shape plus a
   /// re-resolution of the target row by its stable local identity and
   /// direct ownership.
+  ///
+  /// [dispatchedAt] is the `lastModifiedLocal` of the exact owned row whose
+  /// data was serialized into this POST, pinned by [createSession] BEFORE
+  /// scheduling this call. The acknowledgment re-reads the row inside its
+  /// write transaction and compares: an unchanged value is the normal
+  /// success path; a changed value means a local edit / completion raced the
+  /// POST await, so the row keeps the newer local state and is re-queued as
+  /// `pending_update` with the server identity/version attached - never
+  /// rebuilt from the stale create response, never marked synced, never
+  /// re-created.
+  ///
+  /// A delete racing this POST is NOT compensated here: `_markForDeletion`
+  /// hard-deletes a still-server-id-less row, so the re-fetch below returns
+  /// null and a committed server row is orphaned. That needs durable client
+  /// operation identity and is deferred to the Session idempotency PR (see
+  /// `test/data/repositories/session_create_delete_cross_operation_race_test.dart`).
   Future<void> _syncCreateSessionToServer(
     Session session,
     Isar db,
     int localId,
+    DateTime dispatchedAt,
     SessionRequestContext context,
   ) async {
     final token = context.epochToken;
@@ -1214,6 +1259,24 @@ class SessionRepository {
 
       final existing = await db.localSessions.get(localId);
       if (existing == null || existing.userId != token.userId) return;
+
+      if (existing.lastModifiedLocal != dispatchedAt) {
+        // A local edit / completion raced the POST await. Attach the server
+        // identity + authoritative version (so no later pass re-creates the
+        // row), keep the newer local fields, and re-queue as pending_update.
+        // Retry/error bookkeeping is untouched. (A delete racing a
+        // still-server-id-less session hard-deletes the local row, so the
+        // re-fetch above returns null and this branch is not reached for that
+        // case - delete-during-CREATE compensation is deferred to the Session
+        // idempotency PR.)
+        existing.serverId = apiSession.id;
+        existing.version = apiSession.version;
+        existing.lastModifiedServer = DateTime.now();
+        existing.isSynced = false;
+        existing.syncStatus = 'pending_update';
+        await db.localSessions.put(existing);
+        return;
+      }
 
       final updated = ModelMapper.sessionToLocal(
         apiSession,

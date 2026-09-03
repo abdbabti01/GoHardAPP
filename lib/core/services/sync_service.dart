@@ -597,13 +597,38 @@ class SyncService {
     return row;
   }
 
-  /// Sync a session that needs to be created on the server
+  /// Sync a session that needs to be created on the server.
+  ///
+  /// Mirrors `_syncCreateSet`'s in-flight-edit guard: [localSession]'s
+  /// `lastModifiedLocal` is pinned as `dispatchedAt` BEFORE the POST - from
+  /// the same row whose fields are serialized into the request body, so the
+  /// two always correspond - and the acknowledgment re-reads the row inside
+  /// its `writeTxn` and compares. Every same-session mutable-field edit
+  /// (`SessionRepository._applyLocalEditBookkeeping`, `_updateLocalSessionStatus`)
+  /// advances `lastModifiedLocal`, so a changed value means a completion /
+  /// content edit raced in during the POST await - the create-response
+  /// snapshot is stale and must not overwrite the newer local state.
+  ///
+  /// This also covers the `_syncUpdateSession` no-serverId CREATE fallback:
+  /// it re-passes the row the phase enumerated, and the ack's re-read +
+  /// compare still catches any edit that raced the fallback's own
+  /// status-flip `writeTxn`.
+  ///
+  /// NOT covered: a delete racing a still-server-id-less session. Its
+  /// `SessionRepository._markForDeletion` hard-deletes the local row, so the
+  /// create acknowledgment (and any concurrent `_syncDeleteSession` pass)
+  /// finds nothing and a committed server row is orphaned. Compensating that
+  /// needs durable client operation identity and is deferred to the Session
+  /// idempotency PR - see `session_create_delete_cross_operation_race_test.dart`.
   Future<void> _syncCreateSession(
     Isar db,
     LocalSession localSession,
     SessionRequestContext context,
   ) async {
     debugPrint('  Creating session ${localSession.localId} on server...');
+
+    // Pin the exact local revision being dispatched (see the doc comment).
+    final dispatchedAt = localSession.lastModifiedLocal;
 
     // localSession here is a fresh Isar read, so its DateTime fields are
     // local-flagged but instant-correct (see
@@ -639,8 +664,6 @@ class SyncService {
     _assertCurrent(context);
     if (target == null) return;
 
-    // Persist the full authoritative response (including the
-    // server-assigned version) rather than inventing one.
     await _runTestHook(beforeAckWriteTxnForTesting);
     await db.writeTxn(() async {
       await _runTestHook(insideAckWriteTxnForTesting);
@@ -651,6 +674,33 @@ class SyncService {
         context.epochToken.userId,
       );
       if (reFetched == null) return;
+
+      if (reFetched.lastModifiedLocal != dispatchedAt) {
+        // A same-session edit / completion raced in during the POST await.
+        // The server row now exists: attach its identity and authoritative
+        // version so no later pass can CREATE it again, but do NOT mark it
+        // synced and do NOT rebuild the row from the now-stale create
+        // response - keep whatever the newer local edit left in place and
+        // re-queue as pending_update so the next pass PUTs the current state.
+        // Never leave it 'pending_create' - that would duplicate the row.
+        // Retry/error bookkeeping is left untouched.
+        //
+        // (A delete racing a still-server-id-less session hard-deletes the
+        // local row via SessionRepository._markForDeletion, so the re-fetch
+        // above returns null and this branch is never reached for that case;
+        // delete-during-CREATE compensation is deferred to the Session
+        // idempotency / operation-identity PR.)
+        reFetched.serverId = apiSession.id;
+        reFetched.version = apiSession.version;
+        reFetched.lastModifiedServer = DateTime.now();
+        reFetched.isSynced = false;
+        reFetched.syncStatus = 'pending_update';
+        await db.localSessions.put(reFetched);
+        return;
+      }
+
+      // Unchanged: persist the full authoritative response (including the
+      // server-assigned version) rather than inventing one.
       final updated = ModelMapper.sessionToLocal(
         apiSession,
         localId: localSession.localId,
