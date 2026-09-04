@@ -5,6 +5,7 @@ import 'package:isar/isar.dart';
 import '../../data/models/session.dart';
 import '../../data/services/api_service.dart';
 import '../../data/services/auth_service.dart';
+import '../../data/services/session_create_error.dart';
 import '../../data/services/session_request_context.dart';
 import '../../data/services/session_request_exceptions.dart';
 import '../../data/services/session_update_sync_helper.dart';
@@ -582,7 +583,30 @@ class SyncService {
       } on RequestCancelledException {
         rethrow;
       } catch (e) {
-        await _markSyncError(db, session, e.toString(), context);
+        // A Session CREATE response that only signals throttling (429) or an
+        // API operation state this client build cannot yet reconcile
+        // (recognised 404/409/410 `code`s) must NOT advance the terminal
+        // retry counter: otherwise `DatabaseCleanup.cleanupFailedSessions`
+        // hard-deletes the still-unsynced `pending_create` row and its
+        // exercises on the next app startup. The row is left pending for the
+        // next normal sync pass. Unknown structured errors and every
+        // ordinary 4xx/5xx/transport failure keep the established behavior
+        // and fail closed. Lifecycle exceptions are rethrown above and never
+        // reach here.
+        //
+        // `isSoftRetryable` is a pure classification of the error; whether the
+        // row is actually mid-CREATE is re-checked inside `_markSyncError`
+        // against the acknowledgment-time row, so the `pending_update` ->
+        // `pending_create` no-serverId CREATE fallback (see
+        // `_syncUpdateSession`) is covered too - `session` here is the
+        // pre-dispatch snapshot and would still read `pending_update`.
+        await _markSyncError(
+          db,
+          session,
+          e.toString(),
+          context,
+          softError: SessionCreateError.isSoftRetryable(e),
+        );
       }
     }
   }
@@ -986,12 +1010,24 @@ class SyncService {
   /// is still current AND the row still belongs to the captured user -
   /// ordinary errors get the same acknowledgment-safety treatment as
   /// success does.
+  ///
+  /// [softError] defaults to `false` (the established behavior for every hard
+  /// failure). The Session CREATE path passes `true` for a soft throttle /
+  /// recognised operation-state response; combined here with the
+  /// acknowledgment-time row still being `pending_create`, it suppresses the
+  /// `syncRetryCount` increment so the row records the error and attempt time
+  /// but never crosses the terminal `DatabaseCleanup.cleanupFailedSessions`
+  /// threshold - it stays retryable. The `pending_create` check is done
+  /// against `reFetched` (not the caller's pre-dispatch snapshot) so the
+  /// `pending_update` -> `pending_create` no-serverId CREATE fallback is
+  /// covered.
   Future<void> _markSyncError(
     Isar db,
     LocalSession session,
     String error,
-    SessionRequestContext context,
-  ) async {
+    SessionRequestContext context, {
+    bool softError = false,
+  }) async {
     if (!_isCurrent(context)) return;
     final target = await _reacquireOwnedSession(
       db,
@@ -1009,7 +1045,14 @@ class SyncService {
       );
       if (reFetched == null) return;
 
-      reFetched.syncRetryCount += 1;
+      // A soft CREATE error (429 / recognised operation-state code) only skips
+      // the terminal counter while the row is genuinely still mid-CREATE;
+      // every other row, and every hard error, keeps the established behavior.
+      final bumpRetryCount =
+          !(softError && reFetched.syncStatus == 'pending_create');
+      if (bumpRetryCount) {
+        reFetched.syncRetryCount += 1;
+      }
       reFetched.syncError = error;
       reFetched.lastSyncAttempt = DateTime.now().toUtc();
 
@@ -1017,7 +1060,12 @@ class SyncService {
       // so it can be retried. The syncError and syncRetryCount fields
       // already track the error state.
 
-      if (reFetched.syncRetryCount >= _maxRetries) {
+      if (!bumpRetryCount) {
+        debugPrint(
+          '  ⏳ Session ${reFetched.localId} CREATE soft error - kept pending, '
+          'retry count unchanged (${reFetched.syncRetryCount}/$_maxRetries): $error',
+        );
+      } else if (reFetched.syncRetryCount >= _maxRetries) {
         debugPrint(
           '  ❌ Session ${reFetched.localId} failed after $_maxRetries attempts: $error',
         );
