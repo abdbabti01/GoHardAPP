@@ -30,7 +30,6 @@ import 'core/services/sync_service_initializer.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/background_service.dart';
 import 'core/services/tab_navigation_service.dart';
-import 'core/utils/database_cleanup.dart';
 import 'providers/auth_provider.dart';
 import 'providers/sessions_provider.dart';
 import 'providers/active_workout_provider.dart';
@@ -74,11 +73,11 @@ void main() async {
   debugPrint('📊 Database path: ${localDb.database.directory}');
   debugPrint('🔍 Isar Inspector enabled - use Isar Inspector app to view data');
 
-  // Clean up failed/corrupted sessions on startup
-  await DatabaseCleanup.cleanupFailedSessions(localDb.database);
-
-  // Clean up duplicate program workouts on startup
-  await DatabaseCleanup.cleanupDuplicateProgramWorkouts(localDb.database);
+  // NOTE: no pre-authentication cleanup runs here. Startup must never delete a
+  // Session (or its Exercises/ExerciseSets) that has not been synchronized -
+  // sync failures are transient and the retry counter is diagnostic only.
+  // Deletion is authoritative (a successful server DELETE, or an explicit
+  // authenticated user action) and always runs owner-scoped, after auth.
 
   // Initialize connectivity service
   final connectivity = ConnectivityService.instance;

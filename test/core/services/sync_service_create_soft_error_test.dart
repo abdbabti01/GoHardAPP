@@ -9,7 +9,6 @@ import 'package:go_hard_app/core/services/connectivity_service.dart';
 import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/sync_service.dart';
 import 'package:go_hard_app/core/services/user_session_epoch.dart';
-import 'package:go_hard_app/core/utils/database_cleanup.dart';
 import 'package:go_hard_app/data/local/models/local_exercise.dart';
 import 'package:go_hard_app/data/local/models/local_exercise_set.dart';
 import 'package:go_hard_app/data/local/models/local_session.dart';
@@ -29,11 +28,11 @@ import 'sync_service_test.mocks.dart';
 /// (404 `program_not_found`, 409 `operation_canceled`, 409
 /// `operation_incomplete`, 410 `operation_target_deleted`): the
 /// `pending_create` row and its unsynced children are preserved, never marked
-/// synced, never deleted, and never advance the terminal retry /
-/// `DatabaseCleanup` threshold - so the create stays retryable. A known code
-/// on the WRONG status, an unknown code, and every ordinary 4xx/5xx/transport
-/// failure keep their established fail-closed behavior; lifecycle exceptions
-/// stay distinct.
+/// synced, never deleted, and never advance the `syncRetryCount` diagnostic -
+/// so the create stays retryable. A known code on the WRONG status, an unknown
+/// code, and every ordinary 4xx/5xx/transport failure keep their established
+/// fail-closed behavior (advancing the counter, which saturates at
+/// `_maxRetries` and is never terminal); lifecycle exceptions stay distinct.
 ///
 /// `SessionCreateError.retryAfterHint` was considered and removed: nothing in
 /// this PR consumes it (there is no persisted "retry not before" field and no
@@ -100,6 +99,18 @@ void main() {
       await tempDir.delete(recursive: true);
     }
   });
+
+  /// Simulates an app restart: close and reopen the same on-disk Isar. Nothing
+  /// runs at "startup" - there is no cleanup pass - so every row must persist.
+  Future<void> restartApp() async {
+    await isar.close();
+    isar = await Isar.open(
+      [LocalSessionSchema, LocalExerciseSchema, LocalExerciseSetSchema],
+      directory: tempDir.path,
+      inspector: false,
+    );
+    localDb.setTestDatabase(isar);
+  }
 
   // ---- fixtures -------------------------------------------------------------
 
@@ -429,8 +440,8 @@ void main() {
       expect(stored.version, isNull);
     });
 
-    test('3. 429 does not advance the terminal retry / cleanup counter, even '
-        'across repeated passes, so DatabaseCleanup keeps the row', () async {
+    test('3. 429 does not advance the retry counter, and the row + children '
+        'survive an app restart', () async {
       final s = await insertPendingCreateSession();
       final (ex, set) = await insertUnsyncedChildren(s.localId);
       stubPostThrow(apiError(429));
@@ -445,16 +456,12 @@ void main() {
       expect(stored.syncError, isNotNull);
       expect(stored.lastSyncAttempt, isNotNull);
 
-      // The startup sweep only deletes rows with syncRetryCount > 2.
-      await DatabaseCleanup.cleanupFailedSessions(isar);
+      await restartApp();
 
       stored = await reload(s.localId);
-      expect(
-        stored,
-        isNotNull,
-        reason: '429 must never make the row sweepable',
-      );
+      expect(stored, isNotNull, reason: 'nothing deletes a row at startup');
       expect(stored!.syncStatus, 'pending_create');
+      expect(stored.syncRetryCount, 0);
       expect(await isar.localExercises.get(ex.localId), isNotNull);
       expect(await isar.localExerciseSets.get(set.localId), isNotNull);
     });
@@ -715,7 +722,7 @@ void main() {
     });
 
     test('18. the pending_update -> pending_create no-serverId CREATE fallback '
-        'is also protected: a 429 there does not advance the terminal counter '
+        'is also protected: a 429 there does not advance the retry counter '
         '(the catch sees the stale pending_update snapshot; _markSyncError '
         're-checks the acknowledgment-time row)', () async {
       // A malformed row: pending_update but never acknowledged (serverId null).
@@ -745,18 +752,18 @@ void main() {
       expect(stored!.syncStatus, 'pending_create');
       expect(stored.serverId, isNull);
       expect(stored.isSynced, isFalse);
-      // ...but the throttle never advanced the terminal counter.
+      // ...but the throttle never advanced the retry counter.
       expect(stored.syncRetryCount, 0);
 
-      await DatabaseCleanup.cleanupFailedSessions(isar);
+      await restartApp();
 
       stored = await reload(s.localId);
       expect(
         stored,
         isNotNull,
         reason:
-            'a throttled CREATE via the update fallback must not be '
-            'sweepable either',
+            'a throttled CREATE via the update fallback must survive a '
+            'restart too',
       );
       expect(await isar.localExercises.get(ex.localId), isNotNull);
       expect(await isar.localExerciseSets.get(set.localId), isNotNull);
