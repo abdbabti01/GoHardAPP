@@ -585,14 +585,13 @@ class SyncService {
       } catch (e) {
         // A Session CREATE response that only signals throttling (429) or an
         // API operation state this client build cannot yet reconcile
-        // (recognised 404/409/410 `code`s) must NOT advance the terminal
-        // retry counter: otherwise `DatabaseCleanup.cleanupFailedSessions`
-        // hard-deletes the still-unsynced `pending_create` row and its
-        // exercises on the next app startup. The row is left pending for the
-        // next normal sync pass. Unknown structured errors and every
-        // ordinary 4xx/5xx/transport failure keep the established behavior
-        // and fail closed. Lifecycle exceptions are rethrown above and never
-        // reach here.
+        // (recognised 404/409/410 `code`s) is not a client-side failure, so it
+        // does not advance the retry counter for a still-`pending_create` row;
+        // the row simply retries on the next pass. Unknown structured errors
+        // and every ordinary 4xx/5xx/transport failure DO advance the counter
+        // (which saturates at `_maxRetries` - see `_markSyncError`), but the
+        // row is never deleted or made terminal for it. Lifecycle exceptions
+        // are rethrown above and never reach here.
         //
         // `isSoftRetryable` is a pure classification of the error; whether the
         // row is actually mid-CREATE is re-checked inside `_markSyncError`
@@ -1006,21 +1005,26 @@ class SyncService {
     });
   }
 
-  /// Mark sync error with exponential backoff. Only writes if the context
+  /// Record a sync failure as diagnostics only. Only writes if the context
   /// is still current AND the row still belongs to the captured user -
   /// ordinary errors get the same acknowledgment-safety treatment as
   /// success does.
   ///
-  /// [softError] defaults to `false` (the established behavior for every hard
-  /// failure). The Session CREATE path passes `true` for a soft throttle /
-  /// recognised operation-state response; combined here with the
-  /// acknowledgment-time row still being `pending_create`, it suppresses the
-  /// `syncRetryCount` increment so the row records the error and attempt time
-  /// but never crosses the terminal `DatabaseCleanup.cleanupFailedSessions`
-  /// threshold - it stays retryable. The `pending_create` check is done
-  /// against `reFetched` (not the caller's pre-dispatch snapshot) so the
-  /// `pending_update` -> `pending_create` no-serverId CREATE fallback is
-  /// covered.
+  /// Writes `syncError` + `lastSyncAttempt` always, and advances
+  /// `syncRetryCount` by one for a hard failure - but the counter SATURATES at
+  /// `_maxRetries` (it never grows past it) and reaching it is NOT terminal:
+  /// the row keeps its `pending_*` status, stays in the sync queue, and keeps
+  /// retrying on every pass. Nothing deletes a Session or its children for its
+  /// retry count. `syncStatus` is never changed here. A successful sync resets
+  /// the counter to zero; `retryFailedSyncs()` also resets it.
+  ///
+  /// [softError] defaults to `false`. The Session CREATE path passes `true`
+  /// for a soft throttle / recognised operation-state response; combined here
+  /// with the acknowledgment-time row still being `pending_create`, it skips
+  /// even the diagnostic increment (a 429 / operation-state response is not a
+  /// client-side failure). The `pending_create` check is against `reFetched`
+  /// (not the caller's pre-dispatch snapshot) so the `pending_update` ->
+  /// `pending_create` no-serverId CREATE fallback is covered.
   Future<void> _markSyncError(
     Isar db,
     LocalSession session,
@@ -1045,11 +1049,17 @@ class SyncService {
       );
       if (reFetched == null) return;
 
-      // A soft CREATE error (429 / recognised operation-state code) only skips
-      // the terminal counter while the row is genuinely still mid-CREATE;
-      // every other row, and every hard error, keeps the established behavior.
+      // A soft CREATE error (429 / recognised operation-state code) does not
+      // advance the retry counter while the row is genuinely still mid-CREATE -
+      // it is throttling / server operation state, not a client-side failure.
+      // Every other row, and every hard error, still advances the counter, but
+      // ONLY while it is below `_maxRetries`: the counter SATURATES there. It
+      // is a bounded diagnostic - it never grows without limit, and reaching
+      // `_maxRetries` neither stops automatic retries nor makes the row
+      // eligible for deletion. Nothing deletes a Session for its retry count.
       final bumpRetryCount =
-          !(softError && reFetched.syncStatus == 'pending_create');
+          !(softError && reFetched.syncStatus == 'pending_create') &&
+          reFetched.syncRetryCount < _maxRetries;
       if (bumpRetryCount) {
         reFetched.syncRetryCount += 1;
       }
@@ -1057,17 +1067,19 @@ class SyncService {
       reFetched.lastSyncAttempt = DateTime.now().toUtc();
 
       // Don't change syncStatus - keep it as pending_create/update/delete
-      // so it can be retried. The syncError and syncRetryCount fields
-      // already track the error state.
+      // so it keeps retrying on every pass. The syncError / syncRetryCount /
+      // lastSyncAttempt fields track the error state without ever being
+      // terminal.
 
-      if (!bumpRetryCount) {
+      if (softError && reFetched.syncStatus == 'pending_create') {
         debugPrint(
           '  ⏳ Session ${reFetched.localId} CREATE soft error - kept pending, '
           'retry count unchanged (${reFetched.syncRetryCount}/$_maxRetries): $error',
         );
       } else if (reFetched.syncRetryCount >= _maxRetries) {
         debugPrint(
-          '  ❌ Session ${reFetched.localId} failed after $_maxRetries attempts: $error',
+          '  ❌ Session ${reFetched.localId} failed $_maxRetries+ times '
+          '(counter saturated at $_maxRetries): $error',
         );
         debugPrint(
           '  Will keep retrying on next sync (status: ${reFetched.syncStatus})',
