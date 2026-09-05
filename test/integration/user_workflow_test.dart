@@ -6,6 +6,7 @@ import 'package:go_hard_app/providers/active_workout_provider.dart';
 import 'package:go_hard_app/providers/nutrition_provider.dart';
 import 'package:go_hard_app/providers/programs_provider.dart';
 import 'package:go_hard_app/data/repositories/session_repository.dart';
+import 'package:go_hard_app/data/repositories/session_sync_diagnostics.dart';
 import 'package:go_hard_app/data/repositories/nutrition_repository.dart';
 import 'package:go_hard_app/data/repositories/programs_repository.dart';
 import 'package:go_hard_app/data/services/auth_service.dart';
@@ -30,6 +31,17 @@ import 'package:go_hard_app/core/services/user_session_epoch.dart';
   ConnectivityService,
 ])
 import 'user_workflow_test.mocks.dart';
+
+// Diagnostics-free join for stubbing `watchSessionSyncSnapshot` - this
+// integration suite exercises session list/mutation flows only, never sync
+// diagnostics, so every stub here reports zero issues.
+SessionSyncSnapshot _snapshotOf(List<Session> sessions) => SessionSyncSnapshot(
+  visibleEntries: [
+    for (final s in sessions) SessionListEntry(session: s, localId: s.id),
+  ],
+  retryingFailureCount: 0,
+  conflictCount: 0,
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -274,8 +286,8 @@ void main() {
           ),
         ).thenAnswer((_) async => [draftSession]);
         when(
-          mockSessionRepository.watchSessions(any),
-        ).thenAnswer((_) => Stream.value([draftSession]));
+          mockSessionRepository.watchSessionSyncSnapshot(any),
+        ).thenAnswer((_) => Stream.value(_snapshotOf([draftSession])));
 
         // Create providers
         final sessionsProvider = SessionsProvider(
@@ -508,8 +520,8 @@ void main() {
           ),
         ).thenAnswer((_) async => sessions);
         when(
-          mockSessionRepository.watchSessions(1),
-        ).thenAnswer((_) => Stream.value(sessions));
+          mockSessionRepository.watchSessionSyncSnapshot(1),
+        ).thenAnswer((_) => Stream.value(_snapshotOf(sessions)));
 
         final provider = SessionsProvider(
           mockSessionRepository,
@@ -542,8 +554,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenAnswer((_) async => [session]);
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value([session]));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf([session])));
       when(
         mockSessionRepository.deleteSession(1),
       ).thenAnswer((_) async => true);
@@ -589,8 +601,8 @@ void main() {
           ),
         ).thenAnswer((_) async => []);
         when(
-          mockSessionRepository.watchSessions(1),
-        ).thenAnswer((_) => Stream.value([]));
+          mockSessionRepository.watchSessionSyncSnapshot(1),
+        ).thenAnswer((_) => Stream.value(_snapshotOf([])));
 
         final provider = SessionsProvider(
           mockSessionRepository,
@@ -652,8 +664,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenAnswer((_) async => []);
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value([]));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf([])));
 
       final provider = SessionsProvider(
         mockSessionRepository,
@@ -720,8 +732,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenAnswer((_) async => sessions);
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value(sessions));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf(sessions)));
 
       final provider = SessionsProvider(
         mockSessionRepository,
@@ -806,8 +818,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenAnswer((_) async => [session]);
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value([session]));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf([session])));
       when(
         mockSessionRepository.updateWorkoutDate(1, any),
       ).thenAnswer((_) async {});
@@ -1297,8 +1309,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenThrow(Exception('Network error'));
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value([]));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf([])));
 
       final provider = SessionsProvider(
         mockSessionRepository,
@@ -1396,8 +1408,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenAnswer((_) async => [session]);
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value([session]));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf([session])));
 
       final provider = SessionsProvider(
         mockSessionRepository,
@@ -1718,8 +1730,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenAnswer((_) async => weekSessions);
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value(weekSessions));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf(weekSessions)));
 
       final provider = SessionsProvider(
         mockSessionRepository,
@@ -1768,8 +1780,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenAnswer((_) async => sessions);
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value(sessions));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf(sessions)));
 
       final provider = SessionsProvider(
         mockSessionRepository,
@@ -1832,8 +1844,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenAnswer((_) async => sessions);
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value(sessions));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf(sessions)));
 
       final provider = SessionsProvider(
         mockSessionRepository,
@@ -1987,8 +1999,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenAnswer((_) async => []);
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value([]));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf([])));
 
       final sessionsProvider = SessionsProvider(
         mockSessionRepository,
@@ -2463,8 +2475,8 @@ void main() {
         mockSessionRepository.getSessions(waitForSync: anyNamed('waitForSync')),
       ).thenAnswer((_) async => cachedSessions);
       when(
-        mockSessionRepository.watchSessions(1),
-      ).thenAnswer((_) => Stream.value(cachedSessions));
+        mockSessionRepository.watchSessionSyncSnapshot(1),
+      ).thenAnswer((_) => Stream.value(_snapshotOf(cachedSessions)));
 
       final provider = SessionsProvider(
         mockSessionRepository,

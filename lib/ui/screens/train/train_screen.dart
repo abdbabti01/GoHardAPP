@@ -9,8 +9,10 @@ import '../../../providers/exercises_provider.dart';
 import '../../../providers/active_workout_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/sessions/session_card.dart';
+import '../sessions/session_detail_screen.dart';
 import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/active_workout_banner.dart';
+import '../../widgets/common/sync_issues_banner.dart';
 import '../../widgets/common/loading_indicator.dart';
 import '../programs/programs_screen.dart';
 import '../exercises/exercises_screen.dart';
@@ -132,7 +134,11 @@ class _TrainScreenState extends State<TrainScreen>
     }
   }
 
-  Future<void> _handleSessionTap(int sessionId, String status) async {
+  Future<void> _handleSessionTap(
+    int sessionId,
+    String status, [
+    int? localId,
+  ]) async {
     if (status == 'planned') {
       final provider = context.read<SessionsProvider>();
       final session = provider.sessions.firstWhere((s) => s.id == sessionId);
@@ -192,9 +198,10 @@ class _TrainScreenState extends State<TrainScreen>
       ).pushNamed(RouteNames.activeWorkout, arguments: sessionId);
       if (mounted) await context.read<SessionsProvider>().loadSessions();
     } else {
-      Navigator.of(
-        context,
-      ).pushNamed(RouteNames.sessionDetail, arguments: sessionId);
+      Navigator.of(context).pushNamed(
+        RouteNames.sessionDetail,
+        arguments: SessionDetailArgs(sessionId: sessionId, localId: localId),
+      );
     }
   }
 
@@ -417,6 +424,7 @@ class _TrainScreenState extends State<TrainScreen>
       children: [
         const ActiveWorkoutBanner(),
         const OfflineBanner(),
+        const SyncIssuesBanner(),
         Expanded(
           child: Consumer<SessionsProvider>(
             builder: (context, provider, child) {
@@ -588,7 +596,13 @@ class _TrainScreenState extends State<TrainScreen>
                       ...todaySessions.map(
                         (s) => SessionCard(
                           session: s,
-                          onTap: () => _handleSessionTap(s.id, s.status),
+                          diagnostics: provider.diagnosticsFor(s),
+                          onTap:
+                              () => _handleSessionTap(
+                                s.id,
+                                s.status,
+                                provider.localIdFor(s),
+                              ),
                           onDelete: () => _handleDeleteSession(s.id),
                         ),
                       ),
@@ -603,7 +617,13 @@ class _TrainScreenState extends State<TrainScreen>
                       ...thisWeekSessions.map(
                         (s) => SessionCard(
                           session: s,
-                          onTap: () => _handleSessionTap(s.id, s.status),
+                          diagnostics: provider.diagnosticsFor(s),
+                          onTap:
+                              () => _handleSessionTap(
+                                s.id,
+                                s.status,
+                                provider.localIdFor(s),
+                              ),
                           onDelete: () => _handleDeleteSession(s.id),
                         ),
                       ),
@@ -618,7 +638,13 @@ class _TrainScreenState extends State<TrainScreen>
                       ...upcomingSessions.map(
                         (s) => SessionCard(
                           session: s,
-                          onTap: () => _handleSessionTap(s.id, s.status),
+                          diagnostics: provider.diagnosticsFor(s),
+                          onTap:
+                              () => _handleSessionTap(
+                                s.id,
+                                s.status,
+                                provider.localIdFor(s),
+                              ),
                           onDelete: () => _handleDeleteSession(s.id),
                         ),
                       ),
@@ -630,7 +656,13 @@ class _TrainScreenState extends State<TrainScreen>
                         ...groupedPast[label]!.map(
                           (s) => SessionCard(
                             session: s,
-                            onTap: () => _handleSessionTap(s.id, s.status),
+                            diagnostics: provider.diagnosticsFor(s),
+                            onTap:
+                                () => _handleSessionTap(
+                                  s.id,
+                                  s.status,
+                                  provider.localIdFor(s),
+                                ),
                             onDelete: () => _handleDeleteSession(s.id),
                           ),
                         ),

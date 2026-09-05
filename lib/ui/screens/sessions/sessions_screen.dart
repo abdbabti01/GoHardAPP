@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/colors.dart';
+import 'session_detail_screen.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../providers/sessions_provider.dart';
@@ -18,6 +19,7 @@ import '../../widgets/running/running_widget.dart';
 import '../../widgets/nutrition/nutrition_summary_card.dart';
 import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/active_workout_banner.dart';
+import '../../widgets/common/sync_issues_banner.dart';
 import '../../widgets/common/loading_indicator.dart';
 import '../../widgets/common/animations.dart';
 import '../programs/programs_screen.dart';
@@ -36,6 +38,22 @@ class _SessionsScreenState extends State<SessionsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _pastWorkoutsFilter = 'Last Month'; // Filter for past workouts
+
+  // Captured in didChangeDependencies() - never re-read via context.read()
+  // from dispose(). Provider.of/context.read() requires the element to
+  // still be active; when a wider ancestor subtree (including this
+  // provider) is torn down in the SAME pass as this widget - e.g. a full
+  // app/test teardown - the ancestor's element can already be deactivated
+  // by the time THIS widget's dispose() runs, and Flutter throws "Looking
+  // up a deactivated widget's ancestor is unsafe." Holding the reference
+  // instead makes removeListener() safe regardless of teardown order.
+  TabNavigationService? _tabNavService;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _tabNavService = context.read<TabNavigationService>();
+  }
 
   @override
   void initState() {
@@ -57,14 +75,16 @@ class _SessionsScreenState extends State<SessionsScreen>
       // Trigger exercise templates to load and cache for offline use
       context.read<ExercisesProvider>().loadExercises();
 
-      // Listen to TabNavigationService for dynamic sub-tab switching
-      final tabNavService = context.read<TabNavigationService>();
-      tabNavService.addListener(_handleSubTabChange);
+      // Listen to TabNavigationService for dynamic sub-tab switching -
+      // didChangeDependencies() has already run by the time a
+      // postFrameCallback fires, so _tabNavService is populated.
+      _tabNavService?.addListener(_handleSubTabChange);
     });
   }
 
   void _handleSubTabChange() {
-    final tabNavService = context.read<TabNavigationService>();
+    final tabNavService = _tabNavService;
+    if (tabNavService == null) return;
     // Only respond if we're on the Workouts tab (index 0) and subTab is specified
     if (tabNavService.currentTab == 0 &&
         tabNavService.currentSubTab != null &&
@@ -75,9 +95,9 @@ class _SessionsScreenState extends State<SessionsScreen>
 
   @override
   void dispose() {
-    // Remove listener from TabNavigationService
-    final tabNavService = context.read<TabNavigationService>();
-    tabNavService.removeListener(_handleSubTabChange);
+    // Remove listener from the CAPTURED reference - never re-read via
+    // context.read() here (see _tabNavService's doc comment).
+    _tabNavService?.removeListener(_handleSubTabChange);
     _tabController.dispose();
     super.dispose();
   }
@@ -172,7 +192,11 @@ class _SessionsScreenState extends State<SessionsScreen>
     }
   }
 
-  Future<void> _handleSessionTap(int sessionId, String status) async {
+  Future<void> _handleSessionTap(
+    int sessionId,
+    String status, [
+    int? localId,
+  ]) async {
     if (status == 'planned') {
       final provider = context.read<SessionsProvider>();
       final session = provider.sessions.firstWhere((s) => s.id == sessionId);
@@ -229,9 +253,10 @@ class _SessionsScreenState extends State<SessionsScreen>
       }
     } else {
       // Navigate to detail screen for completed sessions
-      Navigator.of(
-        context,
-      ).pushNamed(RouteNames.sessionDetail, arguments: sessionId);
+      Navigator.of(context).pushNamed(
+        RouteNames.sessionDetail,
+        arguments: SessionDetailArgs(sessionId: sessionId, localId: localId),
+      );
     }
   }
 
@@ -890,6 +915,7 @@ class _SessionsScreenState extends State<SessionsScreen>
             children: [
               const ActiveWorkoutBanner(),
               const OfflineBanner(),
+              const SyncIssuesBanner(),
               Expanded(
                 child: Consumer<SessionsProvider>(
                   builder: (context, provider, child) {
@@ -1282,10 +1308,12 @@ class _SessionsScreenState extends State<SessionsScreen>
                             ...todaySessions.map(
                               (session) => SessionCard(
                                 session: session,
+                                diagnostics: provider.diagnosticsFor(session),
                                 onTap:
                                     () => _handleSessionTap(
                                       session.id,
                                       session.status,
+                                      provider.localIdFor(session),
                                     ),
                                 onDelete:
                                     () => _handleDeleteSession(session.id),
@@ -1304,10 +1332,12 @@ class _SessionsScreenState extends State<SessionsScreen>
                             ...thisWeekSessions.map(
                               (session) => SessionCard(
                                 session: session,
+                                diagnostics: provider.diagnosticsFor(session),
                                 onTap:
                                     () => _handleSessionTap(
                                       session.id,
                                       session.status,
+                                      provider.localIdFor(session),
                                     ),
                                 onDelete:
                                     () => _handleDeleteSession(session.id),
@@ -1326,10 +1356,12 @@ class _SessionsScreenState extends State<SessionsScreen>
                             ...upcomingSessions.map(
                               (session) => SessionCard(
                                 session: session,
+                                diagnostics: provider.diagnosticsFor(session),
                                 onTap:
                                     () => _handleSessionTap(
                                       session.id,
                                       session.status,
+                                      provider.localIdFor(session),
                                     ),
                                 onDelete:
                                     () => _handleDeleteSession(session.id),
@@ -1345,10 +1377,12 @@ class _SessionsScreenState extends State<SessionsScreen>
                               ...groupedPast[label]!.map(
                                 (session) => SessionCard(
                                   session: session,
+                                  diagnostics: provider.diagnosticsFor(session),
                                   onTap:
                                       () => _handleSessionTap(
                                         session.id,
                                         session.status,
+                                        provider.localIdFor(session),
                                       ),
                                   onDelete:
                                       () => _handleDeleteSession(session.id),

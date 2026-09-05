@@ -8,6 +8,7 @@ import '../../../providers/sessions_provider.dart';
 import '../../../providers/nutrition_provider.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../routes/route_names.dart';
+import '../sessions/session_detail_screen.dart';
 import '../../widgets/running/running_widget.dart';
 import '../../widgets/common/active_workout_banner.dart';
 
@@ -387,7 +388,10 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                           Navigator.pushNamed(
                             context,
                             RouteNames.sessionDetail,
-                            arguments: session.id,
+                            arguments: SessionDetailArgs(
+                              sessionId: session.id,
+                              localId: sessionsProvider.localIdFor(session),
+                            ),
                           );
                         }
                       },

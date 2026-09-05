@@ -92,14 +92,30 @@ class AppRouter {
         );
 
       case RouteNames.sessionDetail:
-        final sessionId = settings.arguments as int?;
+        // Accepts either a SessionDetailArgs (sessionId + the unambiguous
+        // localId, when the caller had one) or a bare int (legacy/unknown
+        // caller with no localId available) - never derives localId from
+        // sessionId either way; a bare-int caller simply gets no sync-issue
+        // affordance on the opened screen.
+        final args = settings.arguments;
+        final int? sessionId;
+        final int? localId;
+        if (args is SessionDetailArgs) {
+          sessionId = args.sessionId;
+          localId = args.localId;
+        } else {
+          sessionId = args as int?;
+          localId = null;
+        }
         if (sessionId == null) {
           return MaterialPageRoute(
             builder: (_) => const _NotFoundScreen(routeName: 'session-detail'),
           );
         }
         return MaterialPageRoute(
-          builder: (_) => SessionDetailScreen(sessionId: sessionId),
+          builder:
+              (_) =>
+                  SessionDetailScreen(sessionId: sessionId!, localId: localId),
           settings: settings,
         );
 

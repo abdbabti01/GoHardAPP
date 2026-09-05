@@ -524,7 +524,7 @@ void main() {
           mockSessionRepo.getSessions(waitForSync: anyNamed('waitForSync')),
         ).thenAnswer((_) async => [_session()]);
         when(
-          mockSessionRepo.watchSessions(1),
+          mockSessionRepo.watchSessionSyncSnapshot(1),
         ).thenAnswer((_) => const Stream.empty());
         when(mockAuthService.getUserId()).thenAnswer((_) async => 1);
 
@@ -691,7 +691,7 @@ void main() {
           mockSessionRepo.getSessions(waitForSync: anyNamed('waitForSync')),
         ).thenAnswer((_) async => [_session()]);
         when(
-          mockSessionRepo.watchSessions(1),
+          mockSessionRepo.watchSessionSyncSnapshot(1),
         ).thenAnswer((_) => _ThrowingCancelStream());
         when(mockAuthService.getUserId()).thenAnswer((_) async => 1);
 
@@ -785,7 +785,7 @@ void main() {
           mockSessionRepo.getSessions(waitForSync: anyNamed('waitForSync')),
         ).thenAnswer((_) async => [_session()]);
         when(
-          mockSessionRepo.watchSessions(1),
+          mockSessionRepo.watchSessionSyncSnapshot(1),
         ).thenAnswer((_) => _ThrowingCancelStream());
         when(mockAuthService.getUserId()).thenAnswer((_) async => 1);
         sessionsProvider.loadSessions();

@@ -4,6 +4,7 @@ import '../core/services/user_session_epoch.dart';
 import '../data/models/session.dart';
 import '../data/models/program_workout.dart';
 import '../data/repositories/session_repository.dart';
+import '../data/repositories/session_sync_diagnostics.dart';
 import '../data/services/session_request_exceptions.dart';
 import '../core/services/connectivity_service.dart';
 
@@ -84,18 +85,49 @@ import '../core/services/connectivity_service.dart';
 ///
 /// ## User-bound Isar watch
 ///
-/// [loadSessions] installs a `SessionRepository.watchSessions(userId)`
-/// subscription via [_installWatch], bound to four things: the captured
-/// [UserSessionToken], the captured `userId` (== `token.userId`), a
-/// monotonic [_watchGen], and the exact [StreamSubscription] instance. Every
-/// stream data/error/done callback verifies ALL of: not [_disposed], session
-/// still current for the captured token, [_watchGen] unchanged, and the
-/// callback's subscription is `identical` to [_sessionsStreamSubscription] -
-/// so an A-session event can never publish into B and never recaptures a
-/// fresh token. The Isar watch is authoritative for the list once installed;
-/// [loadSessions] only publishes its own initial `getSessions()` snapshot if
-/// no newer watch snapshot ([_streamPublishSeq]) has landed since that load
-/// began, so an older load result never overwrites a fresher stream emission.
+/// [loadSessions] installs a
+/// `SessionRepository.watchSessionSyncSnapshot(userId)` subscription via
+/// [_installWatch], bound to four things: the captured [UserSessionToken],
+/// the captured `userId` (== `token.userId`), a monotonic [_watchGen], and
+/// the exact [StreamSubscription] instance. Every stream data/error/done
+/// callback verifies ALL of: not [_disposed], session still current for the
+/// captured token, [_watchGen] unchanged, and the callback's subscription is
+/// `identical` to [_sessionsStreamSubscription] - so an A-session event can
+/// never publish into B and never recaptures a fresh token. The Isar watch is
+/// authoritative for the list once installed; [loadSessions] only publishes
+/// its own initial `getSessions()` snapshot if no newer watch snapshot
+/// ([_streamPublishSeq]) has landed since that load began, so an older load
+/// result never overwrites a fresher stream emission.
+///
+/// ## Sync diagnostics (read-only)
+///
+/// [_installWatch] subscribes to `watchSessionSyncSnapshot`, NOT
+/// `watchSessions` - there is exactly ONE Isar watch / [StreamSubscription]
+/// for this provider. Its single emission (`SessionSyncSnapshot`) carries
+/// both the visible session list and derived, non-persisted sync diagnostics
+/// for the same rows in the same pass; [_onWatchData] rebuilds [_sessions],
+/// [_diagnosticsByLocalId], and [_localIdBySession] together from that one
+/// snapshot, so they can never observe two different emissions. A second,
+/// independently-installed watch for diagnostics is deliberately never
+/// introduced: it would need its own generation counter (sharing [_watchGen]
+/// would make it permanently fail its ownership check the first time any
+/// session mutation re-arms the list's watch) and could never be guaranteed
+/// consistent with [_sessions]. Once this watch is installed for the current
+/// user, it is the SOLE publisher of both [_sessions] and diagnostics -
+/// [loadSessions]'s plain `getSessions()` result is only ever allowed to
+/// paint the very first snapshot, before any watch has supplied one; see its
+/// `watchAlreadyActiveForThisUser` guard.
+///
+/// [diagnosticsFor] looks up by [Session] object identity into
+/// [_localIdBySession] (never by `session.id`), then resolves the found
+/// `localId` against [_diagnosticsByLocalId]. [localIdFor] exposes that same
+/// unambiguous `localId` for navigation - a caller that needs diagnostics
+/// AFTER navigating away from the live [Session] instance (the detail
+/// screen) must carry the `localId` itself, obtained via [localIdFor] at the
+/// point it still held that instance, and query [diagnosticsForLocalId].
+/// There is no id-based fallback: an entry point with no `localId` gets no
+/// diagnostic. This provider exposes no action that mutates sync state;
+/// there is no `retryNow()` here.
 ///
 /// [_installWatch] bumps [_watchGen], detaches [_sessionsStreamSubscription]
 /// BEFORE cancelling the previous subscription (so a late callback from the
@@ -137,8 +169,24 @@ class SessionsProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
+  // Derived, non-persisted sync diagnostics for the SAME [Session] instances
+  // held in [_sessions] - see the "Sync diagnostics" section of this class
+  // doc comment. Rebuilt from scratch on every watch emission, in lockstep
+  // with [_sessions], from the SAME [SessionSyncSnapshot].
+  //
+  // Keyed by the UNAMBIGUOUS `LocalSession.localId` - never by the public
+  // `Session.id` (`serverId ?? localId`), which can collide between the
+  // server-id and local-id namespaces (see `ModelMapper.localToSession`).
+  // [_localIdBySession] is the identity-keyed companion that lets
+  // [diagnosticsFor] and [localIdFor] resolve a LIVE `Session` instance to
+  // its `localId` without ever touching that ambiguous id.
+  final Map<int, SessionSyncDiagnostics> _diagnosticsByLocalId = {};
+  final Map<Session, int> _localIdBySession = {};
+  int _retryingFailureCount = 0;
+  int _conflictCount = 0;
+
   StreamSubscription<bool>? _connectivitySubscription;
-  StreamSubscription<List<Session>>? _sessionsStreamSubscription;
+  StreamSubscription<SessionSyncSnapshot>? _sessionsStreamSubscription;
 
   // Set synchronously as the first statement of dispose(); every watch
   // callback checks it before touching state or calling notifyListeners().
@@ -205,6 +253,63 @@ class SessionsProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
+  // ---------------------------------------------------------------------------
+  // Sync diagnostics (read-only; no recovery action lives here - see
+  // `session_sync_diagnostics.dart`)
+  // ---------------------------------------------------------------------------
+
+  /// Count of sessions currently `pending_*` with a retained sync error -
+  /// still retrying automatically, never terminal regardless of
+  /// `syncRetryCount`. Includes a failing `pending_delete` row even though
+  /// that row has no entry in [sessions] (see [SessionSyncSnapshot]).
+  int get retryingFailureCount => _retryingFailureCount;
+
+  /// Count of sessions in an unresolved `conflict` state - excluded from
+  /// automatic retry, distinct from [retryingFailureCount].
+  int get conflictCount => _conflictCount;
+
+  /// Whether the aggregate banner has anything to show.
+  bool get hasSyncIssues => _retryingFailureCount > 0 || _conflictCount > 0;
+
+  /// Derived sync diagnostics for [session], or `null` when it is healthy
+  /// (synced, or pending with no retained failure).
+  ///
+  /// Looked up by object identity against the exact [Session] instance this
+  /// provider's watch produced - `Session` has no `==`/`hashCode` override,
+  /// so this is an identity lookup, not a value lookup. Deliberately NOT
+  /// keyed by `session.id` (`serverId ?? localId`): that value can collide
+  /// between the server-id and local-id namespaces (see
+  /// `ModelMapper.localToSession`), which would attach one session's
+  /// diagnostics to an unrelated session. [session] must be an instance
+  /// currently held in [sessions] - a copy (e.g. via `Session.copyWith`,
+  /// which a same-session mutation may apply to its list entry between one
+  /// watch emission and the next) will not match; the next watch snapshot
+  /// resolves this within the same rearm cycle every other direct-edit
+  /// field already relies on (see [_rearmWatchAfterMutation]).
+  SessionSyncDiagnostics? diagnosticsFor(Session session) {
+    final localId = _localIdBySession[session];
+    return localId == null ? null : _diagnosticsByLocalId[localId];
+  }
+
+  /// The unambiguous `LocalSession.localId` for [session], if it is a LIVE
+  /// instance currently held in [sessions] - or `null` otherwise (a copy, a
+  /// session no longer in the list, etc.). This is the ONLY safe way to
+  /// carry a session's identity across navigation to
+  /// [SessionDetailScreen]/[diagnosticsForLocalId]: never pass or resolve by
+  /// `session.id` (`serverId ?? localId`), which can collide between the
+  /// server-id and local-id namespaces. A caller that cannot obtain a
+  /// `localId` (e.g. it holds only a bare int id from an external source)
+  /// must omit the diagnostic affordance rather than guess via that id.
+  int? localIdFor(Session session) => _localIdBySession[session];
+
+  /// Diagnostics for the exact `LocalSession` row identified by [localId] -
+  /// never resolved via the ambiguous `Session.id`. Callers (the detail
+  /// screen) must obtain [localId] from [localIdFor] at the point they still
+  /// hold the live [Session] instance (e.g. at navigation time), never by
+  /// scanning [sessions] for a matching public id.
+  SessionSyncDiagnostics? diagnosticsForLocalId(int localId) =>
+      _diagnosticsByLocalId[localId];
+
   /// The user the currently-installed Isar watch filters for, or `null` when
   /// no watch is installed. Exposed for tests/diagnostics only.
   @visibleForTesting
@@ -264,14 +369,35 @@ class SessionsProvider extends ChangeNotifier {
       );
       if (!owns()) return;
 
-      // The Isar watch is authoritative once installed. Only publish this
-      // initial snapshot if no newer watch snapshot has landed since the load
-      // began - an older getSessions() result must not overwrite a fresher
-      // stream emission.
-      if (_streamPublishSeq == seqAtEntry) {
+      // The joined watch is the SOLE publisher of both the list and
+      // diagnostics once it is installed for this user - a plain
+      // getSessions() result (which carries no diagnostics at all) must
+      // never replace or clear a watch-owned snapshot, not even a "stale"
+      // one from before this load began. If a watch is already active for
+      // this user, skip the direct publish entirely: _installWatch below
+      // re-arms it unconditionally, and that fresh `fireImmediately` query
+      // is strictly more complete (list AND diagnostics) than this plain
+      // list ever is, so there is nothing this branch could correctly add.
+      //
+      // The direct publish exists ONLY to paint something before the very
+      // first watch snapshot has ever landed for this user (e.g. cold start,
+      // right after login) - at that point there are no diagnostics to lose,
+      // so clearing them here is a no-op, never a real loss.
+      final watchAlreadyActiveForThisUser =
+          _sessionsStreamSubscription != null && _watchedUserId == userId;
+      if (!watchAlreadyActiveForThisUser && _streamPublishSeq == seqAtEntry) {
         _sessions
           ..clear()
           ..addAll(sessionList..sort((a, b) => b.date.compareTo(a.date)));
+        // No diagnostics exist yet at this point (no watch has ever
+        // supplied any), so there is nothing to preserve - but clear
+        // explicitly rather than leave stale entries from a PREVIOUS user's
+        // watch that was somehow never cleared (defense in depth; `clear()`
+        // already guarantees this in the normal logout path).
+        _diagnosticsByLocalId.clear();
+        _localIdBySession.clear();
+        _retryingFailureCount = 0;
+        _conflictCount = 0;
         debugPrint('✅ Loaded ${_sessions.length} sessions into provider');
       }
 
@@ -305,9 +431,9 @@ class SessionsProvider extends ChangeNotifier {
     final previous = _sessionsStreamSubscription;
     _sessionsStreamSubscription = null;
 
-    late final StreamSubscription<List<Session>> sub;
+    late final StreamSubscription<SessionSyncSnapshot> sub;
     sub = _sessionRepository
-        .watchSessions(userId)
+        .watchSessionSyncSnapshot(userId)
         .listen(
           (updated) => _onWatchData(updated, token, watchGen, sub),
           onError:
@@ -333,7 +459,7 @@ class SessionsProvider extends ChangeNotifier {
   bool _watchCallbackOwns(
     UserSessionToken token,
     int watchGen,
-    StreamSubscription<List<Session>> sub,
+    StreamSubscription<SessionSyncSnapshot> sub,
   ) {
     if (_disposed) return false;
     if (!_sessionEpoch.isCurrent(token)) return false;
@@ -347,15 +473,33 @@ class SessionsProvider extends ChangeNotifier {
   }
 
   void _onWatchData(
-    List<Session> updated,
+    SessionSyncSnapshot snapshot,
     UserSessionToken token,
     int watchGen,
-    StreamSubscription<List<Session>> sub,
+    StreamSubscription<SessionSyncSnapshot> sub,
   ) {
     if (!_watchCallbackOwns(token, watchGen, sub)) return;
+    // Rebuilt together, from the same snapshot, in the same pass - _sessions,
+    // _diagnosticsByLocalId, and _localIdBySession can never observe two
+    // different emissions.
     _sessions
       ..clear()
-      ..addAll(updated); // repository already sorts by date desc
+      ..addAll(
+        snapshot.visibleEntries.map((e) => e.session),
+      ); // repository already sorts by date desc
+    _diagnosticsByLocalId.clear();
+    _localIdBySession.clear();
+    for (final entry in snapshot.visibleEntries) {
+      // Every visible entry's localId is recorded, healthy or not, so
+      // navigation (localIdFor) works regardless of whether THIS session
+      // currently has a diagnostic.
+      _localIdBySession[entry.session] = entry.localId;
+      if (entry.diagnostics != null) {
+        _diagnosticsByLocalId[entry.localId] = entry.diagnostics!;
+      }
+    }
+    _retryingFailureCount = snapshot.retryingFailureCount;
+    _conflictCount = snapshot.conflictCount;
     _streamPublishSeq++;
     notifyListeners();
     debugPrint('🔄 Sessions auto-updated from background sync');
@@ -365,14 +509,14 @@ class SessionsProvider extends ChangeNotifier {
     Object error,
     UserSessionToken token,
     int watchGen,
-    StreamSubscription<List<Session>> sub,
+    StreamSubscription<SessionSyncSnapshot> sub,
   ) {
     if (!_watchCallbackOwns(token, watchGen, sub)) return;
     debugPrint('⚠️ Sessions stream error: $error');
-    // Keep existing sessions - do not publish on error.
+    // Keep existing sessions/diagnostics - do not publish on error.
   }
 
-  void _onWatchDone(int watchGen, StreamSubscription<List<Session>> sub) {
+  void _onWatchDone(int watchGen, StreamSubscription<SessionSyncSnapshot> sub) {
     if (watchGen == _watchGen && identical(sub, _sessionsStreamSubscription)) {
       _sessionsStreamSubscription = null;
       _watchedUserId = null;
@@ -1041,6 +1185,10 @@ class SessionsProvider extends ChangeNotifier {
     _watchedUserId = null;
 
     _sessions.clear();
+    _diagnosticsByLocalId.clear();
+    _localIdBySession.clear();
+    _retryingFailureCount = 0;
+    _conflictCount = 0;
     _errorMessage = null;
     _isLoading = false;
     notifyListeners();
