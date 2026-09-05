@@ -5,12 +5,30 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../data/services/api_service.dart';
 import '../../core/constants/api_config.dart';
+import 'firebase_bootstrap.dart';
 
-/// Background message handler - must be top-level function
+/// Background message handler - must be top-level function. Delegates to
+/// [handleBackgroundFirebaseMessage], which is exposed for tests since
+/// this function runs in a dedicated isolate spawned directly by the
+/// native FCM plugin and can't be invoked from a test.
 @pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  debugPrint('🔔 Background message: ${message.messageId}');
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) =>
+    handleBackgroundFirebaseMessage(message.messageId);
+
+/// Initializes Firebase for the background-message isolate and logs the
+/// message id on success, without ever letting a failure escape. This
+/// isolate is unrelated to the main isolate's `FirebaseAvailability`, so
+/// it must independently guard `Firebase.initializeApp()` - Android
+/// currently ships unconfigured, so this is expected to fail there today.
+@visibleForTesting
+Future<void> handleBackgroundFirebaseMessage(
+  String? messageId, {
+  Future<void> Function() initializer = Firebase.initializeApp,
+}) async {
+  final available = await initializeFirebaseSafely(initializer);
+  if (available) {
+    debugPrint('🔔 Background message: $messageId');
+  }
 }
 
 /// Service for handling Firebase Cloud Messaging push notifications
@@ -20,7 +38,12 @@ class PushNotificationService {
   factory PushNotificationService() => _instance;
   PushNotificationService._internal();
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  // `late` so this is only evaluated on first *use* (inside `initialize()`,
+  // which callers gate on Firebase availability), not at construction -
+  // `FirebaseMessaging.instance` throws immediately when no Firebase app
+  // exists, and the singleton must remain constructible either way (e.g.
+  // `unregisterToken()` never touches this field).
+  late final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
@@ -222,6 +245,13 @@ class PushNotificationService {
   }
 
   /// Unregister FCM token (call on logout)
+  ///
+  /// Deliberately never touches `_messaging`: this is called unconditionally
+  /// on logout, unguarded by Firebase availability, and stays safe only
+  /// because it doesn't force the `late` `FirebaseMessaging.instance` read.
+  /// Keep it that way - a future addition here that reads `_messaging`
+  /// would reintroduce the crash-when-unconfigured bug this class guards
+  /// against elsewhere.
   Future<void> unregisterToken() async {
     if (_apiService == null || _fcmToken == null) return;
 

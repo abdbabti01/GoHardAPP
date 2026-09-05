@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'app.dart';
+import 'core/services/firebase_availability.dart';
+import 'core/services/firebase_bootstrap.dart';
 import 'core/services/session_cleanup_initializer.dart';
 import 'core/services/session_request_coordinator.dart';
 import 'core/services/user_session_epoch.dart';
@@ -61,9 +63,32 @@ void main() async {
   // Ensure Flutter bindings are initialized for async operations
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
-  await Firebase.initializeApp();
-  debugPrint('🔥 Firebase initialized');
+  // Attempt Firebase initialization without ever blocking startup, then
+  // always continue into the rest of app startup exactly once via
+  // `_startApp` - the same function `runFirebaseAwareStartup` is exercised
+  // with in firebase_bootstrap_test.dart, not a test-only duplicate.
+  // Android currently ships without google-services.json /
+  // firebase_options.dart and with the Google Services Gradle plugin
+  // disabled, so initialization is expected to fail there today - push
+  // notifications are the only feature that depends on it, and
+  // MainScreen skips setting them up when unavailable (see
+  // bootstrapPushNotifications).
+  await runFirebaseAwareStartup(
+    initializer: Firebase.initializeApp,
+    continuation: _startApp,
+  );
+}
+
+/// The remainder of app startup after the Firebase attempt: local
+/// database, connectivity, other app-lifetime services, provider
+/// construction, and `runApp()`. Passed to `runFirebaseAwareStartup` as
+/// its continuation, so it always runs exactly once regardless of whether
+/// Firebase initialized - nothing below is conditioned on
+/// [firebaseAvailability] except the one debug log line.
+Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
+  if (firebaseAvailability.isAvailable) {
+    debugPrint('🔥 Firebase initialized');
+  }
 
   // Initialize local database before app starts
   final localDb = LocalDatabaseService.instance;
@@ -115,6 +140,7 @@ void main() async {
         Provider<NotificationService>.value(value: notificationService),
         Provider<FlutterSecureStorage>.value(value: secureStorage),
         Provider<UserSessionEpoch>.value(value: sessionEpoch),
+        Provider<FirebaseAvailability>.value(value: firebaseAvailability),
         Provider<AuthService>(create: (_) => AuthService()),
         ProxyProvider2<AuthService, UserSessionEpoch, ApiService>(
           update:
