@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
+import 'package:uuid/uuid.dart';
 import '../../data/models/session.dart';
 import '../../data/services/api_service.dart';
 import '../../data/services/auth_service.dart';
@@ -376,6 +377,39 @@ class SyncService {
   @visibleForTesting
   Future<void> Function()? beforePhaseCheckForTesting;
 
+  /// Test-only seam: awaited in [_ensureCreateOperationKey] right after a
+  /// candidate key is generated but BEFORE its guarded write transaction
+  /// opens - lets a test land a concurrent writer's already-committed key in
+  /// that exact window, proving the guarded transaction discards the
+  /// losing candidate instead of overwriting the winner.
+  @visibleForTesting
+  Future<void> Function()? beforeCreateOperationKeyWriteTxnForTesting;
+
+  /// Test-only seam: awaited in [_ensureCreateOperationKey] BEFORE its very
+  /// first read of the row - lets a test land a race exactly at "before key
+  /// assurance begins" (a concurrent path acknowledging, transitioning,
+  /// deleting, or re-owning the row between the phase's batch read and this
+  /// call), proving [_syncCreateSession] aborts without dispatch instead of
+  /// falling back to its stale batch snapshot.
+  @visibleForTesting
+  Future<void> Function()? beforeCreateOperationKeyPreCheckForTesting;
+
+  /// Canonical UUID v4 text for backfilling a legacy/fallback generic
+  /// `pending_create` row's operation key (see [_ensureCreateOperationKey]).
+  /// `uuid`'s `Uuid.v4()` defaults to `CryptoRNG` (`Random.secure()` under
+  /// the hood - verified against the installed package source), so no
+  /// explicit RNG configuration is needed.
+  static const Uuid _uuid = Uuid();
+
+  /// Test-only override for operation-key generation - lets a deterministic
+  /// test assert on a KNOWN value instead of a random one. `null` in
+  /// production and in every test that doesn't explicitly set it.
+  @visibleForTesting
+  String Function()? operationIdGeneratorForTesting;
+
+  String _generateOperationId() =>
+      (operationIdGeneratorForTesting ?? _uuid.v4)();
+
   Future<void> _runTestHook(Future<void> Function()? hook) async {
     if (hook != null) {
       await hook();
@@ -620,6 +654,111 @@ class SyncService {
     return row;
   }
 
+  /// Ensures [localSession]'s row has a durable, persisted
+  /// `clientOperationId` before it is dispatched to generic
+  /// `POST /api/v1/sessions`, so a lost/uncertain HTTP acknowledgment can be
+  /// safely retried under the deployed GoHardAPI idempotent-create contract
+  /// (`(userId, clientOperationId)`) instead of creating a duplicate server
+  /// Session. Backfills legacy rows created before this field existed, and
+  /// rows that fell back to a generic `pending_create` write for another
+  /// reason (e.g. the `from-program-workout` offline fallback - see the
+  /// class-level program-workout boundary note on [_syncCreateSession]),
+  /// since a generic row is indistinguishable from any other once it
+  /// reaches this queue.
+  ///
+  /// Never rotates an existing non-null key, even a malformed one:
+  /// generated keys are always valid UUIDs, so an existing non-null value
+  /// that fails to parse indicates something else already wrote a corrupted
+  /// key, and silently replacing it after it may already have been
+  /// dispatched would risk two different keys standing in for one logical
+  /// operation - the exact failure mode this feature exists to prevent. A
+  /// concurrent writer racing this same backfill never overwrites another
+  /// writer's already-committed key: the transaction's own re-fetch is
+  /// authoritative and a losing caller's candidate is simply discarded.
+  ///
+  /// ## Result contract (unambiguous - the caller must not fall back)
+  ///
+  /// - Returns the canonical, post-transaction, KEYED row when the row is a
+  ///   currently-owned, canonical `pending_create` row - whether it already
+  ///   had a key or one was just assigned. The caller dispatches using ONLY
+  ///   this returned row, never the pre-call snapshot.
+  /// - Returns `null` when the canonical row is missing, foreign, or no
+  ///   longer `pending_create` (deleted, or transitioned to `pending_update`
+  ///   / `pending_delete` / `synced` by a concurrent path since the caller's
+  ///   batch read). `null` means "this CREATE is no longer eligible" - the
+  ///   caller MUST abort without any HTTP dispatch, never fall back to its
+  ///   stale batch snapshot (see [_syncCreateSession]'s doc comment on the
+  ///   still-open delete-race, which this does NOT recover, but which this
+  ///   contract also does not let become a silent unkeyed duplicate-POST
+  ///   race - see the class-level correction note above [_syncCreateSession]).
+  /// - THROWS [SessionStaleException] (via [_assertCurrent]) if the epoch is
+  ///   no longer current at any checkpoint - this is a lifecycle
+  ///   termination, not an eligibility result, and is never folded into the
+  ///   `null` case. The caller must let it propagate, never catch-and-dispatch.
+  Future<LocalSession?> _ensureCreateOperationKey(
+    Isar db,
+    LocalSession localSession,
+    SessionRequestContext context,
+  ) async {
+    final userId = context.epochToken.userId;
+
+    await _runTestHook(beforeCreateOperationKeyPreCheckForTesting);
+    final preCheck = await _reacquireOwnedSession(
+      db,
+      localSession.localId,
+      userId,
+    );
+    _assertCurrent(context);
+    if (preCheck == null || preCheck.syncStatus != 'pending_create') {
+      return null;
+    }
+    if (preCheck.clientOperationId != null) {
+      // Already keyed - never rotate it.
+      return preCheck;
+    }
+
+    // Generate exactly one candidate for this attempt. If a concurrent pass
+    // wins the write below, this candidate is simply discarded.
+    final candidate = _generateOperationId();
+
+    await _runTestHook(beforeCreateOperationKeyWriteTxnForTesting);
+    // A stale epoch here is a lifecycle termination - propagate the typed
+    // exception so control flow (not merely an assertion) is what prevents
+    // any further dispatch. Never silently return null for this case.
+    _assertCurrent(context);
+    await db.writeTxn(() async {
+      _assertCurrent(context);
+      final reFetched = await _reacquireOwnedSession(
+        db,
+        localSession.localId,
+        userId,
+      );
+      if (reFetched == null || reFetched.syncStatus != 'pending_create') {
+        return;
+      }
+      if (reFetched.clientOperationId != null) {
+        // Another writer already committed a key while this candidate was
+        // being generated - it wins; this candidate is discarded.
+        return;
+      }
+      reFetched.clientOperationId = candidate;
+      await db.localSessions.put(reFetched);
+    });
+
+    final postTxn = await _reacquireOwnedSession(
+      db,
+      localSession.localId,
+      userId,
+    );
+    _assertCurrent(context);
+    if (postTxn == null || postTxn.syncStatus != 'pending_create') {
+      // Raced out of eligibility (or gone) between the write above and this
+      // read - abort CREATE for this pass, never fall back to a snapshot.
+      return null;
+    }
+    return postTxn;
+  }
+
   /// Sync a session that needs to be created on the server.
   ///
   /// Mirrors `_syncCreateSet`'s in-flight-edit guard: [localSession]'s
@@ -640,9 +779,41 @@ class SyncService {
   /// NOT covered: a delete racing a still-server-id-less session. Its
   /// `SessionRepository._markForDeletion` hard-deletes the local row, so the
   /// create acknowledgment (and any concurrent `_syncDeleteSession` pass)
-  /// finds nothing and a committed server row is orphaned. Compensating that
-  /// needs durable client operation identity and is deferred to the Session
-  /// idempotency PR - see `session_create_delete_cross_operation_race_test.dart`.
+  /// finds nothing and a committed server row is orphaned. A durable
+  /// `clientOperationId` prevents a RETRY of this exact POST from ever
+  /// creating a SECOND server row, but does not by itself recover this
+  /// orphan case - that still needs a delete/tombstone reconciliation and is
+  /// deferred to a following PR - see
+  /// `session_create_delete_cross_operation_race_test.dart`, which remains
+  /// an accurate, unresolved characterization of this gap.
+  ///
+  /// ## Generic-create operation key boundary
+  ///
+  /// This dispatches only generic `POST /api/v1/sessions`. A row that
+  /// originated from the separate, unkeyed `POST /sessions/from-program-workout`
+  /// endpoint's offline fallback (see
+  /// `SessionRepository.createSessionFromProgramWorkout`) is indistinguishable
+  /// from any other generic `pending_create` row by the time it reaches this
+  /// method, so [_ensureCreateOperationKey] backfills it a key here like any
+  /// legacy row - but that key cannot deduplicate the ORIGINAL
+  /// from-program-workout request, which was never keyed. Program linkage
+  /// (`programId`/`programWorkoutId`) is also still stripped from the body
+  /// below, as it always has been - this PR does not fix or claim to fix
+  /// that lost-acknowledgment/linkage defect.
+  ///
+  /// ## Unkeyed-dispatch race correction
+  ///
+  /// [_ensureCreateOperationKey]'s result is the SOLE source of truth for
+  /// what gets dispatched. A `null` result (the canonical row raced out of
+  /// eligibility - acknowledged, transitioned, or deleted by another path
+  /// between this phase's batch read and here) aborts CREATE with NO HTTP
+  /// dispatch. This method never falls back to [localSession] - the
+  /// caller's stale batch snapshot - for either the dispatch decision or the
+  /// request body: doing so could send an UNKEYED generic POST for a row a
+  /// concurrent path has already resolved, which could duplicate a Session
+  /// if the other path's own POST already committed. A stale epoch is a
+  /// lifecycle termination ([SessionStaleException]), not an eligibility
+  /// result, and is left to propagate untouched.
   Future<void> _syncCreateSession(
     Isar db,
     LocalSession localSession,
@@ -650,10 +821,39 @@ class SyncService {
   ) async {
     debugPrint('  Creating session ${localSession.localId} on server...');
 
-    // Pin the exact local revision being dispatched (see the doc comment).
-    final dispatchedAt = localSession.lastModifiedLocal;
+    // Ensure a durable clientOperationId is persisted BEFORE dispatch, and
+    // require the returned canonical row to be the ONLY source used below.
+    final keyedRow = await _ensureCreateOperationKey(db, localSession, context);
+    _assertCurrent(context);
+    if (keyedRow == null) {
+      // No longer an eligible, canonical pending_create row - abort CREATE.
+      // Never dispatch from the stale batch snapshot (see the class doc
+      // comment's "Unkeyed-dispatch race correction" section above).
+      debugPrint(
+        '  Session ${localSession.localId} no longer eligible for generic '
+        'CREATE (acknowledged/transitioned/deleted elsewhere) - aborting '
+        'without dispatch',
+      );
+      return;
+    }
+    final operationId = keyedRow.clientOperationId;
+    if (operationId == null) {
+      // Unreachable under _ensureCreateOperationKey's contract (a returned
+      // non-null row is always keyed), but enforced here as real control
+      // flow - not merely an `assert` that release builds strip - so this
+      // invariant can never regress into a silent unkeyed dispatch.
+      debugPrint(
+        '  ⚠️ Session ${keyedRow.localId} canonical row unexpectedly '
+        'unkeyed - aborting CREATE without dispatch',
+      );
+      return;
+    }
 
-    // localSession here is a fresh Isar read, so its DateTime fields are
+    // Pin the exact local revision being dispatched (see the doc comment) -
+    // from the CANONICAL row returned above, not the stale batch snapshot.
+    final dispatchedAt = keyedRow.lastModifiedLocal;
+
+    // keyedRow here is a fresh Isar read, so its DateTime fields are
     // local-flagged but instant-correct (see
     // model_mapper_isar_roundtrip_test.dart). Route through the
     // already-corrected ModelMapper.localToSession() + Session.toJson()
@@ -663,13 +863,18 @@ class SyncService {
     // correct instant. id/exercises/version/programId/programWorkoutId are
     // stripped to preserve the exact request shape this endpoint expected
     // before this fix - only the timestamp/date values change.
+    //
+    // clientOperationId is merged in separately (never added to Session's
+    // own JSON model - see LocalSession.clientOperationId's doc comment),
+    // and is always non-null here - never conditionally omitted.
     final sessionJson =
-        ModelMapper.localToSession(localSession).toJson()
+        ModelMapper.localToSession(keyedRow).toJson()
           ..remove('id')
           ..remove('exercises')
           ..remove('version')
           ..remove('programId')
           ..remove('programWorkoutId');
+    sessionJson['clientOperationId'] = operationId;
 
     final response = await _apiService.post<Map<String, dynamic>>(
       ApiConfig.sessions,
@@ -681,7 +886,7 @@ class SyncService {
 
     final target = await _reacquireOwnedSession(
       db,
-      localSession.localId,
+      keyedRow.localId,
       context.epochToken.userId,
     );
     _assertCurrent(context);
@@ -693,7 +898,7 @@ class SyncService {
       _assertCurrent(context);
       final reFetched = await _reacquireOwnedSession(
         db,
-        localSession.localId,
+        keyedRow.localId,
         context.epochToken.userId,
       );
       if (reFetched == null) return;
@@ -726,8 +931,9 @@ class SyncService {
       // server-assigned version) rather than inventing one.
       final updated = ModelMapper.sessionToLocal(
         apiSession,
-        localId: localSession.localId,
+        localId: keyedRow.localId,
         isSynced: true,
+        clientOperationId: reFetched.clientOperationId,
       );
       await db.localSessions.put(updated);
     });
@@ -857,6 +1063,7 @@ class SyncService {
             serverSession,
             localId: session.localId,
             isSynced: true,
+            clientOperationId: reFetched.clientOperationId,
           );
           await db.localSessions.put(refreshed);
         });

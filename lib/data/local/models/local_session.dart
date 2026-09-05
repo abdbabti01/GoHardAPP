@@ -97,6 +97,39 @@ class LocalSession {
   /// detected.
   DateTime? conflictDetectedAt;
 
+  // ========== Generic-CREATE operation identity ==========
+
+  /// Durable client-generated idempotency key for a GENERIC Session CREATE
+  /// (`POST /api/v1/sessions`), paired with the deployed GoHardAPI
+  /// `(userId, clientOperationId)` contract. Exactly one UUID v4 is
+  /// generated and persisted per logical CREATE, before the first HTTP
+  /// dispatch whose outcome could be uncertain, so a lost or retried
+  /// acknowledgment replays the same server-side operation instead of
+  /// creating a duplicate Session.
+  ///
+  /// `null` for legacy rows created before this field existed, and for
+  /// every row produced by `POST /sessions/from-program-workout` (that
+  /// endpoint does not accept this key - see
+  /// `SessionRepository.createSessionFromProgramWorkout`). A row that falls
+  /// back to a generic `pending_create` write is backfilled with a key on
+  /// its first generic retry (`SyncService`), not here.
+  ///
+  /// Never derived from `localId`, `serverId`, `Session.id`, `userId`,
+  /// timestamps, or any mutable workout field. Never read from server JSON
+  /// - the API never echoes this value back. Never rotated once non-null.
+  /// Retained after a successful sync.
+  ///
+  /// Rollback caveat: a row keyed by a build with this field, then acted on
+  /// by a build DOWNGRADED to before this field existed, is invisible to
+  /// that older build's request-body construction - its retry of the same
+  /// logical CREATE goes out unkeyed, reverting to the pre-idempotency
+  /// contract for that one row (and can duplicate a Session if the original
+  /// keyed POST already committed). This is an inherent limitation of a
+  /// client-only idempotency key, not something a later client-side change
+  /// can fully close - avoid downgrading past this field's introduction
+  /// while any row created under it is still unsynced.
+  String? clientOperationId;
+
   /// Constructor
   LocalSession({
     this.serverId,
@@ -123,5 +156,6 @@ class LocalSession {
     this.conflictServerSnapshotJson,
     this.conflictServerVersion,
     this.conflictDetectedAt,
+    this.clientOperationId,
   });
 }

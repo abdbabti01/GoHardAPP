@@ -24,10 +24,18 @@ class ModelMapper {
 
   /// Convert API Session to LocalSession
   /// Used when caching data from server
+  ///
+  /// [clientOperationId] is never sourced from [apiSession] - the API never
+  /// echoes this key back (see `LocalSession.clientOperationId`'s doc
+  /// comment). Every caller reconstructing an EXISTING row must pass the
+  /// row's own current value explicitly so this rebuild does not silently
+  /// drop it; a brand-new row (no [localId]) has none to preserve and
+  /// correctly stays `null`.
   static LocalSession sessionToLocal(
     Session apiSession, {
     int? localId,
     bool isSynced = true,
+    String? clientOperationId,
   }) {
     // Determine sync status:
     // - If synced: 'synced'
@@ -65,6 +73,7 @@ class ModelMapper {
       lastModifiedLocal: DateTime.now(),
       lastModifiedServer: DateTime.now(),
       version: apiSession.version,
+      clientOperationId: clientOperationId,
     );
 
     // Preserve existing localId if updating an existing session
