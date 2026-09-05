@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
 import '../../core/services/session_request_coordinator.dart';
@@ -121,6 +122,21 @@ class SessionRepository {
   );
 
   static const String _unauthenticated = 'User not authenticated';
+
+  /// Canonical UUID v4 text for a new generic-CREATE operation key. `uuid`'s
+  /// `Uuid.v4()` defaults to `CryptoRNG` (`Random.secure()` under the hood -
+  /// verified against the installed package source), so no explicit RNG
+  /// configuration is needed.
+  static const Uuid _uuid = Uuid();
+
+  /// Test-only override for operation-key generation - lets a deterministic
+  /// test assert on a KNOWN value instead of a random one. `null` in
+  /// production and in every test that doesn't explicitly set it.
+  @visibleForTesting
+  String Function()? operationIdGeneratorForTesting;
+
+  String _generateOperationId() =>
+      (operationIdGeneratorForTesting ?? _uuid.v4)();
 
   // ============ Test-only session-race seams ============
   //
@@ -550,6 +566,7 @@ class SessionRepository {
             apiSession,
             localId: existingLocal.localId,
             isSynced: true,
+            clientOperationId: existingLocal.clientOperationId,
           );
           await db.localSessions.put(updated);
           savedSession = updated;
@@ -729,6 +746,7 @@ class SessionRepository {
               apiSession,
               localId: existingLocal.localId,
               isSynced: true,
+              clientOperationId: existingLocal.clientOperationId,
             );
             await db.localSessions.put(updated);
             savedSession = updated;
@@ -806,6 +824,12 @@ class SessionRepository {
     final token = context.epochToken;
     final db = _localDb.database;
 
+    // Generate exactly one durable operation key for this logical generic
+    // CREATE, now that a valid captured user exists - persisted below in
+    // the SAME write that first inserts the pending_create row, before any
+    // HTTP dispatch. See `LocalSession.clientOperationId`'s doc comment.
+    final operationId = _generateOperationId();
+
     // ALWAYS create locally first for instant response, always owned by
     // the captured user regardless of what the caller-supplied [session]
     // claims.
@@ -818,6 +842,7 @@ class SessionRepository {
       db,
       token,
       isPending: true,
+      clientOperationId: operationId,
     );
     await _runTestHook(afterWriteTxnForTesting);
     if (!_sessionEpoch.isCurrent(token)) {
@@ -848,6 +873,10 @@ class SessionRepository {
         return localResult;
       }
       final dispatchedAt = createdRow.lastModifiedLocal;
+      // The canonical, just-persisted row's own key - not the `operationId`
+      // local variable - so the dispatched value always matches whatever
+      // Isar actually committed (see the class doc comment).
+      final dispatchedOperationId = createdRow.clientOperationId;
 
       _backgroundSync(
         () => _syncCreateSessionToServer(
@@ -856,6 +885,7 @@ class SessionRepository {
           localResult.id,
           dispatchedAt,
           context,
+          dispatchedOperationId,
         ),
         'Created session on server',
       );
@@ -1219,22 +1249,34 @@ class SessionRepository {
   ///
   /// A delete racing this POST is NOT compensated here: `_markForDeletion`
   /// hard-deletes a still-server-id-less row, so the re-fetch below returns
-  /// null and a committed server row is orphaned. That needs durable client
-  /// operation identity and is deferred to the Session idempotency PR (see
-  /// `test/data/repositories/session_create_delete_cross_operation_race_test.dart`).
+  /// null and a committed server row is orphaned. A durable
+  /// [clientOperationId] prevents a RETRY of this exact POST from ever
+  /// creating a SECOND server row, but it does not by itself recover this
+  /// orphan case - that still needs a delete/tombstone reconciliation and is
+  /// deferred to a following PR (see
+  /// `test/data/repositories/session_create_delete_cross_operation_race_test.dart`,
+  /// which remains an accurate, unresolved characterization of this gap).
+  ///
+  /// [clientOperationId] is the durable operation key already persisted on
+  /// the row this POST serializes (see [createSession]) - merged into the
+  /// request body here, never added to [Session]'s own JSON model.
   Future<void> _syncCreateSessionToServer(
     Session session,
     Isar db,
     int localId,
     DateTime dispatchedAt,
     SessionRequestContext context,
+    String? clientOperationId,
   ) async {
     final token = context.epochToken;
 
     final data = await _dispatchBackgroundHttp(
       () => _apiService.post<Map<String, dynamic>>(
         ApiConfig.sessions,
-        data: session.toJson(),
+        data: {
+          ...session.toJson(),
+          if (clientOperationId != null) 'clientOperationId': clientOperationId,
+        },
         sessionContext: context,
       ),
     );
@@ -1283,6 +1325,7 @@ class SessionRepository {
         apiSession,
         localId: localId,
         isSynced: true,
+        clientOperationId: existing.clientOperationId,
       );
       await db.localSessions.put(updated);
     });
@@ -1290,11 +1333,18 @@ class SessionRepository {
 
   /// Create session in local database, always owned by [token.userId]
   /// regardless of what [session] claims.
+  ///
+  /// [clientOperationId] is the durable generic-CREATE operation key
+  /// generated by the caller BEFORE this write - only meaningful when
+  /// [isPending] is true (a genuine generic `pending_create` row); ignored
+  /// otherwise, since an already-synced row was never a generic CREATE this
+  /// repository dispatched.
   Future<Session> _createLocalSession(
     Session session,
     Isar db,
     UserSessionToken token, {
     required bool isPending,
+    String? clientOperationId,
   }) async {
     final localSession = LocalSession(
       serverId: isPending ? null : session.id,
@@ -1311,6 +1361,7 @@ class SessionRepository {
       programId: session.programId,
       programWorkoutId: session.programWorkoutId,
       isSynced: !isPending,
+      clientOperationId: isPending ? clientOperationId : null,
       syncStatus: isPending ? 'pending_create' : 'synced',
       lastModifiedLocal: DateTime.now().toUtc(),
     );

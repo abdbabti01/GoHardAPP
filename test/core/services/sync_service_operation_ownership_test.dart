@@ -1162,14 +1162,24 @@ void main() {
 
     await countingSyncService.sync();
 
-    // Empirically 19 for this exact scenario (SessionRequestCoordinator's
+    // Empirically 24 for this exact scenario (SessionRequestCoordinator's
     // own post-JWT-read recheck; one gate per phase in _runSyncPhases;
     // ApiService's own wrapper + dispatch-time interceptor rechecks
     // around the single POST; the per-row, post-HTTP, before-writeTxn,
-    // and first-statement-in-writeTxn checkpoints in _syncCreateSession).
+    // and first-statement-in-writeTxn checkpoints in _syncCreateSession;
+    // the durable-operation-key PR's checkpoints in _ensureCreateOperationKey
+    // (before its guarded writeTxn, first statement inside it) and
+    // _syncCreateSession's own _assertCurrent immediately after it returns
+    // - that PR brought this to 22; the unkeyed-dispatch-race correction PR
+    // added two more explicit checkpoints in _ensureCreateOperationKey
+    // itself (immediately after its first, pre-write read, and immediately
+    // after its final post-transaction canonical re-read) so a stale epoch
+    // is a control-flow-enforced typed exception at every checkpoint, never
+    // folded into an ambiguous null result - bringing this to 24. Was 19
+    // before the durable-key PR, 22 before this correction.
     // The exact figure isn't the point - what matters is that removing
     // any ONE `isCurrent`/`_assertCurrent` call site in this pass's path
     // reduces it by exactly one, which the mutation tests below rely on.
-    expect(countingEpoch.isCurrentCallCount, 19);
+    expect(countingEpoch.isCurrentCallCount, 24);
   });
 }

@@ -23,10 +23,15 @@ import 'api_exception.dart';
 /// pairs it with above. The same known code on any other status - or an
 /// unknown code - on 404/409/410 classifies as [SessionCreateErrorKind
 /// .unknownStructured] and keeps the established hard / fail-closed behavior.
-/// Today's client sends no `clientOperationId`, so the `409`/`410`
-/// operation-state responses are effectively unreachable - they are
-/// recognised here only so that if one is ever received (misconfigured proxy,
-/// partial rollout) it fails safe instead of destroying unsynced data.
+/// The generic create path (`SessionRepository`/`SyncService`) now sends a
+/// durable `clientOperationId` on every dispatch it can (see
+/// `LocalSession.clientOperationId`), so the `404`/`409`/`410` operation-state
+/// responses ARE reachable in production - they are no longer a
+/// misconfigured-proxy-only edge case. The `from-program-workout` offline
+/// fallback's ORIGINAL request is still unkeyed (see the boundary note on
+/// `SyncService._syncCreateSession`), so these codes remain unreachable for
+/// that one specific path until its own lost-acknowledgment defect is fixed
+/// separately.
 enum SessionCreateErrorKind {
   /// HTTP 429. Throttling / backpressure. Always retryable; never terminal.
   throttled,
@@ -113,17 +118,27 @@ abstract final class SessionCreateError {
   /// Unknown structured errors and every ordinary 4xx/5xx/transport failure
   /// return `false` so the caller keeps its established fail-closed behavior.
   ///
-  /// NOTE: [throttled] and [operationIncomplete] are genuinely transient.
-  /// [programNotFound], [operationCanceled] and [operationTargetDeleted] are
-  /// semantically TERMINAL on the server - re-POSTing the identical body can
-  /// never succeed. They are still treated as soft here on purpose: this PR
-  /// must not delete unsynced local data on their account, and today they are
-  /// unreachable (the client sends no `clientOperationId`, and
-  /// `SyncService._syncCreateSession` strips `programId`/`programWorkoutId`
-  /// from the body, so the server always takes the legacy 201 path). The
-  /// follow-up durable-operation-key / tombstone PR MUST revisit this split
-  /// and route the terminal codes to an explicit needs-attention / conflict
-  /// state instead of indefinite silent retry.
+  /// NOTE: [throttled] is genuinely transient (a throttling window that
+  /// passes). [operationIncomplete] is safe to retry - the deployed
+  /// `SessionCreateService` fails closed rather than ever creating a second
+  /// Session for it - but it is NOT genuinely self-healing in production:
+  /// under the real, relational (Postgres/SQL Server) advisory-lock-serialized
+  /// path, an operation row left "present, not canceled, not completed" is
+  /// documented server-side as unreachable in normal operation (the creating
+  /// transaction always commits or rolls back the operation row and the
+  /// Session together), and nothing there will ever later set its
+  /// `CompletedAt`/`CanceledAt` without server/manual intervention if it is
+  /// ever actually observed. [programNotFound], [operationCanceled] and
+  /// [operationTargetDeleted] are semantically TERMINAL on the server -
+  /// re-POSTing the identical body/key can never succeed. All four
+  /// (excluding [throttled]) are still treated as soft here on purpose: this
+  /// PR only adds the durable `clientOperationId` these codes need to become
+  /// reachable at all - it intentionally leaves this classification
+  /// unchanged. A follow-up PR must introduce an explicit terminal
+  /// "needs-attention" classification for the three truly-terminal codes
+  /// instead of indefinite silent retry; that PR is also where
+  /// `operationIncomplete`'s "safe but not self-healing" nuance should be
+  /// reflected in behavior, not just in this comment.
   static bool isSoftRetryable(Object? error) {
     switch (classify(error)) {
       case SessionCreateErrorKind.throttled:

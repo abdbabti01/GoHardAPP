@@ -153,6 +153,7 @@ class SessionUpdateSyncHelper {
         serverSession,
         localId: localSession.localId,
         isSynced: true,
+        clientOperationId: localSession.clientOperationId,
       );
       await db.localSessions.put(updated);
     });

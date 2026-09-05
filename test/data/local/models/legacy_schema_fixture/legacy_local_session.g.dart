@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'local_session.dart';
+part of 'legacy_local_session.dart';
 
 // **************************************************************************
 // IsarCollectionGenerator
@@ -17,91 +17,86 @@ const LocalSessionSchema = CollectionSchema(
   name: r'LocalSession',
   id: -2213146937362583048,
   properties: {
-    r'clientOperationId': PropertySchema(
-      id: 0,
-      name: r'clientOperationId',
-      type: IsarType.string,
-    ),
     r'completedAt': PropertySchema(
-      id: 1,
+      id: 0,
       name: r'completedAt',
       type: IsarType.dateTime,
     ),
     r'conflictDetectedAt': PropertySchema(
-      id: 2,
+      id: 1,
       name: r'conflictDetectedAt',
       type: IsarType.dateTime,
     ),
     r'conflictServerSnapshotJson': PropertySchema(
-      id: 3,
+      id: 2,
       name: r'conflictServerSnapshotJson',
       type: IsarType.string,
     ),
     r'conflictServerVersion': PropertySchema(
-      id: 4,
+      id: 3,
       name: r'conflictServerVersion',
       type: IsarType.long,
     ),
-    r'date': PropertySchema(id: 5, name: r'date', type: IsarType.dateTime),
-    r'duration': PropertySchema(id: 6, name: r'duration', type: IsarType.long),
-    r'isSynced': PropertySchema(id: 7, name: r'isSynced', type: IsarType.bool),
+    r'date': PropertySchema(id: 4, name: r'date', type: IsarType.dateTime),
+    r'duration': PropertySchema(id: 5, name: r'duration', type: IsarType.long),
+    r'isSynced': PropertySchema(id: 6, name: r'isSynced', type: IsarType.bool),
     r'lastModifiedLocal': PropertySchema(
-      id: 8,
+      id: 7,
       name: r'lastModifiedLocal',
       type: IsarType.dateTime,
     ),
     r'lastModifiedServer': PropertySchema(
-      id: 9,
+      id: 8,
       name: r'lastModifiedServer',
       type: IsarType.dateTime,
     ),
     r'lastSyncAttempt': PropertySchema(
-      id: 10,
+      id: 9,
       name: r'lastSyncAttempt',
       type: IsarType.dateTime,
     ),
-    r'name': PropertySchema(id: 11, name: r'name', type: IsarType.string),
-    r'notes': PropertySchema(id: 12, name: r'notes', type: IsarType.string),
+    r'name': PropertySchema(id: 10, name: r'name', type: IsarType.string),
+    r'notes': PropertySchema(id: 11, name: r'notes', type: IsarType.string),
     r'pausedAt': PropertySchema(
-      id: 13,
+      id: 12,
       name: r'pausedAt',
       type: IsarType.dateTime,
     ),
     r'programId': PropertySchema(
-      id: 14,
+      id: 13,
       name: r'programId',
       type: IsarType.long,
     ),
     r'programWorkoutId': PropertySchema(
-      id: 15,
+      id: 14,
       name: r'programWorkoutId',
       type: IsarType.long,
     ),
-    r'serverId': PropertySchema(id: 16, name: r'serverId', type: IsarType.long),
+    r'serverId': PropertySchema(id: 15, name: r'serverId', type: IsarType.long),
     r'startedAt': PropertySchema(
-      id: 17,
+      id: 16,
       name: r'startedAt',
       type: IsarType.dateTime,
     ),
-    r'status': PropertySchema(id: 18, name: r'status', type: IsarType.string),
+    r'status': PropertySchema(id: 17, name: r'status', type: IsarType.string),
     r'syncError': PropertySchema(
-      id: 19,
+      id: 18,
       name: r'syncError',
       type: IsarType.string,
     ),
     r'syncRetryCount': PropertySchema(
-      id: 20,
+      id: 19,
       name: r'syncRetryCount',
       type: IsarType.long,
     ),
     r'syncStatus': PropertySchema(
-      id: 21,
+      id: 20,
       name: r'syncStatus',
       type: IsarType.string,
     ),
-    r'type': PropertySchema(id: 22, name: r'type', type: IsarType.string),
-    r'userId': PropertySchema(id: 23, name: r'userId', type: IsarType.long),
-    r'version': PropertySchema(id: 24, name: r'version', type: IsarType.long),
+    r'type': PropertySchema(id: 21, name: r'type', type: IsarType.string),
+    r'userId': PropertySchema(id: 22, name: r'userId', type: IsarType.long),
+    r'version': PropertySchema(id: 23, name: r'version', type: IsarType.long),
   },
   estimateSize: _localSessionEstimateSize,
   serialize: _localSessionSerialize,
@@ -177,12 +172,6 @@ int _localSessionEstimateSize(
 ) {
   var bytesCount = offsets.last;
   {
-    final value = object.clientOperationId;
-    if (value != null) {
-      bytesCount += 3 + value.length * 3;
-    }
-  }
-  {
     final value = object.conflictServerSnapshotJson;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -223,31 +212,30 @@ void _localSessionSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeString(offsets[0], object.clientOperationId);
-  writer.writeDateTime(offsets[1], object.completedAt);
-  writer.writeDateTime(offsets[2], object.conflictDetectedAt);
-  writer.writeString(offsets[3], object.conflictServerSnapshotJson);
-  writer.writeLong(offsets[4], object.conflictServerVersion);
-  writer.writeDateTime(offsets[5], object.date);
-  writer.writeLong(offsets[6], object.duration);
-  writer.writeBool(offsets[7], object.isSynced);
-  writer.writeDateTime(offsets[8], object.lastModifiedLocal);
-  writer.writeDateTime(offsets[9], object.lastModifiedServer);
-  writer.writeDateTime(offsets[10], object.lastSyncAttempt);
-  writer.writeString(offsets[11], object.name);
-  writer.writeString(offsets[12], object.notes);
-  writer.writeDateTime(offsets[13], object.pausedAt);
-  writer.writeLong(offsets[14], object.programId);
-  writer.writeLong(offsets[15], object.programWorkoutId);
-  writer.writeLong(offsets[16], object.serverId);
-  writer.writeDateTime(offsets[17], object.startedAt);
-  writer.writeString(offsets[18], object.status);
-  writer.writeString(offsets[19], object.syncError);
-  writer.writeLong(offsets[20], object.syncRetryCount);
-  writer.writeString(offsets[21], object.syncStatus);
-  writer.writeString(offsets[22], object.type);
-  writer.writeLong(offsets[23], object.userId);
-  writer.writeLong(offsets[24], object.version);
+  writer.writeDateTime(offsets[0], object.completedAt);
+  writer.writeDateTime(offsets[1], object.conflictDetectedAt);
+  writer.writeString(offsets[2], object.conflictServerSnapshotJson);
+  writer.writeLong(offsets[3], object.conflictServerVersion);
+  writer.writeDateTime(offsets[4], object.date);
+  writer.writeLong(offsets[5], object.duration);
+  writer.writeBool(offsets[6], object.isSynced);
+  writer.writeDateTime(offsets[7], object.lastModifiedLocal);
+  writer.writeDateTime(offsets[8], object.lastModifiedServer);
+  writer.writeDateTime(offsets[9], object.lastSyncAttempt);
+  writer.writeString(offsets[10], object.name);
+  writer.writeString(offsets[11], object.notes);
+  writer.writeDateTime(offsets[12], object.pausedAt);
+  writer.writeLong(offsets[13], object.programId);
+  writer.writeLong(offsets[14], object.programWorkoutId);
+  writer.writeLong(offsets[15], object.serverId);
+  writer.writeDateTime(offsets[16], object.startedAt);
+  writer.writeString(offsets[17], object.status);
+  writer.writeString(offsets[18], object.syncError);
+  writer.writeLong(offsets[19], object.syncRetryCount);
+  writer.writeString(offsets[20], object.syncStatus);
+  writer.writeString(offsets[21], object.type);
+  writer.writeLong(offsets[22], object.userId);
+  writer.writeLong(offsets[23], object.version);
 }
 
 LocalSession _localSessionDeserialize(
@@ -257,31 +245,30 @@ LocalSession _localSessionDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = LocalSession(
-    clientOperationId: reader.readStringOrNull(offsets[0]),
-    completedAt: reader.readDateTimeOrNull(offsets[1]),
-    conflictDetectedAt: reader.readDateTimeOrNull(offsets[2]),
-    conflictServerSnapshotJson: reader.readStringOrNull(offsets[3]),
-    conflictServerVersion: reader.readLongOrNull(offsets[4]),
-    date: reader.readDateTime(offsets[5]),
-    duration: reader.readLongOrNull(offsets[6]),
-    isSynced: reader.readBoolOrNull(offsets[7]) ?? false,
-    lastModifiedLocal: reader.readDateTime(offsets[8]),
-    lastModifiedServer: reader.readDateTimeOrNull(offsets[9]),
-    lastSyncAttempt: reader.readDateTimeOrNull(offsets[10]),
-    name: reader.readStringOrNull(offsets[11]),
-    notes: reader.readStringOrNull(offsets[12]),
-    pausedAt: reader.readDateTimeOrNull(offsets[13]),
-    programId: reader.readLongOrNull(offsets[14]),
-    programWorkoutId: reader.readLongOrNull(offsets[15]),
-    serverId: reader.readLongOrNull(offsets[16]),
-    startedAt: reader.readDateTimeOrNull(offsets[17]),
-    status: reader.readStringOrNull(offsets[18]) ?? 'draft',
-    syncError: reader.readStringOrNull(offsets[19]),
-    syncRetryCount: reader.readLongOrNull(offsets[20]) ?? 0,
-    syncStatus: reader.readStringOrNull(offsets[21]) ?? 'pending_create',
-    type: reader.readStringOrNull(offsets[22]),
-    userId: reader.readLong(offsets[23]),
-    version: reader.readLongOrNull(offsets[24]),
+    completedAt: reader.readDateTimeOrNull(offsets[0]),
+    conflictDetectedAt: reader.readDateTimeOrNull(offsets[1]),
+    conflictServerSnapshotJson: reader.readStringOrNull(offsets[2]),
+    conflictServerVersion: reader.readLongOrNull(offsets[3]),
+    date: reader.readDateTime(offsets[4]),
+    duration: reader.readLongOrNull(offsets[5]),
+    isSynced: reader.readBoolOrNull(offsets[6]) ?? false,
+    lastModifiedLocal: reader.readDateTime(offsets[7]),
+    lastModifiedServer: reader.readDateTimeOrNull(offsets[8]),
+    lastSyncAttempt: reader.readDateTimeOrNull(offsets[9]),
+    name: reader.readStringOrNull(offsets[10]),
+    notes: reader.readStringOrNull(offsets[11]),
+    pausedAt: reader.readDateTimeOrNull(offsets[12]),
+    programId: reader.readLongOrNull(offsets[13]),
+    programWorkoutId: reader.readLongOrNull(offsets[14]),
+    serverId: reader.readLongOrNull(offsets[15]),
+    startedAt: reader.readDateTimeOrNull(offsets[16]),
+    status: reader.readStringOrNull(offsets[17]) ?? 'draft',
+    syncError: reader.readStringOrNull(offsets[18]),
+    syncRetryCount: reader.readLongOrNull(offsets[19]) ?? 0,
+    syncStatus: reader.readStringOrNull(offsets[20]) ?? 'pending_create',
+    type: reader.readStringOrNull(offsets[21]),
+    userId: reader.readLong(offsets[22]),
+    version: reader.readLongOrNull(offsets[23]),
   );
   object.localId = id;
   return object;
@@ -295,54 +282,52 @@ P _localSessionDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 1:
       return (reader.readDateTimeOrNull(offset)) as P;
     case 2:
-      return (reader.readDateTimeOrNull(offset)) as P;
-    case 3:
       return (reader.readStringOrNull(offset)) as P;
+    case 3:
+      return (reader.readLongOrNull(offset)) as P;
     case 4:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 5:
-      return (reader.readDateTime(offset)) as P;
-    case 6:
       return (reader.readLongOrNull(offset)) as P;
-    case 7:
+    case 6:
       return (reader.readBoolOrNull(offset) ?? false) as P;
-    case 8:
+    case 7:
       return (reader.readDateTime(offset)) as P;
+    case 8:
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 9:
       return (reader.readDateTimeOrNull(offset)) as P;
     case 10:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 11:
       return (reader.readStringOrNull(offset)) as P;
     case 12:
-      return (reader.readStringOrNull(offset)) as P;
-    case 13:
       return (reader.readDateTimeOrNull(offset)) as P;
+    case 13:
+      return (reader.readLongOrNull(offset)) as P;
     case 14:
       return (reader.readLongOrNull(offset)) as P;
     case 15:
       return (reader.readLongOrNull(offset)) as P;
     case 16:
-      return (reader.readLongOrNull(offset)) as P;
-    case 17:
       return (reader.readDateTimeOrNull(offset)) as P;
-    case 18:
+    case 17:
       return (reader.readStringOrNull(offset) ?? 'draft') as P;
+    case 18:
+      return (reader.readStringOrNull(offset)) as P;
     case 19:
-      return (reader.readStringOrNull(offset)) as P;
-    case 20:
       return (reader.readLongOrNull(offset) ?? 0) as P;
-    case 21:
+    case 20:
       return (reader.readStringOrNull(offset) ?? 'pending_create') as P;
-    case 22:
+    case 21:
       return (reader.readStringOrNull(offset)) as P;
-    case 23:
+    case 22:
       return (reader.readLong(offset)) as P;
-    case 24:
+    case 23:
       return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -732,165 +717,6 @@ extension LocalSessionQueryWhere
 
 extension LocalSessionQueryFilter
     on QueryBuilder<LocalSession, LocalSession, QFilterCondition> {
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdIsNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNull(property: r'clientOperationId'),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdIsNotNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNotNull(property: r'clientOperationId'),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdEqualTo(String? value, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r'clientOperationId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdGreaterThan(
-    String? value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'clientOperationId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdLessThan(
-    String? value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'clientOperationId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdBetween(
-    String? lower,
-    String? upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'clientOperationId',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdStartsWith(String value, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.startsWith(
-          property: r'clientOperationId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdEndsWith(String value, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.endsWith(
-          property: r'clientOperationId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdContains(String value, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.contains(
-          property: r'clientOperationId',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdMatches(String pattern, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.matches(
-          property: r'clientOperationId',
-          wildcard: pattern,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdIsEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'clientOperationId', value: ''),
-      );
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
-  clientOperationIdIsNotEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(property: r'clientOperationId', value: ''),
-      );
-    });
-  }
-
   QueryBuilder<LocalSession, LocalSession, QAfterFilterCondition>
   completedAtIsNull() {
     return QueryBuilder.apply(this, (query) {
@@ -3184,20 +3010,6 @@ extension LocalSessionQueryLinks
 
 extension LocalSessionQuerySortBy
     on QueryBuilder<LocalSession, LocalSession, QSortBy> {
-  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
-  sortByClientOperationId() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'clientOperationId', Sort.asc);
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
-  sortByClientOperationIdDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'clientOperationId', Sort.desc);
-    });
-  }
-
   QueryBuilder<LocalSession, LocalSession, QAfterSortBy> sortByCompletedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'completedAt', Sort.asc);
@@ -3507,20 +3319,6 @@ extension LocalSessionQuerySortBy
 
 extension LocalSessionQuerySortThenBy
     on QueryBuilder<LocalSession, LocalSession, QSortThenBy> {
-  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
-  thenByClientOperationId() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'clientOperationId', Sort.asc);
-    });
-  }
-
-  QueryBuilder<LocalSession, LocalSession, QAfterSortBy>
-  thenByClientOperationIdDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'clientOperationId', Sort.desc);
-    });
-  }
-
   QueryBuilder<LocalSession, LocalSession, QAfterSortBy> thenByCompletedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'completedAt', Sort.asc);
@@ -3842,16 +3640,6 @@ extension LocalSessionQuerySortThenBy
 
 extension LocalSessionQueryWhereDistinct
     on QueryBuilder<LocalSession, LocalSession, QDistinct> {
-  QueryBuilder<LocalSession, LocalSession, QDistinct>
-  distinctByClientOperationId({bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(
-        r'clientOperationId',
-        caseSensitive: caseSensitive,
-      );
-    });
-  }
-
   QueryBuilder<LocalSession, LocalSession, QDistinct> distinctByCompletedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'completedAt');
@@ -4025,13 +3813,6 @@ extension LocalSessionQueryProperty
   QueryBuilder<LocalSession, int, QQueryOperations> localIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'localId');
-    });
-  }
-
-  QueryBuilder<LocalSession, String?, QQueryOperations>
-  clientOperationIdProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'clientOperationId');
     });
   }
 
