@@ -171,13 +171,37 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // Responsive header: the formatted date can be an
+                  // arbitrarily long English weekday/month string (e.g.
+                  // "Wednesday, September 30, 2026"), and StatusBadge's own
+                  // natural width also grows with text scale (its longest
+                  // label, "In Progress", can itself approach or exceed a
+                  // narrow screen's width at a large text scale). A Row
+                  // (even with the date Expanded) cannot help once the
+                  // BADGE alone doesn't fit - the badge has no flex and
+                  // must never be truncated (status is essential
+                  // semantics). Wrap solves both: each child is measured
+                  // against the FULL available width independently, so
+                  // neither is ever squeezed by the other - they share a
+                  // line when there's room and stack onto separate lines
+                  // otherwise, with no overflow possible either way.
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    runSpacing: 8,
                     children: [
-                      Text(
-                        DateFormat('EEEE, MMMM d, yyyy').format(_session!.date),
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                      Semantics(
+                        label: DateFormat(
+                          'EEEE, MMMM d, yyyy',
+                        ).format(_session!.date),
+                        child: ExcludeSemantics(
+                          child: Text(
+                            DateFormat(
+                              'EEEE, MMMM d, yyyy',
+                            ).format(_session!.date),
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
                       StatusBadge(status: _session!.status),
@@ -185,26 +209,27 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Session stats
-                  Row(
+                  // Session stats. Wrap (not Row) so three self-contained
+                  // stat items never overflow at narrow widths or an
+                  // increased text scale - they simply flow onto a second
+                  // line instead, exactly like the header fix above.
+                  Wrap(
+                    spacing: 24,
+                    runSpacing: 12,
                     children: [
-                      if (_session!.duration != null &&
-                          _session!.duration! > 0) ...[
+                      if (_session!.duration != null && _session!.duration! > 0)
                         _buildStatItem(
                           context,
                           Icons.timer,
                           'Duration',
                           _formatDuration(_session!.duration!),
                         ),
-                        const SizedBox(width: 24),
-                      ],
                       _buildStatItem(
                         context,
                         Icons.fitness_center,
                         'Exercises',
                         '${_session!.exercises.length}',
                       ),
-                      const SizedBox(width: 24),
                       _buildStatItem(
                         context,
                         Icons.repeat,
@@ -335,16 +360,30 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 16, color: Colors.grey.shade600),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
+            // Flexible so a large text scale never overflows this stat
+            // item's own icon+label row; the label is a short, fixed,
+            // known string, but its full text stays available in
+            // semantics even if the visual text ever needs to ellipsize.
+            Flexible(
+              child: Semantics(
+                label: label,
+                child: ExcludeSemantics(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),

@@ -26,12 +26,26 @@ class StatusBadge extends StatelessWidget {
         children: [
           Icon(badgeData.icon, size: 14, color: badgeData.color),
           const SizedBox(width: 4),
-          Text(
-            badgeData.label,
-            style: TextStyle(
-              color: badgeData.color,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+          // Flexible so an increased text scale can never force this
+          // badge's own content to overflow, regardless of how tightly a
+          // parent (e.g. a Wrap sharing a line with other content)
+          // constrains it - status is essential semantics, so the full
+          // label always stays available via Semantics even on the rare
+          // occasion the visual text needs to ellipsize.
+          Flexible(
+            child: Semantics(
+              label: badgeData.label,
+              child: ExcludeSemantics(
+                child: Text(
+                  badgeData.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: badgeData.color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
           ),
         ],
