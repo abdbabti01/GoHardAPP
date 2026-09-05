@@ -3,15 +3,39 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../data/models/session.dart';
+import '../../../data/repositories/session_sync_diagnostics.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../widgets/sessions/status_badge.dart';
 import '../../widgets/community/share_workout_dialog.dart';
+
+/// Navigation arguments for [SessionDetailScreen]. [localId] is the
+/// unambiguous `LocalSession.localId` for the session being opened - the
+/// caller must obtain it via `SessionsProvider.localIdFor(session)` at the
+/// point it still holds the live `Session` instance (e.g. at the moment the
+/// card/tile was tapped), never derive it from the public `sessionId`.
+/// `null` when the entry point genuinely has no way to know it (e.g. it
+/// only ever had a bare id from outside the current session list) - in that
+/// case the screen omits the sync-issue affordance entirely rather than
+/// guess via `sessionId`.
+class SessionDetailArgs {
+  final int sessionId;
+  final int? localId;
+
+  const SessionDetailArgs({required this.sessionId, this.localId});
+}
 
 /// Session detail screen for viewing completed workout
 /// Matches SessionDetailPage.xaml from MAUI app
 class SessionDetailScreen extends StatefulWidget {
   final int sessionId;
 
-  const SessionDetailScreen({super.key, required this.sessionId});
+  /// The unambiguous `LocalSession.localId` for this session, if the caller
+  /// had one available at navigation time - see [SessionDetailArgs]. Never
+  /// derived from [sessionId]; when `null`, no sync-issue affordance is
+  /// shown, rather than guessing which row [sessionId] refers to.
+  final int? localId;
+
+  const SessionDetailScreen({super.key, required this.sessionId, this.localId});
 
   @override
   State<SessionDetailScreen> createState() => _SessionDetailScreenState();
@@ -66,6 +90,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               tooltip: 'Share with friends',
               onPressed: () => _showShareDialog(context),
             ),
+          if (widget.localId != null)
+            _SyncIssueAction(localId: widget.localId!),
         ],
       ),
       body: _buildBody(),
@@ -361,5 +387,98 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     } else {
       return '${secs}s';
     }
+  }
+}
+
+/// Conditional, tooltipped AppBar action showing this session's retained
+/// sync diagnostics, if any - passive only. Reacts to
+/// [SessionsProvider]'s live joined snapshot (never a stale one-shot copy):
+/// rebuilds whenever the provider notifies, so a diagnostic that clears
+/// (successful background sync) or a new one that appears is reflected
+/// without leaving the screen. Opens a read-only dialog with no retry,
+/// discard, keep-local, use-server, delete, or reset control; dismissing it
+/// mutates nothing.
+class _SyncIssueAction extends StatelessWidget {
+  /// The unambiguous `LocalSession.localId` for the session being viewed -
+  /// never the ambiguous public `sessionId`. Resolved by the caller via
+  /// `SessionsProvider.localIdFor(session)` before navigating here.
+  final int localId;
+
+  const _SyncIssueAction({required this.localId});
+
+  @override
+  Widget build(BuildContext context) {
+    // Select a value-comparable record, not the SessionSyncDiagnostics
+    // object itself - it declares no `==`/`hashCode` (deliberately, so the
+    // provider's identity-keyed diagnostics map stays collision-safe - see
+    // SessionsProvider.diagnosticsFor), which would make a raw-object
+    // select() rebuild on every watch emission regardless of an actual
+    // change.
+    final selected = context
+        .select<SessionsProvider, (SessionSyncState, DateTime?)?>((p) {
+          final d = p.diagnosticsForLocalId(localId);
+          return d == null ? null : (d.state, d.lastAttemptAt);
+        });
+    if (selected == null) return const SizedBox.shrink();
+    final diagnostics = SessionSyncDiagnostics(
+      state: selected.$1,
+      lastAttemptAt: selected.$2,
+    );
+
+    final isConflict = diagnostics.isConflict;
+    final color = isConflict ? context.error : context.warning;
+
+    return IconButton(
+      icon: Icon(
+        isConflict ? Icons.warning_rounded : Icons.sync_problem_rounded,
+        color: color,
+      ),
+      tooltip: diagnostics.state.shortLabel,
+      onPressed: () => _showSyncIssueDialog(context, diagnostics),
+    );
+  }
+
+  void _showSyncIssueDialog(
+    BuildContext context,
+    SessionSyncDiagnostics diagnostics,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(diagnostics.state.shortLabel),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(diagnostics.state.friendlyMessage),
+                if (diagnostics.lastAttemptAt != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    // A conflict's timestamp is when it was detected, not a
+                    // retry attempt - it is explicitly excluded from the
+                    // retry loop, so calling it an "attempt" would wrongly
+                    // imply retrying is still happening.
+                    '${diagnostics.isConflict ? 'Detected' : 'Last attempt'}: '
+                    '${_formatLastAttempt(diagnostics.lastAttemptAt!)}',
+                    style: Theme.of(dialogContext).textTheme.bodySmall
+                        ?.copyWith(color: dialogContext.textSecondary),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  String _formatLastAttempt(DateTime lastAttempt) {
+    final local = lastAttempt.toLocal();
+    return DateFormat('MMM d, yyyy \'at\' h:mm a').format(local);
   }
 }

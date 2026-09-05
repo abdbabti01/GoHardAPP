@@ -6,6 +6,7 @@ import '../../core/services/session_request_coordinator.dart';
 import '../../core/services/user_session_epoch.dart';
 import '../models/session.dart';
 import '../models/exercise.dart';
+import 'session_sync_diagnostics.dart';
 import '../models/program_workout.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -1950,7 +1951,39 @@ class SessionRepository {
   /// Watch sessions for reactive updates (Issue #7)
   /// Returns a stream that emits whenever sessions change in local DB
   /// This enables automatic UI updates when background sync completes
+  ///
+  /// Implemented as a thin projection of [watchSessionSyncSnapshot] so
+  /// there is exactly one underlying Isar watch over `localSessions` for
+  /// this user, not two - existing behavior (filtering, sorting, the
+  /// `pending_delete`/`archived` exclusion) is unchanged.
   Stream<List<Session>> watchSessions(int userId) {
+    return watchSessionSyncSnapshot(
+      userId,
+    ).map((snapshot) => snapshot.visibleEntries.map((e) => e.session).toList());
+  }
+
+  /// Real-time, user-scoped, single-watch snapshot of both the visible
+  /// session list and derived sync diagnostics for the SAME rows - see
+  /// [SessionSyncSnapshot]. This is the single collection watch [SessionsProvider]
+  /// installs; it must never be joined with a second `watch()`/
+  /// `StreamSubscription` for diagnostics.
+  ///
+  /// Pure read: never writes to Isar, never calls `SyncService`, never
+  /// makes an HTTP request. Diagnostics never carry raw
+  /// `LocalSession.syncError` text - see [SessionSyncDiagnostics.deriveFrom].
+  ///
+  /// A `pending_delete` row is excluded from [SessionSyncSnapshot.visibleEntries]
+  /// (same rule as the legacy `watchSessions` list), but a failing one still
+  /// contributes to [SessionSyncSnapshot.retryingFailureCount] - a session
+  /// stuck failing to delete must not become invisible to the aggregate
+  /// count merely because it has no place in the visible list.
+  ///
+  /// Every [SessionListEntry] pairs its [Session] with the exact
+  /// [LocalSession.localId] it was built from in this same loop - diagnostics
+  /// are never attached via a later lookup keyed by the ambiguous
+  /// `Session.id` (`serverId ?? localId`), which can collide between the
+  /// server-id and local-id namespaces.
+  Stream<SessionSyncSnapshot> watchSessionSyncSnapshot(int userId) {
     final db = _localDb.database;
 
     return db.localSessions
@@ -1958,19 +1991,46 @@ class SessionRepository {
         .userIdEqualTo(userId)
         .watch(fireImmediately: true)
         .asyncMap((localSessions) async {
-          final sessions = <Session>[];
+          final visibleEntries = <SessionListEntry>[];
+          var retryingFailureCount = 0;
+          var conflictCount = 0;
+
           for (final localSession in localSessions) {
+            final diagnostics = SessionSyncDiagnostics.deriveFrom(localSession);
+            switch (diagnostics?.state) {
+              case SessionSyncState.conflict:
+                conflictCount++;
+              case SessionSyncState.retryingFailure:
+                retryingFailureCount++;
+              case null:
+                break;
+            }
+
             if (localSession.syncStatus == 'pending_delete' ||
                 localSession.status == 'archived') {
               continue;
             }
-            sessions.add(
-              await _localSessionToSessionWithExercises(db, localSession),
+
+            visibleEntries.add(
+              SessionListEntry(
+                session: await _localSessionToSessionWithExercises(
+                  db,
+                  localSession,
+                ),
+                localId: localSession.localId,
+                diagnostics: diagnostics,
+              ),
             );
           }
 
-          sessions.sort((a, b) => b.date.compareTo(a.date));
-          return sessions;
+          visibleEntries.sort(
+            (a, b) => b.session.date.compareTo(a.session.date),
+          );
+          return SessionSyncSnapshot(
+            visibleEntries: visibleEntries,
+            retryingFailureCount: retryingFailureCount,
+            conflictCount: conflictCount,
+          );
         });
   }
 

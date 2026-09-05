@@ -4,9 +4,9 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i13;
-import 'dart:ui' as _i17;
+import 'dart:ui' as _i18;
 
-import 'package:go_hard_app/core/services/connectivity_service.dart' as _i16;
+import 'package:go_hard_app/core/services/connectivity_service.dart' as _i17;
 import 'package:go_hard_app/data/models/exercise.dart' as _i3;
 import 'package:go_hard_app/data/models/food_item.dart' as _i5;
 import 'package:go_hard_app/data/models/food_template.dart' as _i6;
@@ -17,9 +17,11 @@ import 'package:go_hard_app/data/models/program.dart' as _i10;
 import 'package:go_hard_app/data/models/program_workout.dart' as _i11;
 import 'package:go_hard_app/data/models/session.dart' as _i2;
 import 'package:go_hard_app/data/repositories/nutrition_repository.dart' as _i9;
-import 'package:go_hard_app/data/repositories/programs_repository.dart' as _i14;
+import 'package:go_hard_app/data/repositories/programs_repository.dart' as _i15;
 import 'package:go_hard_app/data/repositories/session_repository.dart' as _i12;
-import 'package:go_hard_app/data/services/auth_service.dart' as _i15;
+import 'package:go_hard_app/data/repositories/session_sync_diagnostics.dart'
+    as _i14;
+import 'package:go_hard_app/data/services/auth_service.dart' as _i16;
 import 'package:mockito/mockito.dart' as _i1;
 
 // ignore_for_file: type=lint
@@ -100,6 +102,85 @@ class MockSessionRepository extends _i1.Mock implements _i12.SessionRepository {
   MockSessionRepository() {
     _i1.throwOnMissingStub(this);
   }
+
+  @override
+  set beforeWriteTxnForTesting(
+    _i13.Future<void> Function()? _beforeWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#beforeWriteTxnForTesting, _beforeWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideWriteTxnForTesting(
+    _i13.Future<void> Function()? _insideWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#insideWriteTxnForTesting, _insideWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterWriteTxnForTesting(
+    _i13.Future<void> Function()? _afterWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#afterWriteTxnForTesting, _afterWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeBackgroundHttpDispatchForTesting(
+    _i13.Future<void> Function()? _beforeBackgroundHttpDispatchForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeBackgroundHttpDispatchForTesting,
+      _beforeBackgroundHttpDispatchForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterBackgroundHttpResponseForTesting(
+    _i13.Future<void> Function()? _afterBackgroundHttpResponseForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterBackgroundHttpResponseForTesting,
+      _afterBackgroundHttpResponseForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideBackgroundWriteTxnForTesting(
+    _i13.Future<void> Function()? _insideBackgroundWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #insideBackgroundWriteTxnForTesting,
+      _insideBackgroundWriteTxnForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeChildDeleteForTesting(
+    _i13.Future<void> Function()? _beforeChildDeleteForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeChildDeleteForTesting,
+      _beforeChildDeleteForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set onBackgroundSyncScheduledForTesting(
+    void Function(_i13.Future<void>)? _onBackgroundSyncScheduledForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #onBackgroundSyncScheduledForTesting,
+      _onBackgroundSyncScheduledForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i13.Future<List<_i2.Session>> getSessions({bool? waitForSync = false}) =>
@@ -257,6 +338,14 @@ class MockSessionRepository extends _i1.Mock implements _i12.SessionRepository {
             returnValue: _i13.Stream<List<_i2.Session>>.empty(),
           )
           as _i13.Stream<List<_i2.Session>>);
+
+  @override
+  _i13.Stream<_i14.SessionSyncSnapshot> watchSessionSyncSnapshot(int? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#watchSessionSyncSnapshot, [userId]),
+            returnValue: _i13.Stream<_i14.SessionSyncSnapshot>.empty(),
+          )
+          as _i13.Stream<_i14.SessionSyncSnapshot>);
 
   @override
   _i13.Future<_i3.Exercise> addExerciseToSession(
@@ -681,10 +770,21 @@ class MockNutritionRepository extends _i1.Mock
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockProgramsRepository extends _i1.Mock
-    implements _i14.ProgramsRepository {
+    implements _i15.ProgramsRepository {
   MockProgramsRepository() {
     _i1.throwOnMissingStub(this);
   }
+
+  @override
+  set afterLocalSessionsReadForTesting(
+    _i13.Future<void> Function()? _afterLocalSessionsReadForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterLocalSessionsReadForTesting,
+      _afterLocalSessionsReadForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i13.Future<List<_i10.Program>> getPrograms({bool? isActive}) =>
@@ -859,7 +959,7 @@ class MockProgramsRepository extends _i1.Mock
 /// A class which mocks [AuthService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockAuthService extends _i1.Mock implements _i15.AuthService {
+class MockAuthService extends _i1.Mock implements _i16.AuthService {
   MockAuthService() {
     _i1.throwOnMissingStub(this);
   }
@@ -933,6 +1033,15 @@ class MockAuthService extends _i1.Mock implements _i15.AuthService {
           as _i13.Future<void>);
 
   @override
+  _i13.Future<void> clearSessionCredentials() =>
+      (super.noSuchMethod(
+            Invocation.method(#clearSessionCredentials, []),
+            returnValue: _i13.Future<void>.value(),
+            returnValueForMissingStub: _i13.Future<void>.value(),
+          )
+          as _i13.Future<void>);
+
+  @override
   _i13.Future<void> saveThemePreference(String? theme) =>
       (super.noSuchMethod(
             Invocation.method(#saveThemePreference, [theme]),
@@ -965,13 +1074,30 @@ class MockAuthService extends _i1.Mock implements _i15.AuthService {
             returnValue: _i13.Future<String?>.value(),
           )
           as _i13.Future<String?>);
+
+  @override
+  _i13.Future<void> writeCachedProfile(String? profileJson, int? ownerUserId) =>
+      (super.noSuchMethod(
+            Invocation.method(#writeCachedProfile, [profileJson, ownerUserId]),
+            returnValue: _i13.Future<void>.value(),
+            returnValueForMissingStub: _i13.Future<void>.value(),
+          )
+          as _i13.Future<void>);
+
+  @override
+  _i13.Future<String?> readCachedProfile(int? expectedUserId) =>
+      (super.noSuchMethod(
+            Invocation.method(#readCachedProfile, [expectedUserId]),
+            returnValue: _i13.Future<String?>.value(),
+          )
+          as _i13.Future<String?>);
 }
 
 /// A class which mocks [ConnectivityService].
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockConnectivityService extends _i1.Mock
-    implements _i16.ConnectivityService {
+    implements _i17.ConnectivityService {
   MockConnectivityService() {
     _i1.throwOnMissingStub(this);
   }
@@ -1033,13 +1159,13 @@ class MockConnectivityService extends _i1.Mock
   );
 
   @override
-  void addListener(_i17.VoidCallback? listener) => super.noSuchMethod(
+  void addListener(_i18.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#addListener, [listener]),
     returnValueForMissingStub: null,
   );
 
   @override
-  void removeListener(_i17.VoidCallback? listener) => super.noSuchMethod(
+  void removeListener(_i18.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#removeListener, [listener]),
     returnValueForMissingStub: null,
   );

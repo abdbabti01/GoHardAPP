@@ -5,6 +5,7 @@ import '../../../core/theme/theme_colors.dart';
 import '../../../core/theme/typography.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../data/models/session.dart';
+import '../../../data/repositories/session_sync_diagnostics.dart';
 import '../common/animations.dart';
 import 'quick_actions_sheet.dart';
 
@@ -17,6 +18,14 @@ class SessionCard extends StatelessWidget {
   final VoidCallback? onReschedule;
   final VoidCallback? onDuplicate;
 
+  /// Optional, read-only derived sync diagnostics for [session] (see
+  /// `SessionsProvider.diagnosticsFor`). `null` means healthy - nothing is
+  /// rendered. When present, this ONLY adds a decorative, non-tappable
+  /// corner indicator on the leading icon and appends a friendly summary to
+  /// the title's accessibility label - it never adds an action, and the
+  /// indicator carries no separate accessibility focus node of its own.
+  final SessionSyncDiagnostics? diagnostics;
+
   const SessionCard({
     super.key,
     required this.session,
@@ -24,6 +33,7 @@ class SessionCard extends StatelessWidget {
     this.onDelete,
     this.onReschedule,
     this.onDuplicate,
+    this.diagnostics,
   });
 
   @override
@@ -99,39 +109,56 @@ class SessionCard extends StatelessWidget {
             padding: const EdgeInsets.all(18), // INCREASED from 16
             child: Row(
               children: [
-                // Premium gradient icon container
-                Container(
-                  width: 56, // INCREASED from 52
-                  height: 56,
-                  decoration: BoxDecoration(
-                    gradient:
-                        isCompleted || isInProgress ? statusGradient : null,
-                    color:
-                        isPlanned ? statusColor.withValues(alpha: 0.12) : null,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow:
-                        isCompleted || isInProgress
-                            ? [
-                              BoxShadow(
-                                color: statusColor.withValues(alpha: 0.35),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
-                              ),
-                            ]
-                            : null,
-                  ),
-                  child: Icon(
-                    isCompleted
-                        ? Icons.check_rounded
-                        : (isInProgress
-                            ? Icons.play_arrow_rounded
-                            : Icons.event_rounded),
-                    color:
-                        isCompleted || isInProgress
-                            ? Colors.white
-                            : statusColor,
-                    size: 28,
-                  ),
+                // Premium gradient icon container, with a decorative
+                // corner indicator for a retained sync issue - never in the
+                // trailing Done/Active/chevron slot, and never tappable.
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 56, // INCREASED from 52
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient:
+                            isCompleted || isInProgress ? statusGradient : null,
+                        color:
+                            isPlanned
+                                ? statusColor.withValues(alpha: 0.12)
+                                : null,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow:
+                            isCompleted || isInProgress
+                                ? [
+                                  BoxShadow(
+                                    color: statusColor.withValues(alpha: 0.35),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ]
+                                : null,
+                      ),
+                      child: Icon(
+                        isCompleted
+                            ? Icons.check_rounded
+                            : (isInProgress
+                                ? Icons.play_arrow_rounded
+                                : Icons.event_rounded),
+                        color:
+                            isCompleted || isInProgress
+                                ? Colors.white
+                                : statusColor,
+                        size: 28,
+                      ),
+                    ),
+                    if (diagnostics != null)
+                      Positioned(
+                        top: -4,
+                        right: -4,
+                        child: ExcludeSemantics(
+                          child: _SyncIssueDot(state: diagnostics!.state),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(width: 16), // INCREASED from 14
                 // Workout info - IMPROVED TYPOGRAPHY
@@ -139,14 +166,28 @@ class SessionCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Workout name - using card title style
-                      Text(
-                        session.name ?? _getDefaultName(),
-                        style: AppTypography.cardTitle.copyWith(
-                          color: context.textPrimary,
+                      // Workout name - using card title style. When a sync
+                      // issue is present, its friendly summary is appended to
+                      // THIS node's accessibility label (never a separate
+                      // focusable node) rather than left for a screen reader
+                      // to piece together from the decorative corner dot.
+                      Semantics(
+                        label:
+                            diagnostics == null
+                                ? null
+                                : '${session.name ?? _getDefaultName()}. '
+                                    '${diagnostics!.state.friendlyMessage}',
+                        child: ExcludeSemantics(
+                          excluding: diagnostics != null,
+                          child: Text(
+                            session.name ?? _getDefaultName(),
+                            style: AppTypography.cardTitle.copyWith(
+                              color: context.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 6),
                       // Meta info row - smaller text for hierarchy
@@ -392,5 +433,36 @@ class SessionCard extends StatelessWidget {
     } else {
       return DateFormat('MMM d, yyyy').format(date);
     }
+  }
+}
+
+/// Small, purely decorative corner indicator for a retained sync issue.
+/// Non-tappable (no gesture handling of any kind) and carries no
+/// accessibility semantics of its own - callers must wrap it in
+/// [ExcludeSemantics], as [SessionCard] does. Distinguishes conflict from a
+/// retrying failure by both color AND glyph, never color alone.
+class _SyncIssueDot extends StatelessWidget {
+  final SessionSyncState state;
+
+  const _SyncIssueDot({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final isConflict = state == SessionSyncState.conflict;
+    final color = isConflict ? context.error : context.warning;
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: context.surface, width: 2),
+      ),
+      child: Icon(
+        isConflict ? Icons.priority_high_rounded : Icons.sync_problem_rounded,
+        size: 11,
+        color: Colors.white,
+      ),
+    );
   }
 }

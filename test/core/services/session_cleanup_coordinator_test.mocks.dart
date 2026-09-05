@@ -4,19 +4,19 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i25;
-import 'dart:io' as _i33;
+import 'dart:io' as _i34;
 
-import 'package:go_hard_app/data/models/achievement.dart' as _i38;
+import 'package:go_hard_app/data/models/achievement.dart' as _i39;
 import 'package:go_hard_app/data/models/body_metric.dart' as _i15;
-import 'package:go_hard_app/data/models/chat_conversation.dart' as _i29;
-import 'package:go_hard_app/data/models/chat_message.dart' as _i30;
+import 'package:go_hard_app/data/models/chat_conversation.dart' as _i30;
+import 'package:go_hard_app/data/models/chat_message.dart' as _i31;
 import 'package:go_hard_app/data/models/direct_message.dart' as _i19;
-import 'package:go_hard_app/data/models/dm_conversation.dart' as _i44;
+import 'package:go_hard_app/data/models/dm_conversation.dart' as _i45;
 import 'package:go_hard_app/data/models/exercise.dart' as _i4;
 import 'package:go_hard_app/data/models/food_item.dart' as _i6;
 import 'package:go_hard_app/data/models/food_template.dart' as _i7;
-import 'package:go_hard_app/data/models/friend.dart' as _i40;
-import 'package:go_hard_app/data/models/friend_request.dart' as _i41;
+import 'package:go_hard_app/data/models/friend.dart' as _i41;
+import 'package:go_hard_app/data/models/friend_request.dart' as _i42;
 import 'package:go_hard_app/data/models/friendship_status.dart' as _i17;
 import 'package:go_hard_app/data/models/goal.dart' as _i11;
 import 'package:go_hard_app/data/models/goal_progress.dart' as _i12;
@@ -24,7 +24,7 @@ import 'package:go_hard_app/data/models/gps_point.dart' as _i26;
 import 'package:go_hard_app/data/models/meal_log.dart' as _i5;
 import 'package:go_hard_app/data/models/nutrition_goal.dart' as _i8;
 import 'package:go_hard_app/data/models/nutrition_summary.dart' as _i9;
-import 'package:go_hard_app/data/models/profile_update_request.dart' as _i32;
+import 'package:go_hard_app/data/models/profile_update_request.dart' as _i33;
 import 'package:go_hard_app/data/models/program.dart' as _i20;
 import 'package:go_hard_app/data/models/program_workout.dart' as _i21;
 import 'package:go_hard_app/data/models/public_profile.dart' as _i18;
@@ -32,33 +32,35 @@ import 'package:go_hard_app/data/models/run_session.dart' as _i2;
 import 'package:go_hard_app/data/models/session.dart' as _i3;
 import 'package:go_hard_app/data/models/shared_workout.dart' as _i23;
 import 'package:go_hard_app/data/models/user.dart' as _i14;
-import 'package:go_hard_app/data/models/user_search_result.dart' as _i42;
+import 'package:go_hard_app/data/models/user_search_result.dart' as _i43;
 import 'package:go_hard_app/data/models/workout_stats.dart' as _i16;
 import 'package:go_hard_app/data/models/workout_template.dart' as _i22;
 import 'package:go_hard_app/data/repositories/achievement_repository.dart'
-    as _i37;
+    as _i38;
 import 'package:go_hard_app/data/repositories/analytics_repository.dart'
-    as _i36;
+    as _i37;
 import 'package:go_hard_app/data/repositories/body_metrics_repository.dart'
-    as _i35;
+    as _i36;
 import 'package:go_hard_app/data/repositories/chat_repository.dart' as _i13;
 import 'package:go_hard_app/data/repositories/direct_messages_repository.dart'
-    as _i43;
-import 'package:go_hard_app/data/repositories/friends_repository.dart' as _i39;
-import 'package:go_hard_app/data/repositories/goals_repository.dart' as _i28;
+    as _i44;
+import 'package:go_hard_app/data/repositories/friends_repository.dart' as _i40;
+import 'package:go_hard_app/data/repositories/goals_repository.dart' as _i29;
 import 'package:go_hard_app/data/repositories/nutrition_repository.dart'
     as _i10;
-import 'package:go_hard_app/data/repositories/profile_repository.dart' as _i31;
-import 'package:go_hard_app/data/repositories/programs_repository.dart' as _i45;
+import 'package:go_hard_app/data/repositories/profile_repository.dart' as _i32;
+import 'package:go_hard_app/data/repositories/programs_repository.dart' as _i46;
 import 'package:go_hard_app/data/repositories/running_repository.dart' as _i24;
 import 'package:go_hard_app/data/repositories/session_repository.dart' as _i27;
+import 'package:go_hard_app/data/repositories/session_sync_diagnostics.dart'
+    as _i28;
 import 'package:go_hard_app/data/repositories/shared_workout_repository.dart'
-    as _i47;
+    as _i48;
 import 'package:go_hard_app/data/repositories/workout_template_repository.dart'
-    as _i46;
-import 'package:go_hard_app/data/services/auth_service.dart' as _i48;
+    as _i47;
+import 'package:go_hard_app/data/services/auth_service.dart' as _i49;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i34;
+import 'package:mockito/src/dummies.dart' as _i35;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -680,6 +682,14 @@ class MockSessionRepository extends _i1.Mock implements _i27.SessionRepository {
           as _i25.Stream<List<_i3.Session>>);
 
   @override
+  _i25.Stream<_i28.SessionSyncSnapshot> watchSessionSyncSnapshot(int? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#watchSessionSyncSnapshot, [userId]),
+            returnValue: _i25.Stream<_i28.SessionSyncSnapshot>.empty(),
+          )
+          as _i25.Stream<_i28.SessionSyncSnapshot>);
+
+  @override
   _i25.Future<_i4.Exercise> addExerciseToSession(
     int? sessionId,
     int? exerciseTemplateId,
@@ -1101,7 +1111,7 @@ class MockNutritionRepository extends _i1.Mock
 /// A class which mocks [GoalsRepository].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockGoalsRepository extends _i1.Mock implements _i28.GoalsRepository {
+class MockGoalsRepository extends _i1.Mock implements _i29.GoalsRepository {
   MockGoalsRepository() {
     _i1.throwOnMissingStub(this);
   }
@@ -1273,25 +1283,25 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
   );
 
   @override
-  _i25.Future<List<_i29.ChatConversation>> getConversations() =>
+  _i25.Future<List<_i30.ChatConversation>> getConversations() =>
       (super.noSuchMethod(
             Invocation.method(#getConversations, []),
-            returnValue: _i25.Future<List<_i29.ChatConversation>>.value(
-              <_i29.ChatConversation>[],
+            returnValue: _i25.Future<List<_i30.ChatConversation>>.value(
+              <_i30.ChatConversation>[],
             ),
           )
-          as _i25.Future<List<_i29.ChatConversation>>);
+          as _i25.Future<List<_i30.ChatConversation>>);
 
   @override
-  _i25.Future<_i29.ChatConversation?> getConversation(int? conversationId) =>
+  _i25.Future<_i30.ChatConversation?> getConversation(int? conversationId) =>
       (super.noSuchMethod(
             Invocation.method(#getConversation, [conversationId]),
-            returnValue: _i25.Future<_i29.ChatConversation?>.value(),
+            returnValue: _i25.Future<_i30.ChatConversation?>.value(),
           )
-          as _i25.Future<_i29.ChatConversation?>);
+          as _i25.Future<_i30.ChatConversation?>);
 
   @override
-  _i25.Future<_i29.ChatConversation?> createConversation({
+  _i25.Future<_i30.ChatConversation?> createConversation({
     required String? title,
     required String? type,
   }) =>
@@ -1300,12 +1310,12 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
               #title: title,
               #type: type,
             }),
-            returnValue: _i25.Future<_i29.ChatConversation?>.value(),
+            returnValue: _i25.Future<_i30.ChatConversation?>.value(),
           )
-          as _i25.Future<_i29.ChatConversation?>);
+          as _i25.Future<_i30.ChatConversation?>);
 
   @override
-  _i25.Future<_i30.ChatMessage?> sendMessage({
+  _i25.Future<_i31.ChatMessage?> sendMessage({
     required int? conversationId,
     required String? message,
   }) =>
@@ -1314,9 +1324,9 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
               #conversationId: conversationId,
               #message: message,
             }),
-            returnValue: _i25.Future<_i30.ChatMessage?>.value(),
+            returnValue: _i25.Future<_i31.ChatMessage?>.value(),
           )
-          as _i25.Future<_i30.ChatMessage?>);
+          as _i25.Future<_i31.ChatMessage?>);
 
   @override
   _i25.Future<bool> deleteConversation(int? conversationId) =>
@@ -1327,7 +1337,7 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
           as _i25.Future<bool>);
 
   @override
-  _i25.Future<_i29.ChatConversation?> generateWorkoutPlan({
+  _i25.Future<_i30.ChatConversation?> generateWorkoutPlan({
     required String? goal,
     required String? experienceLevel,
     required int? daysPerWeek,
@@ -1342,12 +1352,12 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
               #equipment: equipment,
               #limitations: limitations,
             }),
-            returnValue: _i25.Future<_i29.ChatConversation?>.value(),
+            returnValue: _i25.Future<_i30.ChatConversation?>.value(),
           )
-          as _i25.Future<_i29.ChatConversation?>);
+          as _i25.Future<_i30.ChatConversation?>);
 
   @override
-  _i25.Future<_i29.ChatConversation?> generateMealPlan({
+  _i25.Future<_i30.ChatConversation?> generateMealPlan({
     required String? dietaryGoal,
     int? targetCalories,
     String? macros,
@@ -1362,12 +1372,12 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
               #restrictions: restrictions,
               #preferences: preferences,
             }),
-            returnValue: _i25.Future<_i29.ChatConversation?>.value(),
+            returnValue: _i25.Future<_i30.ChatConversation?>.value(),
           )
-          as _i25.Future<_i29.ChatConversation?>);
+          as _i25.Future<_i30.ChatConversation?>);
 
   @override
-  _i25.Future<_i29.ChatConversation?> analyzeProgress({
+  _i25.Future<_i30.ChatConversation?> analyzeProgress({
     DateTime? startDate,
     DateTime? endDate,
     String? focusArea,
@@ -1378,9 +1388,9 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
               #endDate: endDate,
               #focusArea: focusArea,
             }),
-            returnValue: _i25.Future<_i29.ChatConversation?>.value(),
+            returnValue: _i25.Future<_i30.ChatConversation?>.value(),
           )
-          as _i25.Future<_i29.ChatConversation?>);
+          as _i25.Future<_i30.ChatConversation?>);
 
   @override
   _i25.Future<_i13.MealPlanPreview> previewMealPlan(int? conversationId) =>
@@ -1516,7 +1526,7 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
 /// A class which mocks [ProfileRepository].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockProfileRepository extends _i1.Mock implements _i31.ProfileRepository {
+class MockProfileRepository extends _i1.Mock implements _i32.ProfileRepository {
   MockProfileRepository() {
     _i1.throwOnMissingStub(this);
   }
@@ -1532,7 +1542,7 @@ class MockProfileRepository extends _i1.Mock implements _i31.ProfileRepository {
           as _i25.Future<_i14.User>);
 
   @override
-  _i25.Future<_i14.User> updateProfile(_i32.ProfileUpdateRequest? request) =>
+  _i25.Future<_i14.User> updateProfile(_i33.ProfileUpdateRequest? request) =>
       (super.noSuchMethod(
             Invocation.method(#updateProfile, [request]),
             returnValue: _i25.Future<_i14.User>.value(
@@ -1542,11 +1552,11 @@ class MockProfileRepository extends _i1.Mock implements _i31.ProfileRepository {
           as _i25.Future<_i14.User>);
 
   @override
-  _i25.Future<String> uploadProfilePhoto(_i33.File? imageFile) =>
+  _i25.Future<String> uploadProfilePhoto(_i34.File? imageFile) =>
       (super.noSuchMethod(
             Invocation.method(#uploadProfilePhoto, [imageFile]),
             returnValue: _i25.Future<String>.value(
-              _i34.dummyValue<String>(
+              _i35.dummyValue<String>(
                 this,
                 Invocation.method(#uploadProfilePhoto, [imageFile]),
               ),
@@ -1567,7 +1577,7 @@ class MockProfileRepository extends _i1.Mock implements _i31.ProfileRepository {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockBodyMetricsRepository extends _i1.Mock
-    implements _i35.BodyMetricsRepository {
+    implements _i36.BodyMetricsRepository {
   MockBodyMetricsRepository() {
     _i1.throwOnMissingStub(this);
   }
@@ -1655,10 +1665,26 @@ class MockBodyMetricsRepository extends _i1.Mock
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockAnalyticsRepository extends _i1.Mock
-    implements _i36.AnalyticsRepository {
+    implements _i37.AnalyticsRepository {
   MockAnalyticsRepository() {
     _i1.throwOnMissingStub(this);
   }
+
+  @override
+  set afterLocalReadForTesting(
+    _i25.Future<void> Function()? _afterLocalReadForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#afterLocalReadForTesting, _afterLocalReadForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeReturnForTesting(
+    _i25.Future<void> Function()? _beforeReturnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#beforeReturnForTesting, _beforeReturnForTesting),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i25.Future<_i16.WorkoutStats> getWorkoutStats() =>
@@ -1739,30 +1765,30 @@ class MockAnalyticsRepository extends _i1.Mock
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockAchievementRepository extends _i1.Mock
-    implements _i37.AchievementRepository {
+    implements _i38.AchievementRepository {
   MockAchievementRepository() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i25.Future<List<_i38.Achievement>> getUnlockedAchievements() =>
+  _i25.Future<List<_i39.Achievement>> getUnlockedAchievements() =>
       (super.noSuchMethod(
             Invocation.method(#getUnlockedAchievements, []),
-            returnValue: _i25.Future<List<_i38.Achievement>>.value(
-              <_i38.Achievement>[],
+            returnValue: _i25.Future<List<_i39.Achievement>>.value(
+              <_i39.Achievement>[],
             ),
           )
-          as _i25.Future<List<_i38.Achievement>>);
+          as _i25.Future<List<_i39.Achievement>>);
 
   @override
-  _i25.Future<List<_i38.Achievement>> getUnseenAchievements() =>
+  _i25.Future<List<_i39.Achievement>> getUnseenAchievements() =>
       (super.noSuchMethod(
             Invocation.method(#getUnseenAchievements, []),
-            returnValue: _i25.Future<List<_i38.Achievement>>.value(
-              <_i38.Achievement>[],
+            returnValue: _i25.Future<List<_i39.Achievement>>.value(
+              <_i39.Achievement>[],
             ),
           )
-          as _i25.Future<List<_i38.Achievement>>);
+          as _i25.Future<List<_i39.Achievement>>);
 
   @override
   _i25.Future<bool> isUnlocked(String? achievementId) =>
@@ -1773,12 +1799,12 @@ class MockAchievementRepository extends _i1.Mock
           as _i25.Future<bool>);
 
   @override
-  _i25.Future<_i38.Achievement?> unlock(String? achievementId) =>
+  _i25.Future<_i39.Achievement?> unlock(String? achievementId) =>
       (super.noSuchMethod(
             Invocation.method(#unlock, [achievementId]),
-            returnValue: _i25.Future<_i38.Achievement?>.value(),
+            returnValue: _i25.Future<_i39.Achievement?>.value(),
           )
-          as _i25.Future<_i38.Achievement?>);
+          as _i25.Future<_i39.Achievement?>);
 
   @override
   _i25.Future<void> markAsSeen(int? achievementLocalId) =>
@@ -1799,7 +1825,7 @@ class MockAchievementRepository extends _i1.Mock
           as _i25.Future<void>);
 
   @override
-  _i25.Future<Map<String, _i37.AchievementProgress>> getProgress({
+  _i25.Future<Map<String, _i38.AchievementProgress>> getProgress({
     required int? currentStreak,
     required int? longestStreak,
     required int? totalWorkouts,
@@ -1815,14 +1841,14 @@ class MockAchievementRepository extends _i1.Mock
               #totalPRs: totalPRs,
             }),
             returnValue:
-                _i25.Future<Map<String, _i37.AchievementProgress>>.value(
-                  <String, _i37.AchievementProgress>{},
+                _i25.Future<Map<String, _i38.AchievementProgress>>.value(
+                  <String, _i38.AchievementProgress>{},
                 ),
           )
-          as _i25.Future<Map<String, _i37.AchievementProgress>>);
+          as _i25.Future<Map<String, _i38.AchievementProgress>>);
 
   @override
-  _i25.Future<List<_i38.Achievement>> checkAndUnlockAchievements({
+  _i25.Future<List<_i39.Achievement>> checkAndUnlockAchievements({
     required int? currentStreak,
     required int? longestStreak,
     required int? totalWorkouts,
@@ -1837,58 +1863,58 @@ class MockAchievementRepository extends _i1.Mock
               #totalVolume: totalVolume,
               #totalPRs: totalPRs,
             }),
-            returnValue: _i25.Future<List<_i38.Achievement>>.value(
-              <_i38.Achievement>[],
+            returnValue: _i25.Future<List<_i39.Achievement>>.value(
+              <_i39.Achievement>[],
             ),
           )
-          as _i25.Future<List<_i38.Achievement>>);
+          as _i25.Future<List<_i39.Achievement>>);
 
   @override
-  _i25.Future<Map<_i38.AchievementTier, int>> getUnlockedCountByTier() =>
+  _i25.Future<Map<_i39.AchievementTier, int>> getUnlockedCountByTier() =>
       (super.noSuchMethod(
             Invocation.method(#getUnlockedCountByTier, []),
-            returnValue: _i25.Future<Map<_i38.AchievementTier, int>>.value(
-              <_i38.AchievementTier, int>{},
+            returnValue: _i25.Future<Map<_i39.AchievementTier, int>>.value(
+              <_i39.AchievementTier, int>{},
             ),
           )
-          as _i25.Future<Map<_i38.AchievementTier, int>>);
+          as _i25.Future<Map<_i39.AchievementTier, int>>);
 }
 
 /// A class which mocks [FriendsRepository].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockFriendsRepository extends _i1.Mock implements _i39.FriendsRepository {
+class MockFriendsRepository extends _i1.Mock implements _i40.FriendsRepository {
   MockFriendsRepository() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i25.Future<List<_i40.Friend>> getFriends() =>
+  _i25.Future<List<_i41.Friend>> getFriends() =>
       (super.noSuchMethod(
             Invocation.method(#getFriends, []),
-            returnValue: _i25.Future<List<_i40.Friend>>.value(<_i40.Friend>[]),
+            returnValue: _i25.Future<List<_i41.Friend>>.value(<_i41.Friend>[]),
           )
-          as _i25.Future<List<_i40.Friend>>);
+          as _i25.Future<List<_i41.Friend>>);
 
   @override
-  _i25.Future<List<_i41.FriendRequest>> getIncomingRequests() =>
+  _i25.Future<List<_i42.FriendRequest>> getIncomingRequests() =>
       (super.noSuchMethod(
             Invocation.method(#getIncomingRequests, []),
-            returnValue: _i25.Future<List<_i41.FriendRequest>>.value(
-              <_i41.FriendRequest>[],
+            returnValue: _i25.Future<List<_i42.FriendRequest>>.value(
+              <_i42.FriendRequest>[],
             ),
           )
-          as _i25.Future<List<_i41.FriendRequest>>);
+          as _i25.Future<List<_i42.FriendRequest>>);
 
   @override
-  _i25.Future<List<_i41.FriendRequest>> getOutgoingRequests() =>
+  _i25.Future<List<_i42.FriendRequest>> getOutgoingRequests() =>
       (super.noSuchMethod(
             Invocation.method(#getOutgoingRequests, []),
-            returnValue: _i25.Future<List<_i41.FriendRequest>>.value(
-              <_i41.FriendRequest>[],
+            returnValue: _i25.Future<List<_i42.FriendRequest>>.value(
+              <_i42.FriendRequest>[],
             ),
           )
-          as _i25.Future<List<_i41.FriendRequest>>);
+          as _i25.Future<List<_i42.FriendRequest>>);
 
   @override
   _i25.Future<void> sendFriendRequest(int? userId) =>
@@ -1949,14 +1975,14 @@ class MockFriendsRepository extends _i1.Mock implements _i39.FriendsRepository {
           as _i25.Future<_i17.FriendshipStatus>);
 
   @override
-  _i25.Future<List<_i42.UserSearchResult>> searchUsers(String? query) =>
+  _i25.Future<List<_i43.UserSearchResult>> searchUsers(String? query) =>
       (super.noSuchMethod(
             Invocation.method(#searchUsers, [query]),
-            returnValue: _i25.Future<List<_i42.UserSearchResult>>.value(
-              <_i42.UserSearchResult>[],
+            returnValue: _i25.Future<List<_i43.UserSearchResult>>.value(
+              <_i43.UserSearchResult>[],
             ),
           )
-          as _i25.Future<List<_i42.UserSearchResult>>);
+          as _i25.Future<List<_i43.UserSearchResult>>);
 
   @override
   _i25.Future<_i18.PublicProfile> getPublicProfile(int? userId) =>
@@ -1976,20 +2002,20 @@ class MockFriendsRepository extends _i1.Mock implements _i39.FriendsRepository {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockDirectMessagesRepository extends _i1.Mock
-    implements _i43.DirectMessagesRepository {
+    implements _i44.DirectMessagesRepository {
   MockDirectMessagesRepository() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i25.Future<List<_i44.DMConversation>> getConversations() =>
+  _i25.Future<List<_i45.DMConversation>> getConversations() =>
       (super.noSuchMethod(
             Invocation.method(#getConversations, []),
-            returnValue: _i25.Future<List<_i44.DMConversation>>.value(
-              <_i44.DMConversation>[],
+            returnValue: _i25.Future<List<_i45.DMConversation>>.value(
+              <_i45.DMConversation>[],
             ),
           )
-          as _i25.Future<List<_i44.DMConversation>>);
+          as _i25.Future<List<_i45.DMConversation>>);
 
   @override
   _i25.Future<List<_i19.DirectMessage>> getMessages(
@@ -2044,10 +2070,21 @@ class MockDirectMessagesRepository extends _i1.Mock
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockProgramsRepository extends _i1.Mock
-    implements _i45.ProgramsRepository {
+    implements _i46.ProgramsRepository {
   MockProgramsRepository() {
     _i1.throwOnMissingStub(this);
   }
+
+  @override
+  set afterLocalSessionsReadForTesting(
+    _i25.Future<void> Function()? _afterLocalSessionsReadForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterLocalSessionsReadForTesting,
+      _afterLocalSessionsReadForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i25.Future<List<_i20.Program>> getPrograms({bool? isActive}) =>
@@ -2223,7 +2260,7 @@ class MockProgramsRepository extends _i1.Mock
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockWorkoutTemplateRepository extends _i1.Mock
-    implements _i46.WorkoutTemplateRepository {
+    implements _i47.WorkoutTemplateRepository {
   MockWorkoutTemplateRepository() {
     _i1.throwOnMissingStub(this);
   }
@@ -2444,7 +2481,7 @@ class MockWorkoutTemplateRepository extends _i1.Mock
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockSharedWorkoutRepository extends _i1.Mock
-    implements _i47.SharedWorkoutRepository {
+    implements _i48.SharedWorkoutRepository {
   MockSharedWorkoutRepository() {
     _i1.throwOnMissingStub(this);
   }
@@ -2638,7 +2675,7 @@ class MockSharedWorkoutRepository extends _i1.Mock
 /// A class which mocks [AuthService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockAuthService extends _i1.Mock implements _i48.AuthService {
+class MockAuthService extends _i1.Mock implements _i49.AuthService {
   MockAuthService() {
     _i1.throwOnMissingStub(this);
   }
@@ -2750,6 +2787,23 @@ class MockAuthService extends _i1.Mock implements _i48.AuthService {
   _i25.Future<String?> getCachedProfile() =>
       (super.noSuchMethod(
             Invocation.method(#getCachedProfile, []),
+            returnValue: _i25.Future<String?>.value(),
+          )
+          as _i25.Future<String?>);
+
+  @override
+  _i25.Future<void> writeCachedProfile(String? profileJson, int? ownerUserId) =>
+      (super.noSuchMethod(
+            Invocation.method(#writeCachedProfile, [profileJson, ownerUserId]),
+            returnValue: _i25.Future<void>.value(),
+            returnValueForMissingStub: _i25.Future<void>.value(),
+          )
+          as _i25.Future<void>);
+
+  @override
+  _i25.Future<String?> readCachedProfile(int? expectedUserId) =>
+      (super.noSuchMethod(
+            Invocation.method(#readCachedProfile, [expectedUserId]),
             returnValue: _i25.Future<String?>.value(),
           )
           as _i25.Future<String?>);

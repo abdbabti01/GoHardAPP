@@ -10,6 +10,7 @@ import 'package:go_hard_app/data/models/exercise.dart';
 import 'package:go_hard_app/data/models/program_workout.dart';
 import 'package:go_hard_app/data/models/session.dart';
 import 'package:go_hard_app/data/repositories/session_repository.dart';
+import 'package:go_hard_app/data/repositories/session_sync_diagnostics.dart';
 import 'package:go_hard_app/providers/sessions_provider.dart';
 
 @GenerateMocks([SessionRepository, ConnectivityService])
@@ -67,13 +68,26 @@ void main() {
     return c;
   }
 
+  // Diagnostics-free join, matching each session's `id` as a stand-in
+  // `localId` - these tests exercise ownership/generation ordering only,
+  // never diagnostics, so no collision scenario is in play here (that is
+  // covered by the dedicated sync-diagnostics test file).
+  SessionSyncSnapshot snapshotOf(List<Session> sessions) => SessionSyncSnapshot(
+    visibleEntries: [
+      for (final s in sessions) SessionListEntry(session: s, localId: s.id),
+    ],
+    retryingFailureCount: 0,
+    conflictCount: 0,
+  );
+
   void stubDefaults() {
     when(
       repo.getSessions(waitForSync: anyNamed('waitForSync')),
     ).thenAnswer((_) async => <Session>[]);
-    when(
-      repo.watchSessions(any),
-    ).thenAnswer((inv) => newWatch(inv.positionalArguments[0] as int).stream);
+    when(repo.watchSessionSyncSnapshot(any)).thenAnswer(
+      (inv) =>
+          newWatch(inv.positionalArguments[0] as int).stream.map(snapshotOf),
+    );
     when(repo.getSession(any)).thenAnswer((_) async => session(1));
     when(
       repo.createSession(any),
@@ -529,7 +543,7 @@ void main() {
 
         expect(watches, isEmpty);
         expect(provider.watchedUserId, isNull);
-        verifyNever(repo.watchSessions(any));
+        verifyNever(repo.watchSessionSyncSnapshot(any));
         verifyNever(repo.getSessions(waitForSync: anyNamed('waitForSync')));
       },
     );
@@ -541,7 +555,7 @@ void main() {
       expect(watches, hasLength(1));
       expect(watches.single.userId, 1);
       expect(provider.watchedUserId, 1);
-      verify(repo.watchSessions(1)).called(1);
+      verify(repo.watchSessionSyncSnapshot(1)).called(1);
     });
 
     test('a loadSessions started under A but completing after logout / B '
@@ -561,7 +575,7 @@ void main() {
 
       expect(watches, isEmpty);
       expect(provider.watchedUserId, isNull);
-      verifyNever(repo.watchSessions(any));
+      verifyNever(repo.watchSessionSyncSnapshot(any));
     });
 
     test(
@@ -821,7 +835,7 @@ void main() {
         expect(connectivityRefresh, isNull);
         expect(watches, isEmpty);
         verifyNever(repo.getSessions(waitForSync: anyNamed('waitForSync')));
-        verifyNever(repo.watchSessions(any));
+        verifyNever(repo.watchSessionSyncSnapshot(any));
       },
     );
 
@@ -1349,7 +1363,7 @@ void main() {
         await provider.deleteSession(1);
 
         expect(watches, isEmpty);
-        verifyNever(repo.watchSessions(any));
+        verifyNever(repo.watchSessionSyncSnapshot(any));
         expect(provider.watchedUserId, isNull);
       },
     );
