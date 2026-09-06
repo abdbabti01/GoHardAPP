@@ -14,6 +14,7 @@ import 'package:go_hard_app/data/local/models/local_exercise_set.dart';
 import 'package:go_hard_app/data/local/models/local_session.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/services/api_exception.dart';
+import 'package:go_hard_app/data/services/rate_limited_exception.dart';
 import 'package:go_hard_app/data/services/session_create_error.dart';
 import 'package:go_hard_app/data/services/session_request_exceptions.dart';
 
@@ -39,6 +40,18 @@ import 'sync_service_test.mocks.dart';
 /// scheduler), and `DateTime.tryParse` only accepts ISO-8601, not the RFC
 /// 1123 HTTP-date form a real `Retry-After` header uses - so shipping it
 /// would have claimed HTTP `Retry-After` support it did not provide.
+///
+/// UPDATE (fix/http-429-retry-handling): `Retry-After` parsing now exists,
+/// but lives entirely OUTSIDE `SessionCreateError` - see `RetryAfterParser`
+/// (pure parsing/clamping), `RateLimitedException` (the typed value
+/// `ApiService._mapError` produces for every 429, replacing the
+/// `ApiException(statusCode: 429)` shape this file's `apiError(429)` helper
+/// still builds for backward compatibility - see the classifier addition
+/// below), and `SyncService._noteRateLimited`/`_rateLimitCooldown` (the
+/// pass-level cooldown gate on `sync()`). None of that changes anything
+/// tested in this file: the per-row soft/hard classification below is
+/// unaffected by whether a 429 arrived as `RateLimitedException` or as a
+/// directly-constructed `ApiException(statusCode: 429)`.
 ///
 /// Real Isar, real `UserSessionEpoch`, real `SessionRequestCoordinator`;
 /// `MockApiService` with synchronous throwing / `Completer`-gated responders.
@@ -390,6 +403,23 @@ void main() {
         {'code': 'operation_target_deleted'},
       ]) {
         final e = apiError(429, body: body);
+        expect(
+          SessionCreateError.classify(e),
+          SessionCreateErrorKind.throttled,
+        );
+        expect(SessionCreateError.isSoftRetryable(e), isTrue);
+      }
+    });
+
+    test('a RateLimitedException (the REAL production shape of a 429, since '
+        'ApiService._mapError now detects 429 before its ApiException '
+        'mapping) also classifies as throttled / soft, with or without a '
+        'Retry-After', () {
+      for (final e in <RateLimitedException>[
+        const RateLimitedException(),
+        const RateLimitedException(retryAfter: Duration(seconds: 30)),
+        const RateLimitedException(code: 'rate_limited'),
+      ]) {
         expect(
           SessionCreateError.classify(e),
           SessionCreateErrorKind.throttled,

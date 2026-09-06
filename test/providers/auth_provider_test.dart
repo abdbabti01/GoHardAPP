@@ -11,6 +11,7 @@ import 'package:go_hard_app/data/services/auth_service.dart';
 import 'package:go_hard_app/data/services/api_service.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/models/auth_response.dart';
+import 'package:go_hard_app/data/services/rate_limited_exception.dart';
 import 'package:go_hard_app/data/services/session_request_exceptions.dart';
 import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/user_session_epoch.dart';
@@ -202,6 +203,48 @@ void main() {
       expect(authProvider.errorMessage, contains('Login failed'));
       verify(mockAuthRepository.login(any)).called(1);
     });
+
+    test('26. login() 429 shows the friendly generic message, does not log '
+        'out, does not disclose account existence, and preserves entered '
+        'credentials', () async {
+      // Arrange
+      authProvider.updateEmail('test@example.com');
+      authProvider.updatePassword('password123');
+
+      when(mockAuthRepository.login(any)).thenThrow(
+        const RateLimitedException(retryAfter: Duration(seconds: 30)),
+      );
+
+      // Act
+      final result = await authProvider.login();
+
+      // Assert
+      expect(result, false);
+      expect(authProvider.isAuthenticated, false);
+      expect(
+        authProvider.errorMessage,
+        'Too many attempts. Please wait and try again.',
+      );
+      // No raw header/body/duration/class-name text reaches the message.
+      expect(authProvider.errorMessage, isNot(contains('RateLimited')));
+      expect(authProvider.errorMessage, isNot(contains('30')));
+      // Entered credentials survive - only the SUCCESS path clears them.
+      expect(authProvider.email, 'test@example.com');
+      expect(authProvider.password, 'password123');
+      verify(mockAuthRepository.login(any)).called(1);
+    });
+
+    test('28. login() never automatically retries after a 429', () async {
+      authProvider.updateEmail('test@example.com');
+      authProvider.updatePassword('password123');
+      when(
+        mockAuthRepository.login(any),
+      ).thenThrow(const RateLimitedException());
+
+      await authProvider.login();
+
+      verify(mockAuthRepository.login(any)).called(1);
+    });
   });
 
   group('AuthProvider - Signup Tests', () {
@@ -263,6 +306,51 @@ void main() {
         'Password must be at least 6 characters',
       );
       verifyNever(mockAuthRepository.signup(any));
+    });
+
+    test('27. signup() 429 behaves identically to login() - friendly generic '
+        'message, no account-existence disclosure, no logout, entered fields '
+        'preserved', () async {
+      const name = 'Test User';
+      const email = 'test@example.com';
+      const password = 'password123';
+      authProvider.setSignupName(name);
+      authProvider.setSignupUsername('testuser');
+      authProvider.setSignupEmail(email);
+      authProvider.setSignupPassword(password);
+      authProvider.setSignupConfirmPassword(password);
+
+      when(
+        mockAuthRepository.signup(any),
+      ).thenThrow(const RateLimitedException(code: 'rate_limited'));
+
+      final result = await authProvider.signup();
+
+      expect(result, false);
+      expect(authProvider.isAuthenticated, false);
+      expect(
+        authProvider.errorMessage,
+        'Too many attempts. Please wait and try again.',
+      );
+      expect(authProvider.errorMessage, isNot(contains('rate_limited')));
+      expect(authProvider.signupEmail, email);
+      expect(authProvider.signupPassword, password);
+      verify(mockAuthRepository.signup(any)).called(1);
+    });
+
+    test('28. signup() never automatically retries after a 429', () async {
+      authProvider.setSignupName('Test User');
+      authProvider.setSignupUsername('testuser');
+      authProvider.setSignupEmail('test@example.com');
+      authProvider.setSignupPassword('password123');
+      authProvider.setSignupConfirmPassword('password123');
+      when(
+        mockAuthRepository.signup(any),
+      ).thenThrow(const RateLimitedException());
+
+      await authProvider.signup();
+
+      verify(mockAuthRepository.signup(any)).called(1);
     });
   });
 

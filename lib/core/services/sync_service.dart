@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../data/models/session.dart';
 import '../../data/services/api_service.dart';
 import '../../data/services/auth_service.dart';
+import '../../data/services/rate_limited_exception.dart';
 import '../../data/services/session_create_error.dart';
 import '../../data/services/session_request_context.dart';
 import '../../data/services/session_request_exceptions.dart';
@@ -41,6 +42,23 @@ class _ActiveSyncOperation {
 
   final UserSessionToken token;
   final Future<void> future;
+}
+
+/// A session-write-limiter (HTTP 429) cooldown recorded for [token],
+/// eligible again at [untilUtc]. Set exactly once per observed 429 by
+/// [SyncService._noteRateLimited] and consulted exactly once, at the very
+/// top of [SyncService.sync], by every trigger source that method already
+/// serves (periodic timer, debounced connectivity/initial sync, manual
+/// pull-to-refresh, [SyncService.retryFailedSyncs]) - this is what coalesces
+/// all of them under one cooldown instead of a separate scheduler per
+/// trigger. Bound to [token] (never compared by wall-clock alone) so a
+/// cooldown recorded for one session can never gate a different session's
+/// sync - see [SyncService.sync]'s entry gate.
+class _RateLimitCooldown {
+  _RateLimitCooldown({required this.token, required this.untilUtc});
+
+  final UserSessionToken token;
+  final DateTime untilUtc;
 }
 
 /// Service for automatic background synchronization of offline data.
@@ -117,6 +135,43 @@ class _ActiveSyncOperation {
 /// immediately before every acknowledgment write, so a race that replaces
 /// or reassigns a row between dispatch and acknowledgment can never let a
 /// stale or foreign response land on it.
+///
+/// ## Rate-limit cooldown and whole-pass abort (HTTP 429)
+///
+/// The deployed API's GlobalLimiter can return HTTP 429 from ANY endpoint -
+/// not only session writes - so a 429 is treated as a whole-PASS event, not a
+/// per-row or per-phase one. Every phase's per-row catch (and the
+/// session-version reconciliation sub-phase's two catches) rethrows a
+/// [RateLimitedException] past its own generic error handling instead of
+/// absorbing it - see each phase's `on RateLimitedException` clause. That
+/// rethrow propagates all the way up through [_runSyncPhases] to
+/// [_startSyncPass], the ONE place this class ever catches it and arms
+/// [_rateLimitCooldown] via [_noteRateLimited] - a session-bound "not
+/// eligible again until" deadline that [sync]'s entry gate consults before
+/// starting a new pass. Because the exception is a genuine Dart exception
+/// propagating up the call stack (not a flag threaded through eleven
+/// separate phase functions), the moment it is thrown: the rest of the
+/// throwing phase's row loop is abandoned, and every phase later in the
+/// sequence never starts at all - this is what "abort the entire remaining
+/// pass" means concretely here, with no duplicated cooldown-arming logic
+/// anywhere except [_startSyncPass].
+///
+/// Every trigger this class has - the periodic timer, the debounce, and any
+/// caller's direct [sync] call (manual pull-to-refresh, [retryFailedSyncs])
+/// - goes through that same single [sync] entry gate, so none of them can
+/// dispatch during the cooldown; this is the "one centralized retry policy,
+/// no second competing scheduler" this app intentionally chose (see [sync]'s
+/// own doc comment). A 429 with no trustworthy `Retry-After` (missing,
+/// malformed, negative, or a literal zero) still arms a cooldown - see
+/// [_effectiveCooldownFor] and [_defaultRateLimitCooldown] - because the
+/// GlobalLimiter's and auth-attempt limiter's bare-429 shape is exactly this
+/// case, and the existing periodic/debounce cadence alone is not a bound on
+/// a manual pull-to-refresh or a connectivity-restoration trigger. This
+/// never changes what happens to any row itself: a pending row's
+/// `syncStatus` is never touched by a 429 (see [_markSyncError] and each
+/// phase's own `_mark*SyncError`), exactly like every other sync error - the
+/// per-row diagnostic contract that already existed for a given phase is
+/// preserved before the exception is rethrown, never skipped.
 class SyncService {
   static SyncService? _instance;
   final ApiService _apiService;
@@ -139,6 +194,29 @@ class SyncService {
   static const Duration _syncInterval = Duration(minutes: 5);
   static const int _maxRetries = 3;
   static const Duration _syncDebounce = Duration(seconds: 3);
+
+  /// The cooldown applied to a 429 that carries no trustworthy `Retry-After`
+  /// (missing, malformed, negative - all already rejected to `null` by
+  /// `RetryAfterParser` - or a parsed `Duration.zero`, which is rejected
+  /// here too so a "0" value can never produce an immediate retry loop).
+  /// The deployed GlobalLimiter's documented window is 60 seconds; this
+  /// mirrors that window as a conservative, bounded default rather than
+  /// falling back to no cooldown at all - see [_noteRateLimited].
+  static const Duration _defaultRateLimitCooldown = Duration(seconds: 60);
+
+  /// The active rate-limit cooldown, or `null`. See [_RateLimitCooldown]'s
+  /// doc comment for the full contract - this field is written only by
+  /// [_noteRateLimited] and read only by [sync].
+  _RateLimitCooldown? _rateLimitCooldown;
+
+  /// Test-only clock seam for [_rateLimitCooldown] comparisons - lets a test
+  /// deterministically land "now" before/after a cooldown deadline with no
+  /// real wall-clock wait. `null` in production, in which case
+  /// `DateTime.now().toUtc()` is used.
+  @visibleForTesting
+  DateTime Function()? nowUtcForTesting;
+
+  DateTime _nowUtc() => (nowUtcForTesting ?? () => DateTime.now().toUtc())();
 
   /// Private constructor for singleton pattern
   SyncService._(
@@ -280,11 +358,35 @@ class SyncService {
   /// Manually trigger sync (public API). Unlike the scheduled triggers
   /// above, this captures whichever session is active AT THE MOMENT IT IS
   /// CALLED - there is no earlier "scheduling time" for a direct call.
+  ///
+  /// Every trigger source in this class - the periodic timer, the debounced
+  /// connectivity/initial-sync path, a manual pull-to-refresh, and
+  /// [retryFailedSyncs] - calls this same method, so the rate-limit cooldown
+  /// gate below applies uniformly to all of them: this app's one consistent
+  /// policy for "what does an explicit user refresh do while rate limited"
+  /// is that it respects the active cooldown exactly like every other
+  /// trigger, rather than forcing a bypass attempt that would just add to
+  /// the retry storm the cooldown exists to prevent.
   Future<void> sync() async {
     final token = _sessionEpoch.capture();
     if (token == null) {
       debugPrint('📴 Not authenticated, skipping sync');
       return;
+    }
+
+    final cooldown = _rateLimitCooldown;
+    if (cooldown != null) {
+      if (cooldown.token == token && _nowUtc().isBefore(cooldown.untilUtc)) {
+        debugPrint(
+          '⏳ Rate-limit cooldown active until ${cooldown.untilUtc} - skipping sync',
+        );
+        return;
+      }
+      // Either a different (newer) session than the one that recorded this
+      // cooldown, or the cooldown has elapsed - either way it can never
+      // apply again, so clear it now rather than leave it to be
+      // re-evaluated (and re-cleared) on every future call.
+      _rateLimitCooldown = null;
     }
 
     final existing = _activeOperation;
@@ -318,9 +420,23 @@ class SyncService {
   /// lifecycle-termination outcome (logged out before the context capture
   /// resolves, session ended mid-pass) is swallowed here - never surfaced
   /// as an error, never leaves anything marked failed.
+  ///
+  /// This is also the ONE orchestration-level place a [RateLimitedException]
+  /// is handled: every phase (and the session-version reconciliation
+  /// sub-phase) rethrows it past its own generic catch rather than absorbing
+  /// it - see each phase's `on RateLimitedException` clause - so it always
+  /// propagates all the way up here, wherever in the eleven-phase sequence
+  /// it originated. Catching it in exactly one place, rather than duplicating
+  /// cooldown-arming logic in every phase, is what makes this "one
+  /// session-owned global sync cooldown" instead of eleven independent ones -
+  /// and catching it here, at the TOP of the call stack, is what aborts the
+  /// entire remaining pass: once this method's `await _runSyncPhases(context)`
+  /// throws, every later phase (and every later row in the phase that threw)
+  /// has already been abandoned by the time control reaches this catch.
   Future<void> _startSyncPass(UserSessionToken token) async {
+    SessionRequestContext? context;
     try {
-      final context = await _sessionCoordinator.captureContext();
+      context = await _sessionCoordinator.captureContext();
       if (context == null || context.epochToken != token) {
         debugPrint(
           '⏭️ Sync aborted before starting - session no longer current',
@@ -332,6 +448,14 @@ class SyncService {
       debugPrint('⏭️ Sync aborted - session ended');
     } on RequestCancelledException {
       debugPrint('⏭️ Sync aborted - request cancelled (session ended)');
+    } on RateLimitedException catch (e) {
+      // `context` is guaranteed non-null here: this exception can only ever
+      // originate from an actual HTTP call inside `_runSyncPhases`, which
+      // never runs before `context` is assigned above.
+      if (context != null) {
+        _noteRateLimited(e, context);
+      }
+      debugPrint('⏳ Sync pass aborted - rate limited');
     } catch (e) {
       debugPrint('❌ Sync failed: $e');
     }
@@ -616,16 +740,35 @@ class SyncService {
         rethrow;
       } on RequestCancelledException {
         rethrow;
+      } on RateLimitedException catch (e) {
+        // The deployed GlobalLimiter can return 429 from ANY endpoint, not
+        // only session writes - so this is no longer a purely per-row,
+        // per-phase concern. The existing per-row diagnostic contract is
+        // preserved (same call, same soft/hard classification, so a
+        // still-`pending_create` row is still treated as soft) before
+        // rethrowing, but the typed signal itself must reach the
+        // orchestration-level handler in `_startSyncPass` - the ONLY place
+        // that now arms the cooldown - so it can abort the ENTIRE remaining
+        // pass (the rest of this phase's rows AND every later phase), not
+        // just skip this one row. Never swallow it here.
+        await _markSyncError(
+          db,
+          session,
+          e.toString(),
+          context,
+          softError: SessionCreateError.isSoftRetryable(e),
+        );
+        rethrow;
       } catch (e) {
-        // A Session CREATE response that only signals throttling (429) or an
-        // API operation state this client build cannot yet reconcile
-        // (recognised 404/409/410 `code`s) is not a client-side failure, so it
-        // does not advance the retry counter for a still-`pending_create` row;
-        // the row simply retries on the next pass. Unknown structured errors
-        // and every ordinary 4xx/5xx/transport failure DO advance the counter
-        // (which saturates at `_maxRetries` - see `_markSyncError`), but the
-        // row is never deleted or made terminal for it. Lifecycle exceptions
-        // are rethrown above and never reach here.
+        // An API operation state this client build cannot yet reconcile
+        // (recognised 404/409/410 `code`s on a Session CREATE) is not a
+        // client-side failure, so it does not advance the retry counter for
+        // a still-`pending_create` row; the row simply retries on the next
+        // pass. Unknown structured errors and every ordinary 4xx/5xx/
+        // transport failure DO advance the counter (which saturates at
+        // `_maxRetries` - see `_markSyncError`), but the row is never
+        // deleted or made terminal for it. Lifecycle exceptions and 429s
+        // are handled above and never reach here.
         //
         // `isSoftRetryable` is a pure classification of the error; whether the
         // row is actually mid-CREATE is re-checked inside `_markSyncError`
@@ -1071,6 +1214,12 @@ class SyncService {
         rethrow;
       } on RequestCancelledException {
         rethrow;
+      } on RateLimitedException {
+        // A read-only reconciliation GET, not a row mutation - nothing here
+        // needs a diagnostic write. Still must abort the whole pass, so it
+        // rethrows to the orchestration-level handler exactly like every
+        // other phase.
+        rethrow;
       } catch (e) {
         debugPrint(
           '  ⚠️ Could not refresh version for clean session ${session.serverId}, will retry later: $e',
@@ -1121,6 +1270,8 @@ class SyncService {
       } on SessionStaleException {
         rethrow;
       } on RequestCancelledException {
+        rethrow;
+      } on RateLimitedException {
         rethrow;
       } catch (e) {
         debugPrint(
@@ -1210,6 +1361,50 @@ class SyncService {
       // Delete the session
       await db.localSessions.delete(reFetched.localId);
     });
+  }
+
+  /// Records a rate-limit cooldown from an observed HTTP 429 - called
+  /// EXACTLY once, from [_startSyncPass]'s own `on RateLimitedException`
+  /// clause, so this is the one place a cooldown is ever armed regardless of
+  /// which of the eleven phases (or the reconciliation sub-phase) the 429
+  /// actually came from. [sync]'s entry gate skips its next call(s) until
+  /// the effective cooldown (see [_effectiveCooldownFor]) elapses - reusing
+  /// that SAME gate/scheduler for every trigger source rather than creating
+  /// a second one (see [sync]'s doc comment).
+  ///
+  /// Bound to [context]'s [UserSessionToken] - never the wall clock alone -
+  /// so a cooldown recorded for this session can never gate a different
+  /// (later) session's own sync calls; see [sync]'s entry gate, the only
+  /// place this is read.
+  void _noteRateLimited(
+    RateLimitedException error,
+    SessionRequestContext context,
+  ) {
+    final until = _nowUtc().add(_effectiveCooldownFor(error));
+    _rateLimitCooldown = _RateLimitCooldown(
+      token: context.epochToken,
+      untilUtc: until,
+    );
+    debugPrint('⏳ Sync rate limited - cooling down until $until');
+  }
+
+  /// The cooldown duration to apply for [error]: its own `retryAfter` when
+  /// it is a genuine positive wait (already clamped to `RetryAfterParser
+  /// .maxRetryAfter` by the time it reaches here), or
+  /// [_defaultRateLimitCooldown] for every other case - missing, malformed,
+  /// negative (all already normalized to `retryAfter == null` by
+  /// `RetryAfterParser`), and a literal zero. A bare global 429 (the
+  /// GlobalLimiter's and the auth-attempt limiter's documented shape - no
+  /// body, no header) MUST still produce a real cooldown: the existing
+  /// periodic-timer/debounce cadence is not, by itself, a bounded backoff
+  /// for a global 429, since a manual pull-to-refresh or a connectivity
+  /// flap can retrigger `sync()` immediately regardless of that cadence.
+  Duration _effectiveCooldownFor(RateLimitedException error) {
+    final retryAfter = error.retryAfter;
+    if (retryAfter == null || retryAfter <= Duration.zero) {
+      return _defaultRateLimitCooldown;
+    }
+    return retryAfter;
   }
 
   /// Record a sync failure as diagnostics only. Only writes if the context
@@ -1373,6 +1568,10 @@ class SyncService {
       } on SessionStaleException {
         rethrow;
       } on RequestCancelledException {
+        rethrow;
+      } on RateLimitedException {
+        // The GlobalLimiter can return 429 from any endpoint, including
+        // this one - must abort the whole pass, not just this row/phase.
         rethrow;
       } catch (e) {
         debugPrint('    ⚠️ Exercise sync failed: $e');
@@ -1593,6 +1792,8 @@ class SyncService {
       } on SessionStaleException {
         rethrow;
       } on RequestCancelledException {
+        rethrow;
+      } on RateLimitedException {
         rethrow;
       } catch (e) {
         debugPrint('    ⚠️ Set sync failed: $e');
@@ -1899,6 +2100,9 @@ class SyncService {
         rethrow;
       } on RequestCancelledException {
         rethrow;
+      } on RateLimitedException catch (e) {
+        await _markProgramSyncError(db, program, e.toString(), context);
+        rethrow;
       } catch (e) {
         debugPrint('    ⚠️ Program sync failed: $e');
         await _markProgramSyncError(db, program, e.toString(), context);
@@ -2123,6 +2327,9 @@ class SyncService {
       } on SessionStaleException {
         rethrow;
       } on RequestCancelledException {
+        rethrow;
+      } on RateLimitedException catch (e) {
+        await _markGoalSyncError(db, goal, e.toString(), context);
         rethrow;
       } catch (e) {
         debugPrint('    ⚠️ Goal sync failed: $e');
@@ -2373,6 +2580,8 @@ class SyncService {
         rethrow;
       } on RequestCancelledException {
         rethrow;
+      } on RateLimitedException {
+        rethrow;
       } catch (e) {
         debugPrint('    ⚠️ Program workout sync failed: $e');
       }
@@ -2584,6 +2793,9 @@ class SyncService {
       } on SessionStaleException {
         rethrow;
       } on RequestCancelledException {
+        rethrow;
+      } on RateLimitedException catch (e) {
+        await _markNutritionGoalSyncError(db, goal, e.toString(), context);
         rethrow;
       } catch (e) {
         debugPrint('    ⚠️ Nutrition goal sync failed: $e');
@@ -2815,6 +3027,9 @@ class SyncService {
         rethrow;
       } on RequestCancelledException {
         rethrow;
+      } on RateLimitedException catch (e) {
+        await _markFoodTemplateSyncError(db, template, e.toString(), context);
+        rethrow;
       } catch (e) {
         debugPrint('    ⚠️ Food template sync failed: $e');
         await _markFoodTemplateSyncError(db, template, e.toString(), context);
@@ -3041,6 +3256,9 @@ class SyncService {
       } on SessionStaleException {
         rethrow;
       } on RequestCancelledException {
+        rethrow;
+      } on RateLimitedException catch (e) {
+        await _markMealLogSyncError(db, log, e.toString(), context);
         rethrow;
       } catch (e) {
         debugPrint('    ⚠️ Meal log sync failed: $e');
@@ -3340,6 +3558,15 @@ class SyncService {
       } on SessionStaleException {
         rethrow;
       } on RequestCancelledException {
+        rethrow;
+      } on RateLimitedException catch (e) {
+        await _markMealEntrySyncError(
+          db,
+          entry,
+          e.toString(),
+          context,
+          mealLogCache,
+        );
         rethrow;
       } catch (e) {
         debugPrint('    ⚠️ Meal entry sync failed: $e');
@@ -3641,6 +3868,16 @@ class SyncService {
       } on SessionStaleException {
         rethrow;
       } on RequestCancelledException {
+        rethrow;
+      } on RateLimitedException catch (e) {
+        await _markFoodItemSyncError(
+          db,
+          item,
+          e.toString(),
+          context,
+          mealLogCache,
+          mealEntryCache,
+        );
         rethrow;
       } catch (e) {
         debugPrint('    ⚠️ Food item sync failed: $e');
