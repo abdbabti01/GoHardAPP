@@ -1,4 +1,5 @@
 import 'api_exception.dart';
+import 'rate_limited_exception.dart';
 
 /// Internal, typed classification of a failure observed while creating a
 /// Session on the server (`POST /api/v1/sessions`).
@@ -16,8 +17,20 @@ import 'api_exception.dart';
 /// * `409 { "code": "operation_canceled" }`
 /// * `409 { "code": "operation_incomplete" }`
 /// * `410 { "code": "operation_target_deleted" }`
-/// * `429` - throttling, empty body (bounded only by the shared per-IP
-///   limiter today; a per-user Session-write limiter is a later PR)
+/// * `429` - throttling, from either the session-write limiter OR the
+///   deployed API's GlobalLimiter (which can return 429 from ANY endpoint).
+///   Arrives as a [RateLimitedException] (`ApiService` detects 429
+///   centrally, before its ordinary [ApiException] mapping - see
+///   `ApiService._mapError`), not as an [ApiException] with `statusCode ==
+///   429` - [classify] recognizes both forms (see below) so a directly
+///   constructed [ApiException] (e.g. in a test, or any future caller that
+///   builds one without going through `ApiService`) still classifies
+///   correctly. `isSoftRetryable` still governs only the per-row retry-count
+///   diagnostic for THIS Session row; `SyncService`'s own
+///   `on RateLimitedException` clause (in `_syncSessions`) separately
+///   rethrows the same exception past this classification to abort the
+///   entire remaining sync pass - the two concerns are independent, and
+///   this classifier knows nothing about the pass-level behavior.
 ///
 /// A recognised `code` is honoured ONLY on the exact HTTP status the contract
 /// pairs it with above. The same known code on any other status - or an
@@ -88,13 +101,20 @@ abstract final class SessionCreateError {
 
   /// Classify a caught Session-CREATE failure. Lifecycle exceptions
   /// ([SessionStaleException] / [RequestCancelledException]) are NOT
-  /// [ApiException]s and classify as [SessionCreateErrorKind.ordinary] - the
-  /// sync layer handles them on a separate path and must never route them
-  /// through here.
+  /// [ApiException]s or [RateLimitedException]s and classify as
+  /// [SessionCreateErrorKind.ordinary] - the sync layer handles them on a
+  /// separate path and must never route them through here.
   static SessionCreateErrorKind classify(Object? error) {
+    // The real, production shape of a 429 - checked first so it never falls
+    // through to the `is! ApiException` early-return below.
+    if (error is RateLimitedException) return SessionCreateErrorKind.throttled;
+
     if (error is! ApiException) return SessionCreateErrorKind.ordinary;
 
     final status = error.statusCode;
+    // Kept for defense-in-depth / any ApiException constructed directly
+    // with statusCode 429 (e.g. existing tests) - ApiService itself never
+    // produces one anymore; see the class doc comment above.
     if (status == 429) return SessionCreateErrorKind.throttled;
 
     if (status == 404 || status == 409 || status == 410) {

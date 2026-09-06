@@ -5,6 +5,7 @@ import '../data/models/signup_request.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/services/auth_service.dart';
 import '../data/services/api_service.dart';
+import '../data/services/rate_limited_exception.dart';
 import '../data/local/services/local_database_service.dart';
 import '../core/services/background_service.dart';
 import '../core/services/push_notification_service.dart';
@@ -415,8 +416,15 @@ class AuthProvider extends ChangeNotifier {
 
       return true;
     } catch (e) {
+      // A 429 is never an authentication failure: never logs the user out,
+      // never wipes the entered password (untouched above on this path -
+      // only the SUCCESS path clears it), never discloses whether the
+      // account exists, and never triggers an automatic retry - the user
+      // stays on this screen and can retry manually whenever they choose.
       _errorMessage =
-          'Login failed: ${e.toString().replaceAll('Exception: ', '')}';
+          e is RateLimitedException
+              ? 'Too many attempts. Please wait and try again.'
+              : 'Login failed: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Login error: $e');
       return false;
     } finally {
@@ -511,8 +519,14 @@ class AuthProvider extends ChangeNotifier {
 
       return true;
     } catch (e) {
+      // Same treatment as login() above: a 429 never logs out, never
+      // discloses account existence, and never auto-retries. Entered
+      // signup fields are untouched here - only the SUCCESS path clears
+      // the password fields.
       _errorMessage =
-          'Signup failed: ${e.toString().replaceAll('Exception: ', '')}';
+          e is RateLimitedException
+              ? 'Too many attempts. Please wait and try again.'
+              : 'Signup failed: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Signup error: $e');
       return false;
     } finally {

@@ -4,6 +4,7 @@ import '../../core/constants/api_config.dart';
 import '../../core/services/user_session_epoch.dart';
 import 'api_exception.dart';
 import 'auth_service.dart';
+import 'rate_limited_exception.dart';
 import 'session_request_context.dart';
 import 'session_request_exceptions.dart';
 
@@ -195,9 +196,17 @@ class ApiService {
 
   /// Maps a caught [DioException] to the exception callers should see:
   /// [SessionStaleException] if the interceptor rejected it as stale,
-  /// [RequestCancelledException] if its [CancelToken] was cancelled, or the
-  /// existing [ApiException] mapping for every ordinary network/server
+  /// [RequestCancelledException] if its [CancelToken] was cancelled,
+  /// [RateLimitedException] for any HTTP 429 - checked before the ordinary
+  /// [ApiException] mapping below, so a 429 is never translated into a
+  /// generic validation/server-error message - or the existing
+  /// [ApiException] mapping for every other ordinary network/server
   /// failure - unchanged from before this PR.
+  ///
+  /// A 429 is never an authentication failure: this method never calls
+  /// [handleResponseError]/`onUnauthorized` (that already only ever fires
+  /// for a real 401 - see [handleResponseError]), so 429 handling here is
+  /// fully independent of it and can never trigger logout.
   Object _mapError(DioException e) {
     final error = e.error;
     if (error is SessionStaleException) {
@@ -205,6 +214,17 @@ class ApiService {
     }
     if (e.type == DioExceptionType.cancel) {
       return RequestCancelledException(originalError: e);
+    }
+    if (e.response?.statusCode == 429) {
+      final rateLimited = RateLimitedException.fromDioException(e);
+      // Bounded, safe debug logging only: status code, sanitized code, and
+      // a rounded retry duration - never the raw body, headers, or token.
+      debugPrint(
+        '⏳ HTTP 429 rate limited'
+        '${rateLimited.code != null ? ' code=${rateLimited.code}' : ''}'
+        '${rateLimited.retryAfter != null ? ' retryAfter=${rateLimited.retryAfter!.inSeconds}s' : ''}',
+      );
+      return rateLimited;
     }
     return ApiException.fromDioException(e);
   }
