@@ -49,9 +49,9 @@ import 'session_repository_session_ownership_test.mocks.dart';
 /// `Completer`s, the adapter's `nextDispatch()` signal, and
 /// `onBackgroundSyncScheduledForTesting`/`beforeBackgroundHttpDispatchForTesting`
 /// hooks already established by this suite's sibling
-/// `session_create_delete_cross_operation_race_test.dart`, which remains
-/// unmodified and is re-run as regression proof that the delete-during-CREATE
-/// orphan race is still unresolved by this PR.
+/// `session_create_delete_cross_operation_race_test.dart` - see that file
+/// (now updated by the durable-cancellation PR) for the delete-during-CREATE
+/// convergence proof this suite's own operation-key coverage feeds into.
 void main() {
   late Isar isar;
   late Directory tempDir;

@@ -22,6 +22,25 @@ class Session {
   final int? programWorkoutId;
   final int version; // Version tracking for conflict resolution (Issue #13)
 
+  /// The server's copy of the durable keyed-CREATE idempotency key for this
+  /// Session, when the deployed API happens to expose it on this response
+  /// shape. Present on `GET /api/v1/sessions` and `GET /api/v1/sessions/{id}`
+  /// (which serialize the raw entity), but deliberately stripped from the
+  /// POST/PUT `SessionResponseDto` shape - `null` there, and `null` for a
+  /// legacy/unkeyed Session everywhere. This field exists purely so a
+  /// server-list refresh can recognize a Session that matches a local
+  /// pending cancellation by its actual canonical identity instead of a
+  /// serverId that may not be known locally yet - see `SessionRepository
+  /// ._syncSessionsFromServer`'s doc comment.
+  ///
+  /// PARSE-ONLY: deliberately omitted from [toJson] (never round-tripped
+  /// into an outgoing request body). Every CREATE dispatch that needs this
+  /// value merges the LOCAL retained `LocalSession.clientOperationId` into
+  /// its request body separately - see `SessionRepository`/`SyncService`'s
+  /// CREATE dispatch - never this field on an in-memory `Session` object,
+  /// which could otherwise be stale or belong to a different fetch.
+  final String? clientOperationId;
+
   Session({
     required this.id,
     required this.userId,
@@ -38,6 +57,7 @@ class Session {
     this.programId,
     this.programWorkoutId,
     this.version = 1,
+    this.clientOperationId,
   });
 
   factory Session.fromJson(Map<String, dynamic> json) {
@@ -68,6 +88,7 @@ class Session {
       programId: json['programId'] as int?,
       programWorkoutId: json['programWorkoutId'] as int?,
       version: json['version'] as int? ?? 1,
+      clientOperationId: json['clientOperationId'] as String?,
     );
   }
 
@@ -95,6 +116,8 @@ class Session {
       'programId': programId,
       'programWorkoutId': programWorkoutId,
       'version': version,
+      // clientOperationId is intentionally NOT included - see its doc
+      // comment ("PARSE-ONLY").
     };
   }
 
@@ -109,7 +132,11 @@ class Session {
   /// clear it (it falls back to the existing value, same as omitting it).
   /// To explicitly clear pausedAt, pass [clearPausedAt]: true instead. If
   /// both [pausedAt] and `clearPausedAt: true` are supplied, clearing
-  /// takes precedence and [pausedAt] is ignored.
+  /// takes precedence and [pausedAt] is ignored. [clearClientOperationId]
+  /// follows the same convention for [clientOperationId] - used by
+  /// `SessionRepository` to strip that internal correlation id before
+  /// handing a freshly-fetched `Session` to a caller outside the
+  /// repository layer (see [clientOperationId]'s own doc comment).
   Session copyWith({
     int? id,
     int? userId,
@@ -127,6 +154,8 @@ class Session {
     int? programId,
     int? programWorkoutId,
     int? version,
+    String? clientOperationId,
+    bool clearClientOperationId = false,
   }) {
     return Session(
       id: id ?? this.id,
@@ -144,6 +173,10 @@ class Session {
       programId: programId ?? this.programId,
       programWorkoutId: programWorkoutId ?? this.programWorkoutId,
       version: version ?? this.version,
+      clientOperationId:
+          clearClientOperationId
+              ? null
+              : (clientOperationId ?? this.clientOperationId),
     );
   }
 }

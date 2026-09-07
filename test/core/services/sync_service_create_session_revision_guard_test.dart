@@ -41,10 +41,12 @@ import 'sync_service_test.mocks.dart';
 /// preserved and re-queued as `pending_update` with the server id/version
 /// attached, never overwritten by the stale create response.
 ///
-/// Delete-during-CREATE compensation is NOT in scope here - a delete of a
-/// still-server-id-less session hard-deletes the local row, and that
-/// cross-operation orphan is deferred to the Session idempotency PR (see
-/// `test/data/repositories/session_create_delete_cross_operation_race_test.dart`).
+/// Delete-during-CREATE is a separate guard (a `pending_delete` re-fetch
+/// short-circuits before this file's edit-vs-stale-response comparison ever
+/// runs - see `SyncService._syncCreateSession`'s doc comment) and is proven
+/// separately in
+/// `test/data/repositories/session_create_delete_cross_operation_race_test.dart`
+/// and `test/core/services/sync_service_delete_cancellation_test.dart`.
 ///
 /// Real Isar, real `UserSessionEpoch`, real `SessionRequestCoordinator`;
 /// `MockApiService` with `Completer`-gated responders for exact

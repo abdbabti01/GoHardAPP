@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
 import 'package:mockito/mockito.dart';
 
+import 'package:go_hard_app/core/constants/api_config.dart';
 import 'package:go_hard_app/core/services/connectivity_service.dart';
 import 'package:go_hard_app/core/services/session_request_coordinator.dart';
 import 'package:go_hard_app/core/services/sync_service.dart';
@@ -333,10 +334,14 @@ void main() {
   });
 
   group('24/25/26. structured soft outcomes reuse the identical key', () {
+    // `operation_canceled` is deliberately excluded from this shared loop:
+    // unlike the other four (which all leave a still-`pending_create` row
+    // to retry unchanged), it converges the row to `pending_delete` with
+    // the SAME key - see the dedicated test below and
+    // `sync_service_create_soft_error_test.dart`'s test 6.
     const recognizedPairs = <({int status, String? code})>[
       (status: 429, code: null),
       (status: 404, code: 'program_not_found'),
-      (status: 409, code: 'operation_canceled'),
       (status: 409, code: 'operation_incomplete'),
       (status: 410, code: 'operation_target_deleted'),
     ];
@@ -366,6 +371,51 @@ void main() {
         expect(afterSuccess.clientOperationId, keyAfterFailure);
       });
     }
+
+    test(
+      '409 operation_canceled converges to pending_delete with the SAME '
+      'key, which a later pass cancels-by-operation (never re-POSTed)',
+      () async {
+        final row = await insertPendingCreateSession();
+        stubPostThrow(apiError(409, body: {'code': 'operation_canceled'}));
+
+        await syncService.sync();
+
+        final afterCanceled = await reload(row.localId);
+        expect(afterCanceled!.syncStatus, 'pending_delete');
+        expect(afterCanceled.clientOperationId, isNotNull);
+        final key = afterCanceled.clientOperationId;
+
+        when(
+          mockApiService.delete(
+            any,
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).thenAnswer((_) async => true);
+
+        await syncService.sync();
+
+        final deletePaths =
+            verify(
+              mockApiService.delete(
+                captureAny,
+                sessionContext: anyNamed('sessionContext'),
+              ),
+            ).captured.cast<String>();
+        expect(deletePaths, [ApiConfig.sessionCancelByOperation(key!)]);
+        expect(await reload(row.localId), isNull);
+
+        // Exactly the one POST from the original attempt - never a second
+        // one on this pass; the row never returns to pending_create.
+        verify(
+          mockApiService.post<Map<String, dynamic>>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        ).called(1);
+      },
+    );
 
     test('26. a 5xx / ordinary transport failure preserves and reuses the key '
         'as well', () async {

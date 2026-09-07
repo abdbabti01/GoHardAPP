@@ -129,6 +129,12 @@ class ApiConfig {
   static String sessionStatus(int id) => '$sessions/$id/status';
   static String sessionExercises(int sessionId) =>
       '$sessions/$sessionId/exercises';
+  // Cancels a keyed Session CREATE (`clientOperationId`) that may not yet
+  // have a `serverId` locally - see `LocalSession.clientOperationId` and
+  // `SessionRepository`'s deletion-flow doc comments. Idempotent; a missing
+  // or foreign key still returns 204.
+  static String sessionCancelByOperation(String clientOperationId) =>
+      '$sessions/by-operation/$clientOperationId';
   static String exerciseSetById(int id) => '$exerciseSets/$id';
   static String exerciseSetsByExerciseId(int exerciseId) =>
       '$exerciseSets/exercise/$exerciseId';

@@ -35,6 +35,7 @@ Session _$SessionFromJson(Map<String, dynamic> json) => Session(
   programId: (json['programId'] as num?)?.toInt(),
   programWorkoutId: (json['programWorkoutId'] as num?)?.toInt(),
   version: (json['version'] as num?)?.toInt() ?? 1,
+  clientOperationId: json['clientOperationId'] as String?,
 );
 
 Map<String, dynamic> _$SessionToJson(Session instance) => <String, dynamic>{
@@ -53,4 +54,5 @@ Map<String, dynamic> _$SessionToJson(Session instance) => <String, dynamic>{
   'programId': instance.programId,
   'programWorkoutId': instance.programWorkoutId,
   'version': instance.version,
+  'clientOperationId': instance.clientOperationId,
 };

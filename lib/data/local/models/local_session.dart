@@ -115,9 +115,15 @@ class LocalSession {
   /// its first generic retry (`SyncService`), not here.
   ///
   /// Never derived from `localId`, `serverId`, `Session.id`, `userId`,
-  /// timestamps, or any mutable workout field. Never read from server JSON
-  /// - the API never echoes this value back. Never rotated once non-null.
-  /// Retained after a successful sync.
+  /// timestamps, or any mutable workout field. Never assigned FROM a POST/PUT
+  /// response - `SessionResponseDto` deliberately never echoes it back (see
+  /// `Session.clientOperationId`'s doc comment on the Flutter model side).
+  /// `GET /api/v1/sessions`/`GET /api/v1/sessions/{id}` DO echo it (they
+  /// serialize the raw server entity), and `SessionRepository
+  /// ._syncSessionsFromServer` reads it - ONLY to recognize a server Session
+  /// that matches THIS row's own pending cancellation, never to assign or
+  /// overwrite this field itself. Never rotated once non-null. Retained
+  /// after a successful sync.
   ///
   /// Rollback caveat: a row keyed by a build with this field, then acted on
   /// by a build DOWNGRADED to before this field existed, is invisible to

@@ -1559,14 +1559,14 @@ void main() {
     );
   });
 
-  // Delete-during-CREATE compensation is NOT part of this PR - the
-  // foreground CREATE POST and an independent SyncService pass share no
-  // coordination, so a delete of a still-server-id-less session while its
-  // CREATE is in flight can orphan a committed server row. That is a
-  // pre-existing gap (unchanged `_markForDeletion` hard-deletes the local
-  // row) and is deferred to the Session idempotency / operation-identity PR.
-  // The reproducing trace lives in
-  // `session_create_delete_cross_operation_race_test.dart`.
+  // Delete-during-CREATE compensation: `_markForDeletion` no longer
+  // hard-deletes a still-server-id-less row with a retained
+  // `clientOperationId` - it persists `pending_delete` and dispatches
+  // `DELETE /sessions/by-operation/{clientOperationId}`, so a delete
+  // racing an in-flight CREATE can no longer orphan a committed server row.
+  // The convergence proof lives in
+  // `session_create_delete_cross_operation_race_test.dart` and
+  // `session_durable_cancellation_test.dart`.
 }
 
 /// Minimal Session-model builder for [SessionRepository.createSession].

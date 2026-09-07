@@ -509,23 +509,38 @@ void main() {
       expect(stored.syncRetryCount, 0);
     });
 
-    test('6. operation_canceled (409) does not become success or delete local '
-        'state', () async {
-      final s = await insertPendingCreateSession();
-      final (ex, set) = await insertUnsyncedChildren(s.localId);
-      stubPostThrow(apiError(409, body: {'code': 'operation_canceled'}));
+    test(
+      '6. operation_canceled (409) never becomes success and never hard-'
+      'deletes local state - it converges the row to pending_delete with '
+      'the SAME retained key (see the durable-cancellation feature: a '
+      'server tombstone for this exact key can never be re-POSTed '
+      'successfully, so silent indefinite retry would just spin forever)',
+      () async {
+        final s = await insertPendingCreateSession();
+        final (ex, set) = await insertUnsyncedChildren(s.localId);
+        stubPostThrow(apiError(409, body: {'code': 'operation_canceled'}));
 
-      await syncService.sync();
+        await syncService.sync();
 
-      final stored = await reload(s.localId);
-      expect(stored, isNotNull);
-      expect(stored!.syncStatus, 'pending_create');
-      expect(stored.isSynced, isFalse);
-      expect(stored.serverId, isNull);
-      expect(stored.syncRetryCount, 0);
-      expect(await isar.localExercises.get(ex.localId), isNotNull);
-      expect(await isar.localExerciseSets.get(set.localId), isNotNull);
-    });
+        final stored = await reload(s.localId);
+        expect(stored, isNotNull);
+        expect(stored!.syncStatus, 'pending_delete');
+        expect(
+          stored.clientOperationId,
+          isNotNull,
+          reason:
+              'the durable key backfilled for this CREATE is retained, '
+              'never cleared or rotated',
+        );
+        expect(stored.isSynced, isFalse);
+        expect(stored.serverId, isNull);
+        // Children are untouched by this transition - only the ordinary
+        // session delete phase (cancel-by-operation, on a later pass) is
+        // what eventually removes the session and cascades to them.
+        expect(await isar.localExercises.get(ex.localId), isNotNull);
+        expect(await isar.localExerciseSets.get(set.localId), isNotNull);
+      },
+    );
 
     test('7. operation_incomplete (409) remains retryable - a later 201 '
         'converges', () async {
