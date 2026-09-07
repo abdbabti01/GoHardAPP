@@ -514,19 +514,24 @@ void main() {
         );
         expect(loggedOutCalls, 1);
         expect(authProvider.isAuthenticated, isFalse);
-        expect(authProvider.errorMessage, contains('Session expired'));
+        expect(
+          authProvider.errorMessage,
+          'Your session expired. Sign in again. Your offline changes are safe.',
+        );
       },
     );
 
-    test('manual logout and a concurrent forced 401 collapse into one cleanup '
-        'pass, one credential/Isar clear, and one navigation call', () async {
+    test('manual logout and a concurrent forced 401 share ONE termination '
+        'pass via the generation-owned arbiter - exactly one onSessionEnding '
+        'call, one credential clear, one Isar clear, and one navigation, '
+        'with the end state consistently logged-out. See '
+        'auth_provider_termination_race_test.dart for the full precedence '
+        'and ordering matrix.', () async {
       await authenticate();
 
       var sessionEndingCalls = 0;
-      final gate = Completer<void>();
       authProvider.onSessionEnding = () async {
         sessionEndingCalls++;
-        await gate.future;
       };
       var loggedOutCalls = 0;
       authProvider.onLoggedOut = () => loggedOutCalls++;
@@ -534,29 +539,36 @@ void main() {
       // Fire both triggers before either can complete.
       final manualLogout = authProvider.logout();
       apiService.onUnauthorized?.call();
-      await pumpEventQueue();
+      await manualLogout;
+      while (authProvider.isTerminating) {
+        await Future.delayed(Duration.zero);
+      }
 
       expect(
         sessionEndingCalls,
         1,
         reason:
-            'a concurrent 401 must await the SAME in-flight logout, not '
-            'start a second cleanup pass',
+            'the forced-401 trigger joins the already-running manual-logout '
+            'pass instead of starting its own - see '
+            'AuthProvider._beginOrJoinTermination',
       );
-      expect(
-        authProvider.isLoggingOut,
-        isTrue,
-        reason: 'still gated - neither trigger has completed yet',
-      );
-
-      gate.complete();
-      await manualLogout;
-      await pumpEventQueue();
-
-      expect(sessionEndingCalls, 1);
       expect(calls.where((c) => c == 'clearSessionCredentials').length, 1);
-      expect(calls.where((c) => c == 'clearAll').length, 1);
+      expect(
+        calls.where((c) => c == 'clearAll').length,
+        1,
+        reason:
+            'Isar clearing is exclusive to explicit logout - since logout '
+            'participates in this shared pass, it runs exactly once',
+      );
       expect(loggedOutCalls, 1);
+      expect(authProvider.isAuthenticated, isFalse);
+      expect(
+        authProvider.errorMessage,
+        '',
+        reason:
+            'explicit logout participated, so its (empty) message wins '
+            'precedence over the generic expiration message',
+      );
     });
 
     test(
@@ -779,16 +791,11 @@ void main() {
     });
 
     test('concurrent manual logout + forced 401, both with a throwing '
-        'onLoggedOut callback, still collapse into one cleanup pass and one '
-        'callback attempt, with no uncaught error', () async {
+        'onLoggedOut callback, produce no uncaught error - they share ONE '
+        'termination pass, so the callback is attempted exactly once, not '
+        'once per trigger', () async {
       await authenticate();
       var loggedOutCalls = 0;
-      var sessionEndingCalls = 0;
-      final gate = Completer<void>();
-      authProvider.onSessionEnding = () async {
-        sessionEndingCalls++;
-        await gate.future;
-      };
       authProvider.onLoggedOut = () {
         loggedOutCalls++;
         throw Exception('nav boom');
@@ -799,25 +806,21 @@ void main() {
         () async {
           final manualLogout = authProvider.logout();
           apiService.onUnauthorized?.call();
-          await pumpEventQueue();
-
-          expect(
-            sessionEndingCalls,
-            1,
-            reason: 'a concurrent 401 must await the same in-flight logout',
-          );
-
-          gate.complete();
           await manualLogout;
-          await pumpEventQueue();
+          while (authProvider.isTerminating) {
+            await Future.delayed(Duration.zero);
+          }
         },
         (error, stackTrace) {
           uncaughtError = error;
         },
       );
 
-      expect(uncaughtError, isNull);
-      expect(sessionEndingCalls, 1);
+      expect(
+        uncaughtError,
+        isNull,
+        reason: 'a throwing onLoggedOut must never escape the shared pass',
+      );
       expect(loggedOutCalls, 1);
       expect(authProvider.isAuthenticated, isFalse);
     });
@@ -1154,9 +1157,12 @@ void main() {
       expect(coordinationEpoch.capture(), isNotNull);
 
       // Simulate the API interceptor detecting a 401. _handleSessionExpired
-      // fires an unawaited logout pass, so poll until it settles.
+      // fires an unawaited forced-expiration pass, so poll until it
+      // settles. Epoch invalidation itself is synchronous (happens before
+      // this call even returns), but waiting for the full pass to settle
+      // keeps this test symmetric with its manual-logout sibling.
       apiService.onUnauthorized?.call();
-      while (forced.isLoggingOut) {
+      while (forced.isExpiringSession) {
         await Future.delayed(Duration.zero);
       }
 
@@ -1280,7 +1286,7 @@ void main() {
       await authenticate(provider);
 
       apiService.onUnauthorized?.call();
-      while (provider.isLoggingOut) {
+      while (provider.isExpiringSession) {
         await Future.delayed(Duration.zero);
       }
 
@@ -1306,8 +1312,10 @@ void main() {
       verify(mockCoordinator.cancelCurrentGeneration()).called(1);
     });
 
-    test('concurrent manual logout + forced 401 collapses into one '
-        'cancellation attempt', () async {
+    test('concurrent manual logout + forced 401 share ONE termination pass, '
+        'so cancellation is attempted exactly once - the forced-401 trigger '
+        'joins the already-running manual-logout pass rather than starting '
+        'its own', () async {
       final provider = AuthProvider(
         mockAuthRepository,
         mockAuthService,
@@ -1318,18 +1326,12 @@ void main() {
       );
       await authenticate(provider);
 
-      final gate = Completer<void>();
-      provider.onSessionEnding = () async {
-        await gate.future;
-      };
-
       final manualLogout = provider.logout();
       apiService.onUnauthorized?.call();
-      await pumpEventQueue();
-
-      gate.complete();
       await manualLogout;
-      await pumpEventQueue();
+      while (provider.isTerminating) {
+        await Future.delayed(Duration.zero);
+      }
 
       verify(mockCoordinator.cancelCurrentGeneration()).called(1);
     });
@@ -1359,7 +1361,7 @@ void main() {
 
       gate.complete();
       await pumpEventQueue();
-      while (provider.isLoggingOut) {
+      while (provider.isExpiringSession) {
         await Future.delayed(Duration.zero);
       }
 

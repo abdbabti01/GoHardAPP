@@ -77,6 +77,20 @@ class UserSessionEpoch {
   bool isCurrent(UserSessionToken token) =>
       token.generation == _generation && token.userId == _activeUserId;
 
+  /// The raw generation counter, exposed so a caller that just invalidated
+  /// (or activated) a session can snapshot "the generation AS OF this exact
+  /// moment" without needing an active user - unlike [capture], which
+  /// returns `null` once logged out, so it cannot itself be used to detect
+  /// "has anything happened to the epoch since I invalidated it". A caller
+  /// mid-way through a multi-step cleanup pass compares a later read of this
+  /// getter against its own earlier snapshot to tell whether a DIFFERENT
+  /// session has since begun (a newer [activate]) - see
+  /// `AuthProvider`'s forced-expiration pass for the concrete use: it must
+  /// never let a stale cleanup step run against, or clear credentials
+  /// belonging to, a session that has already superseded the one being
+  /// cleaned up.
+  int get generation => _generation;
+
   /// Called exactly once per successful login/signup/session-restoration.
   /// ALWAYS bumps the generation, even for the same [userId]
   /// re-authenticating - this is what guarantees a new session never
