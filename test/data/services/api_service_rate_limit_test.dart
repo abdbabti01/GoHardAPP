@@ -57,11 +57,13 @@ class _FakeHttpClientAdapter implements HttpClientAdapter {
 /// cancellation, or session-staleness, and never triggers
 /// `onUnauthorized`/logout.
 void main() {
+  late UserSessionEpoch epoch;
   late ApiService apiService;
   late _FakeHttpClientAdapter adapter;
 
   setUp(() {
-    apiService = ApiService(AuthService(), UserSessionEpoch());
+    epoch = UserSessionEpoch();
+    apiService = ApiService(AuthService(), epoch);
     adapter = _FakeHttpClientAdapter();
     apiService.testHttpClientAdapter = adapter;
   });
@@ -200,6 +202,7 @@ void main() {
 
     test('8. 401 still classifies as unauthorized (ApiException), not '
         'rate-limited', () async {
+      epoch.activate(1); // Forced-expiration ownership needs a live session.
       adapter.statusCode = 401;
       adapter.body = '{"message":"Unauthorized"}';
       var unauthorizedCalls = 0;

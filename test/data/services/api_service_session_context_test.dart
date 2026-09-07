@@ -110,6 +110,12 @@ void main() {
 
     test('a real 401 still invokes onUnauthorized exactly as before '
         '(test 13)', () async {
+      // A realistic authenticated state: the epoch is active, not just the
+      // live-token mock - forced-expiration ownership (see
+      // ApiService.handleResponseError) requires a dispatch-time session,
+      // and an unbound call captures one fresh from the epoch on every
+      // dispatch (see ApiService._requestOptions).
+      epoch.activate(1);
       when(authService.getToken()).thenAnswer((_) async => 'live-token');
       adapter.statusCode = 401;
       adapter.body = '{"message":"Unauthorized"}';

@@ -12,6 +12,34 @@ import '../core/services/push_notification_service.dart';
 import '../core/services/session_request_coordinator.dart';
 import '../core/services/user_session_epoch.dart';
 
+/// Which kind of session-termination a [_TerminationPass] currently is -
+/// see [_TerminationPass] and `AuthProvider._runTerminationPass`.
+enum _TerminationKind { forcedExpiration, explicitLogout }
+
+/// One shared, mutable record of "ending the session that was active when
+/// this pass started" - see `AuthProvider._beginOrJoinTermination` and
+/// `AuthProvider._runTerminationPass`. [kind] may be upgraded from
+/// [_TerminationKind.forcedExpiration] to [_TerminationKind.explicitLogout]
+/// while the pass is in flight (never the reverse).
+class _TerminationPass {
+  _TerminationPass(this.kind);
+  _TerminationKind kind;
+
+  /// The [UserSessionEpoch.generation] value immediately AFTER this pass's
+  /// own `invalidate()` call - set synchronously, as the very first thing
+  /// `_runTerminationPass` does, before any `await`. A joining caller
+  /// matches against this (never against a generation it read itself
+  /// before deciding whether to join) precisely because `invalidate()`
+  /// changes what `UserSessionEpoch.generation` reads: comparing two
+  /// callers' own independently-read snapshots would spuriously fail to
+  /// match depending on exactly when each one happened to read it
+  /// relative to this pass's `invalidate()` call. Null only during the
+  /// infinitesimal window before that first line runs - which, since
+  /// Dart's single-threaded execution never yields before then, no other
+  /// caller can ever actually observe.
+  int? endedGeneration;
+}
+
 /// Provider for authentication state management
 /// Combines LoginViewModel and SignupViewModel from MAUI app
 class AuthProvider extends ChangeNotifier {
@@ -78,19 +106,6 @@ class AuthProvider extends ChangeNotifier {
   /// `NavigatorState` key, so this file never needs a `BuildContext`.
   void Function()? onLoggedOut;
 
-  // Guards logout()/_forceLogout() so concurrent or repeated calls from
-  // either trigger collapse into a single cleanup+navigation pass instead
-  // of running it twice (e.g. a 401 arriving while a manual logout is
-  // already in flight). Every caller after the first awaits this same
-  // Future rather than starting a second pass; it is cleared once the pass
-  // completes (success or failure) so a later authenticated session's own
-  // eventual logout starts a fresh one.
-  Future<void>? _logoutInFlight;
-
-  /// True while a logout pass (cleanup + credential/Isar clearing) is in
-  /// progress. Exposed for tests/diagnostics.
-  bool get isLoggingOut => _logoutInFlight != null;
-
   AuthProvider(
     this._authRepository,
     this._authService,
@@ -104,135 +119,279 @@ class AuthProvider extends ChangeNotifier {
     _checkAuthStatus();
   }
 
-  /// Handle session expired (401 from API)
-  /// Called when any API request returns 401 Unauthorized
-  void _handleSessionExpired() {
-    if (!_isAuthenticated) return; // Already logged out
+  /// The safe, generic message shown after a forced-expiration-only pass -
+  /// deliberately never varies with the server's response body, the
+  /// specific request that failed, or which of the app's endpoints
+  /// triggered it, and never implies any offline work was lost. Never
+  /// shown if explicit logout ever participates in the same termination
+  /// pass - see [_TerminationKind] precedence in [_runTerminationPass].
+  static const String _forcedExpirationMessage =
+      'Your session expired. Sign in again. Your offline changes are safe.';
 
-    debugPrint('⚠️ Session expired - logging out user');
-    // Trigger logout without showing loading state. _forceLogout()'s own
-    // security boundary (_performLogout) is already non-throwing by
-    // construction - every step inside it, including the navigation
-    // callback, is individually guarded - but this outer catch remains a
-    // deliberate last-resort backstop: nothing here is watching this
-    // unawaited Future, so if some future change ever let an exception
-    // past that inner boundary, it must still never surface as an
-    // unhandled asynchronous error.
+  /// Which kind of session-termination a [_TerminationPass] is - decides
+  /// which local-destructive side effects run (FCM unregister, Isar
+  /// [LocalDatabaseService.clearAll]) and which final message/state the
+  /// terminal step selects. A pass may be UPGRADED from [forcedExpiration]
+  /// to [explicitLogout] while in flight if explicit logout joins it (see
+  /// [_beginOrJoinTermination]), but is NEVER downgraded: once any
+  /// participant for a generation is an explicit logout, that generation's
+  /// outcome is always a deliberate logout, never a "session expired"
+  /// message, and its required destructive cleanup always runs exactly
+  /// once.
+  void _handleSessionExpired() {
+    debugPrint('⚠️ Session expired - requesting non-destructive expiration');
+    // _runTerminationPass() is already non-throwing by construction - every
+    // step inside it is individually guarded - but this outer catch
+    // remains a deliberate last-resort backstop: nothing here is watching
+    // this unawaited Future (onUnauthorized is a fire-and-forget `void
+    // Function()` callback), so if some future change ever let an
+    // exception past that inner boundary, it must still never surface as
+    // an unhandled asynchronous error.
     unawaited(
-      _forceLogout().catchError((Object e, StackTrace stackTrace) {
-        debugPrint('⚠️ Forced logout encountered an unexpected error: $e');
+      _beginOrJoinTermination(_TerminationKind.forcedExpiration).catchError((
+        Object e,
+        StackTrace stackTrace,
+      ) {
+        debugPrint('⚠️ Forced expiration encountered an unexpected error: $e');
       }),
     );
   }
 
-  /// Force logout due to session expiry (silent, no FCM unregister attempt)
-  Future<void> _forceLogout() {
-    return _runLogout(
-      unregisterFcm: false,
-      resetSignupFields: false,
-      resultErrorMessage: 'Session expired - please login again',
-    );
-  }
+  /// One shared, single-flight record of "ending the session that was
+  /// active when this pass started" - explicit logout and forced
+  /// expiration both go through [_beginOrJoinTermination], which either
+  /// starts a NEW pass (recorded here) or, if one is already in flight for
+  /// the session currently being ended, joins the existing one instead of
+  /// starting a second. This is what makes concurrent
+  /// manual-logout-plus-forced-401, a burst of concurrent 401s, and
+  /// repeated logout() calls all collapse into exactly one shared
+  /// cleanup+notify+navigate for that session, regardless of which
+  /// trigger(s) participate or their relative timing.
+  _TerminationPass? _activeTermination;
+  Future<void>? _activeTerminationFuture;
 
-  /// Runs one logout pass, or - if one is already in flight from a
-  /// concurrent caller (either trigger) - awaits that same pass instead of
-  /// starting a second one. This is what makes concurrent
-  /// manual-logout-plus-401 and repeated logout calls collapse into exactly
-  /// one cleanup, one credential/Isar clear, and one navigation.
-  Future<void> _runLogout({
-    required bool unregisterFcm,
-    required bool resetSignupFields,
-    required String resultErrorMessage,
-  }) {
-    final inFlight = _logoutInFlight;
-    if (inFlight != null) return inFlight;
+  /// True while ANY termination pass (explicit logout, forced expiration,
+  /// or one upgraded from the latter to the former) is in progress.
+  /// Exposed for tests/diagnostics - the kind-agnostic signal to poll when
+  /// a race between the two triggers is possible; [isLoggingOut] and
+  /// [isExpiringSession] below report the pass's CURRENT kind instead, and
+  /// can flip mid-pass if a joining explicit logout upgrades it.
+  bool get isTerminating => _activeTermination != null;
 
-    final future = _performLogout(
-      unregisterFcm: unregisterFcm,
-      resetSignupFields: resetSignupFields,
-      resultErrorMessage: resultErrorMessage,
-    );
-    _logoutInFlight = future;
-    return future.whenComplete(() {
-      _logoutInFlight = null;
+  /// True while the in-flight termination pass's current kind is explicit
+  /// logout. Exposed for tests/diagnostics.
+  bool get isLoggingOut =>
+      _activeTermination?.kind == _TerminationKind.explicitLogout;
+
+  /// True while the in-flight termination pass's current kind is forced
+  /// expiration (i.e. no explicit logout has joined it - yet). Exposed for
+  /// tests/diagnostics.
+  bool get isExpiringSession =>
+      _activeTermination?.kind == _TerminationKind.forcedExpiration;
+
+  /// Starts a new termination pass, or - if one is already in flight for
+  /// the SAME session (see [_TerminationPass.endedGeneration]) - joins it
+  /// instead, upgrading its kind to [kind] if [kind] is
+  /// [_TerminationKind.explicitLogout] (never the reverse).
+  ///
+  /// A caller is "joining the same pass" exactly when [_activeTermination]
+  /// is non-null and its [_TerminationPass.endedGeneration] equals
+  /// [_sessionEpoch]'s CURRENT generation, read fresh right here. This is
+  /// deliberately NOT a comparison against a generation either side
+  /// captured before deciding to join: `invalidate()` (the very first
+  /// thing [_runTerminationPass] does, synchronously, before any `await`)
+  /// changes what that read returns, and Dart's single-threaded execution
+  /// guarantees no other code can run between a pass's own `invalidate()`
+  /// call and [_TerminationPass.endedGeneration] being recorded - so ANY
+  /// later caller, triggered at any point after that, reading the epoch's
+  /// generation fresh will see exactly [_TerminationPass.endedGeneration]
+  /// if and only if no NEWER session has begun since. If a newer session
+  /// HAS begun (a different user's login, or this same user
+  /// re-authenticating), the generation has moved past it, this join
+  /// condition correctly fails, and this call starts its own fresh,
+  /// independent pass instead - never joining or disturbing a pass that
+  /// belongs to a session that has already superseded the one it
+  /// nominally started for.
+  ///
+  /// Forced expiration additionally no-ops (a harmless, deliberate no-op -
+  /// covers a spurious/late signal, e.g. one arriving after a manual
+  /// logout already finished) if nothing is active to terminate at all:
+  /// no pass in flight AND not currently authenticated. Explicit logout has
+  /// no such guard - it always runs its full pass unconditionally, even if
+  /// called while already signed out, exactly like before this pass ever
+  /// existed: a safe, idempotent, always-available user-initiated
+  /// operation, not merely a reaction to being authenticated.
+  Future<void> _beginOrJoinTermination(_TerminationKind kind) {
+    final existing = _activeTermination;
+    final existingFuture = _activeTerminationFuture;
+
+    if (existing != null &&
+        existingFuture != null &&
+        existing.endedGeneration == _sessionEpoch.generation) {
+      if (kind == _TerminationKind.explicitLogout) {
+        existing.kind = _TerminationKind.explicitLogout;
+      }
+      return existingFuture;
+    }
+
+    if (kind == _TerminationKind.forcedExpiration && !_isAuthenticated) {
+      return Future<void>.value();
+    }
+
+    final pass = _TerminationPass(kind);
+    _activeTermination = pass;
+    final future = _runTerminationPass(pass).whenComplete(() {
+      if (identical(_activeTermination, pass)) {
+        _activeTermination = null;
+        _activeTerminationFuture = null;
+      }
     });
+    _activeTerminationFuture = future;
+    return future;
   }
 
-  /// Runs every security-critical logout step as an independent,
-  /// best-effort attempt: session cleanup, credential removal, background
-  /// auth-task cleanup, Isar clearing, and the navigation callback are each
-  /// wrapped in their own try/catch (a flat sequence, not nested), so a
-  /// failure in any one of them is logged and never prevents the next step
-  /// from running - including the navigation step itself, so a throwing
-  /// `onLoggedOut` cannot propagate out of this method. The in-memory state
-  /// reset is unconditional - outside any try/catch, since assigning local
-  /// fields cannot fail - so this method itself can never throw and
-  /// AuthProvider always reaches the logged-out state with navigation
-  /// attempted exactly once, regardless of which step (if any) failed.
-  Future<void> _performLogout({
-    required bool unregisterFcm,
-    required bool resetSignupFields,
-    required String resultErrorMessage,
-  }) async {
-    // 0. Invalidate the session identity FIRST, synchronously, before
-    // anything else in this logout pass runs - including the FCM
-    // unregister call below. AuthProvider owns this call exclusively (no
-    // other class ever calls activate()/invalidate()), and _runLogout's
-    // _logoutInFlight guard ensures _performLogout - and therefore this
-    // line - runs exactly once per logical logout pass, regardless of how
-    // many concurrent/repeated manual-logout or forced-401 triggers
-    // arrive. This does not depend on onSessionEnding being wired at all:
-    // a bare AuthProvider (e.g. in a test, or in any alternate app wiring
-    // that never constructs a SessionCleanupCoordinator) still invalidates
-    // correctly, because this call has nothing to do with the coordinator
-    // - it is unconditional and always runs. The coordinator itself must
-    // never independently call invalidate() - doing so would double the
-    // generation increment for a single logical logout.
+  /// FCM unregister - reachable ONLY for a pass whose kind is (at the time
+  /// this step runs) [_TerminationKind.explicitLogout]; a pure
+  /// forced-expiration pass never reaches this. Must run BEFORE
+  /// [_authService].clearSessionCredentials() below - never after - so
+  /// this authenticated call is never sent once the token has already been
+  /// removed from secure storage.
+  Future<void> _unregisterFcmForExplicitLogout() async {
+    try {
+      await PushNotificationService().unregisterToken();
+    } catch (e) {
+      debugPrint('⚠️ Failed to unregister FCM token: $e');
+    }
+  }
+
+  /// Clears all local (Isar) database data. The ONLY place in this entire
+  /// file that references [LocalDatabaseService.clearAll] - reachable
+  /// ONLY for a pass whose kind is (at the time this step runs)
+  /// [_TerminationKind.explicitLogout]; a pure forced-expiration pass
+  /// never reaches this. See
+  /// `test/providers/auth_provider_composition_proof_test.dart`, which
+  /// asserts this method name is the sole call site of `clearAll` in this
+  /// file.
+  Future<void> _clearDurableDataForExplicitLogout() async {
+    try {
+      await _localDb.clearAll();
+      debugPrint('✅ Local database cleared on logout');
+    } catch (e) {
+      debugPrint('⚠️ Failed to clear local database: $e');
+    }
+  }
+
+  /// Runs every security-critical termination step as an independent,
+  /// best-effort attempt (its own try/catch, a flat sequence, not nested),
+  /// so a failure in any one of them is logged and never prevents the next
+  /// eligible step from running. Shared by BOTH explicit logout and forced
+  /// expiration - [pass.kind] is re-read FRESH at each decision point
+  /// below (never captured once at the top), so a joining explicit logout
+  /// that upgrades [pass] partway through still reliably gets its FCM
+  /// unregister / Isar-clearing / final-message precedence, no matter
+  /// which step the pass had already reached at the moment it joined.
+  ///
+  /// Every step from [stillOwnsThisGeneration] onward is guarded by that
+  /// snapshot-generation recheck against [_sessionEpoch]: if a NEWER
+  /// session (a different user's login, or this same user
+  /// re-authenticating) has begun since this pass started invalidating the
+  /// OLD one, every remaining step - including credential clearing,
+  /// destructive cleanup, the in-memory reset, and navigation - is skipped
+  /// outright, so a slow/stale pass can never revive, disturb, or delete
+  /// state belonging to the session that superseded it.
+  Future<void> _runTerminationPass(_TerminationPass pass) async {
+    // 0. Invalidate the session identity FIRST, synchronously - before
+    // anything else in this pass runs, including recording
+    // [pass.endedGeneration] itself, which [_beginOrJoinTermination] relies
+    // on to decide whether a later caller is joining THIS pass. Every
+    // later step in this method can also use this same snapshot to detect
+    // whether a NEWER session has since begun.
     _sessionEpoch.invalidate();
+    pass.endedGeneration = _sessionEpoch.generation;
+    final endedGeneration = pass.endedGeneration!;
+    bool stillOwnsThisGeneration() =>
+        _sessionEpoch.generation == endedGeneration;
+
+    // 0a. Reset AuthProvider's own public-facing identity fields
+    // SYNCHRONOUSLY, immediately after invalidate() and before this pass's
+    // first `await` - Dart's single-threaded execution guarantees nothing
+    // else can run in between, so this is always safe: no newer session
+    // can possibly have begun yet, and [_beginOrJoinTermination]'s join
+    // condition depends on `_isAuthenticated` already being `false` by the
+    // time ANY subsequent trigger (even one arriving on the very next
+    // microtask) checks it. This closes a real gap the previous design
+    // had: a caller reading `isAuthenticated`/`currentUserId` mid-pass
+    // (after invalidate() but before the awaited cleanup steps finished)
+    // would see a STALE, already-invalidated session still reported as
+    // authenticated. `_errorMessage`/`notifyListeners()` are deliberately
+    // NOT touched here - the FINAL message depends on which kind this
+    // pass ultimately resolves to, which can still be upgraded by a
+    // joining explicit logout after this point; only the raw identity
+    // fields are safe to commit immediately.
+    _isAuthenticated = false;
+    _currentUserId = null;
+    _currentUserName = null;
+    _currentUserEmail = null;
+    _email = '';
+    _password = '';
 
     // 0b. Cancel every in-flight HTTP request still bound to the session
-    // just invalidated above - its own independent failure boundary, since
-    // SessionRequestCoordinator.cancelCurrentGeneration() is designed to be
-    // non-throwing but must never be trusted to stay that way from here.
-    // Deliberately not nested around the rest of this method: a failure
-    // here must never skip FCM unregister, SessionCleanupCoordinator,
-    // credential clearing, background-service cleanup, Isar clearing, the
-    // in-memory reset, or navigation below.
+    // just invalidated above. Safe regardless of ownership staleness -
+    // see `SessionRequestCoordinator.cancelCurrentGeneration`'s own doc
+    // comment: cancelling an old generation's token can never affect a
+    // newer one's.
     try {
       _sessionRequestCoordinator.cancelCurrentGeneration();
     } catch (e) {
       debugPrint('⚠️ Failed to cancel in-flight session requests: $e');
     }
 
-    if (unregisterFcm) {
-      // Unregister FCM token from server (non-blocking)
-      try {
-        await PushNotificationService().unregisterToken();
-      } catch (e) {
-        debugPrint('⚠️ Failed to unregister FCM token: $e');
-      }
-    }
-
     // 1. Stop active resources (GPS/timers/polling/watchers) and clear
-    // settled Provider state - individually best-effort per operation
-    // inside the coordinator already, guarded again here regardless.
+    // settled Provider state - in-memory only, never Isar (see every
+    // provider's own `clear()`, none of which perform a database write) -
+    // shared, exactly once regardless of which kind(s) participated.
     try {
       await onSessionEnding?.call();
     } catch (e) {
       debugPrint('⚠️ Session cleanup coordinator failed: $e');
     }
 
-    // 2. Remove every session/user-identity secure-storage key (token,
-    // user id/name/email, cached profile). clearSessionCredentials()
-    // itself never throws (each key is deleted independently inside it),
-    // but this step is guarded regardless, matching every other step here.
+    if (!stillOwnsThisGeneration()) return;
+
+    // 1b. FCM unregister - explicit-logout-only, checked fresh HERE rather
+    // than in this pass's synchronous prefix (before step 1's `await`
+    // above): every other step below this point sits after a real `await`
+    // and is genuinely reachable by a LATE-joining explicit logout that
+    // upgrades `pass.kind` while this pass is suspended inside
+    // onSessionEnding - a check placed any earlier (in the synchronous
+    // window between `_activeTermination = pass` in
+    // `_beginOrJoinTermination` and this pass's first `await`) can NEVER
+    // observe an upgrade, since nothing else can run in that window at
+    // all (Dart's single-threaded execution), so a pass that STARTED as
+    // forced-expiration-only would always find `pass.kind` still
+    // `forcedExpiration` there, permanently skipping FCM-unregister even
+    // after a later join upgrades it. Still runs before
+    // `clearSessionCredentials()` below - never after - so this
+    // authenticated call is never sent once the token has already been
+    // removed from secure storage.
+    if (pass.kind == _TerminationKind.explicitLogout) {
+      await _unregisterFcmForExplicitLogout();
+    }
+
+    if (!stillOwnsThisGeneration()) return;
+
+    // 2. Remove every session/user-identity secure-storage key - shared,
+    // exactly once.
     try {
       await _authService.clearSessionCredentials();
     } catch (e) {
       debugPrint('⚠️ Failed to clear session credentials: $e');
     }
 
-    // 3. Clear background service token and cancel scheduled tasks.
+    if (!stillOwnsThisGeneration()) return;
+
+    // 3. Clear background service token and cancel scheduled tasks -
+    // shared, exactly once. No Isar, no network call.
     try {
       await BackgroundService.clearAuthToken();
       await BackgroundService.cancelNutritionCheck();
@@ -240,40 +399,37 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('⚠️ Failed to clear background service: $e');
     }
 
-    // 4. Clear all local database data for privacy/security.
-    try {
-      await _localDb.clearAll();
-      debugPrint('✅ Local database cleared on logout');
-    } catch (e) {
-      debugPrint('⚠️ Failed to clear local database: $e');
+    if (!stillOwnsThisGeneration()) return;
+
+    // 4. Destructive local cleanup - explicit-logout-only, checked fresh
+    // one more time here (the latest point a joining logout can still
+    // guarantee this runs). Never reached by a pass that stays
+    // forced-expiration-only for its entire run.
+    if (pass.kind == _TerminationKind.explicitLogout) {
+      await _clearDurableDataForExplicitLogout();
     }
 
-    // 5. In-memory state reset - unconditional, regardless of any failure
-    // above.
-    _isAuthenticated = false;
-    _currentUserId = null;
-    _currentUserName = null;
-    _currentUserEmail = null;
-    _email = '';
-    _password = '';
-    if (resetSignupFields) {
+    if (!stillOwnsThisGeneration()) return;
+
+    // 5. Terminal step: remaining state reset, final message (precedence:
+    // explicit logout always wins - checked fresh one last time, so even a
+    // very-late-joining logout still overrides the generic expiration
+    // message), and the single notifyListeners() for this whole pass.
+    if (pass.kind == _TerminationKind.explicitLogout) {
       _signupName = '';
       _signupUsername = '';
       _signupEmail = '';
       _signupPassword = '';
       _signupConfirmPassword = '';
+      _errorMessage = '';
+    } else {
+      _errorMessage = _forcedExpirationMessage;
     }
-    _errorMessage = resultErrorMessage;
     notifyListeners();
 
-    // 6. Navigate to login - attempted exactly once per logout pass. Guarded
-    // like every step above: if the callback itself throws, this method
-    // must still complete normally (not propagate to the manual-logout
-    // caller, MeScreen) rather than relying solely on the outer defensive
-    // catch that only the forced/401 trigger's unawaited call site has.
-    // That outer catch remains as a last-resort backstop for anything
-    // unforeseen; this is the first line of defense for both triggers
-    // alike, so they share identical failure behavior.
+    // 6. Navigate to login - attempted exactly once per pass, guarded like
+    // every step above so a throwing `onLoggedOut` cannot propagate out of
+    // this method.
     try {
       onLoggedOut?.call();
     } catch (e) {
@@ -537,11 +693,7 @@ class AuthProvider extends ChangeNotifier {
 
   /// Logout user
   Future<void> logout() {
-    return _runLogout(
-      unregisterFcm: true,
-      resetSignupFields: true,
-      resultErrorMessage: '',
-    );
+    return _beginOrJoinTermination(_TerminationKind.explicitLogout);
   }
 
   /// Clear error message
