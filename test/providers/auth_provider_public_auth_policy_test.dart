@@ -56,7 +56,6 @@ class _ConfigurableAdapter implements HttpClientAdapter {
 /// session must never be forced to expire because of it.
 void main() {
   late MockAuthService mockAuthService;
-  late MockLocalDatabaseService mockLocalDb;
   late UserSessionEpoch sessionEpoch;
   late ApiService apiService;
   late _ConfigurableAdapter adapter;
@@ -66,7 +65,6 @@ void main() {
 
   setUp(() {
     mockAuthService = MockAuthService();
-    mockLocalDb = MockLocalDatabaseService();
     sessionEpoch = UserSessionEpoch();
     adapter = _ConfigurableAdapter();
     apiService = ApiService(mockAuthService, sessionEpoch)
@@ -94,13 +92,11 @@ void main() {
         email: anyNamed('email'),
       ),
     ).thenAnswer((_) async {});
-    when(mockLocalDb.clearAll()).thenAnswer((_) async {});
 
     authProvider = AuthProvider(
       authRepository,
       mockAuthService,
       apiService,
-      mockLocalDb,
       sessionEpoch,
       sessionRequestCoordinator,
     );
@@ -164,7 +160,6 @@ void main() {
       expect(sessionEndingCalls, 0);
       expect(loggedOutCalls, 0);
       verifyNever(mockAuthService.clearSessionCredentials());
-      verifyNever(mockLocalDb.clearAll());
     },
   );
 

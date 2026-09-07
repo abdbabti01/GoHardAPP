@@ -54,7 +54,6 @@ DioException _unauthorizedError(UserSessionToken? dispatchToken) {
 void main() {
   late MockAuthRepository mockAuthRepository;
   late MockAuthService mockAuthService;
-  late MockLocalDatabaseService mockLocalDb;
   late UserSessionEpoch sessionEpoch;
   late ApiService apiService;
   late SessionRequestCoordinator sessionRequestCoordinator;
@@ -63,7 +62,6 @@ void main() {
   setUp(() {
     mockAuthRepository = MockAuthRepository();
     mockAuthService = MockAuthService();
-    mockLocalDb = MockLocalDatabaseService();
     sessionEpoch = UserSessionEpoch();
     apiService = ApiService(mockAuthService, sessionEpoch);
     sessionRequestCoordinator = SessionRequestCoordinator(
@@ -76,13 +74,11 @@ void main() {
     when(mockAuthService.getUserName()).thenAnswer((_) async => null);
     when(mockAuthService.getUserEmail()).thenAnswer((_) async => null);
     when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {});
-    when(mockLocalDb.clearAll()).thenAnswer((_) async {});
 
     authProvider = AuthProvider(
       mockAuthRepository,
       mockAuthService,
       apiService,
-      mockLocalDb,
       sessionEpoch,
       sessionRequestCoordinator,
     );

@@ -4109,23 +4109,53 @@ class SyncService {
     });
   }
 
-  /// Get sync status summary
+  /// Get sync status summary for the CURRENTLY active session only.
+  ///
+  /// Session-owned like every other public entry point in this class:
+  /// captures the [UserSessionToken] once and scopes every count/query to
+  /// that user - never a bare cross-user count. Returns a "nobody signed
+  /// in" summary (all zero/null counts) rather than throwing if called
+  /// with no active session, and again if the session ends partway through
+  /// (a logout/re-login racing this call must never return a result mixing
+  /// counts from two different users). Now that logout no longer wipes
+  /// local data (see `AuthProvider._runTerminationPass`), a previous user's
+  /// retained rows can coexist in the same Isar file with the current
+  /// user's - this scoping is what keeps this summary reporting only the
+  /// current user's own pending/error state.
   Future<Map<String, dynamic>> getSyncStatus() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) {
+      return {
+        'isSyncing': false,
+        'pendingCount': 0,
+        'errorCount': 0,
+        'lastSyncTime': null,
+        'isOnline': _connectivity.isOnline,
+      };
+    }
+
     final db = _localDb.database;
 
     final pendingCount =
-        await db.localSessions.filter().isSyncedEqualTo(false).count();
+        await db.localSessions
+            .filter()
+            .userIdEqualTo(token.userId)
+            .isSyncedEqualTo(false)
+            .count();
 
-    // Count sessions with sync errors (retry count >= 3)
+    // Count sessions with sync errors (retry count >= 3), scoped to the
+    // current user only.
     final errorCount =
         await db.localSessions
             .filter()
+            .userIdEqualTo(token.userId)
             .syncRetryCountGreaterThan(_maxRetries - 1)
             .count();
 
-    final allSessions = await db.localSessions.where().findAll();
+    final ownSessions =
+        await db.localSessions.filter().userIdEqualTo(token.userId).findAll();
     final lastSyncAttempts =
-        allSessions
+        ownSessions
             .where((s) => s.lastSyncAttempt != null)
             .map((s) => s.lastSyncAttempt!)
             .toList();
@@ -4134,6 +4164,19 @@ class SyncService {
         lastSyncAttempts.isEmpty
             ? null
             : lastSyncAttempts.reduce((a, b) => a.isAfter(b) ? a : b);
+
+    if (!_sessionEpoch.isCurrent(token)) {
+      // The session that started this call has since ended (or a
+      // different/re-authenticated session has begun) - never return a
+      // status object computed against a user who is no longer current.
+      return {
+        'isSyncing': false,
+        'pendingCount': 0,
+        'errorCount': 0,
+        'lastSyncTime': null,
+        'isOnline': _connectivity.isOnline,
+      };
+    }
 
     return {
       'isSyncing': isSyncing,
@@ -4144,30 +4187,64 @@ class SyncService {
     };
   }
 
-  /// Retry failed syncs
+  /// Retry failed syncs for the CURRENTLY active session only.
+  ///
+  /// Session-owned like [sync]: captures the [UserSessionToken] once,
+  /// scopes the read to that user, and re-validates ownership immediately
+  /// before the `writeTxn` and again per-row as the first check inside it -
+  /// the same capture-then-recheck shape every repository in this app
+  /// already uses for a protected write. A logout/re-login racing this
+  /// call causes it to silently reset zero rows for the no-longer-current
+  /// user rather than resurrecting or mutating a retained account's
+  /// diagnostics. No-ops entirely (no read, no write, no triggered sync)
+  /// if nobody is signed in. The trailing [sync] call still goes through
+  /// that method's own cooldown/active-operation gate, so this is never a
+  /// second competing scheduler - see the class doc comment.
   Future<void> retryFailedSyncs() async {
+    final token = _sessionEpoch.capture();
+    if (token == null) {
+      debugPrint('📴 Not authenticated, skipping retryFailedSyncs');
+      return;
+    }
+
     final db = _localDb.database;
 
-    // Reset retry count for failed items (retry count >= 3)
+    // Reset retry count for failed items (retry count >= 3), scoped to the
+    // current user only - never another retained account's rows.
     final failedSessions =
         await db.localSessions
             .filter()
+            .userIdEqualTo(token.userId)
             .syncRetryCountGreaterThan(_maxRetries - 1)
             .findAll();
 
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    var resetCount = 0;
     await db.writeTxn(() async {
+      if (!_sessionEpoch.isCurrent(token)) return;
       for (final session in failedSessions) {
-        session.syncRetryCount = 0;
+        // Re-fetch and re-check ownership by primary key inside the
+        // txn - a concurrent edit/logout between the read above and this
+        // write must never resurrect or reset a foreign/stale row.
+        final reFetched = await db.localSessions.get(session.localId);
+        if (reFetched == null || reFetched.userId != token.userId) continue;
+        reFetched.syncRetryCount = 0;
         // Keep original syncStatus (pending_create/update/delete)
-        session.syncError = null;
-        await db.localSessions.put(session);
+        reFetched.syncError = null;
+        await db.localSessions.put(reFetched);
+        resetCount++;
       }
     });
 
-    debugPrint('🔄 Retrying ${failedSessions.length} failed syncs');
+    debugPrint('🔄 Retrying $resetCount failed syncs');
 
-    // Trigger immediate sync
-    if (failedSessions.isNotEmpty) {
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    // Trigger immediate sync - reuses [sync]'s own session-owned entry
+    // gate (rate-limit cooldown, active-operation coalescing), never a
+    // separate/parallel scheduler.
+    if (resetCount > 0) {
       await sync();
     }
   }

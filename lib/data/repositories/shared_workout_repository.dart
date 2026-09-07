@@ -64,11 +64,14 @@ import '../local/services/local_database_service.dart';
 /// `writeTxn`, again as the first statement inside `writeTxn`, a fresh
 /// re-read of the target row(s) by stable server ID inside that same
 /// transaction, and once more by the caller immediately after the
-/// transaction returns before reporting success. This guarantees a logout
-/// landing anywhere in that window - including while Isar's write lock is
-/// being awaited, and including after `LocalDatabaseService.clearAll()` has
-/// already run - never lets a write land against a foreign/replaced row and
-/// never resurrects a since-cleared user's data.
+/// transaction returns before reporting success. This guarantees a session
+/// ending anywhere in that window - including while Isar's write lock is
+/// being awaited - never lets a write land against a foreign/replaced row.
+/// Neither explicit logout nor forced expiration calls
+/// `LocalDatabaseService.clearAll()` (both are non-destructive; see
+/// `AuthProvider._runTerminationPass`), but this checkpoint shape remains
+/// correct defense-in-depth even if a future genuinely destructive
+/// operation ever did.
 ///
 /// [SessionStaleException] and [RequestCancelledException] are expected
 /// lifecycle outcomes of a session ending mid-flight, not failures: reads

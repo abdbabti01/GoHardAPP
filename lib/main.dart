@@ -494,11 +494,15 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
         ),
 
         // Providers (state managers - equivalent to ViewModels)
-        ChangeNotifierProxyProvider4<
+        // AuthProvider deliberately does not depend on LocalDatabaseService -
+        // neither explicit logout nor forced session expiration touches
+        // durable local (Isar) data (see
+        // `AuthProvider._runTerminationPass`'s class doc comment), so there
+        // is nothing here for it to read or watch.
+        ChangeNotifierProxyProvider3<
           AuthRepository,
           AuthService,
           ApiService,
-          LocalDatabaseService,
           AuthProvider
         >(
           create:
@@ -506,7 +510,6 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                 context.read<AuthRepository>(),
                 context.read<AuthService>(),
                 context.read<ApiService>(),
-                context.read<LocalDatabaseService>(),
                 // UserSessionEpoch and SessionRequestCoordinator are fixed
                 // .value()/ProxyProvider singletons, never reactively
                 // watched, so they are read directly here rather than added
@@ -515,13 +518,12 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                 context.read<SessionRequestCoordinator>(),
               ),
           update:
-              (context, authRepo, authService, apiService, localDb, previous) =>
+              (context, authRepo, authService, apiService, previous) =>
                   previous ??
                   AuthProvider(
                     authRepo,
                     authService,
                     apiService,
-                    localDb,
                     context.read<UserSessionEpoch>(),
                     context.read<SessionRequestCoordinator>(),
                   ),

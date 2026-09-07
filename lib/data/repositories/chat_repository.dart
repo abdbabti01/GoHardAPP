@@ -90,12 +90,14 @@ import '../local/models/local_chat_message.dart';
 /// caller already resolved) with a repeated ownership check immediately
 /// inside that same `writeTxn`. Every public method that calls one of these
 /// also rechecks the epoch once more immediately after it returns, before
-/// returning any caller-visible result. This guarantees a logout landing
+/// returning any caller-visible result. This guarantees a session ending
 /// anywhere in that window - including while Isar's write lock is being
-/// awaited, and including after `LocalDatabaseService.clearAll()` has
-/// already run on logout - never lets a write land against a
-/// foreign/replaced row, and never resurrects or overwrites a
-/// since-cleared user's data.
+/// awaited - never lets a write land against a foreign/replaced row.
+/// Neither explicit logout nor forced expiration calls
+/// `LocalDatabaseService.clearAll()` (both are non-destructive; see
+/// `AuthProvider._runTerminationPass`), but this checkpoint shape remains
+/// correct defense-in-depth even if a future genuinely destructive
+/// operation (e.g. account deletion) ever did.
 ///
 /// [SessionStaleException] and [RequestCancelledException] are expected
 /// lifecycle outcomes of a session ending mid-flight, not failures: for the
