@@ -11,6 +11,7 @@ import 'session_sync_diagnostics.dart';
 import '../models/program_workout.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/session_create_error.dart';
 import '../services/session_request_context.dart';
 import '../services/session_request_exceptions.dart';
 import '../services/session_update_sync_helper.dart';
@@ -475,11 +476,80 @@ class SessionRepository {
   /// [context]: the HTTP call carries its pinned JWT, and every cache write
   /// is gated behind the class doc comment's three-checkpoint shape plus a
   /// direct [LocalSession.userId] ownership check.
+  ///
+  /// ## Matching a not-yet-acknowledged CREATE by operation key
+  ///
+  /// The "skip - has pending local changes" branch below matches an
+  /// existing local row by `serverId`. That alone is not enough for a
+  /// `pending_delete` row still keyed by `clientOperationId` alone (its own
+  /// CREATE's response was lost - see [deleteSession]'s doc comment): if the
+  /// server-side CREATE actually committed, this refresh's response
+  /// contains the Session under a `serverId` this client never learned, so
+  /// a `serverId`-only match would miss it and insert a brand-new, visible,
+  /// resurrected row for a Session the user already asked to delete.
+  ///
+  /// `GET /api/v1/sessions` (and `GET /api/v1/sessions/{id}`) serialize the
+  /// raw server `Session` entity, which - unlike the sanitized
+  /// `SessionResponseDto` returned by POST/PUT - DOES carry back
+  /// `clientOperationId` (confirmed by reading `SessionsController`'s GET
+  /// actions and the `Session` entity in the paired GoHardAPI source: no DTO
+  /// wrapper, no `[JsonIgnore]`, a real mapped/persisted column). So before
+  /// falling back to the `serverId`-only match, an `apiSession` with no
+  /// matching local row is additionally checked against this user's
+  /// `pending_delete` rows by the EXACT retained `clientOperationId` - never
+  /// a title/date/`programWorkoutId` heuristic. A match means this
+  /// `apiSession` IS the target of a local cancellation still in flight:
+  /// skip inserting it (attaching the now-known `serverId` to the existing
+  /// hidden row instead, exactly like the CREATE-acknowledgment
+  /// `pending_delete` guard in `_syncCreateSessionToServer`), so the pending
+  /// cancellation converges on the SAME row instead of a resurrected
+  /// duplicate, and a later refresh's own cleanup pass below removes the
+  /// server-side original once cancellation completes.
+  ///
+  /// This does not suppress or delay any OTHER Session - only an exact
+  /// operation-key match short-circuits the insert; every unrelated
+  /// server Session (including ones this user created on another device)
+  /// is cached normally.
+  ///
+  /// ## Ordering: a response captured BEFORE cancellation commits,
+  /// reconciled AFTER the local tombstone is already gone
+  ///
+  /// This GET and an independent `DELETE .../by-operation/{key}` share no
+  /// ordering: the server can process the GET before the cancel commits
+  /// (so the response body still lists the Session), while the CLIENT
+  /// processes the cancel's OWN acknowledgment first (removing the local
+  /// `pending_delete` row entirely) and only reconciles this slower GET
+  /// response afterward. At that point there is no live local row left to
+  /// match by `clientOperationId` at all - the operation-key match above,
+  /// by itself, protects only WHILE the tombstone still exists.
+  ///
+  /// `pendingCancellationKeysBeforeDispatch` (below) closes this: a snapshot of
+  /// this user's `pending_delete` operation keys taken immediately before
+  /// the HTTP dispatch below - BEFORE the cancel could possibly have
+  /// completed and removed the row this call is about to race against.
+  /// Reconciliation additionally checks this snapshot, not just the live
+  /// row: an apiSession whose key was already pending cancellation as of
+  /// dispatch time is never inserted, whether or not its tombstone survived
+  /// until the response came back. Purely a local, in-memory, per-call
+  /// snapshot - no persisted state, no schema change, and it never
+  /// suppresses a session whose key was NOT already pending cancellation
+  /// at that moment.
   Future<void> _syncSessionsFromServer(
     Isar db,
     SessionRequestContext context,
   ) async {
     final token = context.epochToken;
+
+    // Snapshot BEFORE dispatch - see the doc comment above.
+    final pendingCancellationKeysBeforeDispatch = await db.localSessions
+        .filter()
+        .userIdEqualTo(token.userId)
+        .syncStatusEqualTo('pending_delete')
+        .findAll()
+        .then(
+          (rows) =>
+              rows.map((r) => r.clientOperationId).whereType<String>().toSet(),
+        );
 
     // Fetch from API
     final data = await _dispatchBackgroundHttp(
@@ -527,6 +597,47 @@ class SessionRepository {
                 .filter()
                 .serverIdEqualTo(apiSession.id)
                 .findFirst();
+
+        // No serverId match - before treating this as a brand-new Session,
+        // check whether it is the target of a LOCAL pending cancellation
+        // this client never learned the serverId for (see this method's
+        // doc comment). Matched by the EXACT retained operation key only.
+        if (existingLocal == null && apiSession.clientOperationId != null) {
+          final pendingCancellation =
+              await db.localSessions
+                  .filter()
+                  .userIdEqualTo(currentUserId)
+                  .syncStatusEqualTo('pending_delete')
+                  .clientOperationIdEqualTo(apiSession.clientOperationId)
+                  .findFirst();
+          if (pendingCancellation != null) {
+            if (pendingCancellation.serverId != apiSession.id) {
+              pendingCancellation.serverId = apiSession.id;
+              pendingCancellation.version = apiSession.version;
+              await db.localSessions.put(pendingCancellation);
+            }
+            debugPrint(
+              '  ⏭️ Skipping session ${apiSession.id} - matches a pending '
+              'cancellation by operation key',
+            );
+            continue;
+          }
+
+          // The tombstone is already gone: cancellation completed (this
+          // client's own acknowledgment already removed the row) WHILE this
+          // GET was still in flight, so this response is a stale snapshot
+          // captured before that. Never resurrect it - see this method's
+          // doc comment's "Ordering" section.
+          if (pendingCancellationKeysBeforeDispatch.contains(
+            apiSession.clientOperationId,
+          )) {
+            debugPrint(
+              '  ⏭️ Skipping session ${apiSession.id} - stale snapshot from '
+              'before an already-completed cancellation',
+            );
+            continue;
+          }
+        }
 
         // Never overwrite a row that no longer belongs to the current
         // user - a serverId collision (or a foreign row somehow sharing
@@ -785,7 +896,12 @@ class SessionRepository {
           }
         });
 
-        return apiSession;
+        // Strip the internal correlation id before handing this Session to
+        // a caller outside the repository layer - every other return path
+        // here (_getLocalSession, _localSessionToSessionWithExercises)
+        // builds via ModelMapper, which never carries it in the first
+        // place. See Session.clientOperationId's doc comment.
+        return apiSession.copyWith(clearClientOperationId: true);
       } on SessionStaleException {
         return await _getLocalSession(db, id, token);
       } on RequestCancelledException {
@@ -908,6 +1024,31 @@ class SessionRepository {
   /// Create a session from a program workout
   /// Links the session to the program and program workout
   /// Now works offline by parsing exercisesJson client-side
+  ///
+  /// ## Durable-cancellation boundary (accepted, pre-existing limitation)
+  ///
+  /// The ONLINE request to `POST /sessions/from-program-workout` is
+  /// UNKEYED - `CreateSessionFromProgramWorkoutDto` has no
+  /// `clientOperationId` field, unlike the generic `POST /api/v1/sessions`
+  /// this class's [createSession] uses. If that request actually commits
+  /// server-side but its response is lost (the `catch` below only sees a
+  /// network/transport failure), this method falls through to the OFFLINE
+  /// branch and creates a brand-new local row with NEITHER a `serverId` nor
+  /// a `clientOperationId` - there is no key to backfill onto it, because
+  /// the ORIGINAL request that may have committed never carried one. A
+  /// generic sync pass will later backfill this NEW row its OWN key (see
+  /// [LocalSession.clientOperationId]'s doc comment) and dispatch a SEPARATE
+  /// generic keyed CREATE for it - which cannot retroactively identify or
+  /// cancel whatever the original unkeyed request may have already created.
+  /// Deleting this offline-fallback row BEFORE that backfill ever runs is
+  /// still safe (see `_markForDeletion`'s doc comment: neither identity
+  /// existed yet, so there is nothing a server could be holding under a key
+  /// that was never generated for THIS row) - but it does nothing for a
+  /// still-possible orphaned Session from the original unkeyed request. This
+  /// is a genuinely unresolved gap in this specific entry point, not
+  /// something durable cancellation claims to close; fixing it would require
+  /// adding `clientOperationId` to `CreateSessionFromProgramWorkoutDto` and
+  /// its server-side handling - an API-first change, out of scope here.
   Future<Session> createSessionFromProgramWorkout(
     int programWorkoutId,
     ProgramWorkout programWorkout,
@@ -1065,7 +1206,11 @@ class SessionRepository {
         });
 
         debugPrint('✅ Created session from program workout: ${apiSession.id}');
-        return apiSession;
+        // Same rationale as getSession's online-success return: strip the
+        // internal correlation id before handing this Session outside the
+        // repository layer (harmless here since this endpoint never sets
+        // it, but keeps both raw-entity return paths consistent).
+        return apiSession.copyWith(clearClientOperationId: true);
       } on SessionStaleException {
         throw Exception(_unauthenticated);
       } on RequestCancelledException {
@@ -1250,15 +1395,18 @@ class SessionRepository {
   /// rebuilt from the stale create response, never marked synced, never
   /// re-created.
   ///
-  /// A delete racing this POST is NOT compensated here: `_markForDeletion`
-  /// hard-deletes a still-server-id-less row, so the re-fetch below returns
-  /// null and a committed server row is orphaned. A durable
-  /// [clientOperationId] prevents a RETRY of this exact POST from ever
-  /// creating a SECOND server row, but it does not by itself recover this
-  /// orphan case - that still needs a delete/tombstone reconciliation and is
-  /// deferred to a following PR (see
-  /// `test/data/repositories/session_create_delete_cross_operation_race_test.dart`,
-  /// which remains an accurate, unresolved characterization of this gap).
+  /// A delete racing this POST (foreground [deleteSession] or the
+  /// background `SyncService`'s delete phase) is preserved, not lost:
+  /// `_markForDeletion` now keeps a still-server-id-less row as
+  /// `pending_delete` (see its doc comment) instead of hard-deleting it, so
+  /// the re-fetch below finds it with `syncStatus == 'pending_delete'` and
+  /// this acknowledgment attaches the server identity/version WITHOUT
+  /// touching `syncStatus` - deletion intent always wins over a late CREATE
+  /// acknowledgment, and the row is never resurrected to visible or
+  /// `pending_update`. See [deleteSession]'s doc comment for the
+  /// cancellation-by-operation-key dispatch this durably represents, and
+  /// `test/data/repositories/session_create_delete_cross_operation_race_test.dart`
+  /// for the deterministic proof of this exact convergence.
   ///
   /// [clientOperationId] is the durable operation key already persisted on
   /// the row this POST serializes (see [createSession]) - merged into the
@@ -1273,16 +1421,42 @@ class SessionRepository {
   ) async {
     final token = context.epochToken;
 
-    final data = await _dispatchBackgroundHttp(
-      () => _apiService.post<Map<String, dynamic>>(
-        ApiConfig.sessions,
-        data: {
-          ...session.toJson(),
-          if (clientOperationId != null) 'clientOperationId': clientOperationId,
-        },
-        sessionContext: context,
-      ),
-    );
+    Map<String, dynamic> data;
+    try {
+      data = await _dispatchBackgroundHttp(
+        () => _apiService.post<Map<String, dynamic>>(
+          ApiConfig.sessions,
+          data: {
+            ...session.toJson(),
+            if (clientOperationId != null)
+              'clientOperationId': clientOperationId,
+          },
+          sessionContext: context,
+        ),
+      );
+    } catch (e) {
+      // A `409 operation_canceled` means the server holds a permanent
+      // tombstone for this exact key - re-POSTing it can never succeed (see
+      // `SessionCreateError`'s class doc comment). Converge locally instead
+      // of leaving the row stuck retrying an operation the server will
+      // forever refuse: transition a STILL-`pending_create` row to
+      // `pending_delete`, preserving the SAME `clientOperationId` (never
+      // rotating it, never generating a new key), so it is removed through
+      // the ordinary cancel-by-operation-key delete phase on the next pass.
+      // A row already moved on (the user's own delete already flipped it,
+      // or it's gone) is left untouched.
+      if (clientOperationId != null &&
+          SessionCreateError.classify(e) ==
+              SessionCreateErrorKind.operationCanceled) {
+        await _convertCanceledCreateToPendingDelete(
+          db,
+          localId,
+          clientOperationId,
+          token,
+        );
+      }
+      rethrow;
+    }
     final apiSession = Session.fromJson(data);
 
     // Checkpoint: post-HTTP, before touching Isar at all.
@@ -1306,15 +1480,27 @@ class SessionRepository {
       final existing = await db.localSessions.get(localId);
       if (existing == null || existing.userId != token.userId) return;
 
+      if (existing.syncStatus == 'pending_delete') {
+        // Deletion/cancellation intent races (or already won) - a late
+        // CREATE acknowledgment must never resurrect this row to
+        // `pending_update` or visible/synced. Attach the identity/version
+        // the server just confirmed (so a later delete pass can use
+        // ordinary DELETE-by-serverId, and so a later server-list refresh's
+        // serverId match keeps skipping this row) but leave `syncStatus`/
+        // `isSynced` untouched - deletion intent always wins. See
+        // [deleteSession]'s doc comment.
+        existing.serverId = apiSession.id;
+        existing.version = apiSession.version;
+        existing.lastModifiedServer = DateTime.now();
+        await db.localSessions.put(existing);
+        return;
+      }
+
       if (existing.lastModifiedLocal != dispatchedAt) {
         // A local edit / completion raced the POST await. Attach the server
         // identity + authoritative version (so no later pass re-creates the
         // row), keep the newer local fields, and re-queue as pending_update.
-        // Retry/error bookkeeping is untouched. (A delete racing a
-        // still-server-id-less session hard-deletes the local row, so the
-        // re-fetch above returns null and this branch is not reached for that
-        // case - delete-during-CREATE compensation is deferred to the Session
-        // idempotency PR.)
+        // Retry/error bookkeeping is untouched.
         existing.serverId = apiSession.id;
         existing.version = apiSession.version;
         existing.lastModifiedServer = DateTime.now();
@@ -1331,6 +1517,43 @@ class SessionRepository {
         clientOperationId: existing.clientOperationId,
       );
       await db.localSessions.put(updated);
+    });
+  }
+
+  /// A CREATE dispatch that comes back `409 operation_canceled` means the
+  /// server holds a PERMANENT tombstone for [operationId] - re-POSTing it can
+  /// never succeed (see [SessionCreateError]'s class doc comment). Converts a
+  /// row that is STILL `pending_create` to `pending_delete`, PRESERVING the
+  /// same [operationId] (never rotating it, never generating a new key), so
+  /// it converges to local removal through the ordinary
+  /// cancel-by-operation-key delete path on the next sync pass instead of
+  /// retrying an operation the server will forever refuse.
+  ///
+  /// A row already moved on since this CREATE was dispatched - the user's
+  /// own delete already flipped it away from `pending_create`, its key was
+  /// somehow replaced, or it is gone/foreign - is left untouched: this never
+  /// overwrites a newer local intent.
+  Future<void> _convertCanceledCreateToPendingDelete(
+    Isar db,
+    int localId,
+    String operationId,
+    UserSessionToken token,
+  ) async {
+    if (!_sessionEpoch.isCurrent(token)) return;
+    final target = await _ownedSessionByLocalId(db, localId, token);
+    if (target == null) return;
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    await db.writeTxn(() async {
+      if (!_sessionEpoch.isCurrent(token)) return;
+      final reFetched = await db.localSessions.get(localId);
+      if (reFetched == null || reFetched.userId != token.userId) return;
+      if (reFetched.syncStatus != 'pending_create') return;
+      if (reFetched.clientOperationId != operationId) return;
+      reFetched.syncStatus = 'pending_delete';
+      reFetched.isSynced = false;
+      reFetched.lastModifiedLocal = DateTime.now().toUtc();
+      await db.localSessions.put(reFetched);
     });
   }
 
@@ -1718,6 +1941,49 @@ class SessionRepository {
 
   /// Delete session
   /// Marks as pending_delete offline, deletes from server when online
+  ///
+  /// ## Dispatch rule (see [LocalSession.clientOperationId]'s doc comment)
+  ///
+  /// - A known [LocalSession.serverId] always uses ordinary
+  ///   `DELETE /api/v1/sessions/{id}` - unaffected by any of this, EVEN when
+  ///   a `clientOperationId` is also retained (it always is, once a keyed
+  ///   CREATE has synced - see [LocalSession.clientOperationId]'s doc
+  ///   comment). Confirmed safe by reading the paired GoHardAPI source
+  ///   (`SessionCreateService.RunKeyedAttemptAsync` / the DB-level
+  ///   `SessionCreateOperation.SessionId` FK, `ON DELETE SET NULL`): an
+  ///   ordinary DELETE never touches the operation row, but the FK cascade
+  ///   still blanks its `SessionId` while `CompletedAt` stays set - the
+  ///   EXACT terminal state a later CREATE retry with that same key reads as
+  ///   "Gone" (`410 operation_target_deleted`), never as "eligible to
+  ///   recreate". This is exactly the deployed contract's OWN existing test
+  ///   (`SessionCreateIdempotencyPostgresTests
+  ///   .CompletedOperationWhoseSessionWasDeleted_Returns410_AndNeverRecreates`,
+  ///   which deletes the Session with a raw SQL DELETE - the same operation
+  ///   an ordinary `DELETE /sessions/{id}` performs - then replays the key
+  ///   and asserts 410, never a second Session). Routing a known-`serverId`
+  ///   delete through the operation-key endpoint instead would be no safer,
+  ///   so this is left as ordinary DELETE rather than changed for style.
+  /// - No `serverId` but a retained `clientOperationId` means the row's
+  ///   generic CREATE may have reached the server before its response was
+  ///   lost (or may still be in flight) - a missing `serverId` does NOT
+  ///   prove CREATE never happened. This dispatches
+  ///   `DELETE /api/v1/sessions/by-operation/{clientOperationId}` instead,
+  ///   which is safe to call before, during, or after the server commits the
+  ///   CREATE, and retains a server tombstone that blocks any later replay of
+  ///   that exact key.
+  /// - Neither identity (no `serverId`, no `clientOperationId`) means this
+  ///   row was never dispatched to the generic keyed CREATE endpoint (e.g.
+  ///   the `from-program-workout` offline fallback - see
+  ///   [createSessionFromProgramWorkout]) - there is nothing a server could
+  ///   be holding under a key that was never generated, so it is safe to
+  ///   remove the local row immediately, exactly as before this feature.
+  ///
+  /// The returned `bool` is not a uniform "HTTP call succeeded" signal
+  /// across branches: the legacy `serverId` branch returns `false` for a
+  /// non-2xx-but-non-throwing result, while the operation-key branch always
+  /// returns `true` once cancellation intent is durably persisted -
+  /// regardless of whether the cancel call itself has succeeded yet -
+  /// since that intent will converge on a later pass either way.
   Future<bool> deleteSession(int id) async {
     final context = await _sessionCoordinator.captureContext();
     if (context == null) {
@@ -1739,10 +2005,13 @@ class SessionRepository {
       );
     }
 
-    if (_connectivity.isOnline && localSession.serverId != null) {
+    final serverId = localSession.serverId;
+    final operationId = localSession.clientOperationId;
+
+    if (_connectivity.isOnline && serverId != null) {
       try {
         final success = await _apiService.delete(
-          ApiConfig.sessionById(localSession.serverId!),
+          ApiConfig.sessionById(serverId),
           sessionContext: context,
         );
 
@@ -1751,7 +2020,7 @@ class SessionRepository {
             throw Exception(_unauthenticated);
           }
           await _deleteSessionAndRelatedData(db, localSession, token);
-          debugPrint('✅ Deleted session from server: ${localSession.serverId}');
+          debugPrint('✅ Deleted session from server: $serverId');
           return true;
         }
         return false;
@@ -1766,6 +2035,44 @@ class SessionRepository {
         await _markForDeletion(db, localSession, token);
         return true;
       }
+    } else if (serverId == null && operationId != null) {
+      // Persist cancellation intent atomically BEFORE any HTTP attempt (and
+      // before this row disappears from the visible list) - never rely
+      // solely on an in-memory callback or an immediate HTTP attempt alone.
+      // A crash/restart landing anywhere after this point still finds the
+      // row durably `pending_delete` with the SAME retained operation key,
+      // never silently reverted back to visible. See [_markForDeletion]'s
+      // doc comment.
+      await _markForDeletion(db, localSession, token);
+      if (!_sessionEpoch.isCurrent(token) || !_connectivity.isOnline) {
+        // Intent is already durable either way - a later sync pass (or a
+        // resumed session) dispatches the cancellation.
+        return true;
+      }
+
+      try {
+        final success = await _apiService.delete(
+          ApiConfig.sessionCancelByOperation(operationId),
+          sessionContext: context,
+        );
+
+        if (success && _sessionEpoch.isCurrent(token)) {
+          await _deleteSessionAndRelatedData(
+            db,
+            localSession,
+            token,
+            requireOperationId: operationId,
+          );
+          debugPrint('✅ Canceled session create on server (op $operationId)');
+        }
+      } on SessionStaleException {
+        // Intent already durable - retried by a later pass.
+      } on RequestCancelledException {
+        // Intent already durable - retried by a later pass.
+      } catch (e) {
+        debugPrint('⚠️ Cancel API failed, will retry later: $e');
+      }
+      return true;
     } else {
       debugPrint('📴 Offline - marking session for deletion');
       await _markForDeletion(db, localSession, token);
@@ -1773,27 +2080,97 @@ class SessionRepository {
     }
   }
 
-  /// Mark session for deletion (to be synced later)
+  /// Deletes [localId]'s exercises, their sets, and the session row itself.
+  /// Pure transaction-internal helper: assumes the caller has ALREADY
+  /// verified epoch/ownership/identity as earlier statements inside its OWN
+  /// transaction - this performs no such checks itself beyond the
+  /// grandparent-ownership recheck on each child (closing the window
+  /// between the exercise query and its own delete, per the class doc
+  /// comment's session graph ownership section). Never call this outside an
+  /// already-open `writeTxn`.
+  Future<void> _deleteSessionRowAndChildren(Isar db, int localId) async {
+    final exercises =
+        await db.localExercises
+            .filter()
+            .sessionLocalIdEqualTo(localId)
+            .findAll();
+
+    for (final exercise in exercises) {
+      await _runTestHook(beforeChildDeleteForTesting);
+      // Grandparent-ownership recheck: re-resolve the exercise by its
+      // stable local identity and confirm it still belongs to the session
+      // being deleted before touching its sets.
+      final currentExercise = await db.localExercises.get(exercise.localId);
+      if (currentExercise == null ||
+          currentExercise.sessionLocalId != localId) {
+        continue;
+      }
+      await db.localExerciseSets
+          .filter()
+          .exerciseLocalIdEqualTo(exercise.localId)
+          .deleteAll();
+      await db.localExercises.delete(exercise.localId);
+    }
+
+    await db.localSessions.delete(localId);
+  }
+
+  /// Mark session for deletion (to be synced later).
+  ///
+  /// A row with neither a `serverId` nor a retained `clientOperationId` was
+  /// never dispatched to the server under a durable key, so it is removed
+  /// immediately - unchanged from before this feature. Every other row
+  /// (a known `serverId`, OR no `serverId` but a retained `clientOperationId`
+  /// whose CREATE may have reached the server) is persisted as
+  /// `pending_delete` - never hard-deleted - so the deletion/cancellation
+  /// intent survives restart, logout, and retryable failures. See
+  /// [deleteSession]'s doc comment for the full dispatch rule this durably
+  /// represents.
+  ///
+  /// The "neither identity" decision is made from a row re-fetched by
+  /// stable local identity as the FIRST statement inside THIS transaction -
+  /// never from the possibly-stale [localSession] parameter. A row observed
+  /// keyless/serverId-less at an earlier read (e.g. `deleteSession`'s own
+  /// resolution, or a prior failed cancel attempt) can still race a
+  /// concurrent `SyncService._ensureCreateOperationKey` backfill (legacy
+  /// rows and the `from-program-workout` offline fallback start with a
+  /// `null` key - see [LocalSession.clientOperationId]'s doc comment) that
+  /// assigns a key and dispatches CREATE between that read and this write.
+  /// If the fresh, in-transaction read shows EITHER identity now present,
+  /// this always falls back to persisting `pending_delete` rather than
+  /// hard-deleting - a concurrent backfill may have just attached the exact
+  /// identity a later cancellation/delete would need, and silently
+  /// discarding it here would reopen the orphan-Session race this feature
+  /// exists to close.
   Future<void> _markForDeletion(
     Isar db,
     LocalSession localSession,
     UserSessionToken token,
   ) async {
-    if (localSession.serverId == null) {
-      await _deleteSessionAndRelatedData(db, localSession, token);
-    } else {
-      await _runTestHook(beforeWriteTxnForTesting);
+    await _runTestHook(beforeWriteTxnForTesting);
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    await db.writeTxn(() async {
+      await _runTestHook(insideWriteTxnForTesting);
       if (!_sessionEpoch.isCurrent(token)) return;
-      await db.writeTxn(() async {
-        await _runTestHook(insideWriteTxnForTesting);
-        if (!_sessionEpoch.isCurrent(token)) return;
-        localSession.isSynced = false;
-        localSession.syncStatus = 'pending_delete';
-        localSession.lastModifiedLocal = DateTime.now().toUtc();
-        await db.localSessions.put(localSession);
-      });
-      await _runTestHook(afterWriteTxnForTesting);
-    }
+
+      final current = await db.localSessions.get(localSession.localId);
+      if (current == null || current.userId != token.userId) return;
+
+      if (current.serverId == null && current.clientOperationId == null) {
+        // Proven fresh, inside this exact transaction: neither identity was
+        // ever generated for this row - nothing a server could be holding
+        // under a key. Safe to remove immediately.
+        await _deleteSessionRowAndChildren(db, current.localId);
+        return;
+      }
+
+      current.isSynced = false;
+      current.syncStatus = 'pending_delete';
+      current.lastModifiedLocal = DateTime.now().toUtc();
+      await db.localSessions.put(current);
+    });
+    await _runTestHook(afterWriteTxnForTesting);
   }
 
   /// Delete session and all related exercises and sets. Reverifies parent
@@ -1801,11 +2178,25 @@ class SessionRepository {
   /// doc comment's session graph ownership section - this must never delete
   /// a session/its children that have been reassigned or replaced since
   /// [localSession] was resolved.
+  ///
+  /// [requireOperationId], when non-null, additionally requires - as part of
+  /// the SAME re-read inside the transaction - that the row's retained
+  /// `clientOperationId` still equals it AND that deletion intent is still
+  /// current (`syncStatus == 'pending_delete'` - [deleteSession] always
+  /// persists this durably BEFORE ever dispatching the cancellation HTTP
+  /// call, so this holds by the time any acknowledgment can run). Passed
+  /// only when this deletion is the acknowledgment of an accepted
+  /// `DELETE /sessions/by-operation/{id}` cancellation, so a late
+  /// acknowledgment can never remove a row whose operation key was somehow
+  /// replaced, or one whose intent has since changed - never just an
+  /// assertion, but the actual gate on whether anything is deleted. `null`
+  /// (every pre-existing call site) preserves prior behavior exactly.
   Future<void> _deleteSessionAndRelatedData(
     Isar db,
     LocalSession localSession,
-    UserSessionToken token,
-  ) async {
+    UserSessionToken token, {
+    String? requireOperationId,
+  }) async {
     final localId = localSession.localId;
 
     await _runTestHook(beforeWriteTxnForTesting);
@@ -1817,32 +2208,13 @@ class SessionRepository {
 
       final current = await db.localSessions.get(localId);
       if (current == null || current.userId != token.userId) return;
-
-      final exercises =
-          await db.localExercises
-              .filter()
-              .sessionLocalIdEqualTo(localId)
-              .findAll();
-
-      for (final exercise in exercises) {
-        await _runTestHook(beforeChildDeleteForTesting);
-        // Grandparent-ownership recheck: re-resolve the exercise by its
-        // stable local identity and confirm it still belongs to the
-        // session being deleted before touching its sets - closes the
-        // window between the query above and this delete.
-        final currentExercise = await db.localExercises.get(exercise.localId);
-        if (currentExercise == null ||
-            currentExercise.sessionLocalId != localId) {
-          continue;
-        }
-        await db.localExerciseSets
-            .filter()
-            .exerciseLocalIdEqualTo(exercise.localId)
-            .deleteAll();
-        await db.localExercises.delete(exercise.localId);
+      if (requireOperationId != null &&
+          (current.clientOperationId != requireOperationId ||
+              current.syncStatus != 'pending_delete')) {
+        return;
       }
 
-      await db.localSessions.delete(localId);
+      await _deleteSessionRowAndChildren(db, localId);
     });
     await _runTestHook(afterWriteTxnForTesting);
   }
