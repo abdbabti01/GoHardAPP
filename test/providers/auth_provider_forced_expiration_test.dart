@@ -33,7 +33,6 @@ import 'auth_provider_test.mocks.dart';
 void main() {
   late MockAuthRepository mockAuthRepository;
   late MockAuthService mockAuthService;
-  late MockLocalDatabaseService mockLocalDb;
   late UserSessionEpoch sessionEpoch;
   late ApiService apiService;
   late SessionRequestCoordinator sessionRequestCoordinator;
@@ -42,7 +41,6 @@ void main() {
   setUp(() {
     mockAuthRepository = MockAuthRepository();
     mockAuthService = MockAuthService();
-    mockLocalDb = MockLocalDatabaseService();
     sessionEpoch = UserSessionEpoch();
     apiService = ApiService(mockAuthService, sessionEpoch);
     sessionRequestCoordinator = SessionRequestCoordinator(
@@ -55,13 +53,11 @@ void main() {
     when(mockAuthService.getUserName()).thenAnswer((_) async => null);
     when(mockAuthService.getUserEmail()).thenAnswer((_) async => null);
     when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {});
-    when(mockLocalDb.clearAll()).thenAnswer((_) async {});
 
     authProvider = AuthProvider(
       mockAuthRepository,
       mockAuthService,
       apiService,
-      mockLocalDb,
       sessionEpoch,
       sessionRequestCoordinator,
     );
@@ -113,7 +109,6 @@ void main() {
       expect(authProvider.errorMessage, isNot(contains('session expired')));
       // No forced-expiration pass was ever started.
       expect(authProvider.isExpiringSession, isFalse);
-      verifyNever(mockLocalDb.clearAll());
     });
 
     test('3. signup() receiving a 401/failure does NOT trigger forced '
@@ -133,7 +128,6 @@ void main() {
       expect(authProvider.isAuthenticated, isFalse);
       expect(authProvider.errorMessage, contains('Signup failed'));
       expect(authProvider.isExpiringSession, isFalse);
-      verifyNever(mockLocalDb.clearAll());
     });
 
     test('a spurious/late onUnauthorized callback while already signed out '
@@ -287,7 +281,6 @@ void main() {
       await waitForExpirationToSettle();
 
       expect(authProvider.isAuthenticated, isFalse);
-      verifyNever(mockLocalDb.clearAll());
     });
 
     test('17. a stale transition cannot clear newly written B credentials - '
@@ -353,8 +346,6 @@ void main() {
 
       apiService.onUnauthorized?.call();
       await waitForExpirationToSettle();
-
-      verifyNever(mockLocalDb.clearAll());
     });
 
     test('38. the expiration UI message is the exact generic, safe string and '

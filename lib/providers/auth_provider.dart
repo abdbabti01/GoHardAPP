@@ -6,7 +6,6 @@ import '../data/repositories/auth_repository.dart';
 import '../data/services/auth_service.dart';
 import '../data/services/api_service.dart';
 import '../data/services/rate_limited_exception.dart';
-import '../data/local/services/local_database_service.dart';
 import '../core/services/background_service.dart';
 import '../core/services/push_notification_service.dart';
 import '../core/services/session_request_coordinator.dart';
@@ -46,7 +45,6 @@ class AuthProvider extends ChangeNotifier {
   final AuthRepository _authRepository;
   final AuthService _authService;
   final ApiService _apiService;
-  final LocalDatabaseService _localDb;
 
   /// The app's single shared session-identity service. AuthProvider is the
   /// sole owner of both activate() (on every authentication-success path
@@ -90,8 +88,9 @@ class AuthProvider extends ChangeNotifier {
   String? _currentUserEmail;
 
   /// Awaited at the very start of every logout pass (manual or forced),
-  /// before credentials/Isar are touched - the single seam through which
-  /// active-resource teardown (GPS, timers, polling, Isar watchers) and
+  /// before credentials are touched - the single seam through which
+  /// active-resource teardown (GPS, timers, polling, Isar watcher/stream
+  /// SUBSCRIPTION cancellation - never a data write or delete) and
   /// settled-state clearing happens for every logout trigger. Set once from
   /// main.dart after the full Provider graph exists (mirroring the
   /// `_apiService.onUnauthorized` wiring below), so this class never needs
@@ -99,18 +98,17 @@ class AuthProvider extends ChangeNotifier {
   /// clears - avoiding a circular dependency in either direction.
   Future<void> Function()? onSessionEnding;
 
-  /// Invoked exactly once per completed logout pass, after credentials and
-  /// Isar are cleared and this provider's own state has settled - the
-  /// single centralized navigation trigger for every logout path (manual
-  /// button, 401/session-expiry). Set from app.dart via a global
-  /// `NavigatorState` key, so this file never needs a `BuildContext`.
+  /// Invoked exactly once per completed logout pass, after credentials are
+  /// cleared and this provider's own state has settled - the single
+  /// centralized navigation trigger for every logout path (manual button,
+  /// 401/session-expiry). Set from app.dart via a global `NavigatorState`
+  /// key, so this file never needs a `BuildContext`.
   void Function()? onLoggedOut;
 
   AuthProvider(
     this._authRepository,
     this._authService,
     this._apiService,
-    this._localDb,
     this._sessionEpoch,
     this._sessionRequestCoordinator,
   ) {
@@ -129,15 +127,15 @@ class AuthProvider extends ChangeNotifier {
       'Your session expired. Sign in again. Your offline changes are safe.';
 
   /// Which kind of session-termination a [_TerminationPass] is - decides
-  /// which local-destructive side effects run (FCM unregister, Isar
-  /// [LocalDatabaseService.clearAll]) and which final message/state the
-  /// terminal step selects. A pass may be UPGRADED from [forcedExpiration]
-  /// to [explicitLogout] while in flight if explicit logout joins it (see
-  /// [_beginOrJoinTermination]), but is NEVER downgraded: once any
-  /// participant for a generation is an explicit logout, that generation's
-  /// outcome is always a deliberate logout, never a "session expired"
-  /// message, and its required destructive cleanup always runs exactly
-  /// once.
+  /// whether FCM unregister runs and which final message/state the
+  /// terminal step selects. Neither kind touches durable local (Isar) data
+  /// - explicit logout and forced expiration are both non-destructive; see
+  /// [_runTerminationPass]'s class doc comment. A pass may be UPGRADED from
+  /// [forcedExpiration] to [explicitLogout] while in flight if explicit
+  /// logout joins it (see [_beginOrJoinTermination]), but is NEVER
+  /// downgraded: once any participant for a generation is an explicit
+  /// logout, that generation's outcome is always a deliberate logout,
+  /// never a "session expired" message.
   void _handleSessionExpired() {
     debugPrint('⚠️ Session expired - requesting non-destructive expiration');
     // _runTerminationPass() is already non-throwing by construction - every
@@ -227,6 +225,7 @@ class AuthProvider extends ChangeNotifier {
 
     if (existing != null &&
         existingFuture != null &&
+        existing.endedGeneration != null &&
         existing.endedGeneration == _sessionEpoch.generation) {
       if (kind == _TerminationKind.explicitLogout) {
         existing.kind = _TerminationKind.explicitLogout;
@@ -264,23 +263,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Clears all local (Isar) database data. The ONLY place in this entire
-  /// file that references [LocalDatabaseService.clearAll] - reachable
-  /// ONLY for a pass whose kind is (at the time this step runs)
-  /// [_TerminationKind.explicitLogout]; a pure forced-expiration pass
-  /// never reaches this. See
-  /// `test/providers/auth_provider_composition_proof_test.dart`, which
-  /// asserts this method name is the sole call site of `clearAll` in this
-  /// file.
-  Future<void> _clearDurableDataForExplicitLogout() async {
-    try {
-      await _localDb.clearAll();
-      debugPrint('✅ Local database cleared on logout');
-    } catch (e) {
-      debugPrint('⚠️ Failed to clear local database: $e');
-    }
-  }
-
   /// Runs every security-critical termination step as an independent,
   /// best-effort attempt (its own try/catch, a flat sequence, not nested),
   /// so a failure in any one of them is logged and never prevents the next
@@ -288,17 +270,32 @@ class AuthProvider extends ChangeNotifier {
   /// expiration - [pass.kind] is re-read FRESH at each decision point
   /// below (never captured once at the top), so a joining explicit logout
   /// that upgrades [pass] partway through still reliably gets its FCM
-  /// unregister / Isar-clearing / final-message precedence, no matter
-  /// which step the pass had already reached at the moment it joined.
+  /// unregister / final-message precedence, no matter which step the pass
+  /// had already reached at the moment it joined.
+  ///
+  /// NEITHER kind ever touches durable local (Isar) data. Explicit logout
+  /// and forced expiration are both non-destructive: every step here only
+  /// invalidates in-memory/session identity, cancels in-flight requests,
+  /// clears already-settled Provider state, removes secure-storage
+  /// credentials, and (for explicit logout) best-effort unregisters the
+  /// FCM push token - never `LocalDatabaseService.clearAll()`, never any
+  /// other Isar write or delete. A user's offline-created/pending/synced
+  /// records survive every termination path; only signing back in changes
+  /// what is currently visible. See
+  /// `test/providers/auth_provider_non_destructive_logout_test.dart` for
+  /// the behavioral proof and
+  /// `test/providers/auth_provider_composition_proof_test.dart` for the
+  /// source-level guarantee that this file contains no reference to
+  /// `clearAll` at all.
   ///
   /// Every step from [stillOwnsThisGeneration] onward is guarded by that
   /// snapshot-generation recheck against [_sessionEpoch]: if a NEWER
   /// session (a different user's login, or this same user
   /// re-authenticating) has begun since this pass started invalidating the
-  /// OLD one, every remaining step - including credential clearing,
-  /// destructive cleanup, the in-memory reset, and navigation - is skipped
-  /// outright, so a slow/stale pass can never revive, disturb, or delete
-  /// state belonging to the session that superseded it.
+  /// OLD one, every remaining step - including credential clearing, the
+  /// in-memory reset, and navigation - is skipped outright, so a
+  /// slow/stale pass can never revive, disturb, or delete state belonging
+  /// to the session that superseded it.
   Future<void> _runTerminationPass(_TerminationPass pass) async {
     // 0. Invalidate the session identity FIRST, synchronously - before
     // anything else in this pass runs, including recording
@@ -401,17 +398,7 @@ class AuthProvider extends ChangeNotifier {
 
     if (!stillOwnsThisGeneration()) return;
 
-    // 4. Destructive local cleanup - explicit-logout-only, checked fresh
-    // one more time here (the latest point a joining logout can still
-    // guarantee this runs). Never reached by a pass that stays
-    // forced-expiration-only for its entire run.
-    if (pass.kind == _TerminationKind.explicitLogout) {
-      await _clearDurableDataForExplicitLogout();
-    }
-
-    if (!stillOwnsThisGeneration()) return;
-
-    // 5. Terminal step: remaining state reset, final message (precedence:
+    // 4. Terminal step: remaining state reset, final message (precedence:
     // explicit logout always wins - checked fresh one last time, so even a
     // very-late-joining logout still overrides the generic expiration
     // message), and the single notifyListeners() for this whole pass.
@@ -427,7 +414,7 @@ class AuthProvider extends ChangeNotifier {
     }
     notifyListeners();
 
-    // 6. Navigate to login - attempted exactly once per pass, guarded like
+    // 5. Navigate to login - attempted exactly once per pass, guarded like
     // every step above so a throwing `onLoggedOut` cannot propagate out of
     // this method.
     try {
@@ -691,7 +678,13 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Logout user
+  /// Explicit, user-initiated logout - non-destructive: clears
+  /// authentication (credentials, session identity, in-memory Provider
+  /// state) but never durable local data. A later login as the SAME
+  /// account sees every offline-created/pending/synced record exactly as
+  /// it was left; a DIFFERENT account never sees it at all (every
+  /// repository read/watch stays scoped to the currently authenticated
+  /// user - see [_runTerminationPass]'s class doc comment).
   Future<void> logout() {
     return _beginOrJoinTermination(_TerminationKind.explicitLogout);
   }

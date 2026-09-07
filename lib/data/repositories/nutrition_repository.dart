@@ -42,15 +42,16 @@ import '../local/models/local_food_template.dart';
 /// 2. **Operation/session ownership** - the [_sessionEpoch] token captured
 ///    at method entry must still be [UserSessionEpoch.isCurrent] at every
 ///    checkpoint the method passes through. Row ownership alone is not
-///    enough: a method can resolve a perfectly-owned row, have its user
-///    log out (which invalidates the epoch and empties Isar via
-///    `LocalDatabaseService.clearAll`), and only then reach its
+///    enough: a method can resolve a perfectly-owned row, have its user's
+///    session end mid-flight (invalidating the epoch - neither explicit
+///    logout nor forced expiration empties Isar; both are non-destructive,
+///    see `AuthProvider._runTerminationPass`), and only then reach its
 ///    `writeTxn` - without the epoch recheck placed as the FIRST statement
-///    inside that `writeTxn` callback, that write would silently
-///    reinsert/resurrect the logged-out user's row into a database that
-///    was just cleared. See the `beforeWriteTxnForTesting` /
-///    `insideWriteTxnForTesting` / `afterWriteTxnForTesting` test seams
-///    below for how this exact race is exercised deterministically.
+///    inside that `writeTxn` callback, that write would silently commit
+///    against a row whose owning session has already ended. See the
+///    `beforeWriteTxnForTesting` / `insideWriteTxnForTesting` /
+///    `afterWriteTxnForTesting` test seams below for how this exact race
+///    is exercised deterministically.
 ///
 /// ## Detached/background session ownership
 ///
@@ -111,8 +112,8 @@ class NutritionRepository {
   // ============ Test-only session-race seams ============
   //
   // Three hooks, one per checkpoint, let tests deterministically land a
-  // session invalidation (and, where relevant, a clearAll() wipe) at each
-  // of the three points every protected mutation re-checks
+  // session invalidation at each of the three points every protected mutation
+  // re-checks
   // `_sessionEpoch.isCurrent(token)` around its writeTxn: immediately
   // before entering it, as the very first statement inside it (the
   // checkpoint that specifically closes the "waiting for Isar's write

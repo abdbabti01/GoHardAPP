@@ -36,22 +36,24 @@ String _readLib(String relativePath) {
 ///  3. `SessionCleanupCoordinator` (the class `onSessionEnding` is wired
 ///     to in production) never references Isar, `clearAll`, or
 ///     `DatabaseCleanup` anywhere in its own source.
-///  4. Inside `auth_provider.dart`, the string `clearAll` appears ONLY
-///     within the body of `_clearDurableDataForExplicitLogout` - the one
-///     method in the whole file gated behind `pass.kind ==
-///     _TerminationKind.explicitLogout` and reachable ONLY from an
-///     explicit-logout-kind pass, never from a pass that stays
-///     forced-expiration-only for its entire run (see
-///     `_runTerminationPass`).
+///  4. `auth_provider.dart` itself contains NO reference to `clearAll`,
+///     `LocalDatabaseService`, `Isar`, or `DatabaseCleanup` anywhere at
+///     all - explicit logout and forced expiration are BOTH
+///     non-destructive (see `_runTerminationPass`'s class doc comment),
+///     and neither operation, nor any future refactor that keeps working
+///     within this file's existing shape, has anything to reach a
+///     durable-data write THROUGH even if it wanted to: `AuthProvider`
+///     does not hold a `LocalDatabaseService` reference at all (see its
+///     constructor).
 ///
 /// This is the composition-level complement to the behavioral proof in
-/// `auth_provider_forced_expiration_durable_retention_test.dart` (real
-/// Isar, real `LocalDatabaseService.instance`) and
-/// `auth_provider_termination_race_test.dart` (mocked `LocalDatabaseService
-/// .clearAll` call-count assertions) - together they show BOTH that the
-/// real app wiring routes forced expiration through the real, Isar-free
-/// coordinator, AND that no code path inside `AuthProvider` itself could
-/// reach a durable-data write even if the wiring were somehow different.
+/// `auth_provider_non_destructive_logout_test.dart` (real Isar, a real
+/// `LocalDatabaseService` instance seeded and read directly, decoupled
+/// from `AuthProvider`) - together they show BOTH that the real app
+/// wiring routes every termination pass through the real, Isar-free
+/// coordinator, AND that `AuthProvider` itself has no remaining code path
+/// that could reach a durable-data write even if the wiring were somehow
+/// different.
 void main() {
   test('main.dart wires the real app to SessionCleanupInitializer, which '
       'assigns AuthProvider.onSessionEnding to coordinator.cleanUp', () {
@@ -111,71 +113,28 @@ void main() {
     }
   });
 
-  test('inside auth_provider.dart, "clearAll" appears ONLY within '
-      '_clearDurableDataForExplicitLogout - the sole method reachable ONLY '
-      'from an explicit-logout-kind pass', () {
+  test('auth_provider.dart contains NO reference to clearAll, '
+      'LocalDatabaseService, Isar, or DatabaseCleanup anywhere at all - '
+      'explicit logout and forced expiration are both structurally '
+      'incapable of a durable-data write, not merely guarded against one', () {
     final authProviderSource = _readLib('providers/auth_provider.dart');
     final codeOnly = _stripComments(authProviderSource);
 
-    final clearAllOccurrences = 'clearAll'.allMatches(codeOnly).length;
-    expect(
-      clearAllOccurrences,
-      greaterThan(0),
-      reason:
-          'sanity check: explicit logout must still actually clear Isar '
-          'somewhere in this file',
-    );
-
-    final methodMatch = RegExp(
-      r'Future<void> _clearDurableDataForExplicitLogout\(\) async \{([\s\S]*?)\n  \}',
-    ).firstMatch(codeOnly);
-    expect(
-      methodMatch,
-      isNotNull,
-      reason: '_clearDurableDataForExplicitLogout must exist as written',
-    );
-    final methodBody = methodMatch!.group(1)!;
-    final occurrencesInsideMethod = 'clearAll'.allMatches(methodBody).length;
-
-    expect(
-      occurrencesInsideMethod,
-      clearAllOccurrences,
-      reason:
-          'every single occurrence of "clearAll" in the whole file must '
-          'be inside _clearDurableDataForExplicitLogout - if a future '
-          'edit added ANY other call site (even one nominally guarded by '
-          'a pass.kind check inline), this composition proof fails, '
-          'forcing that new call site through the same, single, '
-          'greppable, reviewable choke point',
-    );
-
-    // And that method itself must only ever be invoked from a line that
-    // also mentions the explicit-logout kind, so the choke point itself
-    // cannot be reached from a pass that never became one.
-    final callSites = RegExp(
-      r'^.*_clearDurableDataForExplicitLogout\(\).*$',
-      multiLine: true,
-    ).allMatches(codeOnly).where((m) => !m.group(0)!.contains('Future<void>'));
-    for (final call in callSites) {
-      // The call site itself is a bare `await _clearDurableDataForExplicitLogout();`
-      // guarded by an `if (pass.kind == _TerminationKind.explicitLogout)`
-      // on the line(s) immediately above - verified structurally by
-      // locating the nearest preceding `if (pass.kind ==` within a small
-      // window, since Dart's own type system does not expose control
-      // flow to a plain source scan.
-      final callIndex = codeOnly.indexOf(call.group(0)!);
-      final precedingWindow = codeOnly.substring(
-        (callIndex - 200).clamp(0, codeOnly.length),
-        callIndex,
-      );
+    for (final forbidden in [
+      'clearAll',
+      'LocalDatabaseService',
+      'Isar',
+      'DatabaseCleanup',
+    ]) {
       expect(
-        precedingWindow.contains(
-          'pass.kind == _TerminationKind.explicitLogout',
-        ),
-        isTrue,
+        codeOnly.contains(forbidden),
+        isFalse,
         reason:
-            'the call to _clearDurableDataForExplicitLogout() must be '
-            'immediately guarded by an explicit-logout kind check',
+            'auth_provider.dart must never reference "$forbidden" - '
+            'AuthProvider does not hold a LocalDatabaseService dependency '
+            'at all (removed from its constructor), so neither logout() '
+            'nor the forced-expiration path has anything through which it '
+            'could reach a durable-data write, even accidentally',
       );
     }
   });

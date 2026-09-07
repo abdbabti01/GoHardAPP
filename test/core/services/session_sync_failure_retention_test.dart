@@ -783,4 +783,112 @@ void main() {
     await syncService.retryFailedSyncs(); // finds it, resets, one failing pass
     expect((await reload(s.localId))!.syncRetryCount, 1);
   });
+
+  // ======================================================================
+  // 21: retryFailedSyncs() / getSyncStatus() are session-owned - proven
+  //     with two users' rows RETAINED in the same Isar file (only
+  //     possible now that logout no longer wipes local data; see
+  //     AuthProvider._runTerminationPass). Neither method may read,
+  //     reset, or dispatch for a user other than the one currently
+  //     signed in.
+  // ======================================================================
+
+  test(
+    '21a. retryFailedSyncs() called as B only resets B\'s own saturated '
+    'pending_create row - A\'s retained saturated row is left completely '
+    'untouched (retry count, syncError, and syncStatus all unchanged)',
+    () async {
+      final aSession = await insertSession(
+        uid: userA,
+        syncStatus: 'pending_create',
+        syncRetryCount: maxRetries,
+      );
+      await isar.writeTxn(() async {
+        final row = (await reload(aSession.localId))!;
+        row.syncError = "A's original error - must never be touched by B";
+        await isar.localSessions.put(row);
+      });
+
+      final bSession = await insertSession(
+        uid: userB,
+        syncStatus: 'pending_create',
+        syncRetryCount: maxRetries,
+      );
+
+      await restartApp(asUser: userB);
+      stubPost(returns: serverSessionJson(id: 902, uid: userB));
+
+      await syncService.retryFailedSyncs();
+
+      final bAfter = await reload(bSession.localId);
+      expect(bAfter!.syncRetryCount, 0, reason: "B's own row must reset");
+
+      final aAfter = await reload(aSession.localId);
+      expect(
+        aAfter!.syncRetryCount,
+        maxRetries,
+        reason:
+            "A's retained row must never be reset by B's "
+            'retryFailedSyncs()',
+      );
+      expect(aAfter.syncError, isNotNull);
+      expect(aAfter.syncStatus, 'pending_create');
+    },
+  );
+
+  test('21b. retryFailedSyncs() called as B never dispatches a DELETE for '
+      "A's retained saturated pending_delete row, and never resets its "
+      'retry diagnostics', () async {
+    final aSession = await insertSession(
+      serverId: 700,
+      uid: userA,
+      syncStatus: 'pending_delete',
+      syncRetryCount: maxRetries,
+    );
+    await isar.writeTxn(() async {
+      final row = (await reload(aSession.localId))!;
+      row.syncError = "A's delete error - must never be touched by B";
+      await isar.localSessions.put(row);
+    });
+
+    // B has nothing of their own to retry.
+    await restartApp(asUser: userB);
+    stubDelete(returns: true);
+
+    await syncService.retryFailedSyncs();
+
+    verifyNever(
+      mockApiService.delete(any, sessionContext: anyNamed('sessionContext')),
+    );
+
+    final aAfter = await reload(aSession.localId);
+    expect(
+      aAfter!.syncRetryCount,
+      maxRetries,
+      reason: "A's retained pending_delete row must never be touched",
+    );
+    expect(aAfter.syncError, isNotNull);
+    expect(aAfter.syncStatus, 'pending_delete');
+  });
+
+  test("21c. getSyncStatus() called as B only counts B's own pending/error "
+      "rows - never A's retained rows", () async {
+    await insertSession(
+      uid: userA,
+      syncStatus: 'pending_create',
+      syncRetryCount: maxRetries,
+    );
+    await insertSession(uid: userA, syncStatus: 'pending_update');
+
+    await restartApp(asUser: userB);
+    await insertSession(uid: userB, syncStatus: 'pending_create');
+
+    final status = await syncService.getSyncStatus();
+    expect(status['pendingCount'], 1, reason: "only B's own unsynced row");
+    expect(
+      status['errorCount'],
+      0,
+      reason: "A's saturated row must not be counted for B",
+    );
+  });
 }

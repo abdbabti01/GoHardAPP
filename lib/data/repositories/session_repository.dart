@@ -73,10 +73,13 @@ import '../local/models/local_exercise_template.dart';
 /// [UserSessionEpoch.isCurrent] immediately after every awaited HTTP/local
 /// lookup, immediately before entering its `writeTxn`, and again as the
 /// FIRST statement inside that `writeTxn` - the three-checkpoint shape that
-/// guarantees a logout landing anywhere in that window (including while
-/// Isar's write lock is being awaited) never lets a write land after
-/// `LocalDatabaseService.clearAll()` has already run, and never lets a
-/// stale acknowledgment resurrect or overwrite a since-replaced row. See the
+/// guarantees a session ending anywhere in that window (including while
+/// Isar's write lock is being awaited) never lets a stale acknowledgment
+/// resurrect or overwrite a since-replaced row. Neither explicit logout nor
+/// forced expiration calls `LocalDatabaseService.clearAll()` (both are
+/// non-destructive; see `AuthProvider._runTerminationPass`), but this
+/// checkpoint shape remains correct defense-in-depth even if a future
+/// genuinely destructive operation ever did. See the
 /// `beforeWriteTxnForTesting` / `insideWriteTxnForTesting` /
 /// `afterWriteTxnForTesting` and background-flavored equivalents below for
 /// how this is exercised deterministically in tests.

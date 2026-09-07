@@ -104,7 +104,6 @@ void main() {
       mockAuthRepository,
       mockAuthService,
       apiService,
-      localDb,
       sessionEpoch,
       sessionRequestCoordinator,
     );

@@ -72,12 +72,15 @@ import '../local/models/local_run_session.dart';
 /// reference a caller already resolved) with a repeated ownership check
 /// immediately inside that same `writeTxn`, and once more by the caller
 /// immediately after the transaction returns, before scheduling any
-/// detached background work from the result. This guarantees a logout
-/// landing anywhere in that window - including while Isar's write lock is
-/// being awaited, and including a since-reused local ID after
-/// `LocalDatabaseService.clearAll()` has already run - never lets a write
-/// land against a foreign/replaced row, and never resurrects or overwrites
-/// a since-cleared user's data. This is intentionally a single centralized
+/// detached background work from the result. This guarantees a session
+/// ending anywhere in that window - including while Isar's write lock is
+/// being awaited - never lets a write land against a foreign/replaced row.
+/// Neither explicit logout nor forced expiration calls
+/// `LocalDatabaseService.clearAll()` (both are non-destructive; see
+/// `AuthProvider._runTerminationPass`), but this checkpoint shape remains
+/// correct defense-in-depth even if a future genuinely destructive
+/// operation (which could reuse a local ID from a freshly-emptied table)
+/// ever did. This is intentionally a single centralized
 /// pair of helpers rather than SessionRepository's hand-copied checkpoints
 /// per method - every local write in this file (foreground edits and
 /// background acknowledgments alike) goes through the exact same path, so

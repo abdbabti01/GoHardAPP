@@ -62,8 +62,12 @@ import '../local/services/local_database_service.dart';
 /// invisible to every authenticated read and are never treated as
 /// synchronized data. A legacy row whose `serverId` matches a template still
 /// on the server is adopted (restamped for the current user) by the next
-/// full owner-list refresh; a legacy `serverId == null` row is left inert and
-/// removed only by `LocalDatabaseService.clearAll()` on logout.
+/// full owner-list refresh; a legacy `serverId == null` row is left inert
+/// and, since neither explicit logout nor forced expiration calls
+/// `LocalDatabaseService.clearAll()` (both are non-destructive; see
+/// `AuthProvider._runTerminationPass`), persists on-device indefinitely -
+/// harmless storage bloat given it is already unreachable from every
+/// authenticated read path, not a data-isolation concern.
 ///
 /// ## Conflict model and write ordering
 ///

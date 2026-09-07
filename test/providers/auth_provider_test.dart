@@ -64,7 +64,6 @@ void main() {
   late MockAuthRepository mockAuthRepository;
   late MockAuthService mockAuthService;
   late MockApiService mockApiService;
-  late MockLocalDatabaseService mockLocalDb;
   // A real UserSessionEpoch instance (not a mock) - it's a plain,
   // dependency-free value service, so tests exercise its actual
   // activate()/invalidate()/capture()/isCurrent() behavior rather than
@@ -82,7 +81,6 @@ void main() {
     mockAuthRepository = MockAuthRepository();
     mockAuthService = MockAuthService();
     mockApiService = MockApiService();
-    mockLocalDb = MockLocalDatabaseService();
     sessionEpoch = UserSessionEpoch();
     mockSessionRequestCoordinator = MockSessionRequestCoordinator();
     // MockSessionRequestCoordinator throws on any unstubbed call
@@ -103,7 +101,6 @@ void main() {
       mockAuthRepository,
       mockAuthService,
       mockApiService,
-      mockLocalDb,
       sessionEpoch,
       mockSessionRequestCoordinator,
     );
@@ -454,7 +451,6 @@ void main() {
         mockAuthRepository,
         mockAuthService,
         apiService,
-        mockLocalDb,
         sessionEpoch,
         sessionRequestCoordinator,
       );
@@ -462,34 +458,28 @@ void main() {
       when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {
         calls.add('clearSessionCredentials');
       });
-      when(mockLocalDb.clearAll()).thenAnswer((_) async {
-        calls.add('clearAll');
-      });
     });
 
-    test(
-      'manual logout awaits onSessionEnding before clearing credentials',
-      () async {
-        authProvider.onSessionEnding = () async {
-          calls.add('onSessionEnding');
-        };
-        authProvider.onLoggedOut = () => calls.add('onLoggedOut');
+    test('manual logout awaits onSessionEnding before clearing credentials, '
+        'and never touches durable local data', () async {
+      authProvider.onSessionEnding = () async {
+        calls.add('onSessionEnding');
+      };
+      authProvider.onLoggedOut = () => calls.add('onLoggedOut');
 
-        await authProvider.logout();
+      await authProvider.logout();
 
-        expect(calls, [
-          'onSessionEnding',
-          'clearSessionCredentials',
-          'clearAll',
-          'onLoggedOut',
-        ]);
-        expect(
-          calls.indexOf('onSessionEnding') <
-              calls.indexOf('clearSessionCredentials'),
-          isTrue,
-        );
-      },
-    );
+      expect(calls, [
+        'onSessionEnding',
+        'clearSessionCredentials',
+        'onLoggedOut',
+      ]);
+      expect(
+        calls.indexOf('onSessionEnding') <
+            calls.indexOf('clearSessionCredentials'),
+        isTrue,
+      );
+    });
 
     test(
       'forced 401 logout invokes the same onSessionEnding/onLoggedOut hooks',
@@ -523,8 +513,8 @@ void main() {
 
     test('manual logout and a concurrent forced 401 share ONE termination '
         'pass via the generation-owned arbiter - exactly one onSessionEnding '
-        'call, one credential clear, one Isar clear, and one navigation, '
-        'with the end state consistently logged-out. See '
+        'call, one credential clear, and one navigation, with the end state '
+        'consistently logged-out and durable data untouched. See '
         'auth_provider_termination_race_test.dart for the full precedence '
         'and ordering matrix.', () async {
       await authenticate();
@@ -553,13 +543,6 @@ void main() {
             'AuthProvider._beginOrJoinTermination',
       );
       expect(calls.where((c) => c == 'clearSessionCredentials').length, 1);
-      expect(
-        calls.where((c) => c == 'clearAll').length,
-        1,
-        reason:
-            'Isar clearing is exclusive to explicit logout - since logout '
-            'participates in this shared pass, it runs exactly once',
-      );
       expect(loggedOutCalls, 1);
       expect(authProvider.isAuthenticated, isFalse);
       expect(
@@ -609,8 +592,8 @@ void main() {
       },
     );
 
-    test('a session-cleanup failure does not block credential/Isar clearing '
-        'or navigation', () async {
+    test('a session-cleanup failure does not block credential clearing or '
+        'navigation', () async {
       authProvider.onSessionEnding = () async {
         throw Exception('coordinator boom');
       };
@@ -620,36 +603,26 @@ void main() {
       await authProvider.logout();
 
       expect(calls, contains('clearSessionCredentials'));
-      expect(calls, contains('clearAll'));
       expect(authProvider.isAuthenticated, isFalse);
       expect(loggedOutCalls, 1);
     });
 
-    test(
-      'clearSessionCredentials throwing does not prevent Isar clearing, '
-      'state reset, or navigation, and logout() itself does not throw',
-      () async {
-        when(
-          mockAuthService.clearSessionCredentials(),
-        ).thenThrow(Exception('secure storage unavailable'));
-        var loggedOutCalls = 0;
-        authProvider.onLoggedOut = () => loggedOutCalls++;
+    test('clearSessionCredentials throwing does not prevent state reset or '
+        'navigation, and logout() itself does not throw', () async {
+      when(
+        mockAuthService.clearSessionCredentials(),
+      ).thenThrow(Exception('secure storage unavailable'));
+      var loggedOutCalls = 0;
+      authProvider.onLoggedOut = () => loggedOutCalls++;
 
-        await expectLater(authProvider.logout(), completes);
+      await expectLater(authProvider.logout(), completes);
 
-        expect(
-          calls,
-          contains('clearAll'),
-          reason: 'Isar clearing must still be attempted',
-        );
-        expect(authProvider.isAuthenticated, isFalse);
-        expect(loggedOutCalls, 1);
-      },
-    );
+      expect(authProvider.isAuthenticated, isFalse);
+      expect(loggedOutCalls, 1);
+    });
 
     test('a real BackgroundService failure (no platform bindings set up in '
-        'this test file) does not prevent Isar clearing, state reset, or '
-        'navigation', () async {
+        'this test file) does not prevent state reset or navigation', () async {
       // BackgroundService.clearAuthToken() genuinely throws here -
       // SharedPreferences.getInstance() has no platform binding in this
       // test file (no TestWidgetsFlutterBinding.ensureInitialized()).
@@ -660,26 +633,13 @@ void main() {
 
       await expectLater(authProvider.logout(), completes);
 
-      expect(calls, contains('clearAll'));
       expect(authProvider.isAuthenticated, isFalse);
       expect(loggedOutCalls, 1);
     });
 
-    test('Isar clearAll() throwing does not prevent state reset or '
-        'navigation, and logout() itself does not throw', () async {
-      when(mockLocalDb.clearAll()).thenThrow(Exception('isar closed'));
-      var loggedOutCalls = 0;
-      authProvider.onLoggedOut = () => loggedOutCalls++;
-
-      await expectLater(authProvider.logout(), completes);
-
-      expect(authProvider.isAuthenticated, isFalse);
-      expect(loggedOutCalls, 1);
-    });
-
-    test('multiple simultaneous failures (coordinator, credentials, Isar) '
-        'still result in every step being attempted exactly once, with '
-        'state reset and navigation completing', () async {
+    test('multiple simultaneous failures (coordinator, credentials) still '
+        'result in every step being attempted exactly once, with state '
+        'reset and navigation completing', () async {
       var sessionEndingCalls = 0;
       authProvider.onSessionEnding = () async {
         sessionEndingCalls++;
@@ -688,7 +648,6 @@ void main() {
       when(
         mockAuthService.clearSessionCredentials(),
       ).thenThrow(Exception('secure storage boom'));
-      when(mockLocalDb.clearAll()).thenThrow(Exception('isar boom'));
       var loggedOutCalls = 0;
       authProvider.onLoggedOut = () => loggedOutCalls++;
 
@@ -744,25 +703,21 @@ void main() {
     // no longer the only thing standing between a throwing callback and
     // an uncaught error.
     // -----------------------------------------------------------------
-    test(
-      'manual logout with a throwing onLoggedOut callback completes '
-      'without throwing, remains unauthenticated, still performs '
-      'credential/Isar cleanup, and attempts the callback exactly once',
-      () async {
-        var loggedOutCalls = 0;
-        authProvider.onLoggedOut = () {
-          loggedOutCalls++;
-          throw Exception('nav boom');
-        };
+    test('manual logout with a throwing onLoggedOut callback completes '
+        'without throwing, remains unauthenticated, still performs '
+        'credential cleanup, and attempts the callback exactly once', () async {
+      var loggedOutCalls = 0;
+      authProvider.onLoggedOut = () {
+        loggedOutCalls++;
+        throw Exception('nav boom');
+      };
 
-        await expectLater(authProvider.logout(), completes);
+      await expectLater(authProvider.logout(), completes);
 
-        expect(authProvider.isAuthenticated, isFalse);
-        expect(calls, contains('clearSessionCredentials'));
-        expect(calls, contains('clearAll'));
-        expect(loggedOutCalls, 1);
-      },
-    );
+      expect(authProvider.isAuthenticated, isFalse);
+      expect(calls, contains('clearSessionCredentials'));
+      expect(loggedOutCalls, 1);
+    });
 
     test('forced 401 logout with the same throwing onLoggedOut callback '
         'produces no uncaught asynchronous error, reaches the same final '
@@ -892,7 +847,6 @@ void main() {
         mockAuthRepository,
         mockAuthService,
         mockApiService,
-        mockLocalDb,
         freshEpoch,
         SessionRequestCoordinator(freshEpoch, mockAuthService),
       );
@@ -923,7 +877,6 @@ void main() {
           mockAuthRepository,
           mockAuthService,
           mockApiService,
-          mockLocalDb,
           freshEpoch,
           SessionRequestCoordinator(freshEpoch, mockAuthService),
         );
@@ -1128,7 +1081,6 @@ void main() {
         mockAuthRepository,
         mockAuthService,
         apiService,
-        mockLocalDb,
         coordinationEpoch,
         SessionRequestCoordinator(coordinationEpoch, mockAuthService),
       );
@@ -1230,9 +1182,6 @@ void main() {
       when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {
         calls.add('clearSessionCredentials');
       });
-      when(mockLocalDb.clearAll()).thenAnswer((_) async {
-        calls.add('clearAll');
-      });
     });
 
     test(
@@ -1246,7 +1195,6 @@ void main() {
           mockAuthRepository,
           mockAuthService,
           apiService,
-          mockLocalDb,
           sessionEpoch,
           mockCoordinator,
         );
@@ -1263,7 +1211,6 @@ void main() {
         mockAuthRepository,
         mockAuthService,
         apiService,
-        mockLocalDb,
         sessionEpoch,
         mockCoordinator,
       );
@@ -1279,7 +1226,6 @@ void main() {
         mockAuthRepository,
         mockAuthService,
         apiService,
-        mockLocalDb,
         sessionEpoch,
         mockCoordinator,
       );
@@ -1299,7 +1245,6 @@ void main() {
         mockAuthRepository,
         mockAuthService,
         apiService,
-        mockLocalDb,
         sessionEpoch,
         mockCoordinator,
       );
@@ -1320,7 +1265,6 @@ void main() {
         mockAuthRepository,
         mockAuthService,
         apiService,
-        mockLocalDb,
         sessionEpoch,
         mockCoordinator,
       );
@@ -1342,7 +1286,6 @@ void main() {
         mockAuthRepository,
         mockAuthService,
         apiService,
-        mockLocalDb,
         sessionEpoch,
         mockCoordinator,
       );
@@ -1374,7 +1317,6 @@ void main() {
         mockAuthRepository,
         mockAuthService,
         apiService,
-        mockLocalDb,
         sessionEpoch,
         mockCoordinator,
       );
@@ -1388,42 +1330,42 @@ void main() {
       verify(mockCoordinator.cancelCurrentGeneration()).called(1);
     });
 
-    test('cancellation throwing does not prevent SessionCleanupCoordinator '
-        'execution, credential clearing, Isar clearing, reaching the '
-        'unauthenticated state, navigation exactly once, or normal Future '
-        'completion', () async {
-      when(
-        mockCoordinator.cancelCurrentGeneration(),
-      ).thenThrow(StateError('cancellation machinery boom'));
-      final provider = AuthProvider(
-        mockAuthRepository,
-        mockAuthService,
-        apiService,
-        mockLocalDb,
-        sessionEpoch,
-        mockCoordinator,
-      );
-      await authenticate(provider);
+    test(
+      'cancellation throwing does not prevent SessionCleanupCoordinator '
+      'execution, credential clearing, reaching the unauthenticated '
+      'state, navigation exactly once, or normal Future completion',
+      () async {
+        when(
+          mockCoordinator.cancelCurrentGeneration(),
+        ).thenThrow(StateError('cancellation machinery boom'));
+        final provider = AuthProvider(
+          mockAuthRepository,
+          mockAuthService,
+          apiService,
+          sessionEpoch,
+          mockCoordinator,
+        );
+        await authenticate(provider);
 
-      var sessionEndingCalls = 0;
-      provider.onSessionEnding = () async {
-        sessionEndingCalls++;
-      };
-      var loggedOutCalls = 0;
-      provider.onLoggedOut = () => loggedOutCalls++;
+        var sessionEndingCalls = 0;
+        provider.onSessionEnding = () async {
+          sessionEndingCalls++;
+        };
+        var loggedOutCalls = 0;
+        provider.onLoggedOut = () => loggedOutCalls++;
 
-      await expectLater(provider.logout(), completes);
+        await expectLater(provider.logout(), completes);
 
-      expect(
-        sessionEndingCalls,
-        1,
-        reason: 'SessionCleanupCoordinator must still run',
-      );
-      expect(calls, contains('clearSessionCredentials'));
-      expect(calls, contains('clearAll'));
-      expect(provider.isAuthenticated, isFalse);
-      expect(loggedOutCalls, 1);
-    });
+        expect(
+          sessionEndingCalls,
+          1,
+          reason: 'SessionCleanupCoordinator must still run',
+        );
+        expect(calls, contains('clearSessionCredentials'));
+        expect(provider.isAuthenticated, isFalse);
+        expect(loggedOutCalls, 1);
+      },
+    );
 
     test('a real session-bound ApiService request held by a Completer-backed '
         'adapter is cancelled with RequestCancelledException when logout '
@@ -1435,7 +1377,6 @@ void main() {
         mockAuthRepository,
         mockAuthService,
         apiService,
-        mockLocalDb,
         sessionEpoch,
         realCoordinator,
       );

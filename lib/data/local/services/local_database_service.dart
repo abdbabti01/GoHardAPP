@@ -104,7 +104,13 @@ class LocalDatabaseService {
     }
   }
 
-  /// Clear all data from the database (useful for testing/logout)
+  /// Clear all data from the database. NOT called by explicit logout or
+  /// forced session expiration - both are non-destructive by design (see
+  /// `AuthProvider._runTerminationPass`'s class doc comment). Retained as
+  /// a general-purpose primitive for tests and for any genuinely
+  /// destructive operation added later (e.g. account deletion), which
+  /// must remain a separate, explicitly-named, deliberately-triggered
+  /// action - never something a normal sign-out silently does.
   Future<void> clearAll() async {
     if (_isar != null && _isar!.isOpen) {
       await _isar!.writeTxn(() async {
