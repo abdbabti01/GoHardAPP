@@ -9,7 +9,9 @@ import 'rate_limited_exception.dart';
 /// later durable-operation-key work a stable value to branch on instead of
 /// re-parsing response bodies.
 ///
-/// The deployed GoHardAPI contract for this endpoint is:
+/// The deployed GoHardAPI contract for this endpoint (and its
+/// `from-program-workout` sibling, which shares the SAME
+/// `(userId, clientOperationId)` idempotency contract) is:
 ///
 /// * `201` - legacy create accepted (`SessionResponseDto`)
 /// * `200` - keyed replay of an already-committed create (`SessionResponseDto`)
@@ -17,6 +19,14 @@ import 'rate_limited_exception.dart';
 /// * `409 { "code": "operation_canceled" }`
 /// * `409 { "code": "operation_incomplete" }`
 /// * `410 { "code": "operation_target_deleted" }`
+/// * `400 { "code": "program_workout_data_invalid" }` -
+///   `from-program-workout` ONLY: the source `ProgramWorkout.ExercisesJson`
+///   was unparseable. No tombstone - a later retry succeeds if the
+///   underlying data is fixed, but blindly retrying the SAME unparseable
+///   data will not, so this is classified [SessionCreateErrorKind
+///   .programWorkoutDataInvalid] and treated as a hard (non-soft-retryable)
+///   failure like [unknownStructured] - never a terminal-conversion target,
+///   never a reason to rotate the operation key.
 /// * `429` - throttling, from either the session-write limiter OR the
 ///   deployed API's GlobalLimiter (which can return 429 from ANY endpoint).
 ///   Arrives as a [RateLimitedException] (`ApiService` detects 429
@@ -33,18 +43,22 @@ import 'rate_limited_exception.dart';
 ///   this classifier knows nothing about the pass-level behavior.
 ///
 /// A recognised `code` is honoured ONLY on the exact HTTP status the contract
-/// pairs it with above. The same known code on any other status - or an
-/// unknown code - on 404/409/410 classifies as [SessionCreateErrorKind
-/// .unknownStructured] and keeps the established hard / fail-closed behavior.
-/// The generic create path (`SessionRepository`/`SyncService`) now sends a
-/// durable `clientOperationId` on every dispatch it can (see
+/// pairs it with above. On 404/409/410, the same known code on any OTHER of
+/// those three statuses - or an unknown code - classifies as
+/// [SessionCreateErrorKind.unknownStructured]. 400 is handled separately: only
+/// `program_workout_data_invalid` is recognized there; every other 400 (no
+/// code, an unknown code, or a code this classifier recognizes on a
+/// DIFFERENT status) classifies as [SessionCreateErrorKind.ordinary] -
+/// preserving exactly how an arbitrary 400 classified before
+/// `program_workout_data_invalid` existed. Both `ordinary` and
+/// `unknownStructured` keep the same established hard / fail-closed
+/// `isSoftRetryable` behavior regardless. Both keyed CREATE paths
+/// (`SessionRepository`/`SyncService`, for the
+/// generic endpoint AND `from-program-workout`) now send a durable
+/// `clientOperationId` on every dispatch they can (see
 /// `LocalSession.clientOperationId`), so the `404`/`409`/`410` operation-state
-/// responses ARE reachable in production - they are no longer a
-/// misconfigured-proxy-only edge case. The `from-program-workout` offline
-/// fallback's ORIGINAL request is still unkeyed (see the boundary note on
-/// `SyncService._syncCreateSession`), so these codes remain unreachable for
-/// that one specific path until its own lost-acknowledgment defect is fixed
-/// separately.
+/// responses ARE reachable in production for both - they are no longer a
+/// misconfigured-proxy-only edge case.
 enum SessionCreateErrorKind {
   /// HTTP 429. Throttling / backpressure. Always retryable; never terminal.
   throttled,
@@ -62,7 +76,11 @@ enum SessionCreateErrorKind {
   /// HTTP 410 `{ "code": "operation_target_deleted" }`.
   operationTargetDeleted,
 
-  /// A 404/409/410 whose `(status, code)` pair this client build does not
+  /// HTTP 400 `{ "code": "program_workout_data_invalid" }` -
+  /// `from-program-workout` ONLY. See the class doc comment.
+  programWorkoutDataInvalid,
+
+  /// A 400/404/409/410 whose `(status, code)` pair this client build does not
   /// recognise (unknown code, or a known code on the wrong status). Fails
   /// closed: the caller keeps its established hard-failure behavior.
   unknownStructured,
@@ -97,6 +115,10 @@ abstract final class SessionCreateError {
       status: 410,
       kind: SessionCreateErrorKind.operationTargetDeleted,
     ),
+    'program_workout_data_invalid': (
+      status: 400,
+      kind: SessionCreateErrorKind.programWorkoutDataInvalid,
+    ),
   };
 
   /// Classify a caught Session-CREATE failure. Lifecycle exceptions
@@ -116,6 +138,22 @@ abstract final class SessionCreateError {
     // with statusCode 429 (e.g. existing tests) - ApiService itself never
     // produces one anymore; see the class doc comment above.
     if (status == 429) return SessionCreateErrorKind.throttled;
+
+    if (status == 400) {
+      // `program_workout_data_invalid` is the ONLY recognized code on 400 -
+      // added for `from-program-workout`, which never previously reached
+      // this branch. Every OTHER 400 (unknown code, no code, or a code this
+      // classifier recognizes only on a DIFFERENT status, e.g. a stray
+      // `operation_canceled` on 400) keeps its pre-existing `ordinary`
+      // classification - never reclassified to `unknownStructured` - so the
+      // generic CREATE path's established behavior for an arbitrary 400 is
+      // unchanged by this addition.
+      final code = _codeOf(error.responseData);
+      if (code == 'program_workout_data_invalid') {
+        return SessionCreateErrorKind.programWorkoutDataInvalid;
+      }
+      return SessionCreateErrorKind.ordinary;
+    }
 
     if (status == 404 || status == 409 || status == 410) {
       final code = _codeOf(error.responseData);
@@ -167,6 +205,10 @@ abstract final class SessionCreateError {
       case SessionCreateErrorKind.operationIncomplete:
       case SessionCreateErrorKind.operationTargetDeleted:
         return true;
+      case SessionCreateErrorKind.programWorkoutDataInvalid:
+      // Blindly retrying the SAME unparseable ProgramWorkout data will not
+      // self-heal - hard failure, like unknownStructured/ordinary. See
+      // the class doc comment.
       case SessionCreateErrorKind.unknownStructured:
       case SessionCreateErrorKind.ordinary:
         return false;

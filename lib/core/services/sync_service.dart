@@ -725,7 +725,20 @@ class SyncService {
       try {
         switch (session.syncStatus) {
           case 'pending_create':
-            await _syncCreateSession(db, session, context);
+            // A row from `SessionRepository.createSessionFromProgramWorkout`
+            // is durably keyed to `POST /sessions/from-program-workout`, NOT
+            // the generic endpoint - dispatching it as a generic CREATE
+            // would send a keyless/linkless body under a key that
+            // endpoint's own server-side operation row already owns,
+            // permanently losing the template's Exercises to
+            // first-writer-wins. `programWorkoutId` is what this
+            // dispatcher reads to decide which endpoint owns the key - see
+            // `_syncCreateSession`'s class doc comment.
+            if (session.programWorkoutId != null) {
+              await _syncCreateSessionFromProgramWorkout(db, session, context);
+            } else {
+              await _syncCreateSession(db, session, context);
+            }
             break;
           case 'pending_update':
             await _syncUpdateSession(db, session, context);
@@ -933,19 +946,23 @@ class SyncService {
   /// `session_create_delete_cross_operation_race_test.dart` for the
   /// deterministic proof of this exact convergence.
   ///
-  /// ## Generic-create operation key boundary
+  /// ## Generic-create operation key boundary / dispatch routing
   ///
-  /// This dispatches only generic `POST /api/v1/sessions`. A row that
-  /// originated from the separate, unkeyed `POST /sessions/from-program-workout`
-  /// endpoint's offline fallback (see
-  /// `SessionRepository.createSessionFromProgramWorkout`) is indistinguishable
-  /// from any other generic `pending_create` row by the time it reaches this
-  /// method, so [_ensureCreateOperationKey] backfills it a key here like any
-  /// legacy row - but that key cannot deduplicate the ORIGINAL
-  /// from-program-workout request, which was never keyed. Program linkage
-  /// (`programId`/`programWorkoutId`) is also still stripped from the body
-  /// below, as it always has been - this PR does not fix or claim to fix
-  /// that lost-acknowledgment/linkage defect.
+  /// This dispatches ONLY generic `POST /api/v1/sessions`, and must never be
+  /// called for a row with a non-null `programWorkoutId` -
+  /// `SessionRepository.createSessionFromProgramWorkout` durably keys those
+  /// rows to the SEPARATE `POST /sessions/from-program-workout` endpoint
+  /// (see [_syncCreateSessionFromProgramWorkout]), which shares the deployed
+  /// API's `(userId, clientOperationId)` idempotency contract but is a
+  /// DIFFERENT server-side operation row. Sending a program-workout row's
+  /// key through THIS method's generic body (which strips `programId`/
+  /// `programWorkoutId` below, as it always has) would claim that key with
+  /// a linkless body under first-writer-wins, permanently losing the
+  /// template's Exercises - the `_syncSessions` phase switch and the
+  /// `_syncUpdateSession` no-serverId fallback both branch on
+  /// `programWorkoutId` before ever reaching either method, so this
+  /// invariant holds by construction; it is restated here as a fail-closed
+  /// backstop, not the only place it is enforced.
   ///
   /// ## Unkeyed-dispatch race correction
   ///
@@ -979,6 +996,18 @@ class SyncService {
         '  Session ${localSession.localId} no longer eligible for generic '
         'CREATE (acknowledged/transitioned/deleted elsewhere) - aborting '
         'without dispatch',
+      );
+      return;
+    }
+    if (keyedRow.programWorkoutId != null) {
+      // Fail-closed backstop for the class doc comment's dispatch-routing
+      // invariant - both call sites already branch away from this method
+      // for such a row, so this should be unreachable, but never send a
+      // program-workout row's key through the generic body regardless.
+      debugPrint(
+        '  ⚠️ Session ${keyedRow.localId} has a programWorkoutId - refusing '
+        'generic CREATE dispatch (should have been routed to '
+        '_syncCreateSessionFromProgramWorkout)',
       );
       return;
     }
@@ -1122,6 +1151,215 @@ class SyncService {
     debugPrint('  ✅ Session created with server ID: ${apiSession.id}');
   }
 
+  /// Background retry of a durable `POST /sessions/from-program-workout`
+  /// CREATE - covers the case `SessionRepository.createSessionFromProgramWorkout`'s
+  /// own fire-and-forget dispatch never itself completes (app killed before
+  /// its HTTP resolves, or before it could even be scheduled) and the row is
+  /// still `pending_create` on a later sync pass, possibly after a restart
+  /// with no in-memory `ProgramWorkout` object at all.
+  ///
+  /// Reuses [_ensureCreateOperationKey] as-is (it is fully generic - keyed
+  /// only on `pending_create` + `clientOperationId`, with no
+  /// `programWorkoutId` dependency) so a legacy pre-upgrade row that fell
+  /// back to a keyless program-workout write is backfilled a key here
+  /// exactly like a legacy generic row. The request body sent below is
+  /// ALWAYS `{programWorkoutId, programId, clientOperationId}` re-read from
+  /// the returned canonical row - never the caller's stale batch snapshot,
+  /// same "unkeyed-dispatch race correction" contract as
+  /// [_syncCreateSession].
+  ///
+  /// Session + Exercise reconciliation mirrors
+  /// `SessionRepository._syncCreateSessionFromProgramWorkoutToServer` exactly
+  /// (same dispatchedAt-comparison contract, same positional Exercise
+  /// pairing/surplus rules) - see that method's doc comment for the full
+  /// rationale distinguishing this from generic `_syncCreateSession`'s ack,
+  /// including the pure `date`-only clamp that makes no ProgramWorkout
+  /// object necessary here either.
+  Future<void> _syncCreateSessionFromProgramWorkout(
+    Isar db,
+    LocalSession localSession,
+    SessionRequestContext context,
+  ) async {
+    debugPrint(
+      '  Creating session ${localSession.localId} from program workout on server...',
+    );
+
+    final keyedRow = await _ensureCreateOperationKey(db, localSession, context);
+    _assertCurrent(context);
+    if (keyedRow == null) {
+      debugPrint(
+        '  Session ${localSession.localId} no longer eligible for '
+        'program-workout CREATE (acknowledged/transitioned/deleted '
+        'elsewhere) - aborting without dispatch',
+      );
+      return;
+    }
+    final operationId = keyedRow.clientOperationId;
+    final programWorkoutId = keyedRow.programWorkoutId;
+    final programId = keyedRow.programId;
+    if (operationId == null || programWorkoutId == null || programId == null) {
+      // Unreachable under this phase's own routing (only a row with a
+      // non-null programWorkoutId reaches this method) combined with
+      // _ensureCreateOperationKey's contract (a returned non-null row is
+      // always keyed) - enforced here as real control flow, never a silent
+      // malformed dispatch.
+      debugPrint(
+        '  ⚠️ Session ${keyedRow.localId} canonical row missing required '
+        'program-workout CREATE fields - aborting without dispatch',
+      );
+      return;
+    }
+
+    final dispatchedAt = keyedRow.lastModifiedLocal;
+
+    Map<String, dynamic> response;
+    try {
+      response = await _apiService.post<Map<String, dynamic>>(
+        ApiConfig.sessionsFromProgramWorkout,
+        data: {
+          'programWorkoutId': programWorkoutId,
+          'programId': programId,
+          'clientOperationId': operationId,
+        },
+        sessionContext: context,
+      );
+    } catch (e) {
+      if (SessionCreateError.classify(e) ==
+          SessionCreateErrorKind.operationCanceled) {
+        await _convertCanceledCreateToPendingDelete(
+          db,
+          keyedRow.localId,
+          operationId,
+          context,
+        );
+      }
+      rethrow;
+    }
+    _assertCurrent(context);
+    final apiSession = Session.fromJson(response);
+
+    final target = await _reacquireOwnedSession(
+      db,
+      keyedRow.localId,
+      context.epochToken.userId,
+    );
+    _assertCurrent(context);
+    if (target == null) return;
+
+    await _runTestHook(beforeAckWriteTxnForTesting);
+    await db.writeTxn(() async {
+      await _runTestHook(insideAckWriteTxnForTesting);
+      _assertCurrent(context);
+      final reFetched = await _reacquireOwnedSession(
+        db,
+        keyedRow.localId,
+        context.epochToken.userId,
+      );
+      if (reFetched == null) return;
+
+      if (reFetched.syncStatus == 'pending_delete') {
+        reFetched.serverId = apiSession.id;
+        reFetched.version = apiSession.version;
+        reFetched.lastModifiedServer = DateTime.now();
+        await db.localSessions.put(reFetched);
+        return;
+      }
+
+      if (reFetched.lastModifiedLocal != dispatchedAt) {
+        reFetched.serverId = apiSession.id;
+        reFetched.version = apiSession.version;
+        reFetched.lastModifiedServer = DateTime.now();
+        reFetched.isSynced = false;
+        reFetched.syncStatus = 'pending_update';
+        await db.localSessions.put(reFetched);
+      } else {
+        final today = DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+        );
+        final correctedDate =
+            apiSession.date.isBefore(today) ? today : apiSession.date;
+        final updated = ModelMapper.sessionToLocal(
+          apiSession.copyWith(date: correctedDate),
+          localId: keyedRow.localId,
+          isSynced: true,
+          clientOperationId: reFetched.clientOperationId,
+        );
+        await db.localSessions.put(updated);
+      }
+
+      await _reconcileProgramWorkoutCreateExercises(
+        db,
+        keyedRow.localId,
+        apiSession,
+      );
+    });
+
+    debugPrint(
+      '  ✅ Session created from program workout with server ID: ${apiSession.id}',
+    );
+  }
+
+  /// Reconciles the child Exercises a program-workout CREATE acknowledgment
+  /// returns against the local placeholders materialized before dispatch, by
+  /// exact `occurrenceKey` identity - NEVER by position, name, prescription,
+  /// or `exerciseTemplateId`. Identical matched/unmatchedServer/unmatchedLocal
+  /// handling to `SessionRepository._reconcileProgramWorkoutCreateExercises`
+  /// (see its doc comment for the full rationale, including exactly what
+  /// marking `unmatchedLocal` `syncStatus: 'conflict'` does and does not
+  /// close) - duplicated rather than shared across the repository/SyncService
+  /// boundary, matching this file's existing `_syncCreateSession` /
+  /// `SessionRepository._syncCreateSessionToServer` precedent for the generic
+  /// CREATE path. Must be called from INSIDE the same write transaction that
+  /// reconciles the parent Session; never touches [LocalExerciseSet] rows.
+  Future<void> _reconcileProgramWorkoutCreateExercises(
+    Isar db,
+    int sessionLocalId,
+    Session apiSession,
+  ) async {
+    final localExercises =
+        await db.localExercises
+              .filter()
+              .sessionLocalIdEqualTo(sessionLocalId)
+              .findAll()
+          ..sort((a, b) => a.localId.compareTo(b.localId));
+    final paired = ModelMapper.pairProgramWorkoutCreateExercises(
+      localExercises,
+      apiSession.exercises,
+    );
+
+    for (final (local, apiExercise) in paired.matched) {
+      final updated = ModelMapper.exerciseToLocal(
+        apiExercise,
+        sessionLocalId: sessionLocalId,
+        sessionServerId: apiSession.id,
+        localId: local.localId,
+        isSynced: true,
+      );
+      await db.localExercises.put(updated);
+    }
+
+    for (final apiExercise in paired.unmatchedServer) {
+      final localExercise = ModelMapper.exerciseToLocal(
+        apiExercise,
+        sessionLocalId: sessionLocalId,
+        sessionServerId: apiSession.id,
+        isSynced: true,
+      );
+      await db.localExercises.put(localExercise);
+    }
+
+    // Never independently re-created (nor left able to be) - see
+    // `SessionRepository._reconcileProgramWorkoutCreateExercises`'s doc
+    // comment for exactly what 'conflict' does and does not close.
+    for (final local in paired.unmatchedLocal) {
+      local.syncStatus = 'conflict';
+      local.isSynced = false;
+      await db.localExercises.put(local);
+    }
+  }
+
   /// A CREATE dispatch that comes back `409 operation_canceled` means the
   /// server holds a PERMANENT tombstone for [operationId] - re-POSTing it can
   /// never succeed (see `SessionCreateError`'s class doc comment). Converts a
@@ -1189,8 +1427,14 @@ class SyncService {
         await db.localSessions.put(reFetched);
       });
       _assertCurrent(context);
-      // Now sync as create
-      await _syncCreateSession(db, localSession, context);
+      // Now sync as create - routed exactly like the `pending_create` phase
+      // switch above (see its comment): a program-workout row must never
+      // fall through to the generic endpoint.
+      if (localSession.programWorkoutId != null) {
+        await _syncCreateSessionFromProgramWorkout(db, localSession, context);
+      } else {
+        await _syncCreateSession(db, localSession, context);
+      }
       return;
     }
 
@@ -1611,6 +1855,29 @@ class SyncService {
   /// captured user. Orphaned rows (parent session missing) and foreign
   /// rows (parent session belongs to a different user) are silently
   /// skipped - never uploaded, never marked synced or failed.
+  ///
+  /// A parent Session already `pending_delete` is ALSO skipped here, freshly
+  /// re-read for this exact exercise (never a value cached from an earlier
+  /// iteration of this loop or an earlier phase) - starting new child CREATE
+  /// work under a Session already converging toward deletion would only be
+  /// wasted (the child row is unconditionally removed the moment that
+  /// deletion's own `_deleteSessionRowAndChildren` runs, regardless of
+  /// anything dispatched here) and can otherwise leave a real, briefly
+  /// orphaned server-side Exercise under a Session about to vanish. This is
+  /// a fresh CHECK, not a proof that dispatch never starts under a session
+  /// that becomes `pending_delete` a moment later - see
+  /// [_syncCreateExercise]'s own pre-dispatch and acknowledgment-time
+  /// re-checks for the narrower race this can't close by itself. Given this
+  /// loop calls [_syncCreateExercise] essentially synchronously right after
+  /// this check (no real await between them), that method's OWN pre-dispatch
+  /// re-check already subsumes this one for every race a black-box test can
+  /// actually land - this guard's only genuinely independent value is a
+  /// hook-driven delay artificially inserted between the two, which no
+  /// existing test seam provides. It is kept anyway as the SAME deliberate,
+  /// redundant multi-checkpoint shape this class already uses everywhere
+  /// else (see the class doc comment's "Transaction/logout race protection"
+  /// section) - not because this exact interaction is independently proven
+  /// dispatch-avoiding by a dedicated test, which it honestly is not.
   Future<void> _syncExercises(Isar db, SessionRequestContext context) async {
     final userId = context.epochToken.userId;
     final pendingExercises =
@@ -1639,6 +1906,10 @@ class SyncService {
       }
       if (_positiveServerId(parentSession.serverId) == null) {
         debugPrint('    ! Skipping exercise - parent session not synced yet');
+        continue;
+      }
+      if (parentSession.syncStatus == 'pending_delete') {
+        debugPrint('    ! Skipping exercise - parent session pending_delete');
         continue;
       }
 
@@ -1706,6 +1977,36 @@ class SyncService {
     return row;
   }
 
+  /// Dispatches `POST {sessions}/{serverId}/exercises` for [exercise].
+  ///
+  /// Guarded on both ends against the parent Session converging toward
+  /// deletion, per [_syncExercises]'s own enumeration-time skip (this closes
+  /// the narrower windows that check can't):
+  /// - Immediately before dispatch, [parentSession] is re-read FRESH (never
+  ///   the caller's enumeration-time snapshot, which could already be stale
+  ///   by the time this specific exercise's turn in the loop comes up) and
+  ///   the POST is never sent at all if it is now `pending_delete`, gone, or
+  ///   no longer owned.
+  /// - At acknowledgment time, inside the SAME write transaction that would
+  ///   mark this exercise synced, the parent is re-read fresh AGAIN - a
+  ///   delete racing the POST await (the session transitions to
+  ///   `pending_delete` WHILE this HTTP call is in flight) must still win.
+  ///   In that case this is a deliberate no-op: no `serverId` attached, no
+  ///   `isSynced`/`syncStatus` change. Unlike the Session-level and
+  ///   program-workout-Exercise-level `pending_delete` acknowledgment
+  ///   branches elsewhere in this file (which DO attach identity so a later
+  ///   pass can target the right server row), an Exercise never needs that:
+  ///   `_deleteSessionRowAndChildren` unconditionally removes EVERY
+  ///   [LocalExercise] row for its parent regardless of that row's own
+  ///   `serverId`/`syncStatus` once the session's own deletion converges, so
+  ///   there is nothing later to target - the row is going away either way,
+  ///   and the real server-side Exercise this POST already created gets
+  ///   cleaned up by that same session-level deletion's cascade once it
+  ///   reaches the server (ordinary `DELETE /sessions/{id}` cascades to its
+  ///   Exercises; see [SessionRepository.deleteSession]'s doc comment for
+  ///   the dispatch rule that applies once the session has a `serverId`,
+  ///   which it always does by the time this method's caller's
+  ///   `_positiveServerId(parentSession.serverId) == null` gate admits it).
   Future<void> _syncCreateExercise(
     Isar db,
     LocalExercise exercise,
@@ -1713,8 +2014,18 @@ class SyncService {
     SessionRequestContext context,
     Map<int, int?> sessionCache,
   ) async {
+    final freshParent = await db.localSessions.get(parentSession.localId);
+    if (freshParent == null ||
+        freshParent.userId != context.epochToken.userId ||
+        freshParent.syncStatus == 'pending_delete') {
+      debugPrint(
+        '    ! Aborting exercise CREATE - parent session no longer eligible',
+      );
+      return;
+    }
+
     final response = await _apiService.post<Map<String, dynamic>>(
-      '${ApiConfig.sessions}/${parentSession.serverId}/exercises',
+      '${ApiConfig.sessions}/${freshParent.serverId}/exercises',
       data: {
         'name': exercise.name,
         'duration': exercise.duration,
@@ -1740,8 +2051,17 @@ class SyncService {
       _assertCurrent(context);
       final reFetched = await db.localExercises.get(exercise.localId);
       if (reFetched == null) return;
+
+      final parentAtAck = await db.localSessions.get(reFetched.sessionLocalId);
+      if (parentAtAck == null || parentAtAck.syncStatus == 'pending_delete') {
+        // A delete raced this POST's await and won - see this method's doc
+        // comment for why a pure no-op (no identity attached) is correct
+        // here, unlike the Session-level pending_delete branches.
+        return;
+      }
+
       reFetched.serverId = response['id'] as int;
-      reFetched.sessionServerId = parentSession.serverId;
+      reFetched.sessionServerId = parentAtAck.serverId;
       reFetched.isSynced = true;
       reFetched.syncStatus = 'synced';
       await db.localExercises.put(reFetched);
@@ -1857,6 +2177,22 @@ class SyncService {
         debugPrint('    ! Skipping set - parent exercise not synced yet');
         continue;
       }
+      // `_sessionOwner` only resolves `userId` - a Session already
+      // `pending_delete` still has the same owner, so that check alone
+      // cannot catch it. Children are never individually flipped to
+      // `pending_delete` when their Session is (see
+      // `_deleteSessionRowAndChildren`'s doc comment - it sweeps them in
+      // bulk instead), so this is the only signal a set's dispatch loop
+      // has that its grandparent Session is being canceled. Mirrors
+      // `_syncExercises`'s identical enumeration-time skip.
+      final grandparentSession = await db.localSessions.get(
+        parentExercise.sessionLocalId,
+      );
+      if (grandparentSession == null ||
+          grandparentSession.syncStatus == 'pending_delete') {
+        debugPrint('    ! Skipping set - parent session pending_delete');
+        continue;
+      }
 
       // Update set's exerciseServerId if not set
       if (set.exerciseServerId != parentExercise.serverId) {
@@ -1962,6 +2298,34 @@ class SyncService {
       return;
     }
 
+    // Fresh, immediately-pre-dispatch recheck of the whole parent chain -
+    // `_syncExerciseSets`'s enumeration-time skip can be stale by the time
+    // we're about to spend an HTTP call (a same-pass Session cancellation,
+    // or the exercise itself being reparented/removed, could have raced in
+    // since this set was enumerated). Mirrors `_syncCreateExercise`'s
+    // `freshParent` check - an acknowledgment guard alone does not prove
+    // dispatch itself was prevented, so this must run BEFORE the POST, not
+    // only after it.
+    final freshExercise = await db.localExercises.get(parentExercise.localId);
+    if (freshExercise == null ||
+        _positiveServerId(freshExercise.serverId) == null) {
+      debugPrint(
+        '    ! Aborting set CREATE - parent exercise no longer eligible',
+      );
+      return;
+    }
+    final freshGrandparentSession = await db.localSessions.get(
+      freshExercise.sessionLocalId,
+    );
+    if (freshGrandparentSession == null ||
+        freshGrandparentSession.userId != context.epochToken.userId ||
+        freshGrandparentSession.syncStatus == 'pending_delete') {
+      debugPrint(
+        '    ! Aborting set CREATE - parent session no longer eligible',
+      );
+      return;
+    }
+
     // Pin the exact local revision being dispatched. `_applyLocalComplete` and
     // `_markPendingDelete` advance `lastModifiedLocal` on every same-session
     // set mutation, so a changed value in the acknowledgment below means a
@@ -1972,7 +2336,7 @@ class SyncService {
     final response = await _apiService.post<Map<String, dynamic>>(
       ApiConfig.exerciseSets,
       data: {
-        'exerciseId': parentExercise.serverId,
+        'exerciseId': freshExercise.serverId,
         'setNumber': set.setNumber,
         'reps': set.reps,
         'weight': set.weight,
@@ -2003,10 +2367,35 @@ class SyncService {
       final reFetched = await db.localExerciseSets.get(set.localId);
       if (reFetched == null) return;
 
+      // Symmetric to `_syncCreateExercise`'s ack-time guard: the pre-dispatch
+      // recheck above cannot see a Session delete that starts DURING this
+      // POST's await. If the grandparent Session is (now) `pending_delete`,
+      // this is a pure no-op - no identity attached, no status change. The
+      // set's local row still converges correctly: it will be swept along
+      // with its parent Exercise when the pending Session delete completes
+      // (`_deleteSessionRowAndChildren` sweeps children unconditionally), so
+      // there is nothing left to resurrect. Attaching a server id here would
+      // just leave the server row with no local row pointing back at it once
+      // the sweep runs - orphaned, not wrong, but attaching identity to a
+      // row about to be discarded serves no purpose and only risks a future
+      // guard treating it as live.
+      final parentAtAck = await db.localExercises.get(
+        reFetched.exerciseLocalId,
+      );
+      final sessionAtAck =
+          parentAtAck == null
+              ? null
+              : await db.localSessions.get(parentAtAck.sessionLocalId);
+      if (parentAtAck == null ||
+          sessionAtAck == null ||
+          sessionAtAck.syncStatus == 'pending_delete') {
+        return;
+      }
+
       // The server row now exists: always attach its identity so no later
       // pass can CREATE it again. Only the pending state varies below.
       reFetched.serverId = assignedServerId;
-      reFetched.exerciseServerId = parentExercise.serverId;
+      reFetched.exerciseServerId = parentAtAck.serverId;
 
       if (reFetched.lastModifiedLocal != dispatchedAt) {
         // A same-session mutation raced in during the POST await. Do NOT mark

@@ -15,6 +15,7 @@ Exercise _$ExerciseFromJson(Map<String, dynamic> json) => Exercise(
   restTime: (json['restTime'] as num?)?.toInt(),
   notes: json['notes'] as String?,
   exerciseTemplateId: (json['exerciseTemplateId'] as num?)?.toInt(),
+  occurrenceKey: json['occurrenceKey'] as String?,
   exerciseSets:
       (json['exerciseSets'] as List<dynamic>?)
           ?.map((e) => ExerciseSet.fromJson(e as Map<String, dynamic>))
@@ -32,6 +33,7 @@ Map<String, dynamic> _$ExerciseToJson(Exercise instance) => <String, dynamic>{
   'restTime': instance.restTime,
   'notes': instance.notes,
   'exerciseTemplateId': instance.exerciseTemplateId,
+  'occurrenceKey': instance.occurrenceKey,
   'exerciseSets': instance.exerciseSets,
   'version': instance.version,
 };

@@ -13,6 +13,17 @@ class Exercise {
   final int? restTime;
   final String? notes;
   final int? exerciseTemplateId;
+
+  /// Persistent occurrence identity, copied verbatim from the deployed
+  /// `POST /sessions/from-program-workout` response's `occurrenceKey` field
+  /// (see `GoHardAPI.Models.Exercise.OccurrenceKey`'s doc comment). Identifies
+  /// a specific exercise *occurrence* within one `ProgramWorkout` - never the
+  /// exercise type ([exerciseTemplateId] does that) and never globally
+  /// unique: the SAME key legitimately repeats across Exercises materialized
+  /// from the same `ProgramWorkout` into different Sessions (two intentional
+  /// starts of the same workout). `null` for an ad-hoc exercise (no
+  /// program-workout source) or one materialized before this field existed.
+  final String? occurrenceKey;
   final List<ExerciseSet> exerciseSets;
   final int version; // Version tracking for conflict resolution (Issue #13)
 
@@ -25,6 +36,7 @@ class Exercise {
     this.restTime,
     this.notes,
     this.exerciseTemplateId,
+    this.occurrenceKey,
     this.exerciseSets = const [],
     this.version = 1,
   });
@@ -42,6 +54,7 @@ class Exercise {
     int? restTime,
     String? notes,
     int? exerciseTemplateId,
+    String? occurrenceKey,
     List<ExerciseSet>? exerciseSets,
     int? version,
   }) {
@@ -54,6 +67,7 @@ class Exercise {
       restTime: restTime ?? this.restTime,
       notes: notes ?? this.notes,
       exerciseTemplateId: exerciseTemplateId ?? this.exerciseTemplateId,
+      occurrenceKey: occurrenceKey ?? this.occurrenceKey,
       exerciseSets: exerciseSets ?? this.exerciseSets,
       version: version ?? this.version,
     );

@@ -515,16 +515,15 @@ void main() {
     expect(after!.userId, userB);
   });
 
-  test('13. legacy entry point trace: createSessionFromProgramWorkout\'s '
-      'UNKEYED online request fails and falls back to an offline-created row '
-      'with NEITHER identity - deleting it immediately (before any sync pass '
-      'could ever backfill a key) is safe local-only removal with zero HTTP '
-      'calls. The ORIGINAL unkeyed POST, if it actually committed server-side '
-      'with its response lost, cannot be correlated or canceled by this or '
-      'any later client action - an accepted, pre-existing limitation this '
-      'feature does not claim to close (see createSessionFromProgramWorkout\'s '
-      'own doc comment).', () async {
+  test('13. createSessionFromProgramWorkout is now durably keyed like the '
+      'generic entry point: a row deleted before server identity is known '
+      'reuses the SAME by-operation cancellation dispatch, never a silent '
+      'local-only removal.', () async {
     loginAs(userA);
+    Future<void>? backgroundCreateSettled;
+    repository.onBackgroundSyncScheduledForTesting = (settled) {
+      backgroundCreateSettled = settled;
+    };
     adapter.responder = (o) {
       if (o.method == 'POST' &&
           o.path == ApiConfig.sessionsFromProgramWorkout) {
@@ -560,23 +559,26 @@ void main() {
     expect(row!.serverId, isNull);
     expect(
       row.clientOperationId,
-      isNull,
+      isNotNull,
       reason:
-          'the from-program-workout offline fallback never assigns a '
-          'key - only a later generic sync pass would backfill one',
+          'the durable key is persisted atomically BEFORE the first HTTP '
+          'attempt, regardless of what that attempt does',
     );
+    final operationId = row.clientOperationId!;
+
+    // Let the failed background CREATE settle before proceeding, so the
+    // adapter's captured requests below are deterministic.
+    await backgroundCreateSettled;
+    repository.onBackgroundSyncScheduledForTesting = null;
     adapter.captured.clear();
 
     final result = await repository.deleteSession(created.id);
 
     expect(result, isTrue);
-    expect(
-      adapter.captured,
-      isEmpty,
-      reason:
-          'neither identity existed yet - nothing to cancel or delete '
-          'remotely',
+    final cancelCall = adapter.captured.singleWhere(
+      (r) => r.method == 'DELETE',
     );
+    expect(cancelCall.path, ApiConfig.sessionCancelByOperation(operationId));
     expect(await isar.localSessions.get(created.id), isNull);
   });
 

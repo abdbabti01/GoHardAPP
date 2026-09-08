@@ -61,6 +61,17 @@ class MockSessionRepository extends _i1.Mock implements _i6.SessionRepository {
   }
 
   @override
+  set operationIdGeneratorForTesting(
+    String Function()? _operationIdGeneratorForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #operationIdGeneratorForTesting,
+      _operationIdGeneratorForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   set beforeWriteTxnForTesting(
     _i7.Future<void> Function()? _beforeWriteTxnForTesting,
   ) => super.noSuchMethod(

@@ -202,6 +202,9 @@ class ModelMapper {
 
   /// Convert API Exercise to LocalExercise
   /// Requires localSessionId for parent reference
+  ///
+  /// [apiExercise.occurrenceKey] is always copied verbatim (never invented,
+  /// never dropped) - see `LocalExercise.occurrenceKey`'s doc comment.
   static LocalExercise exerciseToLocal(
     Exercise apiExercise, {
     required int sessionLocalId,
@@ -220,6 +223,7 @@ class ModelMapper {
       restTime: apiExercise.restTime,
       notes: apiExercise.notes,
       exerciseTemplateId: apiExercise.exerciseTemplateId,
+      occurrenceKey: apiExercise.occurrenceKey,
       isSynced: isSynced,
       syncStatus: isSynced ? 'synced' : 'pending_create',
       lastModifiedLocal: DateTime.now(),
@@ -250,7 +254,201 @@ class ModelMapper {
       restTime: localExercise.restTime,
       notes: localExercise.notes,
       exerciseTemplateId: localExercise.exerciseTemplateId,
+      occurrenceKey: localExercise.occurrenceKey,
       exerciseSets: exerciseSets,
+    );
+  }
+
+  /// Pairs a program-workout CREATE's local placeholder [localExercises]
+  /// (materialized before dispatch - see
+  /// `SessionRepository.createSessionFromProgramWorkout`) against the
+  /// server's authoritative [serverExercises] list, for the acknowledgment's
+  /// reconciliation. Both lists must already be scoped to the SAME captured
+  /// owner and the SAME parent Session - the caller does this before calling
+  /// (a session-scoped Isar query plus the epoch/ownership checks already
+  /// established for every other write in this class's callers) - this
+  /// method's own job is purely the pairing decision within that scope.
+  ///
+  /// ## `occurrenceKey`: the deployed contract's per-occurrence identity
+  ///
+  /// `GoHardAPI.Models.Exercise.OccurrenceKey` (mirrored client-side by
+  /// `Exercise.occurrenceKey`/`LocalExercise.occurrenceKey`) identifies one
+  /// exercise OCCURRENCE within a single `ProgramWorkout` - never the
+  /// exercise type (`exerciseTemplateId` still means that), and never
+  /// globally unique: the SAME key legitimately repeats across every
+  /// Exercise materialized from the same `ProgramWorkout` into DIFFERENT
+  /// Sessions (two intentional starts of the same workout both get Exercises
+  /// keyed identically to their shared source template - see
+  /// `ProgramWorkoutExerciseOccurrences`'s class doc comment on the deployed
+  /// side). Uniqueness is enforced only WITHIN one workout's array, which is
+  /// exactly the scope one CREATE materializes into one Session - so within
+  /// the two lists this method receives, a non-null key legitimately
+  /// appearing MORE than once on either side is a genuine contract
+  /// violation, not a normal case, and is handled the same as any other
+  /// unresolvable shape below (never partially assigned).
+  ///
+  /// Every server Exercise materialized through the KEYED
+  /// `POST /sessions/from-program-workout` path carries a real, non-null
+  /// `occurrenceKey` - the server self-heals a source template missing keys
+  /// before materializing (`ProgramWorkoutExerciseOccurrences
+  /// .EnsurePersistedAsync`, called from `SessionCreateService
+  /// .ProgramWorkoutFirstWriteAsync` before `ProgramWorkoutSessionMaterializer
+  /// .Build`), so [serverExercises] should never actually contain a
+  /// `null`-keyed entry in practice; this method does not assume that,
+  /// though - see the `null`-key handling below, which is defensive, not
+  /// load-bearing on that assumption.
+  ///
+  /// ## Matching rule: exact one-to-one by `occurrenceKey`, nothing else
+  ///
+  /// Exercises are grouped by `occurrenceKey` on BOTH sides. A NON-NULL key's
+  /// group pairs its members ONLY when it holds EXACTLY ONE local exercise
+  /// and EXACTLY ONE server exercise - the one shape with no other candidate
+  /// either could possibly mean, so attaching that identity is not a guess.
+  /// Every other shape for a non-null key - more than one local exercise (a
+  /// genuine contract violation per the paragraph above, since occurrence
+  /// keys are unique per workout array), a local exercise whose key has no
+  /// server counterpart at all (the occurrence was removed/replaced before
+  /// materialization), or a server exercise whose key has zero or more than
+  /// one local counterpart - is left AMBIGUOUS: no identity is assigned to
+  /// any local exercise in that group, and no corresponding server exercise
+  /// is inserted for it (inserting one anyway risks a second, duplicate-
+  /// looking row alongside the untouched ambiguous local one(s)).
+  ///
+  /// This method NEVER falls back to `exerciseTemplateId`, array position,
+  /// name, or prescription fields to resolve what `occurrenceKey` alone
+  /// could not - those signals either identify the wrong thing (the exercise
+  /// TYPE, not the occurrence) or are exactly the guesses this reconciliation
+  /// exists to avoid (see the historical rationale preserved in this class's
+  /// git history / the prior round's `SessionRepository` doc comment section
+  /// for why a positional or `exerciseTemplateId` fallback was found unsafe).
+  ///
+  /// `occurrenceKey == null` (an ad-hoc/custom local placeholder, OR - the
+  /// remaining real-world case - one materialized from a CACHED template
+  /// that predates this field, before this client's own next routine
+  /// program/workout refresh backfills it - see
+  /// `SessionRepository.createSessionFromProgramWorkout`'s doc comment on the
+  /// legacy-cache case) NEVER reaches the "exactly one and one" fast path,
+  /// even when there is exactly one `null`-keyed exercise on each side:
+  /// `null` carries no identity information at all, so "one on each side" is
+  /// not proof they are the same occurrence. A `null`-keyed local exercise is
+  /// ALWAYS ambiguous when the `null`-keyed group is non-empty on the local
+  /// side; a `null`-keyed server exercise is only ever treated as genuinely
+  /// new (returned in [unmatchedServer]) when there is NO local `null`-keyed
+  /// exercise at all to potentially conflict with.
+  ///
+  /// An ambiguous local exercise is returned in [unmatchedLocal] UNCHANGED -
+  /// the caller must not assign it a `serverId`, must not mark it synced,
+  /// and must leave its `LocalExerciseSet` children exactly where they are
+  /// (see the caller's own doc comment for what "unchanged" produces: the
+  /// row is marked `conflict` so `SyncService._syncExercises` never
+  /// independently re-creates it, and a later GET refresh can now RECOGNIZE
+  /// it by `occurrenceKey` too instead of inserting a duplicate - see
+  /// `SessionRepository._resolveExistingExerciseForRefresh`).
+  ///
+  /// The ONLY server exercises returned in [unmatchedServer] (safe to insert
+  /// as brand-new, already-synced local rows) are ones whose key has ZERO
+  /// local claimants at all - nothing local could be confused with them.
+  ///
+  /// ## Idempotency preface: an already-resolved identity is never revisited
+  ///
+  /// Before any `occurrenceKey` grouping happens, every local exercise that
+  /// already carries a real (positive) `serverId` matching one of THIS
+  /// response's exercise ids is paired immediately and removed from further
+  /// consideration on both sides - unconditionally, regardless of its
+  /// `occurrenceKey`. This is what makes a REDUNDANT/overlapping
+  /// acknowledgment for the exact same operation idempotent even for a
+  /// `null`-keyed exercise: a null-keyed occurrence a PRIOR pass already
+  /// safely inserted (via the `unmatchedServer` "zero local claimants" path
+  /// above) now genuinely IS a local claimant on the next pass - without this
+  /// preface, the `null`-key group would see that previously-inserted row as
+  /// a competing claimant and demote an already-correctly-synced exercise to
+  /// `'conflict'` (a real regression a redundant ack must never cause; see
+  /// this method's own test coverage for the exact scenario). A row can only
+  /// reach this preface with a real `serverId` if some EARLIER reconciliation
+  /// pass already attached it from THIS same session's own CREATE response
+  /// history - it is never a coincidental match against unrelated data, for
+  /// the same reason `SessionRepository._resolveExistingExerciseForRefresh`'s
+  /// `serverId`-first lookup is safe: server exercise ids are assumed
+  /// globally unique.
+  static ({
+    List<(LocalExercise, Exercise)> matched,
+    List<LocalExercise> unmatchedLocal,
+    List<Exercise> unmatchedServer,
+  })
+  pairProgramWorkoutCreateExercises(
+    List<LocalExercise> localExercises,
+    List<Exercise> serverExercises,
+  ) {
+    final matched = <(LocalExercise, Exercise)>[];
+    final unmatchedLocal = <LocalExercise>[];
+    final unmatchedServer = <Exercise>[];
+
+    final serverById = <int, Exercise>{
+      for (final server in serverExercises) server.id: server,
+    };
+    final alreadyResolvedLocalIds = <int>{};
+    final alreadyResolvedServerIds = <int>{};
+    for (final local in localExercises) {
+      final serverId = local.serverId;
+      if (serverId == null || serverId <= 0) continue;
+      final server = serverById[serverId];
+      if (server == null) continue;
+      matched.add((local, server));
+      alreadyResolvedLocalIds.add(local.localId);
+      alreadyResolvedServerIds.add(server.id);
+    }
+
+    final remainingLocal = localExercises.where(
+      (local) => !alreadyResolvedLocalIds.contains(local.localId),
+    );
+    final remainingServer = serverExercises.where(
+      (server) => !alreadyResolvedServerIds.contains(server.id),
+    );
+
+    final localByKey = <String?, List<LocalExercise>>{};
+    for (final local in remainingLocal) {
+      (localByKey[local.occurrenceKey] ??= <LocalExercise>[]).add(local);
+    }
+    final serverByKey = <String?, List<Exercise>>{};
+    for (final server in remainingServer) {
+      (serverByKey[server.occurrenceKey] ??= <Exercise>[]).add(server);
+    }
+
+    final allKeys = <String?>{...localByKey.keys, ...serverByKey.keys};
+    for (final key in allKeys) {
+      final localGroup = localByKey[key] ?? const [];
+      final serverGroup = serverByKey[key] ?? const [];
+
+      if (localGroup.isEmpty) {
+        // Nothing local claims this key - every server exercise in this
+        // group is genuinely new, safe to insert. Holds for `null` too:
+        // `null` carries no identity to conflict with, so an unclaimed
+        // `null`-keyed server exercise is exactly as safe to insert as any
+        // other unclaimed key.
+        unmatchedServer.addAll(serverGroup);
+      } else if (key != null &&
+          localGroup.length == 1 &&
+          serverGroup.length == 1) {
+        // The only shape with no other candidate on either side - and only
+        // meaningful for a REAL occurrenceKey. See this method's doc comment
+        // for why `null` is excluded even at count 1-vs-1.
+        matched.add((localGroup.single, serverGroup.single));
+      } else {
+        // Ambiguous (a genuine occurrenceKey contract violation - more than
+        // one local/server exercise sharing a non-null key that is supposed
+        // to be unique per workout array - a local/server count mismatch,
+        // or an unresolvable `null` key) - never guess, never partially
+        // assign an uncertain identity. Server exercises in this group are
+        // dropped entirely, not inserted, so they cannot appear to
+        // duplicate the untouched local occurrence(s).
+        unmatchedLocal.addAll(localGroup);
+      }
+    }
+
+    return (
+      matched: matched,
+      unmatchedLocal: unmatchedLocal,
+      unmatchedServer: unmatchedServer,
     );
   }
 

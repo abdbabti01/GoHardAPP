@@ -99,20 +99,24 @@ class LocalSession {
 
   // ========== Generic-CREATE operation identity ==========
 
-  /// Durable client-generated idempotency key for a GENERIC Session CREATE
-  /// (`POST /api/v1/sessions`), paired with the deployed GoHardAPI
-  /// `(userId, clientOperationId)` contract. Exactly one UUID v4 is
-  /// generated and persisted per logical CREATE, before the first HTTP
-  /// dispatch whose outcome could be uncertain, so a lost or retried
-  /// acknowledgment replays the same server-side operation instead of
-  /// creating a duplicate Session.
+  /// Durable client-generated idempotency key for a keyed Session CREATE -
+  /// either the generic `POST /api/v1/sessions` or
+  /// `POST /sessions/from-program-workout` (both share ONE
+  /// `(userId, clientOperationId)` idempotency contract server-side; see
+  /// `SessionsController`). Exactly one UUID v4 is generated and persisted
+  /// per logical CREATE, before the first HTTP dispatch whose outcome could
+  /// be uncertain, so a lost or retried acknowledgment replays the same
+  /// server-side operation instead of creating a duplicate Session.
   ///
-  /// `null` for legacy rows created before this field existed, and for
-  /// every row produced by `POST /sessions/from-program-workout` (that
-  /// endpoint does not accept this key - see
-  /// `SessionRepository.createSessionFromProgramWorkout`). A row that falls
-  /// back to a generic `pending_create` write is backfilled with a key on
-  /// its first generic retry (`SyncService`), not here.
+  /// `null` for legacy rows created before this field existed - both CREATE
+  /// entry points now assign it atomically with the row's first
+  /// `pending_create` write (see `SessionRepository.createSession` and
+  /// `.createSessionFromProgramWorkout`). A row that falls back to a generic
+  /// `pending_create` write for another reason is backfilled with a key on
+  /// its first retry (`SyncService._ensureCreateOperationKey`), not here.
+  /// `programWorkoutId` (below), not this field, is what a CREATE dispatcher
+  /// reads to decide WHICH endpoint owns a given key - see
+  /// `SyncService._syncCreateSession`'s class-level dispatch-routing note.
   ///
   /// Never derived from `localId`, `serverId`, `Session.id`, `userId`,
   /// timestamps, or any mutable workout field. Never assigned FROM a POST/PUT

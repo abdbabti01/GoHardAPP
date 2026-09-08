@@ -44,6 +44,22 @@ class MockExerciseRepository extends _i1.Mock
   }
 
   @override
+  set beforeWriteTxnForTesting(
+    _i5.Future<void> Function()? _beforeWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#beforeWriteTxnForTesting, _beforeWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideWriteTxnForTesting(
+    _i5.Future<void> Function()? _insideWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#insideWriteTxnForTesting, _insideWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   _i5.Future<List<_i2.ExerciseTemplate>> getExerciseTemplates({
     String? category,
     String? muscleGroup,
