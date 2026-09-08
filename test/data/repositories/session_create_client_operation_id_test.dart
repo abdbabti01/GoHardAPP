@@ -579,136 +579,172 @@ void main() {
     expect(row.serverId, 777);
   });
 
-  group('31/32. program-workout boundary', () {
+  group('31/32. program-workout durable creation', () {
+    test('31. createSessionFromProgramWorkout persists a durable key BEFORE '
+        'HTTP, and the background POST carries it', () async {
+      loginAs(1);
+      answerAllWith({
+        'id': 900,
+        'userId': 1,
+        'date': '2026-01-01',
+        'duration': null,
+        'notes': null,
+        'type': 'Workout',
+        'name': 'PW',
+        'status': 'draft',
+        'startedAt': null,
+        'completedAt': null,
+        'pausedAt': null,
+        'exercises': <dynamic>[],
+        'programId': 5,
+        'programWorkoutId': 10,
+        'version': 1,
+      });
+
+      final programWorkout = ProgramWorkout(
+        id: 10,
+        programId: 5,
+        weekNumber: 1,
+        dayNumber: 1,
+        workoutName: 'PW',
+        exercisesJson: '[]',
+        isCompleted: false,
+        orderIndex: 0,
+      );
+
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        programWorkout,
+        DateTime(2026, 1, 1),
+        5,
+      );
+
+      // The key is committed to Isar synchronously, before the caller
+      // even gets the local row back - long before the background POST.
+      final rowBeforeDispatch = await isar.localSessions.get(created.id);
+      expect(rowBeforeDispatch!.clientOperationId, isNotNull);
+      expect(
+        RegExp(uuidV4Pattern).hasMatch(rowBeforeDispatch.clientOperationId!),
+        isTrue,
+      );
+      expect(rowBeforeDispatch.syncStatus, 'pending_create');
+
+      await scheduledBackgroundSyncs.single;
+
+      final post = adapter.captured.singleWhere(
+        (r) =>
+            r.method == 'POST' &&
+            r.path == ApiConfig.sessionsFromProgramWorkout,
+      );
+      final body = post.data as Map<String, dynamic>;
+      expect(body['clientOperationId'], rowBeforeDispatch.clientOperationId);
+      expect(body['programWorkoutId'], 10);
+      expect(body['programId'], 5);
+
+      final rowAfterAck = await isar.localSessions.get(created.id);
+      expect(rowAfterAck!.serverId, 900);
+      expect(rowAfterAck.syncStatus, 'synced');
+    });
+
     test(
-      '31. the direct from-program-workout POST never carries the key',
+      '32. a lost acknowledgment is retried through SyncService on the SAME '
+      'endpoint with the SAME key - never the generic CREATE fallback',
       () async {
         loginAs(1);
+        // The from-program-workout POST fails (lost response) on the first
+        // attempt.
+        adapter.responder = (opts) {
+          if (opts.path == ApiConfig.sessionsFromProgramWorkout) {
+            throw DioException(
+              requestOptions: opts,
+              type: DioExceptionType.connectionError,
+            );
+          }
+          return Future.value(jsonResponse(const <dynamic>[]));
+        };
+
+        final programWorkout = ProgramWorkout(
+          id: 11,
+          programId: 5,
+          weekNumber: 1,
+          dayNumber: 1,
+          workoutName: 'PW2',
+          exercisesJson: '[]',
+          isCompleted: false,
+          orderIndex: 0,
+        );
+
+        final created = await repository.createSessionFromProgramWorkout(
+          11,
+          programWorkout,
+          DateTime(2026, 1, 1),
+          5,
+        );
+        await scheduledBackgroundSyncs.single;
+
+        final rowAfterFailedDispatch = await isar.localSessions.get(created.id);
+        expect(rowAfterFailedDispatch!.clientOperationId, isNotNull);
+        expect(rowAfterFailedDispatch.syncStatus, 'pending_create');
+        expect(rowAfterFailedDispatch.serverId, isNull);
+        final operationId = rowAfterFailedDispatch.clientOperationId;
+
+        // Now SyncService retries. It must dispatch the SAME endpoint with
+        // the SAME key/linkage - never fall back to generic POST /sessions,
+        // which would send a keyless/linkless body under a key the
+        // from-program-workout endpoint's own operation row already owns.
+        SyncService.reset();
+        final syncService = SyncService(
+          apiService: apiService,
+          authService: mockAuthService,
+          localDb: localDb,
+          connectivity: mockConnectivity,
+          sessionEpoch: sessionEpoch,
+          sessionCoordinator: sessionCoordinator,
+        );
         answerAllWith({
-          'id': 900,
+          'id': 999,
           'userId': 1,
           'date': '2026-01-01',
           'duration': null,
           'notes': null,
           'type': 'Workout',
-          'name': 'PW',
+          'name': 'PW2',
           'status': 'draft',
           'startedAt': null,
           'completedAt': null,
           'pausedAt': null,
           'exercises': <dynamic>[],
           'programId': 5,
-          'programWorkoutId': 10,
+          'programWorkoutId': 11,
           'version': 1,
         });
+        await syncService.sync();
 
-        final programWorkout = ProgramWorkout(
-          id: 10,
-          programId: 5,
-          weekNumber: 1,
-          dayNumber: 1,
-          workoutName: 'PW',
-          exercisesJson: '[]',
-          isCompleted: false,
-          orderIndex: 0,
-        );
+        final rowAfterRetry = await isar.localSessions.get(created.id);
+        expect(rowAfterRetry!.clientOperationId, operationId);
+        expect(rowAfterRetry.serverId, 999);
+        expect(rowAfterRetry.syncStatus, 'synced');
 
-        await repository.createSessionFromProgramWorkout(
-          10,
-          programWorkout,
-          DateTime(2026, 1, 1),
-          5,
-        );
-
-        final post = adapter.captured.singleWhere(
+        final retryPost = adapter.captured.lastWhere(
           (r) =>
               r.method == 'POST' &&
               r.path == ApiConfig.sessionsFromProgramWorkout,
         );
-        final body = post.data as Map<String, dynamic>;
-        expect(body.containsKey('clientOperationId'), isFalse);
+        final retryBody = retryPost.data as Map<String, dynamic>;
+        expect(retryBody['clientOperationId'], operationId);
+        expect(retryBody['programWorkoutId'], 11);
+        expect(retryBody['programId'], 5);
+
+        // Never dispatched through the generic endpoint at all.
+        expect(
+          adapter.captured.any(
+            (r) => r.method == 'POST' && r.path == ApiConfig.sessions,
+          ),
+          isFalse,
+        );
+        SyncService.reset();
       },
     );
-
-    test('32. its generic offline-fallback row is keyed only on the LATER '
-        'generic retry, and the original request stayed unkeyed', () async {
-      loginAs(1);
-      // The from-program-workout POST fails -> offline fallback fires.
-      adapter.responder = (opts) {
-        if (opts.path == ApiConfig.sessionsFromProgramWorkout) {
-          throw DioException(
-            requestOptions: opts,
-            type: DioExceptionType.connectionError,
-          );
-        }
-        return Future.value(jsonResponse(const <dynamic>[]));
-      };
-
-      final programWorkout = ProgramWorkout(
-        id: 11,
-        programId: 5,
-        weekNumber: 1,
-        dayNumber: 1,
-        workoutName: 'PW2',
-        exercisesJson: '[]',
-        isCompleted: false,
-        orderIndex: 0,
-      );
-
-      final fallback = await repository.createSessionFromProgramWorkout(
-        11,
-        programWorkout,
-        DateTime(2026, 1, 1),
-        5,
-      );
-
-      final rowRightAfterFallback = await isar.localSessions.get(fallback.id);
-      expect(
-        rowRightAfterFallback!.clientOperationId,
-        isNull,
-        reason: 'the fallback write itself never assigns a key',
-      );
-      expect(rowRightAfterFallback.programWorkoutId, 11);
-
-      // The original unkeyed request is confirmed sent.
-      expect(
-        adapter.captured.any(
-          (r) => r.path == ApiConfig.sessionsFromProgramWorkout,
-        ),
-        isTrue,
-      );
-
-      // Now the generic SyncService retry backfills a key on ITS retry.
-      SyncService.reset();
-      final syncService = SyncService(
-        apiService: apiService,
-        authService: mockAuthService,
-        localDb: localDb,
-        connectivity: mockConnectivity,
-        sessionEpoch: sessionEpoch,
-        sessionCoordinator: sessionCoordinator,
-      );
-      answerAllWith(serverSessionJson(999));
-      await syncService.sync();
-
-      final rowAfterGenericSync = await isar.localSessions.get(fallback.id);
-      expect(rowAfterGenericSync!.clientOperationId, isNotNull);
-      expect(rowAfterGenericSync.syncStatus, 'synced');
-
-      final genericPost = adapter.captured.lastWhere(
-        (r) => r.method == 'POST' && r.path == ApiConfig.sessions,
-      );
-      final genericBody = genericPost.data as Map<String, dynamic>;
-      expect(
-        genericBody['clientOperationId'],
-        rowAfterGenericSync.clientOperationId,
-      );
-      // Documents the still-open defect: program linkage is stripped from
-      // the generic retry body - this PR does not fix that.
-      expect(genericBody.containsKey('programId'), isFalse);
-      expect(genericBody.containsKey('programWorkoutId'), isFalse);
-      SyncService.reset();
-    });
   });
 
   test('34. a successful keyed replay clears passive diagnostics through the '

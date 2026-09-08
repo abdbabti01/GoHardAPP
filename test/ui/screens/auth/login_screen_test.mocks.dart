@@ -3,12 +3,12 @@
 // Do not manually edit this file.
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'dart:async' as _i4;
+import 'dart:async' as _i3;
 import 'dart:ui' as _i5;
 
 import 'package:go_hard_app/providers/auth_provider.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i3;
+import 'package:mockito/src/dummies.dart' as _i4;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -32,10 +32,41 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
   }
 
   @override
+  set onSessionEnding(_i3.Future<void> Function()? _onSessionEnding) =>
+      super.noSuchMethod(
+        Invocation.setter(#onSessionEnding, _onSessionEnding),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  set onLoggedOut(void Function()? _onLoggedOut) => super.noSuchMethod(
+    Invocation.setter(#onLoggedOut, _onLoggedOut),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  bool get isTerminating =>
+      (super.noSuchMethod(Invocation.getter(#isTerminating), returnValue: false)
+          as bool);
+
+  @override
+  bool get isLoggingOut =>
+      (super.noSuchMethod(Invocation.getter(#isLoggingOut), returnValue: false)
+          as bool);
+
+  @override
+  bool get isExpiringSession =>
+      (super.noSuchMethod(
+            Invocation.getter(#isExpiringSession),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
   String get email =>
       (super.noSuchMethod(
             Invocation.getter(#email),
-            returnValue: _i3.dummyValue<String>(
+            returnValue: _i4.dummyValue<String>(
               this,
               Invocation.getter(#email),
             ),
@@ -46,7 +77,7 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
   String get password =>
       (super.noSuchMethod(
             Invocation.getter(#password),
-            returnValue: _i3.dummyValue<String>(
+            returnValue: _i4.dummyValue<String>(
               this,
               Invocation.getter(#password),
             ),
@@ -57,7 +88,7 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
   String get signupName =>
       (super.noSuchMethod(
             Invocation.getter(#signupName),
-            returnValue: _i3.dummyValue<String>(
+            returnValue: _i4.dummyValue<String>(
               this,
               Invocation.getter(#signupName),
             ),
@@ -68,7 +99,7 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
   String get signupUsername =>
       (super.noSuchMethod(
             Invocation.getter(#signupUsername),
-            returnValue: _i3.dummyValue<String>(
+            returnValue: _i4.dummyValue<String>(
               this,
               Invocation.getter(#signupUsername),
             ),
@@ -79,7 +110,7 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
   String get signupEmail =>
       (super.noSuchMethod(
             Invocation.getter(#signupEmail),
-            returnValue: _i3.dummyValue<String>(
+            returnValue: _i4.dummyValue<String>(
               this,
               Invocation.getter(#signupEmail),
             ),
@@ -90,7 +121,7 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
   String get signupPassword =>
       (super.noSuchMethod(
             Invocation.getter(#signupPassword),
-            returnValue: _i3.dummyValue<String>(
+            returnValue: _i4.dummyValue<String>(
               this,
               Invocation.getter(#signupPassword),
             ),
@@ -101,7 +132,7 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
   String get signupConfirmPassword =>
       (super.noSuchMethod(
             Invocation.getter(#signupConfirmPassword),
-            returnValue: _i3.dummyValue<String>(
+            returnValue: _i4.dummyValue<String>(
               this,
               Invocation.getter(#signupConfirmPassword),
             ),
@@ -117,7 +148,7 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
   String get errorMessage =>
       (super.noSuchMethod(
             Invocation.getter(#errorMessage),
-            returnValue: _i3.dummyValue<String>(
+            returnValue: _i4.dummyValue<String>(
               this,
               Invocation.getter(#errorMessage),
             ),
@@ -188,29 +219,29 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
   );
 
   @override
-  _i4.Future<bool> login() =>
+  _i3.Future<bool> login() =>
       (super.noSuchMethod(
             Invocation.method(#login, []),
-            returnValue: _i4.Future<bool>.value(false),
+            returnValue: _i3.Future<bool>.value(false),
           )
-          as _i4.Future<bool>);
+          as _i3.Future<bool>);
 
   @override
-  _i4.Future<bool> signup() =>
+  _i3.Future<bool> signup() =>
       (super.noSuchMethod(
             Invocation.method(#signup, []),
-            returnValue: _i4.Future<bool>.value(false),
+            returnValue: _i3.Future<bool>.value(false),
           )
-          as _i4.Future<bool>);
+          as _i3.Future<bool>);
 
   @override
-  _i4.Future<void> logout() =>
+  _i3.Future<void> logout() =>
       (super.noSuchMethod(
             Invocation.method(#logout, []),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i3.Future<void>);
 
   @override
   void clearError() => super.noSuchMethod(

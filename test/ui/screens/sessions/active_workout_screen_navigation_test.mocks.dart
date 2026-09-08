@@ -9,6 +9,8 @@ import 'package:go_hard_app/data/models/exercise.dart' as _i3;
 import 'package:go_hard_app/data/models/program_workout.dart' as _i6;
 import 'package:go_hard_app/data/models/session.dart' as _i2;
 import 'package:go_hard_app/data/repositories/session_repository.dart' as _i4;
+import 'package:go_hard_app/data/repositories/session_sync_diagnostics.dart'
+    as _i7;
 import 'package:mockito/mockito.dart' as _i1;
 
 // ignore_for_file: type=lint
@@ -41,6 +43,96 @@ class MockSessionRepository extends _i1.Mock implements _i4.SessionRepository {
   MockSessionRepository() {
     _i1.throwOnMissingStub(this);
   }
+
+  @override
+  set operationIdGeneratorForTesting(
+    String Function()? _operationIdGeneratorForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #operationIdGeneratorForTesting,
+      _operationIdGeneratorForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeWriteTxnForTesting(
+    _i5.Future<void> Function()? _beforeWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#beforeWriteTxnForTesting, _beforeWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideWriteTxnForTesting(
+    _i5.Future<void> Function()? _insideWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#insideWriteTxnForTesting, _insideWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterWriteTxnForTesting(
+    _i5.Future<void> Function()? _afterWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(#afterWriteTxnForTesting, _afterWriteTxnForTesting),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeBackgroundHttpDispatchForTesting(
+    _i5.Future<void> Function()? _beforeBackgroundHttpDispatchForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeBackgroundHttpDispatchForTesting,
+      _beforeBackgroundHttpDispatchForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set afterBackgroundHttpResponseForTesting(
+    _i5.Future<void> Function()? _afterBackgroundHttpResponseForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #afterBackgroundHttpResponseForTesting,
+      _afterBackgroundHttpResponseForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set insideBackgroundWriteTxnForTesting(
+    _i5.Future<void> Function()? _insideBackgroundWriteTxnForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #insideBackgroundWriteTxnForTesting,
+      _insideBackgroundWriteTxnForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set beforeChildDeleteForTesting(
+    _i5.Future<void> Function()? _beforeChildDeleteForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #beforeChildDeleteForTesting,
+      _beforeChildDeleteForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set onBackgroundSyncScheduledForTesting(
+    void Function(_i5.Future<void>)? _onBackgroundSyncScheduledForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #onBackgroundSyncScheduledForTesting,
+      _onBackgroundSyncScheduledForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i5.Future<List<_i2.Session>> getSessions({bool? waitForSync = false}) =>
@@ -198,6 +290,14 @@ class MockSessionRepository extends _i1.Mock implements _i4.SessionRepository {
             returnValue: _i5.Stream<List<_i2.Session>>.empty(),
           )
           as _i5.Stream<List<_i2.Session>>);
+
+  @override
+  _i5.Stream<_i7.SessionSyncSnapshot> watchSessionSyncSnapshot(int? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#watchSessionSyncSnapshot, [userId]),
+            returnValue: _i5.Stream<_i7.SessionSyncSnapshot>.empty(),
+          )
+          as _i5.Stream<_i7.SessionSyncSnapshot>);
 
   @override
   _i5.Future<_i3.Exercise> addExerciseToSession(

@@ -196,6 +196,23 @@ class MockAuthService extends _i1.Mock implements _i8.AuthService {
             returnValue: _i3.Future<String?>.value(),
           )
           as _i3.Future<String?>);
+
+  @override
+  _i3.Future<void> writeCachedProfile(String? profileJson, int? ownerUserId) =>
+      (super.noSuchMethod(
+            Invocation.method(#writeCachedProfile, [profileJson, ownerUserId]),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
+
+  @override
+  _i3.Future<String?> readCachedProfile(int? expectedUserId) =>
+      (super.noSuchMethod(
+            Invocation.method(#readCachedProfile, [expectedUserId]),
+            returnValue: _i3.Future<String?>.value(),
+          )
+          as _i3.Future<String?>);
 }
 
 /// A class which mocks [ApiService].
@@ -317,6 +334,25 @@ class MockApiService extends _i1.Mock implements _i9.ApiService {
                     [path],
                     {#data: data, #sessionContext: sessionContext},
                   ),
+                ),
+          )
+          as _i3.Future<T>);
+
+  @override
+  _i3.Future<T> postPublic<T>(String? path, {dynamic data}) =>
+      (super.noSuchMethod(
+            Invocation.method(#postPublic, [path], {#data: data}),
+            returnValue:
+                _i12.ifNotNull(
+                  _i12.dummyValueOrNull<T>(
+                    this,
+                    Invocation.method(#postPublic, [path], {#data: data}),
+                  ),
+                  (T v) => _i3.Future<T>.value(v),
+                ) ??
+                _FakeFuture_1<T>(
+                  this,
+                  Invocation.method(#postPublic, [path], {#data: data}),
                 ),
           )
           as _i3.Future<T>);

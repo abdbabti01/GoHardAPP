@@ -388,6 +388,7 @@ void main() {
         restTime: 90,
         notes: 'Heavy day',
         exerciseTemplateId: 5,
+        occurrenceKey: 'bench-key',
         exerciseSets: [],
       );
 
@@ -407,9 +408,35 @@ void main() {
       expect(localExercise.restTime, 90);
       expect(localExercise.notes, 'Heavy day');
       expect(localExercise.exerciseTemplateId, 5);
+      expect(
+        localExercise.occurrenceKey,
+        'bench-key',
+        reason: 'copied verbatim from the API response',
+      );
       expect(localExercise.isSynced, true);
       expect(localExercise.syncStatus, 'synced');
     });
+
+    test(
+      'exerciseToLocal copies a null occurrenceKey through unchanged - never '
+      'invents one',
+      () {
+        final apiExercise = Exercise(
+          id: 11,
+          sessionId: 20,
+          name: 'Custom',
+          exerciseSets: [],
+        );
+
+        final localExercise = ModelMapper.exerciseToLocal(
+          apiExercise,
+          sessionLocalId: 100,
+          sessionServerId: 20,
+        );
+
+        expect(localExercise.occurrenceKey, isNull);
+      },
+    );
 
     test('localToExercise should convert LocalExercise to API Exercise', () {
       // Arrange
@@ -422,6 +449,7 @@ void main() {
         restTime: 90,
         notes: 'Heavy day',
         exerciseTemplateId: 5,
+        occurrenceKey: 'bench-key',
         isSynced: true,
         syncStatus: 'synced',
         lastModifiedLocal: DateTime.now(),
@@ -438,6 +466,7 @@ void main() {
       expect(apiExercise.restTime, 90);
       expect(apiExercise.notes, 'Heavy day');
       expect(apiExercise.exerciseTemplateId, 5);
+      expect(apiExercise.occurrenceKey, 'bench-key');
     });
 
     test(

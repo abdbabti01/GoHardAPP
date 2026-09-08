@@ -201,6 +201,23 @@ class MockAuthService extends _i1.Mock implements _i8.AuthService {
             returnValue: _i4.Future<String?>.value(),
           )
           as _i4.Future<String?>);
+
+  @override
+  _i4.Future<void> writeCachedProfile(String? profileJson, int? ownerUserId) =>
+      (super.noSuchMethod(
+            Invocation.method(#writeCachedProfile, [profileJson, ownerUserId]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
+  _i4.Future<String?> readCachedProfile(int? expectedUserId) =>
+      (super.noSuchMethod(
+            Invocation.method(#readCachedProfile, [expectedUserId]),
+            returnValue: _i4.Future<String?>.value(),
+          )
+          as _i4.Future<String?>);
 }
 
 /// A class which mocks [ConnectivityService].

@@ -9,6 +9,8 @@ import 'package:go_hard_app/data/models/exercise.dart' as _i3;
 import 'package:go_hard_app/data/models/program_workout.dart' as _i6;
 import 'package:go_hard_app/data/models/session.dart' as _i2;
 import 'package:go_hard_app/data/repositories/session_repository.dart' as _i4;
+import 'package:go_hard_app/data/repositories/session_sync_diagnostics.dart'
+    as _i7;
 import 'package:mockito/mockito.dart' as _i1;
 
 // ignore_for_file: type=lint
@@ -41,6 +43,17 @@ class MockSessionRepository extends _i1.Mock implements _i4.SessionRepository {
   MockSessionRepository() {
     _i1.throwOnMissingStub(this);
   }
+
+  @override
+  set operationIdGeneratorForTesting(
+    String Function()? _operationIdGeneratorForTesting,
+  ) => super.noSuchMethod(
+    Invocation.setter(
+      #operationIdGeneratorForTesting,
+      _operationIdGeneratorForTesting,
+    ),
+    returnValueForMissingStub: null,
+  );
 
   @override
   set beforeWriteTxnForTesting(
@@ -277,6 +290,14 @@ class MockSessionRepository extends _i1.Mock implements _i4.SessionRepository {
             returnValue: _i5.Stream<List<_i2.Session>>.empty(),
           )
           as _i5.Stream<List<_i2.Session>>);
+
+  @override
+  _i5.Stream<_i7.SessionSyncSnapshot> watchSessionSyncSnapshot(int? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#watchSessionSyncSnapshot, [userId]),
+            returnValue: _i5.Stream<_i7.SessionSyncSnapshot>.empty(),
+          )
+          as _i5.Stream<_i7.SessionSyncSnapshot>);
 
   @override
   _i5.Future<_i3.Exercise> addExerciseToSession(

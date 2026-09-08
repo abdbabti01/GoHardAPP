@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'local_exercise.dart';
+part of 'legacy_local_exercise.dart';
 
 // **************************************************************************
 // IsarCollectionGenerator
@@ -41,40 +41,35 @@ const LocalExerciseSchema = CollectionSchema(
     ),
     r'name': PropertySchema(id: 6, name: r'name', type: IsarType.string),
     r'notes': PropertySchema(id: 7, name: r'notes', type: IsarType.string),
-    r'occurrenceKey': PropertySchema(
-      id: 8,
-      name: r'occurrenceKey',
-      type: IsarType.string,
-    ),
-    r'restTime': PropertySchema(id: 9, name: r'restTime', type: IsarType.long),
-    r'serverId': PropertySchema(id: 10, name: r'serverId', type: IsarType.long),
+    r'restTime': PropertySchema(id: 8, name: r'restTime', type: IsarType.long),
+    r'serverId': PropertySchema(id: 9, name: r'serverId', type: IsarType.long),
     r'sessionLocalId': PropertySchema(
-      id: 11,
+      id: 10,
       name: r'sessionLocalId',
       type: IsarType.long,
     ),
     r'sessionServerId': PropertySchema(
-      id: 12,
+      id: 11,
       name: r'sessionServerId',
       type: IsarType.long,
     ),
     r'sortOrder': PropertySchema(
-      id: 13,
+      id: 12,
       name: r'sortOrder',
       type: IsarType.long,
     ),
     r'syncError': PropertySchema(
-      id: 14,
+      id: 13,
       name: r'syncError',
       type: IsarType.string,
     ),
     r'syncRetryCount': PropertySchema(
-      id: 15,
+      id: 14,
       name: r'syncRetryCount',
       type: IsarType.long,
     ),
     r'syncStatus': PropertySchema(
-      id: 16,
+      id: 15,
       name: r'syncStatus',
       type: IsarType.string,
     ),
@@ -85,19 +80,6 @@ const LocalExerciseSchema = CollectionSchema(
   deserializeProp: _localExerciseDeserializeProp,
   idName: r'localId',
   indexes: {
-    r'occurrenceKey': IndexSchema(
-      id: 1905454298359628696,
-      name: r'occurrenceKey',
-      unique: false,
-      replace: false,
-      properties: [
-        IndexPropertySchema(
-          name: r'occurrenceKey',
-          type: IndexType.hash,
-          caseSensitive: true,
-        ),
-      ],
-    ),
     r'isSynced': IndexSchema(
       id: -39763503327887510,
       name: r'isSynced',
@@ -147,12 +129,6 @@ int _localExerciseEstimateSize(
     }
   }
   {
-    final value = object.occurrenceKey;
-    if (value != null) {
-      bytesCount += 3 + value.length * 3;
-    }
-  }
-  {
     final value = object.syncError;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -176,15 +152,14 @@ void _localExerciseSerialize(
   writer.writeDateTime(offsets[5], object.lastSyncAttempt);
   writer.writeString(offsets[6], object.name);
   writer.writeString(offsets[7], object.notes);
-  writer.writeString(offsets[8], object.occurrenceKey);
-  writer.writeLong(offsets[9], object.restTime);
-  writer.writeLong(offsets[10], object.serverId);
-  writer.writeLong(offsets[11], object.sessionLocalId);
-  writer.writeLong(offsets[12], object.sessionServerId);
-  writer.writeLong(offsets[13], object.sortOrder);
-  writer.writeString(offsets[14], object.syncError);
-  writer.writeLong(offsets[15], object.syncRetryCount);
-  writer.writeString(offsets[16], object.syncStatus);
+  writer.writeLong(offsets[8], object.restTime);
+  writer.writeLong(offsets[9], object.serverId);
+  writer.writeLong(offsets[10], object.sessionLocalId);
+  writer.writeLong(offsets[11], object.sessionServerId);
+  writer.writeLong(offsets[12], object.sortOrder);
+  writer.writeString(offsets[13], object.syncError);
+  writer.writeLong(offsets[14], object.syncRetryCount);
+  writer.writeString(offsets[15], object.syncStatus);
 }
 
 LocalExercise _localExerciseDeserialize(
@@ -202,15 +177,14 @@ LocalExercise _localExerciseDeserialize(
     lastSyncAttempt: reader.readDateTimeOrNull(offsets[5]),
     name: reader.readString(offsets[6]),
     notes: reader.readStringOrNull(offsets[7]),
-    occurrenceKey: reader.readStringOrNull(offsets[8]),
-    restTime: reader.readLongOrNull(offsets[9]),
-    serverId: reader.readLongOrNull(offsets[10]),
-    sessionLocalId: reader.readLong(offsets[11]),
-    sessionServerId: reader.readLongOrNull(offsets[12]),
-    sortOrder: reader.readLongOrNull(offsets[13]) ?? 0,
-    syncError: reader.readStringOrNull(offsets[14]),
-    syncRetryCount: reader.readLongOrNull(offsets[15]) ?? 0,
-    syncStatus: reader.readStringOrNull(offsets[16]) ?? 'pending_create',
+    restTime: reader.readLongOrNull(offsets[8]),
+    serverId: reader.readLongOrNull(offsets[9]),
+    sessionLocalId: reader.readLong(offsets[10]),
+    sessionServerId: reader.readLongOrNull(offsets[11]),
+    sortOrder: reader.readLongOrNull(offsets[12]) ?? 0,
+    syncError: reader.readStringOrNull(offsets[13]),
+    syncRetryCount: reader.readLongOrNull(offsets[14]) ?? 0,
+    syncStatus: reader.readStringOrNull(offsets[15]) ?? 'pending_create',
   );
   object.localId = id;
   return object;
@@ -240,22 +214,20 @@ P _localExerciseDeserializeProp<P>(
     case 7:
       return (reader.readStringOrNull(offset)) as P;
     case 8:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 9:
       return (reader.readLongOrNull(offset)) as P;
     case 10:
-      return (reader.readLongOrNull(offset)) as P;
-    case 11:
       return (reader.readLong(offset)) as P;
-    case 12:
+    case 11:
       return (reader.readLongOrNull(offset)) as P;
+    case 12:
+      return (reader.readLongOrNull(offset) ?? 0) as P;
     case 13:
-      return (reader.readLongOrNull(offset) ?? 0) as P;
-    case 14:
       return (reader.readStringOrNull(offset)) as P;
-    case 15:
+    case 14:
       return (reader.readLongOrNull(offset) ?? 0) as P;
-    case 16:
+    case 15:
       return (reader.readStringOrNull(offset) ?? 'pending_create') as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -365,84 +337,6 @@ extension LocalExerciseQueryWhere
           includeUpper: includeUpper,
         ),
       );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterWhereClause>
-  occurrenceKeyIsNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        IndexWhereClause.equalTo(indexName: r'occurrenceKey', value: [null]),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterWhereClause>
-  occurrenceKeyIsNotNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        IndexWhereClause.between(
-          indexName: r'occurrenceKey',
-          lower: [null],
-          includeLower: false,
-          upper: [],
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterWhereClause>
-  occurrenceKeyEqualTo(String? occurrenceKey) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        IndexWhereClause.equalTo(
-          indexName: r'occurrenceKey',
-          value: [occurrenceKey],
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterWhereClause>
-  occurrenceKeyNotEqualTo(String? occurrenceKey) {
-    return QueryBuilder.apply(this, (query) {
-      if (query.whereSort == Sort.asc) {
-        return query
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'occurrenceKey',
-                lower: [],
-                upper: [occurrenceKey],
-                includeUpper: false,
-              ),
-            )
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'occurrenceKey',
-                lower: [occurrenceKey],
-                includeLower: false,
-                upper: [],
-              ),
-            );
-      } else {
-        return query
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'occurrenceKey',
-                lower: [occurrenceKey],
-                includeLower: false,
-                upper: [],
-              ),
-            )
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'occurrenceKey',
-                lower: [],
-                upper: [occurrenceKey],
-                includeUpper: false,
-              ),
-            );
-      }
     });
   }
 
@@ -1269,165 +1163,6 @@ extension LocalExerciseQueryFilter
   }
 
   QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyIsNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNull(property: r'occurrenceKey'),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyIsNotNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNotNull(property: r'occurrenceKey'),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyEqualTo(String? value, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(
-          property: r'occurrenceKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyGreaterThan(
-    String? value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'occurrenceKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyLessThan(
-    String? value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'occurrenceKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyBetween(
-    String? lower,
-    String? upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'occurrenceKey',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyStartsWith(String value, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.startsWith(
-          property: r'occurrenceKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyEndsWith(String value, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.endsWith(
-          property: r'occurrenceKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyContains(String value, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.contains(
-          property: r'occurrenceKey',
-          value: value,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyMatches(String pattern, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.matches(
-          property: r'occurrenceKey',
-          wildcard: pattern,
-          caseSensitive: caseSensitive,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyIsEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'occurrenceKey', value: ''),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
-  occurrenceKeyIsNotEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(property: r'occurrenceKey', value: ''),
-      );
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
   restTimeIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(
@@ -2226,20 +1961,6 @@ extension LocalExerciseQuerySortBy
     });
   }
 
-  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
-  sortByOccurrenceKey() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'occurrenceKey', Sort.asc);
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
-  sortByOccurrenceKeyDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'occurrenceKey', Sort.desc);
-    });
-  }
-
   QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy> sortByRestTime() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'restTime', Sort.asc);
@@ -2468,20 +2189,6 @@ extension LocalExerciseQuerySortThenBy
     });
   }
 
-  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
-  thenByOccurrenceKey() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'occurrenceKey', Sort.asc);
-    });
-  }
-
-  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
-  thenByOccurrenceKeyDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'occurrenceKey', Sort.desc);
-    });
-  }
-
   QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy> thenByRestTime() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'restTime', Sort.asc);
@@ -2648,16 +2355,6 @@ extension LocalExerciseQueryWhereDistinct
     });
   }
 
-  QueryBuilder<LocalExercise, LocalExercise, QDistinct>
-  distinctByOccurrenceKey({bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(
-        r'occurrenceKey',
-        caseSensitive: caseSensitive,
-      );
-    });
-  }
-
   QueryBuilder<LocalExercise, LocalExercise, QDistinct> distinctByRestTime() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'restTime');
@@ -2771,13 +2468,6 @@ extension LocalExerciseQueryProperty
   QueryBuilder<LocalExercise, String?, QQueryOperations> notesProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'notes');
-    });
-  }
-
-  QueryBuilder<LocalExercise, String?, QQueryOperations>
-  occurrenceKeyProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'occurrenceKey');
     });
   }
 

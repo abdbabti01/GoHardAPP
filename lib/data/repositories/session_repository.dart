@@ -91,6 +91,94 @@ import '../local/models/local_exercise_template.dart';
 /// and never treated as grounds to mark a row permanently failed or
 /// increment a retry counter. Every other exception preserves this
 /// repository's existing "log and continue, retry later" behavior.
+///
+/// ## Program-workout exercise-occurrence identity
+///
+/// GoHardAPI's persistent occurrence-identity contract is deployed and live
+/// (`GoHardAPI.Models.Exercise.OccurrenceKey`, backed by
+/// `ProgramWorkoutExerciseOccurrences`/`ProgramWorkoutSessionMaterializer` -
+/// see their class doc comments on the deployed side). This section
+/// documents how this repository consumes it; it previously documented a
+/// design PROPOSAL for a feature that has since shipped.
+///
+/// **What `occurrenceKey` identifies.** One exercise OCCURRENCE within a
+/// single `ProgramWorkout.ExercisesJson` array - never the exercise TYPE
+/// (`exerciseTemplateId` still means that), and never globally unique: the
+/// SAME key legitimately repeats across every Exercise materialized from the
+/// same `ProgramWorkout` into DIFFERENT Sessions (two intentional starts of
+/// the same workout both get Exercises keyed identically to their shared
+/// source template). Uniqueness is enforced only WITHIN one workout array.
+///
+/// **Where it comes from, client-side.** [createSessionFromProgramWorkout]
+/// reads `occurrenceKey` directly off each parsed `exercisesData` map (the
+/// SAME cached `ProgramWorkout.exercisesJson` this method already reads
+/// `name`/`exerciseTemplateId`/`notes`/`rest` from) and persists it verbatim
+/// on the local placeholder - never invented, never derived from anything
+/// else. A template CACHED before this field existed (or not refreshed
+/// since) simply has no key on some or all entries yet; every server
+/// read path that returns a `ProgramWorkout` (program/workout GETs) now
+/// self-heals this server-side (`ProgramWorkoutExerciseOccurrences
+/// .EnsurePersistedAsync`), so this client's OWN next routine program/
+/// workout refresh backfills real keys with zero client-side protocol
+/// change - `ProgramWorkout.exercisesJson` is an opaque, already-generic
+/// JSON blob on both the Isar (`LocalProgramWorkout.exercisesJson`) and API
+/// (`ProgramWorkout.exercises` getter, parsed as raw `Map<String,dynamic>`)
+/// sides, so the field rides through existing plumbing with no model change
+/// there. A placeholder still materialized with no key (a genuinely stale
+/// cache, or an ad-hoc exercise with no program-workout source at all) is
+/// never matched by guessing - see the matching rule below.
+///
+/// **Where it comes from, server-side.** Every Exercise materialized
+/// through the KEYED `POST /sessions/from-program-workout` path carries a
+/// real, non-null `occurrenceKey`: `SessionCreateService
+/// .ProgramWorkoutFirstWriteAsync` calls `EnsurePersistedAsync` on the
+/// source workout BEFORE `ProgramWorkoutSessionMaterializer.Build` runs, so
+/// even a source template that itself still lacks keys gets stable,
+/// self-healed ones at materialization time (verified against the deployed
+/// contract's own test,
+/// `SessionCreateFromProgramWorkoutOccurrenceKeyTests
+/// .KeyedCreate_SourceWorkoutMissingKeys_StillGetsStableKeysOnEachExercise`).
+/// A keyed REPLAY never re-reads the source workout at all (existing
+/// first-writer-wins contract, unchanged), so it always returns the SAME
+/// Exercises with the SAME keys the original accepted write assigned -
+/// confirmed by the deployed contract's own
+/// `Replay_AfterSourceWorkoutEdited_StillReturnsTheOriginalSessionsOriginalKeys`
+/// test. `occurrenceKey` is a normal persisted column, so it is naturally
+/// present on every `GET /sessions/{id}`/`GET /sessions` response too
+/// (raw-entity serialization, unchanged) and survives a server or this
+/// client's own app restart with no special handling - nothing about this
+/// class's durable-retry design (dispatch-before-persistence, retry after
+/// restart, `dispatchedAt` comparisons) needed to change to keep it correct.
+///
+/// **Matching rule.** [_reconcileProgramWorkoutCreateExercises] delegates to
+/// [ModelMapper.pairProgramWorkoutCreateExercises] - see its doc comment for
+/// the full one-to-one-by-`occurrenceKey` contract, including why `null`
+/// never establishes identity and why a duplicate/invalid response identity
+/// is treated as a contract error (never partially assigned) rather than a
+/// crash. The SAME matching contract is used by
+/// [_syncCreateSessionFromProgramWorkoutToServer] (this class),
+/// `SyncService._syncCreateSessionFromProgramWorkout` (its independent
+/// twin), and now also by ordinary Session/Exercise refresh
+/// ([_resolveExistingExerciseForRefresh], used by both [getSession] and
+/// [_syncSessionsFromServer]): a later GET can now recognize an occurrence
+/// already represented locally (e.g. a still-`conflict`-marked ambiguous
+/// row, or a plain unsynced program-workout placeholder) by `occurrenceKey`
+/// instead of only by `serverId`, closing the "a subsequent refresh inserts
+/// a duplicate row" gap a prior round of this branch explicitly disclosed as
+/// unresolved.
+///
+/// **Legacy/unresolved cases.** A local exercise that cannot be safely
+/// matched (no key at all, or a key with no unique server counterpart - the
+/// occurrence was removed/replaced before materialization) is marked
+/// `syncStatus: 'conflict'` (see [_reconcileProgramWorkoutCreateExercises]) -
+/// never guessed, never silently discarded, its `LocalExerciseSet` children
+/// always preserved under its stable `localId`. This is a genuine, disclosed
+/// limitation, not a defect: without a key, there is no data-safe way to
+/// attach a server identity, and this codebase has no exercise-level
+/// equivalent of the Session conflict-resolution UI yet (the `'conflict'`
+/// status value is borrowed from that existing, Session-level concept - see
+/// `SessionSyncDiagnostics` - precisely so a future UI has something to
+/// surface it against).
 class SessionRepository {
   final ApiService _apiService;
   final LocalDatabaseService _localDb;
@@ -534,6 +622,61 @@ class SessionRepository {
   /// snapshot - no persisted state, no schema change, and it never
   /// suppresses a session whose key was NOT already pending cancellation
   /// at that moment.
+  ///
+  /// Resolves the LOCAL row a refresh ([_syncSessionsFromServer] or
+  /// [getSession]) should reconcile [apiExercise] against, for the already-
+  /// resolved-and-owned parent Session at [sessionLocalId]. First by
+  /// `serverId` (the pre-existing, general contract for any already-synced
+  /// exercise - unconditionally correct regardless of program-workout
+  /// origin), then - only when that fails - by `occurrenceKey`, using the
+  /// SAME one-to-one contract [ModelMapper.pairProgramWorkoutCreateExercises]
+  /// uses for the CREATE acknowledgment itself: exactly one local exercise
+  /// in this session sharing [apiExercise]'s `occurrenceKey`. This is what
+  /// lets a refresh recognize an occurrence already represented locally
+  /// (e.g. a still-`conflict`-marked ambiguous row, or an ordinary unsynced
+  /// program-workout placeholder still awaiting its own CREATE
+  /// acknowledgment) instead of inserting a duplicate for it. Returns `null`
+  /// when neither resolves to a UNIQUE local row (no key, or more than one
+  /// local exercise sharing it - never guessed) - the caller's existing
+  /// "insert as new" fallback applies unchanged, exactly as it did before
+  /// `occurrenceKey` existed.
+  ///
+  /// The `serverId` lookup below is intentionally NOT scoped to
+  /// [sessionLocalId] (unlike the `occurrenceKey` fallback, which IS scoped
+  /// to it) - it relies on the same "server exercise ids are globally
+  /// unique" assumption this whole feature already depends on elsewhere
+  /// ([ModelMapper.pairProgramWorkoutCreateExercises]'s own preliminary
+  /// already-resolved-by-serverId pass makes the identical assumption). A
+  /// positive `serverId` is only ever attached to a local row by this
+  /// repository's own acknowledged writes, always under ownership checks at
+  /// write time, so a stale/foreign match here is not expected to occur in
+  /// practice - not a newly-introduced risk, but called out here since nothing
+  /// enforces it structurally at this call site the way [sessionLocalId]
+  /// scoping enforces it for the `occurrenceKey` fallback.
+  Future<LocalExercise?> _resolveExistingExerciseForRefresh(
+    Isar db,
+    int sessionLocalId,
+    Exercise apiExercise,
+  ) async {
+    final byServerId =
+        await db.localExercises
+            .filter()
+            .serverIdEqualTo(apiExercise.id)
+            .findFirst();
+    if (byServerId != null) return byServerId;
+
+    final key = apiExercise.occurrenceKey;
+    if (key == null) return null;
+
+    final byOccurrenceKey =
+        await db.localExercises
+            .filter()
+            .sessionLocalIdEqualTo(sessionLocalId)
+            .occurrenceKeyEqualTo(key)
+            .findAll();
+    return byOccurrenceKey.length == 1 ? byOccurrenceKey.single : null;
+  }
+
   Future<void> _syncSessionsFromServer(
     Isar db,
     SessionRequestContext context,
@@ -694,12 +837,11 @@ class SessionRepository {
         // Save exercises for this session
         int exerciseCount = 0;
         for (final apiExercise in apiSession.exercises) {
-          // Check if exercise already exists locally
-          final existingExercise =
-              await db.localExercises
-                  .filter()
-                  .serverIdEqualTo(apiExercise.id)
-                  .findFirst();
+          final existingExercise = await _resolveExistingExerciseForRefresh(
+            db,
+            savedSession.localId,
+            apiExercise,
+          );
 
           if (existingExercise != null) {
             // Update existing
@@ -872,11 +1014,11 @@ class SessionRepository {
 
           // Save exercises for this session
           for (final apiExercise in apiSession.exercises) {
-            final existingExercise =
-                await db.localExercises
-                    .filter()
-                    .serverIdEqualTo(apiExercise.id)
-                    .findFirst();
+            final existingExercise = await _resolveExistingExerciseForRefresh(
+              db,
+              savedSession.localId,
+              apiExercise,
+            );
 
             if (existingExercise != null) {
               final updated = ModelMapper.exerciseToLocal(
@@ -1021,34 +1163,98 @@ class SessionRepository {
     return await _localSessionToSessionWithExercises(db, localSession);
   }
 
-  /// Create a session from a program workout
-  /// Links the session to the program and program workout
-  /// Now works offline by parsing exercisesJson client-side
+  /// Computes the scheduled `date`/initial `status` for a program-workout
+  /// Session, from the SAME rule the previous online/offline branches used
+  /// independently (now unified so they cannot drift): prefer
+  /// [ProgramWorkout.scheduledDate], otherwise derive it from
+  /// [programStartDate] + week/day offset; a computed date in the past is
+  /// clamped to today (so an overdue workout can still be started "now"
+  /// instead of showing a stale past date) - `status` follows from the
+  /// CLAMPED date, exactly like before.
+  ({DateTime date, String status}) _scheduleForProgramWorkout(
+    ProgramWorkout programWorkout,
+    DateTime programStartDate,
+  ) {
+    DateTime normalizedScheduledDate;
+    if (programWorkout.scheduledDate != null) {
+      final sd = programWorkout.scheduledDate!;
+      normalizedScheduledDate = DateTime(sd.year, sd.month, sd.day);
+    } else {
+      final localStartDate = programStartDate.toLocal();
+      final startDate = DateTime(
+        localStartDate.year,
+        localStartDate.month,
+        localStartDate.day,
+      );
+      final scheduledDate = startDate.add(
+        Duration(
+          days:
+              (programWorkout.weekNumber - 1) * 7 +
+              (programWorkout.dayNumber - 1),
+        ),
+      );
+      normalizedScheduledDate = DateTime(
+        scheduledDate.year,
+        scheduledDate.month,
+        scheduledDate.day,
+      );
+    }
+    return _clampScheduleToToday(normalizedScheduledDate);
+  }
+
+  /// Pure `date`-only clamp shared by [_scheduleForProgramWorkout] (initial
+  /// local materialization) and the CREATE acknowledgment (applied directly
+  /// to the server's own `date`, with no [ProgramWorkout] object needed - see
+  /// [_syncCreateSessionFromProgramWorkoutToServer]'s doc comment for why
+  /// that matters for a retry dispatched after an app restart).
+  ({DateTime date, String status}) _clampScheduleToToday(
+    DateTime normalizedDate,
+  ) {
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    final actualDate = normalizedDate.isBefore(today) ? today : normalizedDate;
+    final status = actualDate.isAfter(today) ? 'planned' : 'draft';
+    return (date: actualDate, status: status);
+  }
+
+  /// Create a session from a program workout. Links the session to the
+  /// program and program workout, and works offline by parsing
+  /// `exercisesJson` client-side.
   ///
-  /// ## Durable-cancellation boundary (accepted, pre-existing limitation)
+  /// ## Durable, idempotent creation
   ///
-  /// The ONLINE request to `POST /sessions/from-program-workout` is
-  /// UNKEYED - `CreateSessionFromProgramWorkoutDto` has no
-  /// `clientOperationId` field, unlike the generic `POST /api/v1/sessions`
-  /// this class's [createSession] uses. If that request actually commits
-  /// server-side but its response is lost (the `catch` below only sees a
-  /// network/transport failure), this method falls through to the OFFLINE
-  /// branch and creates a brand-new local row with NEITHER a `serverId` nor
-  /// a `clientOperationId` - there is no key to backfill onto it, because
-  /// the ORIGINAL request that may have committed never carried one. A
-  /// generic sync pass will later backfill this NEW row its OWN key (see
-  /// [LocalSession.clientOperationId]'s doc comment) and dispatch a SEPARATE
-  /// generic keyed CREATE for it - which cannot retroactively identify or
-  /// cancel whatever the original unkeyed request may have already created.
-  /// Deleting this offline-fallback row BEFORE that backfill ever runs is
-  /// still safe (see `_markForDeletion`'s doc comment: neither identity
-  /// existed yet, so there is nothing a server could be holding under a key
-  /// that was never generated for THIS row) - but it does nothing for a
-  /// still-possible orphaned Session from the original unkeyed request. This
-  /// is a genuinely unresolved gap in this specific entry point, not
-  /// something durable cancellation claims to close; fixing it would require
-  /// adding `clientOperationId` to `CreateSessionFromProgramWorkoutDto` and
-  /// its server-side handling - an API-first change, out of scope here.
+  /// `POST /sessions/from-program-workout` now joins the SAME durable
+  /// `clientOperationId` protocol [createSession] uses for the generic
+  /// endpoint (see [LocalSession.clientOperationId]'s doc comment): exactly
+  /// one operation key is generated here and persisted, atomically with the
+  /// local Session/Exercise materialization, BEFORE any HTTP attempt -
+  /// online or offline, this method always returns the just-persisted local
+  /// row (mirroring [createSession]'s "local-first" contract), and dispatch
+  /// to the server happens in the background via
+  /// [_syncCreateSessionFromProgramWorkoutToServer], never inline here.
+  ///
+  /// The durable retry REQUEST is nothing more than the identifiers already
+  /// on the row - `programWorkoutId`, `programId`, `clientOperationId` (no
+  /// new schema field needed): the server materializes the Session's
+  /// Exercises from ITS OWN current `ProgramWorkout.ExercisesJson` on the
+  /// first accepted write and never re-reads it on a replay (see the
+  /// deployed contract's doc comment on
+  /// `SessionsController.CreateSessionFromProgramWorkout`), so a client-side
+  /// retry never needs to (and never does) resend exercise data - a
+  /// [programWorkout] edited after this call returns cannot change what a
+  /// later retry of THIS operation sends.
+  ///
+  /// A background `SyncService` pass picks up a still-`pending_create` row
+  /// exactly like any other - see the class-level dispatch-routing note on
+  /// `SyncService._syncCreateSession` - and dispatches through the SAME
+  /// endpoint with the SAME retained key, never through the generic
+  /// `POST /api/v1/sessions` fallback (which would send a keyless/linkless
+  /// body under a key the from-program-workout endpoint's server-side
+  /// operation row already owns, permanently losing the template's
+  /// exercises to first-writer-wins).
   Future<Session> createSessionFromProgramWorkout(
     int programWorkoutId,
     ProgramWorkout programWorkout,
@@ -1063,7 +1269,12 @@ class SessionRepository {
     final db = _localDb.database;
     final userId = token.userId;
 
-    // Check if a session already exists for this program workout
+    // Check if a session already exists for this program workout. This
+    // guards against duplicate ACTIVE sessions for the same template, not
+    // against a durable-operation-key check - a fresh key is generated below
+    // for every genuinely new intent, so two separate intentional starts of
+    // the SAME programWorkoutId (this one finished/archived, a new one
+    // begun) never share a key.
     final existingSessions =
         await db.localSessions
             .filter()
@@ -1126,164 +1337,32 @@ class SessionRepository {
       '📝 No existing draft/planned session found, creating new session for program workout $programWorkoutId',
     );
 
-    // Try to create on server if online
-    if (_connectivity.isOnline) {
-      try {
-        final data = await _apiService.post<Map<String, dynamic>>(
-          ApiConfig.sessionsFromProgramWorkout,
-          data: {'programWorkoutId': programWorkoutId, 'programId': programId},
-          sessionContext: context,
-        );
-        var apiSession = Session.fromJson(data);
+    // Generate exactly one durable operation key for this logical CREATE,
+    // persisted below in the SAME write that first inserts the
+    // pending_create row, before any HTTP dispatch - see
+    // [LocalSession.clientOperationId]'s doc comment.
+    final operationId = _generateOperationId();
+    final schedule = _scheduleForProgramWorkout(
+      programWorkout,
+      programStartDate,
+    );
 
-        // Use scheduledDate from ProgramWorkout if available (single source of truth)
-        DateTime correctScheduledDate;
-        if (programWorkout.scheduledDate != null) {
-          final sd = programWorkout.scheduledDate!;
-          correctScheduledDate = DateTime(sd.year, sd.month, sd.day);
-        } else {
-          final localStartDate = programStartDate.toLocal();
-          final startDate = DateTime(
-            localStartDate.year,
-            localStartDate.month,
-            localStartDate.day,
-          );
-          correctScheduledDate = startDate.add(
-            Duration(
-              days:
-                  (programWorkout.weekNumber - 1) * 7 +
-                  (programWorkout.dayNumber - 1),
-            ),
-          );
-        }
-
-        final today = DateTime(
-          DateTime.now().year,
-          DateTime.now().month,
-          DateTime.now().day,
-        );
-
-        final actualDate =
-            correctScheduledDate.isBefore(today) ? today : correctScheduledDate;
-
-        final apiDate = DateTime(
-          apiSession.date.year,
-          apiSession.date.month,
-          apiSession.date.day,
-        );
-
-        if (apiDate != actualDate) {
-          debugPrint(
-            '📅 Using scheduledDate from program workout: $apiDate -> $actualDate',
-          );
-          apiSession = apiSession.copyWith(date: actualDate);
-        }
-
-        await _runTestHook(beforeWriteTxnForTesting);
-        if (!_sessionEpoch.isCurrent(token)) {
-          throw Exception(_unauthenticated);
-        }
-
-        // Cache the session locally with exercises
-        await db.writeTxn(() async {
-          await _runTestHook(insideWriteTxnForTesting);
-          if (!_sessionEpoch.isCurrent(token)) return;
-
-          final localSession = ModelMapper.sessionToLocal(
-            apiSession,
-            isSynced: true,
-          );
-          await db.localSessions.put(localSession);
-
-          for (final apiExercise in apiSession.exercises) {
-            final localExercise = ModelMapper.exerciseToLocal(
-              apiExercise,
-              sessionLocalId: localSession.localId,
-              isSynced: true,
-            );
-            await db.localExercises.put(localExercise);
-          }
-        });
-
-        debugPrint('✅ Created session from program workout: ${apiSession.id}');
-        // Same rationale as getSession's online-success return: strip the
-        // internal correlation id before handing this Session outside the
-        // repository layer (harmless here since this endpoint never sets
-        // it, but keeps both raw-entity return paths consistent).
-        return apiSession.copyWith(clearClientOperationId: true);
-      } on SessionStaleException {
-        throw Exception(_unauthenticated);
-      } on RequestCancelledException {
-        throw Exception(_unauthenticated);
-      } catch (e) {
-        debugPrint(
-          '⚠️ Failed to create session on server, creating locally: $e',
-        );
-        // Fall through to offline creation
-      }
-    }
-
-    // Offline creation: Parse exercisesJson and create locally
-    debugPrint('📴 Creating session from program workout offline');
-
+    // Parse exercisesJson NOW - the only point this call reads the supplied
+    // [programWorkout] object. A later template edit cannot retroactively
+    // change what gets materialized here, and (per the class doc comment)
+    // cannot change what a later retry of THIS operation sends either, since
+    // the retry never resends exercise data at all.
     final exercisesData = programWorkout.exercises;
     final exercises = <Exercise>[];
 
-    DateTime normalizedScheduledDate;
-    if (programWorkout.scheduledDate != null) {
-      final sd = programWorkout.scheduledDate!;
-      normalizedScheduledDate = DateTime(sd.year, sd.month, sd.day);
-    } else {
-      final localStartDate = programStartDate.toLocal();
-      final startDate = DateTime(
-        localStartDate.year,
-        localStartDate.month,
-        localStartDate.day,
-      );
-      final scheduledDate = startDate.add(
-        Duration(
-          days:
-              (programWorkout.weekNumber - 1) * 7 +
-              (programWorkout.dayNumber - 1),
-        ),
-      );
-      normalizedScheduledDate = DateTime(
-        scheduledDate.year,
-        scheduledDate.month,
-        scheduledDate.day,
-      );
-    }
-
-    final today = DateTime(
-      DateTime.now().year,
-      DateTime.now().month,
-      DateTime.now().day,
-    );
-
-    final actualDate =
-        normalizedScheduledDate.isBefore(today)
-            ? today
-            : normalizedScheduledDate;
-
-    final status = actualDate.isAfter(today) ? 'planned' : 'draft';
-
-    final session = Session(
-      id: 0,
-      userId: userId,
-      date: actualDate,
-      name: programWorkout.workoutName,
-      type: programWorkout.workoutType ?? 'Workout',
-      status: status,
-      programId: programId,
-      programWorkoutId: programWorkoutId,
-      exercises: exercises,
-    );
-
+    // ALWAYS materialize locally first for instant response and a durable
+    // retry target, online or offline - one shared timestamp for the
+    // Session AND every Exercise row created in this same transaction, so
+    // the acknowledgment's "did anything change since dispatch" comparisons
+    // (below) are exact.
+    final createdAt = DateTime.now().toUtc();
     late int sessionLocalId;
 
-    if (!_sessionEpoch.isCurrent(token)) {
-      throw Exception(_unauthenticated);
-    }
     await _runTestHook(beforeWriteTxnForTesting);
     if (!_sessionEpoch.isCurrent(token)) {
       throw Exception(_unauthenticated);
@@ -1296,20 +1375,16 @@ class SessionRepository {
       final localSession = LocalSession(
         serverId: null,
         userId: userId,
-        date: session.date,
-        duration: session.duration,
-        notes: session.notes,
-        type: session.type,
-        name: session.name,
-        status: session.status,
-        startedAt: session.startedAt,
-        completedAt: session.completedAt,
-        pausedAt: session.pausedAt,
-        programId: session.programId,
-        programWorkoutId: session.programWorkoutId,
+        date: schedule.date,
+        name: programWorkout.workoutName,
+        type: programWorkout.workoutType ?? 'Workout',
+        status: schedule.status,
+        programId: programId,
+        programWorkoutId: programWorkoutId,
         isSynced: false,
         syncStatus: 'pending_create',
-        lastModifiedLocal: DateTime.now().toUtc(),
+        lastModifiedLocal: createdAt,
+        clientOperationId: operationId,
       );
 
       sessionLocalId = await db.localSessions.put(localSession);
@@ -1319,35 +1394,45 @@ class SessionRepository {
         final exerciseTemplateId = exerciseData['exerciseTemplateId'] as int?;
         final notes = exerciseData['notes'] as String?;
         final restTime = exerciseData['rest'] as int?;
+        // Copied verbatim from the cached template entry, exactly as the
+        // deployed materializer does server-side - never invented here. A
+        // template cached before this field existed (or never refreshed
+        // since) simply has no key for this entry; see this method's class
+        // doc comment section on program-workout exercise-occurrence
+        // identity for why that is handled safely rather than guessed.
+        final occurrenceKey = exerciseData['occurrenceKey'] as String?;
 
-        final exercise = Exercise(
-          id: 0,
-          sessionId: sessionLocalId,
-          name: exerciseName,
-          exerciseTemplateId: exerciseTemplateId,
-          notes: notes,
-          restTime: restTime,
-          duration: null,
-          exerciseSets: [],
-        );
-
-        final localExercise = ModelMapper.exerciseToLocal(
-          exercise,
+        final localExercise = LocalExercise(
           sessionLocalId: sessionLocalId,
+          name: exerciseName,
+          restTime: restTime,
+          notes: notes,
+          exerciseTemplateId: exerciseTemplateId,
+          occurrenceKey: occurrenceKey,
           isSynced: false,
+          syncStatus: 'pending_create',
+          lastModifiedLocal: createdAt,
         );
         final exerciseLocalId = await db.localExercises.put(localExercise);
 
-        // Offline exercise: expose it under the collision-free public-id
-        // namespace (`-localId`), matching ModelMapper.localToExercise, so a
-        // later ExerciseRepository lookup resolves it as a local id, never as
-        // a server id.
+        // Not-yet-synced exercise: expose it under the collision-free
+        // public-id namespace (`-localId`), matching
+        // ModelMapper.localToExercise, so a later ExerciseRepository lookup
+        // resolves it as a local id, never as a server id.
         exercises.add(
-          exercise.copyWith(
+          Exercise(
             id: ModelMapper.publicRowId(
               serverId: null,
               localId: exerciseLocalId,
             ),
+            sessionId: sessionLocalId,
+            name: exerciseName,
+            exerciseTemplateId: exerciseTemplateId,
+            occurrenceKey: occurrenceKey,
+            notes: notes,
+            restTime: restTime,
+            duration: null,
+            exerciseSets: const [],
           ),
         );
       }
@@ -1357,24 +1442,55 @@ class SessionRepository {
       throw Exception(_unauthenticated);
     }
 
+    // Dispatch to server in background if online (never inline/blocking) -
+    // bound to the context captured at entry, exactly like [createSession].
+    if (_connectivity.isOnline) {
+      // Pin the exact local revision the background CREATE will serialize BY
+      // RE-READING the just-persisted row, not the raw `createdAt` value used
+      // to construct it - Isar's own DateTime round-trip precision can
+      // differ from the in-memory value, and the acknowledgment's
+      // comparisons below must be against what Isar will ACTUALLY read back
+      // later, exactly like [createSession] does. Every Exercise row in this
+      // same transaction was stamped with the SAME `createdAt` instant, so
+      // this one re-read is the correct baseline for all of them too.
+      final createdRow = await _ownedSessionByLocalId(
+        db,
+        sessionLocalId,
+        token,
+      );
+      if (createdRow != null) {
+        final dispatchedAt = createdRow.lastModifiedLocal;
+        _backgroundSync(
+          () => _syncCreateSessionFromProgramWorkoutToServer(
+            db,
+            sessionLocalId,
+            dispatchedAt,
+            context,
+            operationId,
+          ),
+          'Created session from program workout on server',
+        );
+      }
+      // else: already gone (deleted / logged out between the write and
+      // here) - nothing to sync, matching [createSession]'s identical case.
+    } else {
+      debugPrint('📴 Offline - program workout session will sync later');
+    }
+
     debugPrint(
-      '💾 Created session offline with ${exercises.length} exercises (localId: $sessionLocalId)',
+      '💾 Created session from program workout with ${exercises.length} exercises '
+      '(localId: $sessionLocalId, op: $operationId)',
     );
 
     return Session(
       id: sessionLocalId,
       userId: userId,
-      date: session.date,
-      duration: session.duration,
-      notes: session.notes,
-      type: session.type,
-      name: session.name,
-      status: session.status,
-      startedAt: session.startedAt,
-      completedAt: session.completedAt,
-      pausedAt: session.pausedAt,
-      programId: session.programId,
-      programWorkoutId: session.programWorkoutId,
+      date: schedule.date,
+      name: programWorkout.workoutName,
+      type: programWorkout.workoutType ?? 'Workout',
+      status: schedule.status,
+      programId: programId,
+      programWorkoutId: programWorkoutId,
       exercises: exercises,
     );
   }
@@ -1518,6 +1634,273 @@ class SessionRepository {
       );
       await db.localSessions.put(updated);
     });
+  }
+
+  /// Background sync: dispatch the durable `POST /sessions/from-program-workout`
+  /// CREATE for the row [createSessionFromProgramWorkout] just persisted, and
+  /// reconcile the acknowledgment. Mirrors [_syncCreateSessionToServer]'s
+  /// dispatchedAt-comparison contract exactly, extended to also reconcile the
+  /// child Exercises this endpoint (unlike generic CREATE) returns.
+  ///
+  /// The request body is ONLY `{programWorkoutId, programId,
+  /// clientOperationId}` - re-read from the canonical row, never from a
+  /// captured [ProgramWorkout] object (there isn't one here; see the class
+  /// doc comment on [createSessionFromProgramWorkout] for why the server
+  /// never needs one on a retry either). This is what makes the SAME retry
+  /// safe to fire from [SyncService] after an app restart, with no in-memory
+  /// template available at all.
+  ///
+  /// [dispatchedAt] is the shared `lastModifiedLocal` stamped onto the
+  /// Session row AND every Exercise row created in the same transaction (see
+  /// [createSessionFromProgramWorkout]). The acknowledgment compares each
+  /// row's CURRENT `lastModifiedLocal` against it independently: an
+  /// unchanged Session is reconciled fully from the server response; a
+  /// Session edited (status change, completion, ...) while this POST was in
+  /// flight keeps its newer local fields and is re-queued as
+  /// `pending_update`, exactly like the generic path. Each Exercise gets the
+  /// same per-row treatment, so a user editing/completing a set on ONE
+  /// exercise while CREATE is in flight never loses that edit, and never
+  /// blocks the other exercises from being reconciled normally.
+  ///
+  /// Exercises are paired to the server's response by `occurrenceKey`
+  /// identity, NEVER by position, name, prescription, or `exerciseTemplateId`
+  /// - see [ModelMapper.pairProgramWorkoutCreateExercises]'s doc comment for
+  /// the full one-to-one matching contract, and
+  /// [_reconcileProgramWorkoutCreateExercises]'s doc comment for exactly
+  /// what an unresolvable pairing produces. Nothing here duplicates or loses
+  /// a row a user has already added Sets under, and nothing here ever
+  /// attaches an
+  /// uncertain server identity to a local placeholder.
+  Future<void> _syncCreateSessionFromProgramWorkoutToServer(
+    Isar db,
+    int localId,
+    DateTime dispatchedAt,
+    SessionRequestContext context,
+    String clientOperationId,
+  ) async {
+    final token = context.epochToken;
+
+    // Re-resolve by stable local identity before dispatch - never trust a
+    // stale caller-held reference for the request body. Deliberately does
+    // NOT also require `syncStatus == 'pending_create'` here (unlike
+    // `SyncService._ensureCreateOperationKey`, which does) - this method is
+    // only ever reached once, synchronously scheduled by
+    // [createSessionFromProgramWorkout] immediately after that row's own
+    // pending_create write, exactly mirroring
+    // [_syncCreateSessionToServer]'s identical no-pre-status-check shape for
+    // the generic path: any status change that raced in by the time the
+    // HTTP response returns (including a delete-to-pending_delete) is fully
+    // handled by the ack branches below, not by refusing to dispatch here.
+    // If this asymmetry with `_ensureCreateOperationKey` is ever tightened
+    // on one side, tighten it identically on the other.
+    final preDispatch = await _ownedSessionByLocalId(db, localId, token);
+    if (preDispatch == null ||
+        preDispatch.programWorkoutId == null ||
+        preDispatch.programId == null ||
+        preDispatch.clientOperationId != clientOperationId) {
+      // No longer an eligible, canonical program-workout pending_create row
+      // for this exact key - abort without dispatch.
+      return;
+    }
+
+    Map<String, dynamic> data;
+    try {
+      data = await _dispatchBackgroundHttp(
+        () => _apiService.post<Map<String, dynamic>>(
+          ApiConfig.sessionsFromProgramWorkout,
+          data: {
+            'programWorkoutId': preDispatch.programWorkoutId,
+            'programId': preDispatch.programId,
+            'clientOperationId': clientOperationId,
+          },
+          sessionContext: context,
+        ),
+      );
+    } catch (e) {
+      // Same terminal-tombstone convergence as the generic path - see
+      // [_convertCanceledCreateToPendingDelete]'s doc comment. Fully generic
+      // (keyed only on `clientOperationId` + `pending_create`), so it is
+      // reused as-is for this endpoint too.
+      if (SessionCreateError.classify(e) ==
+          SessionCreateErrorKind.operationCanceled) {
+        await _convertCanceledCreateToPendingDelete(
+          db,
+          localId,
+          clientOperationId,
+          token,
+        );
+      }
+      rethrow;
+    }
+    _assertProgramWorkoutCreateCurrent(token);
+    final apiSession = Session.fromJson(data);
+
+    await _runTestHook(afterBackgroundHttpResponseForTesting);
+
+    final target = await _ownedSessionByLocalId(db, localId, token);
+    if (!_sessionEpoch.isCurrent(token)) return;
+    if (target == null) return;
+
+    await db.writeTxn(() async {
+      await _runTestHook(insideBackgroundWriteTxnForTesting);
+      if (!_sessionEpoch.isCurrent(token)) return;
+
+      final existing = await db.localSessions.get(localId);
+      if (existing == null || existing.userId != token.userId) return;
+
+      if (existing.syncStatus == 'pending_delete') {
+        // Deletion/cancellation intent races (or already won) - never
+        // resurrect. See [_syncCreateSessionToServer]'s identical branch.
+        existing.serverId = apiSession.id;
+        existing.version = apiSession.version;
+        existing.lastModifiedServer = DateTime.now();
+        await db.localSessions.put(existing);
+        return;
+      }
+
+      if (existing.lastModifiedLocal != dispatchedAt) {
+        // A local edit / completion raced the POST await - keep it, attach
+        // identity, re-queue as pending_update. Exercises are still
+        // reconciled below regardless of this branch.
+        existing.serverId = apiSession.id;
+        existing.version = apiSession.version;
+        existing.lastModifiedServer = DateTime.now();
+        existing.isSynced = false;
+        existing.syncStatus = 'pending_update';
+        await db.localSessions.put(existing);
+      } else {
+        // Unchanged: the same `date`-only clamp [createSessionFromProgramWorkout]
+        // applied locally, reapplied here directly to the server's own date -
+        // no ProgramWorkout object needed (see this method's doc comment).
+        // `status`/`name`/`type` are trusted from the server as-is, exactly
+        // like the previous online-success path did.
+        final schedule = _clampScheduleToToday(apiSession.date);
+        final updated = ModelMapper.sessionToLocal(
+          apiSession.copyWith(date: schedule.date),
+          localId: localId,
+          isSynced: true,
+          clientOperationId: existing.clientOperationId,
+        );
+        await db.localSessions.put(updated);
+      }
+
+      await _reconcileProgramWorkoutCreateExercises(db, localId, apiSession);
+    });
+  }
+
+  /// Assert-and-throw variant of [UserSessionEpoch.isCurrent] used only
+  /// between the HTTP call and the first Isar read below it in
+  /// [_syncCreateSessionFromProgramWorkoutToServer] - every other checkpoint
+  /// in that method returns early instead, matching
+  /// [_syncCreateSessionToServer]'s existing convention.
+  void _assertProgramWorkoutCreateCurrent(UserSessionToken token) {
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw const SessionStaleException();
+    }
+  }
+
+  /// Reconciles the child Exercises returned by a program-workout CREATE
+  /// acknowledgment against the local placeholders
+  /// [createSessionFromProgramWorkout] materialized before dispatch. Must be
+  /// called from INSIDE the same write transaction that reconciles the
+  /// parent Session - never touches [LocalExerciseSet] rows, so any Set a
+  /// user added while CREATE was in flight survives untouched under its
+  /// exercise's stable `localId`, regardless of anything below.
+  ///
+  /// Pairing/identity-safety rules live entirely in
+  /// [ModelMapper.pairProgramWorkoutCreateExercises] - see its doc comment.
+  /// This method only applies the three outcomes it returns:
+  ///
+  /// - `matched` (a local placeholder paired with EXACTLY the one server
+  ///   exercise sharing its `occurrenceKey`, with no other candidate on
+  ///   either side): overwritten UNCONDITIONALLY from the server's response
+  ///   (never gated on a `lastModifiedLocal` comparison) - there is no UI
+  ///   path that edits an Exercise's own fields (name/notes/rest) before it
+  ///   is synced, so there is nothing "newer" to protect here, and the
+  ///   deployed API has no PUT route for a single Exercise (`SyncService
+  ///   ._syncUpdateExercise` refuses to dispatch anything with a positive
+  ///   `serverId`) - flipping a matched exercise to `pending_update` instead
+  ///   would strand it there permanently, including on an entirely benign
+  ///   REDUNDANT re-acknowledgment (e.g. this dispatch racing a separate
+  ///   `SyncService` pass for the exact same still-`pending_create` row -
+  ///   both carry the identical key, so both eventually see the identical
+  ///   apiSession data; overwriting twice with identical data is always a
+  ///   safe no-op). Unlike the Session-level check above, this method takes
+  ///   no `dispatchedAt`-equivalent parameter at all - there is nothing for
+  ///   one to gate, for the reasons above.
+  /// - `unmatchedServer` (a server exercise whose `occurrenceKey` no local
+  ///   placeholder claims at all): inserted fresh, already synced - nothing
+  ///   local could be confused with it.
+  /// - `unmatchedLocal` (a local placeholder the pairing could not safely
+  ///   attach an identity to - no key at all, or a key the server's response
+  ///   doesn't uniquely corroborate; see the pairing method's doc comment
+  ///   for every case this covers): marked `syncStatus: 'conflict'` (never
+  ///   `serverId`, never `isSynced: true`) - the SAME "needs manual
+  ///   resolution, never auto-dispatched" convention this codebase already
+  ///   uses for a Session-level 409 (see `SessionSyncDiagnostics`).
+  ///   `SyncService._syncExercises`'s phase switch has no case for
+  ///   `'conflict'`, so it is silently skipped forever (its top-level query
+  ///   is `isSyncedEqualTo(false)`, not filtered by `syncStatus`, so the row
+  ///   is still enumerated and gets its `sessionServerId` patched, but never
+  ///   reaches a dispatching switch case) - it can NEVER independently
+  ///   re-create itself server-side, so an unresolved occurrence never turns
+  ///   into a duplicate that way. A LATER refresh of the same session
+  ///   ([getSession]/`SyncService._syncSessionsFromServer`, via
+  ///   [_resolveExistingExerciseForRefresh]) can now ALSO recognize this row
+  ///   by its retained `occurrenceKey` (if it has one) instead of only by
+  ///   `serverId`, so a genuinely-resolvable occurrence converges on refresh
+  ///   even if the CREATE ack that should have resolved it never did. A row
+  ///   with NO `occurrenceKey` at all (the legacy-cache case) has no way to
+  ///   be recognized by either path - it remains `'conflict'` until some
+  ///   future manual-resolution mechanism (not built yet - there is no
+  ///   exercise-level equivalent of the Session conflict-resolution UI this
+  ///   borrows its status value from) decides what to do with it. This is a
+  ///   genuine, disclosed limitation of a keyless local row, not a defect.
+  Future<void> _reconcileProgramWorkoutCreateExercises(
+    Isar db,
+    int sessionLocalId,
+    Session apiSession,
+  ) async {
+    final localExercises =
+        await db.localExercises
+              .filter()
+              .sessionLocalIdEqualTo(sessionLocalId)
+              .findAll()
+          ..sort((a, b) => a.localId.compareTo(b.localId));
+    final paired = ModelMapper.pairProgramWorkoutCreateExercises(
+      localExercises,
+      apiSession.exercises,
+    );
+
+    for (final (local, apiExercise) in paired.matched) {
+      final updated = ModelMapper.exerciseToLocal(
+        apiExercise,
+        sessionLocalId: sessionLocalId,
+        sessionServerId: apiSession.id,
+        localId: local.localId,
+        isSynced: true,
+      );
+      await db.localExercises.put(updated);
+    }
+
+    for (final apiExercise in paired.unmatchedServer) {
+      final localExercise = ModelMapper.exerciseToLocal(
+        apiExercise,
+        sessionLocalId: sessionLocalId,
+        sessionServerId: apiSession.id,
+        isSynced: true,
+      );
+      await db.localExercises.put(localExercise);
+    }
+
+    // Never independently re-created (nor left able to be) - see this
+    // method's doc comment for exactly what 'conflict' does and does not
+    // close.
+    for (final local in paired.unmatchedLocal) {
+      local.syncStatus = 'conflict';
+      local.isSynced = false;
+      await db.localExercises.put(local);
+    }
   }
 
   /// A CREATE dispatch that comes back `409 operation_canceled` means the
@@ -1964,19 +2347,22 @@ class SessionRepository {
   ///   delete through the operation-key endpoint instead would be no safer,
   ///   so this is left as ordinary DELETE rather than changed for style.
   /// - No `serverId` but a retained `clientOperationId` means the row's
-  ///   generic CREATE may have reached the server before its response was
-  ///   lost (or may still be in flight) - a missing `serverId` does NOT
-  ///   prove CREATE never happened. This dispatches
-  ///   `DELETE /api/v1/sessions/by-operation/{clientOperationId}` instead,
-  ///   which is safe to call before, during, or after the server commits the
-  ///   CREATE, and retains a server tombstone that blocks any later replay of
-  ///   that exact key.
+  ///   keyed CREATE (generic `POST /api/v1/sessions` OR
+  ///   `POST /sessions/from-program-workout` - both share this dispatch
+  ///   rule identically, see [createSessionFromProgramWorkout]) may have
+  ///   reached the server before its response was lost (or may still be in
+  ///   flight) - a missing `serverId` does NOT prove CREATE never happened.
+  ///   This dispatches `DELETE /api/v1/sessions/by-operation/{clientOperationId}`
+  ///   instead, which is safe to call before, during, or after the server
+  ///   commits the CREATE, and retains a server tombstone that blocks any
+  ///   later replay of that exact key - regardless of which endpoint owns
+  ///   it, since both write to the same `SessionCreateOperations` table.
   /// - Neither identity (no `serverId`, no `clientOperationId`) means this
-  ///   row was never dispatched to the generic keyed CREATE endpoint (e.g.
-  ///   the `from-program-workout` offline fallback - see
-  ///   [createSessionFromProgramWorkout]) - there is nothing a server could
-  ///   be holding under a key that was never generated, so it is safe to
-  ///   remove the local row immediately, exactly as before this feature.
+  ///   row was never dispatched to a keyed CREATE endpoint at all - only
+  ///   possible for a legacy row created before either CREATE entry point
+  ///   assigned this field - there is nothing a server could be holding
+  ///   under a key that was never generated, so it is safe to remove the
+  ///   local row immediately, exactly as before this feature.
   ///
   /// The returned `bool` is not a uniform "HTTP call succeeded" signal
   /// across branches: the legacy `serverId` branch returns `false` for a
@@ -2132,10 +2518,11 @@ class SessionRepository {
   /// never from the possibly-stale [localSession] parameter. A row observed
   /// keyless/serverId-less at an earlier read (e.g. `deleteSession`'s own
   /// resolution, or a prior failed cancel attempt) can still race a
-  /// concurrent `SyncService._ensureCreateOperationKey` backfill (legacy
-  /// rows and the `from-program-workout` offline fallback start with a
-  /// `null` key - see [LocalSession.clientOperationId]'s doc comment) that
-  /// assigns a key and dispatches CREATE between that read and this write.
+  /// concurrent `SyncService._ensureCreateOperationKey` backfill (only a
+  /// legacy pre-upgrade row starts with a `null` key now - both CREATE entry
+  /// points assign one atomically at creation, see
+  /// [LocalSession.clientOperationId]'s doc comment) that assigns a key and
+  /// dispatches CREATE between that read and this write.
   /// If the fresh, in-transaction read shows EITHER identity now present,
   /// this always falls back to persisting `pending_delete` rather than
   /// hard-deleting - a concurrent backfill may have just attached the exact
