@@ -10,6 +10,7 @@ ProfileUpdateRequest _$ProfileUpdateRequestFromJson(
   Map<String, dynamic> json,
 ) => ProfileUpdateRequest(
   name: json['name'] as String?,
+  username: json['username'] as String?,
   bio: json['bio'] as String?,
   dateOfBirth:
       json['dateOfBirth'] == null
@@ -33,6 +34,7 @@ Map<String, dynamic> _$ProfileUpdateRequestToJson(
   ProfileUpdateRequest instance,
 ) => <String, dynamic>{
   'name': instance.name,
+  'username': instance.username,
   'bio': instance.bio,
   'dateOfBirth': instance.dateOfBirth?.toIso8601String(),
   'gender': instance.gender,

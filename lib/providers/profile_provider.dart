@@ -4,9 +4,46 @@ import 'package:flutter/material.dart';
 import '../data/models/user.dart';
 import '../data/models/profile_update_request.dart';
 import '../data/repositories/profile_repository.dart';
+import '../data/services/api_exception.dart';
 import '../data/services/auth_service.dart';
 import '../core/services/connectivity_service.dart';
 import '../core/services/user_session_epoch.dart';
+
+/// Why the last [ProfileProvider.uploadProfilePhoto] attempt failed, so the
+/// UI can react appropriately without re-parsing an error string. [none] means
+/// "no attempt yet, or the last one succeeded".
+enum PhotoUploadError {
+  none,
+
+  /// Server rejected the image (400) - wrong format / not a real image.
+  validation,
+
+  /// Server rejected the image as too large (413).
+  tooLarge,
+
+  /// Server photo changed under us (409) - the caller must refresh
+  /// authoritative state and offer an explicit retry, never silently
+  /// overwrite the concurrent change.
+  conflict,
+
+  /// Transport/5xx/other failure - retryable.
+  network,
+}
+
+/// Why the last [ProfileProvider.updateProfile] attempt failed.
+enum ProfileFieldsError {
+  none,
+
+  /// The requested username is taken by another account (409).
+  usernameTaken,
+
+  /// Server-side validation rejected the request (400) - e.g. an invalid
+  /// username.
+  validation,
+
+  /// Transport/5xx/other failure - retryable.
+  network,
+}
 
 /// Provider for user profile management
 /// Replaces ProfileViewModel from MAUI app
@@ -21,6 +58,8 @@ class ProfileProvider extends ChangeNotifier {
   bool _isUpdating = false;
   bool _isUploadingPhoto = false;
   String? _errorMessage;
+  PhotoUploadError _photoError = PhotoUploadError.none;
+  ProfileFieldsError _fieldsError = ProfileFieldsError.none;
   String? _cachedThemePreference; // Theme loaded from local storage
 
   StreamSubscription<bool>? _connectivitySubscription;
@@ -69,6 +108,12 @@ class ProfileProvider extends ChangeNotifier {
   bool get isUpdating => _isUpdating;
   bool get isUploadingPhoto => _isUploadingPhoto;
   String? get errorMessage => _errorMessage;
+
+  /// Classified reason the last [uploadProfilePhoto] failed (or [none]).
+  PhotoUploadError get photoError => _photoError;
+
+  /// Classified reason the last [updateProfile] failed (or [none]).
+  ProfileFieldsError get fieldsError => _fieldsError;
 
   /// Get current theme mode based on user preference
   /// Uses cached theme from local storage first (offline-first)
@@ -126,12 +171,17 @@ class ProfileProvider extends ChangeNotifier {
   }
 
   /// Update user profile. Same session-epoch guarding as [loadUserProfile].
+  ///
+  /// On failure, [fieldsError] is set to a classified reason (username taken,
+  /// generic validation, or network) so the caller can show an inline field
+  /// error vs. a retryable message without re-parsing [errorMessage].
   Future<bool> updateProfile(ProfileUpdateRequest request) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
 
     _isUpdating = true;
     _errorMessage = null;
+    _fieldsError = ProfileFieldsError.none;
     notifyListeners();
 
     try {
@@ -149,6 +199,7 @@ class ProfileProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return false;
+      _fieldsError = _classifyFieldsError(e);
       _errorMessage =
           'Failed to update profile: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Update profile error: $e');
@@ -161,6 +212,18 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
+  static ProfileFieldsError _classifyFieldsError(Object e) {
+    if (e is ApiException) {
+      switch (e.statusCode) {
+        case 409:
+          return ProfileFieldsError.usernameTaken;
+        case 400:
+          return ProfileFieldsError.validation;
+      }
+    }
+    return ProfileFieldsError.network;
+  }
+
   /// Upload profile photo. [loadUserProfile]'s own nested call is
   /// independently session-epoch guarded; this method additionally guards
   /// its own [_isUploadingPhoto]/[_errorMessage] assignments with the same
@@ -171,13 +234,15 @@ class ProfileProvider extends ChangeNotifier {
 
     _isUploadingPhoto = true;
     _errorMessage = null;
+    _photoError = PhotoUploadError.none;
     notifyListeners();
 
     try {
       await _profileRepository.uploadProfilePhoto(imageFile);
       if (!_sessionEpoch.isCurrent(token)) return false;
 
-      // Reload profile to get updated photo URL
+      // Reload profile so the authoritative server photo URL is published to
+      // every screen immediately (never a local File preview).
       await loadUserProfile();
       if (!_sessionEpoch.isCurrent(token)) return false;
 
@@ -186,6 +251,7 @@ class ProfileProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return false;
+      _photoError = _classifyPhotoError(e);
       _errorMessage =
           'Failed to upload photo: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Upload photo error: $e');
@@ -193,6 +259,20 @@ class ProfileProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  static PhotoUploadError _classifyPhotoError(Object e) {
+    if (e is ApiException) {
+      switch (e.statusCode) {
+        case 413:
+          return PhotoUploadError.tooLarge;
+        case 400:
+          return PhotoUploadError.validation;
+        case 409:
+          return PhotoUploadError.conflict;
+      }
+    }
+    return PhotoUploadError.network;
   }
 
   /// Delete profile photo. Same session-epoch guarding as
@@ -252,6 +332,8 @@ class ProfileProvider extends ChangeNotifier {
   /// Clear error message
   void clearError() {
     _errorMessage = null;
+    _photoError = PhotoUploadError.none;
+    _fieldsError = ProfileFieldsError.none;
     notifyListeners();
   }
 
@@ -259,6 +341,8 @@ class ProfileProvider extends ChangeNotifier {
   void clear() {
     _currentUser = null;
     _errorMessage = null;
+    _photoError = PhotoUploadError.none;
+    _fieldsError = ProfileFieldsError.none;
     _isLoading = false;
     _isUpdating = false;
     _isUploadingPhoto = false;

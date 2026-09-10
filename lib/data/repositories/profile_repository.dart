@@ -185,7 +185,13 @@ class ProfileRepository {
     }
   }
 
-  /// Update current user's profile
+  /// Update current user's profile.
+  ///
+  /// On success the returned profile is written to the owner-tagged offline
+  /// cache (same rules as [getProfile]) so a later offline read reflects the
+  /// edit - e.g. a changed `username` - rather than a pre-edit snapshot. The
+  /// write is gated by a post-response [UserSessionEpoch.isCurrent] check so a
+  /// response that outlived its session neither caches nor publishes.
   Future<User> updateProfile(ProfileUpdateRequest request) async {
     final context = await _capture();
     if (context == null) throw const SessionStaleException();
@@ -195,7 +201,14 @@ class ProfileRepository {
       data: request.toJson(),
       sessionContext: context,
     );
-    return User.fromJson(data);
+    final user = User.fromJson(data);
+
+    if (!_sessionEpoch.isCurrent(context.epochToken)) {
+      throw const SessionStaleException();
+    }
+    await _cacheProfile(user, context.epochToken.userId);
+
+    return user;
   }
 
   /// Upload profile photo

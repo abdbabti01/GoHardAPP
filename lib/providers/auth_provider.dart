@@ -85,6 +85,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
   int? _currentUserId;
   String? _currentUserName;
+  String? _currentUsername;
   String? _currentUserEmail;
 
   /// Awaited at the very start of every logout pass (manual or forced),
@@ -328,6 +329,7 @@ class AuthProvider extends ChangeNotifier {
     _isAuthenticated = false;
     _currentUserId = null;
     _currentUserName = null;
+    _currentUsername = null;
     _currentUserEmail = null;
     _email = '';
     _password = '';
@@ -341,6 +343,32 @@ class AuthProvider extends ChangeNotifier {
       _sessionRequestCoordinator.cancelCurrentGeneration();
     } catch (e) {
       debugPrint('⚠️ Failed to cancel in-flight session requests: $e');
+    }
+
+    // 0c. Drain any in-flight `applyUpdatedUsername` secure-storage write
+    // started under the session just invalidated, BEFORE step 2 clears
+    // credentials (and before any newer login can run its own
+    // `saveUsername`). This is what guarantees a delayed username write
+    // lands *before* the clear - so it is removed by this same pass and can
+    // never recreate the `user_username` key after logout or overwrite the
+    // next user's handle. Placed here in the synchronous-reachable prefix
+    // (before step 1's first `await`) so a login that races this pass cannot
+    // slip its write in ahead of the drain. Already error-handled by
+    // `applyUpdatedUsername`; the extra guard keeps a throw here impossible.
+    final pendingUsernameWrite = _pendingUsernamePersist;
+    if (pendingUsernameWrite != null) {
+      try {
+        await pendingUsernameWrite;
+      } catch (e) {
+        debugPrint('⚠️ Pending username persistence failed during logout: $e');
+      }
+      // `applyUpdatedUsername` cannot run after step 0a (guard rejects it once
+      // `_isAuthenticated` is false / the generation moved), so the tail is
+      // still this same future - guard the clear anyway, matching the pattern
+      // used in the `whenComplete` above.
+      if (identical(_pendingUsernamePersist, pendingUsernameWrite)) {
+        _pendingUsernamePersist = null;
+      }
     }
 
     // 1. Stop active resources (GPS/timers/polling/watchers) and clear
@@ -438,6 +466,13 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _isAuthenticated;
   int? get currentUserId => _currentUserId;
   String? get currentUserName => _currentUserName;
+
+  /// The current account's `@username` (immutable for the session; set at
+  /// signup on the server). Null or empty when unknown - a session restored
+  /// from a build before this was persisted (null), or an auth response that
+  /// omitted it (`''`). Callers treat both as "no handle"; it never falls
+  /// back to the email.
+  String? get currentUsername => _currentUsername;
   String? get currentUserEmail => _currentUserEmail;
 
   // Setters
@@ -483,6 +518,7 @@ class AuthProvider extends ChangeNotifier {
       if (_isAuthenticated) {
         _currentUserId = await _authService.getUserId();
         _currentUserName = await _authService.getUserName();
+        _currentUsername = await _authService.getUsername();
         _currentUserEmail = await _authService.getUserEmail();
 
         // A restored session is a live authentication-success path just
@@ -529,11 +565,13 @@ class AuthProvider extends ChangeNotifier {
         name: response.name,
         email: response.email,
       );
+      await _authService.saveUsername(response.username);
 
       // Update local state
       _isAuthenticated = true;
       _currentUserId = response.userId;
       _currentUserName = response.name;
+      _currentUsername = response.username;
       _currentUserEmail = response.email;
 
       // Mint a fresh session generation now that the authoritative user ID
@@ -636,11 +674,13 @@ class AuthProvider extends ChangeNotifier {
         name: response.name,
         email: response.email,
       );
+      await _authService.saveUsername(response.username);
 
       // Update local state
       _isAuthenticated = true;
       _currentUserId = response.userId;
       _currentUserName = response.name;
+      _currentUsername = response.username;
       _currentUserEmail = response.email;
 
       // Signup authenticates immediately (same as login) - mint a fresh
@@ -687,6 +727,68 @@ class AuthProvider extends ChangeNotifier {
   /// user - see [_runTerminationPass]'s class doc comment).
   Future<void> logout() {
     return _beginOrJoinTermination(_TerminationKind.explicitLogout);
+  }
+
+  /// A session token for the currently-active session, or `null` when logged
+  /// out. Capture this BEFORE an `await` and pass it back to
+  /// [applyUpdatedUsername] so a result that outlived its session (logout, or
+  /// a different user logging in) is rejected structurally rather than by
+  /// timing.
+  UserSessionToken? captureSessionToken() => _sessionEpoch.capture();
+
+  /// Tail of the chain of in-flight secure-storage username writes started by
+  /// [applyUpdatedUsername] (there is normally at most one, but a user can
+  /// save the username field twice before the first write settles). A logout
+  /// pass drains this BEFORE it clears credentials (see `_runTerminationPass`
+  /// step 0c), so a stale username write can never land *after* the clear
+  /// (recreating the key) or after a subsequent login (overwriting the new
+  /// user's handle) - the ordering is enforced here, not left to
+  /// platform-channel timing.
+  ///
+  /// Writes are chained (`.then`) rather than fired independently so a single
+  /// `await` on this tail covers every outstanding write, and so they apply
+  /// in call order (last edit wins). Always already error-handled
+  /// ([applyUpdatedUsername] attaches a swallowing `catchError`), so awaiting
+  /// it can never surface an unhandled asynchronous error.
+  Future<void>? _pendingUsernamePersist;
+
+  /// Reconcile the account `@username` after a profile edit that changed it
+  /// on the server (see `EditProfileScreen`). Keeps [currentUsername], secure
+  /// storage, and therefore the next restored session in step with the value
+  /// `GET /profile` now returns.
+  ///
+  /// Session-guarded on [token] (captured by the caller before its awaits):
+  /// a no-op if that session is no longer current, or if there is no active
+  /// session. The secure-storage write is best-effort and fire-and-forget for
+  /// the caller, but is TRACKED (and chained) in [_pendingUsernamePersist] so
+  /// a concurrent logout waits for every outstanding write to finish before
+  /// clearing credentials - guaranteeing a delayed write cannot recreate
+  /// cleared credentials or clobber the next user's persisted username.
+  void applyUpdatedUsername(String username, UserSessionToken? token) {
+    if (token == null || !_isAuthenticated || !_sessionEpoch.isCurrent(token)) {
+      return;
+    }
+    if (_currentUsername == username) return;
+    _currentUsername = username;
+    notifyListeners();
+
+    // Chain onto any still-pending prior write: one await in the logout drain
+    // then covers ALL in-flight username writes, not just the most recent,
+    // and the writes apply in call order. [AuthService.saveUsername] already
+    // swallows its own failures; the extra catchError is defence in depth so
+    // a future refactor that let it throw still could not turn this into an
+    // unhandled async error (it is awaited by the logout pass).
+    final chained = (_pendingUsernamePersist ?? Future<void>.value())
+        .then((_) => _authService.saveUsername(username))
+        .catchError((Object e) {
+          debugPrint('⚠️ Username persistence failed (non-fatal): $e');
+        });
+    _pendingUsernamePersist = chained;
+    chained.whenComplete(() {
+      if (identical(_pendingUsernamePersist, chained)) {
+        _pendingUsernamePersist = null;
+      }
+    });
   }
 
   /// Clear error message

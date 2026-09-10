@@ -95,7 +95,9 @@ void main() {
     when(mockAuthService.isAuthenticated()).thenAnswer((_) async => false);
     when(mockAuthService.getUserId()).thenAnswer((_) async => null);
     when(mockAuthService.getUserName()).thenAnswer((_) async => null);
+    when(mockAuthService.getUsername()).thenAnswer((_) async => null);
     when(mockAuthService.getUserEmail()).thenAnswer((_) async => null);
+    when(mockAuthService.saveUsername(any)).thenAnswer((_) async {});
 
     authProvider = AuthProvider(
       mockAuthRepository,
@@ -1437,6 +1439,173 @@ void main() {
       // (a no-op on an already-cancelled token) leaves B untouched.
       contextA.cancelToken.cancel();
       expect(contextB.cancelToken.isCancelled, isFalse);
+    });
+  });
+
+  group('AuthProvider - Username identity', () {
+    AuthResponse response({String username = 'bob01'}) => AuthResponse(
+      token: 'jwt',
+      userId: 7,
+      name: 'Bob Roberts',
+      username: username,
+      email: 'bob@example.com',
+    );
+
+    setUp(() {
+      when(
+        mockAuthService.saveToken(
+          token: anyNamed('token'),
+          userId: anyNamed('userId'),
+          name: anyNamed('name'),
+          email: anyNamed('email'),
+        ),
+      ).thenAnswer((_) async {});
+    });
+
+    test('login() persists the auth-response username and exposes it via '
+        'currentUsername (never the email)', () async {
+      when(mockAuthRepository.login(any)).thenAnswer((_) async => response());
+      authProvider.updateEmail('bob@example.com');
+      authProvider.updatePassword('secret12');
+
+      final ok = await authProvider.login();
+
+      expect(ok, isTrue);
+      expect(authProvider.currentUsername, 'bob01');
+      expect(authProvider.currentUserName, 'Bob Roberts');
+      verify(mockAuthService.saveUsername('bob01')).called(1);
+    });
+
+    test('signup() persists the auth-response username', () async {
+      when(mockAuthRepository.signup(any)).thenAnswer((_) async => response());
+      authProvider.setSignupName('Bob Roberts');
+      authProvider.setSignupUsername('bob01');
+      authProvider.setSignupEmail('bob@example.com');
+      authProvider.setSignupPassword('secret12');
+      authProvider.setSignupConfirmPassword('secret12');
+
+      final ok = await authProvider.signup();
+
+      expect(ok, isTrue);
+      expect(authProvider.currentUsername, 'bob01');
+      verify(mockAuthService.saveUsername('bob01')).called(1);
+    });
+
+    test('a session restored at startup rehydrates currentUsername from '
+        'secure storage', () async {
+      when(mockAuthService.isAuthenticated()).thenAnswer((_) async => true);
+      when(mockAuthService.getUserId()).thenAnswer((_) async => 7);
+      when(
+        mockAuthService.getUserName(),
+      ).thenAnswer((_) async => 'Bob Roberts');
+      when(mockAuthService.getUsername()).thenAnswer((_) async => 'bob01');
+      when(
+        mockAuthService.getUserEmail(),
+      ).thenAnswer((_) async => 'bob@example.com');
+
+      final restored = AuthProvider(
+        mockAuthRepository,
+        mockAuthService,
+        mockApiService,
+        sessionEpoch,
+        mockSessionRequestCoordinator,
+      );
+      await pumpEventQueue();
+
+      expect(restored.currentUsername, 'bob01');
+    });
+
+    test('explicit logout clears currentUsername and routes credential '
+        'wiping through clearSessionCredentials (which now includes the '
+        'username key)', () async {
+      when(mockAuthRepository.login(any)).thenAnswer((_) async => response());
+      when(mockAuthService.clearSessionCredentials()).thenAnswer((_) async {});
+      authProvider.updateEmail('bob@example.com');
+      authProvider.updatePassword('secret12');
+      await authProvider.login();
+      expect(authProvider.currentUsername, 'bob01');
+
+      await authProvider.logout();
+
+      expect(authProvider.currentUsername, isNull);
+      verify(mockAuthService.clearSessionCredentials()).called(1);
+    });
+
+    test('an empty username in the auth response yields an empty '
+        'currentUsername (UI hides the @handle), never a fallback', () async {
+      when(
+        mockAuthRepository.login(any),
+      ).thenAnswer((_) async => response(username: ''));
+      authProvider.updateEmail('bob@example.com');
+      authProvider.updatePassword('secret12');
+
+      await authProvider.login();
+
+      expect(authProvider.currentUsername, '');
+    });
+
+    group('applyUpdatedUsername (post-profile-edit reconciliation)', () {
+      Future<void> loginAs(String username) async {
+        when(
+          mockAuthRepository.login(any),
+        ).thenAnswer((_) async => response(username: username));
+        authProvider.updateEmail('bob@example.com');
+        authProvider.updatePassword('secret12');
+        await authProvider.login();
+      }
+
+      test('updates currentUsername, notifies, and persists to secure '
+          'storage', () async {
+        await loginAs('bob01');
+        final token = authProvider.captureSessionToken();
+        var notified = 0;
+        authProvider.addListener(() => notified++);
+
+        authProvider.applyUpdatedUsername('bob_v2', token);
+
+        expect(authProvider.currentUsername, 'bob_v2');
+        expect(notified, 1);
+        await pumpEventQueue();
+        verify(mockAuthService.saveUsername('bob_v2')).called(1);
+      });
+
+      test('is a no-op when the value is unchanged', () async {
+        await loginAs('bob01');
+        final token = authProvider.captureSessionToken();
+        var notified = 0;
+        authProvider.addListener(() => notified++);
+
+        authProvider.applyUpdatedUsername('bob01', token);
+
+        expect(notified, 0);
+      });
+
+      test('is a no-op when the captured session is no longer current '
+          '(a different account took over mid-save)', () async {
+        await loginAs('bob01');
+        final staleToken = authProvider.captureSessionToken();
+
+        // Another session supersedes the one the token was captured under.
+        sessionEpoch.activate(999);
+
+        authProvider.applyUpdatedUsername('bob_v2', staleToken);
+
+        expect(authProvider.currentUsername, 'bob01');
+        verifyNever(mockAuthService.saveUsername('bob_v2'));
+      });
+
+      test('is a no-op when not authenticated (never resurrects identity for '
+          'a logged-out provider)', () async {
+        expect(authProvider.isAuthenticated, isFalse);
+
+        authProvider.applyUpdatedUsername(
+          'someone',
+          authProvider.captureSessionToken(),
+        );
+
+        expect(authProvider.currentUsername, isNull);
+        verifyNever(mockAuthService.saveUsername(any));
+      });
     });
   });
 }

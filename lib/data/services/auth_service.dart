@@ -16,6 +16,7 @@ class AuthService {
   static const String _tokenKey = 'jwt_token';
   static const String _userIdKey = 'user_id';
   static const String _userNameKey = 'user_name';
+  static const String _userUsernameKey = 'user_username';
   static const String _userEmailKey = 'user_email';
   static const String _themePreferenceKey = 'theme_preference';
   static const String _cachedProfileKey = 'cached_user_profile';
@@ -71,6 +72,34 @@ class AuthService {
     }
   }
 
+  /// Persist the account's immutable-per-session username (from the auth
+  /// response). Written alongside [saveToken] on every login/signup so the
+  /// current user's `@username` is available offline and survives
+  /// logout/login. Kept as its own method rather than a [saveToken]
+  /// parameter so the committed generated `MockAuthService`s keep compiling
+  /// without a full mock regen (same rationale as [saveCachedProfile]).
+  /// Best-effort: a storage failure is swallowed.
+  Future<void> saveUsername(String username) async {
+    try {
+      await _storage.write(key: _userUsernameKey, value: username);
+    } catch (e) {
+      // Fail silently - the display name from [saveToken] remains as a
+      // fallback; never block authentication on this.
+    }
+  }
+
+  /// Get the account username from secure storage. Returns null when never
+  /// stored (e.g. a session restored from a build before usernames were
+  /// persisted) - callers must treat null as "unknown", never substitute
+  /// the email.
+  Future<String?> getUsername() async {
+    try {
+      return await _storage.read(key: _userUsernameKey);
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Get user email from secure storage
   Future<String?> getUserEmail() async {
     try {
@@ -97,6 +126,7 @@ class AuthService {
       _storage.delete(key: _tokenKey),
       _storage.delete(key: _userIdKey),
       _storage.delete(key: _userNameKey),
+      _storage.delete(key: _userUsernameKey),
       _storage.delete(key: _userEmailKey),
       // Don't delete theme preference - user's theme choice persists across logins
     ]);
@@ -115,6 +145,7 @@ class AuthService {
     _tokenKey,
     _userIdKey,
     _userNameKey,
+    _userUsernameKey,
     _userEmailKey,
     _cachedProfileKey,
   ];
