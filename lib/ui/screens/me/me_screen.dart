@@ -4,7 +4,9 @@ import '../../../core/theme/theme_colors.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/friends_provider.dart';
 import '../../../providers/messages_provider.dart';
+import '../../../providers/profile_provider.dart';
 import '../../../routes/route_names.dart';
+import '../../widgets/common/user_avatar.dart';
 
 /// Me screen - Profile hub with goals, analytics, settings
 class MeScreen extends StatefulWidget {
@@ -19,8 +21,19 @@ class _MeScreenState extends State<MeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<FriendsProvider>().loadIncomingRequests();
       context.read<MessagesProvider>().loadUnreadCount();
+
+      // The profile hub is the first authenticated screen that shows the
+      // user's photo/name, but nothing else loads the profile on login
+      // (ProfileProvider is cleared on logout and only Settings triggers a
+      // fetch). Pull it once here so the avatar and identity render, and so
+      // it is fresh again after a logout/login on the same device.
+      final profile = context.read<ProfileProvider>();
+      if (profile.currentUser == null && !profile.isLoading) {
+        profile.loadUserProfile();
+      }
     });
   }
 
@@ -132,10 +145,14 @@ class _MeScreenState extends State<MeScreen> {
   }
 
   Widget _buildProfileHeader(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, child) {
+    return Consumer2<AuthProvider, ProfileProvider>(
+      builder: (context, authProvider, profileProvider, child) {
         final userName = authProvider.currentUserName;
         final userEmail = authProvider.currentUserEmail;
+        final username = authProvider.currentUsername;
+        // Prefer the freshly loaded profile photo; fall back to nothing (the
+        // avatar shows an initial/icon). Never a device file path.
+        final photoUrl = profileProvider.currentUser?.profilePhotoUrl;
 
         return Container(
           padding: const EdgeInsets.all(20),
@@ -146,19 +163,10 @@ class _MeScreenState extends State<MeScreen> {
           ),
           child: Row(
             children: [
-              // Avatar
-              Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  gradient: context.primaryGradient,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.person,
-                  size: 36,
-                  color: context.textOnPrimary,
-                ),
+              UserAvatar(
+                photoUrl: photoUrl,
+                fallbackText: userName ?? username,
+                radius: 35,
               ),
               const SizedBox(width: 16),
               // Info
@@ -173,14 +181,30 @@ class _MeScreenState extends State<MeScreen> {
                         fontWeight: FontWeight.bold,
                         color: context.textPrimary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    if (username != null && username.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '@$username',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: context.textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(
                       userEmail ?? '',
                       style: TextStyle(
-                        fontSize: 14,
-                        color: context.textSecondary,
+                        fontSize: 13,
+                        color: context.textTertiary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -190,6 +214,7 @@ class _MeScreenState extends State<MeScreen> {
                 onPressed:
                     () => Navigator.pushNamed(context, RouteNames.editProfile),
                 icon: Icon(Icons.edit_outlined, color: context.accent),
+                tooltip: 'Edit profile',
               ),
             ],
           ),

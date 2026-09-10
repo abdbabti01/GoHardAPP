@@ -575,5 +575,41 @@ void main() {
       await expectLater(future, throwsA(isA<SessionStaleException>()));
       verifyNever(authService.writeCachedProfile(any, any));
     });
+
+    test('a successful updateProfile writes the offline cache once, stamped '
+        'with the captured user id (not the response body id)', () async {
+      login(7);
+      adapter.body =
+          '{"id":999,"name":"x","username":"x","email":"x@x.com",'
+          '"dateCreated":"2024-01-01T00:00:00Z"}';
+
+      await repository.updateProfile(ProfileUpdateRequest(name: 'x'));
+
+      verify(authService.writeCachedProfile(any, 7)).called(1);
+      verifyNever(authService.writeCachedProfile(any, 999));
+    });
+
+    test('an updateProfile whose response lands after logout throws '
+        'SessionStaleException and never writes the cache', () async {
+      login(1);
+      adapter.responseGate = Completer<ResponseBody>();
+
+      final future = repository.updateProfile(ProfileUpdateRequest(name: 'x'));
+      await adapter.dispatched.future;
+
+      epoch.invalidate();
+      adapter.responseGate!.complete(
+        ResponseBody.fromString(
+          profileJson,
+          200,
+          headers: {
+            'content-type': ['application/json'],
+          },
+        ),
+      );
+
+      await expectLater(future, throwsA(isA<SessionStaleException>()));
+      verifyNever(authService.writeCachedProfile(any, any));
+    });
   });
 }

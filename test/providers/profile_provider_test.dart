@@ -10,6 +10,7 @@ import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/models/profile_update_request.dart';
 import 'package:go_hard_app/data/models/user.dart';
 import 'package:go_hard_app/data/repositories/profile_repository.dart';
+import 'package:go_hard_app/data/services/api_exception.dart';
 import 'package:go_hard_app/data/services/auth_service.dart';
 import 'package:go_hard_app/providers/profile_provider.dart';
 
@@ -338,5 +339,86 @@ void main() {
         verifyNever(mockProfileRepository.deleteProfilePhoto());
       },
     );
+  });
+
+  group('error classification (for the Edit Profile save orchestration)', () {
+    setUp(() => sessionEpoch.activate(1));
+
+    test('uploadProfilePhoto maps 409 -> conflict, 413 -> tooLarge, '
+        '400 -> validation, other -> network', () async {
+      Future<PhotoUploadError> run(Object error) async {
+        when(mockProfileRepository.uploadProfilePhoto(any)).thenThrow(error);
+        await provider.uploadProfilePhoto(File('x.png'));
+        return provider.photoError;
+      }
+
+      expect(
+        await run(ApiException('changed', statusCode: 409)),
+        PhotoUploadError.conflict,
+      );
+      expect(
+        await run(ApiException('too big', statusCode: 413)),
+        PhotoUploadError.tooLarge,
+      );
+      expect(
+        await run(ApiException('bad', statusCode: 400)),
+        PhotoUploadError.validation,
+      );
+      expect(
+        await run(ApiException('Network error - cannot connect to server')),
+        PhotoUploadError.network,
+      );
+    });
+
+    test('updateProfile maps 409 -> usernameTaken, 400 -> validation, '
+        'other -> network', () async {
+      Future<ProfileFieldsError> run(Object error) async {
+        when(mockProfileRepository.updateProfile(any)).thenThrow(error);
+        await provider.updateProfile(ProfileUpdateRequest(name: 'x'));
+        return provider.fieldsError;
+      }
+
+      expect(
+        await run(ApiException('taken', statusCode: 409)),
+        ProfileFieldsError.usernameTaken,
+      );
+      expect(
+        await run(ApiException('invalid', statusCode: 400)),
+        ProfileFieldsError.validation,
+      );
+      expect(
+        await run(ApiException('Server error: boom', statusCode: 500)),
+        ProfileFieldsError.network,
+      );
+    });
+
+    test('a successful call resets the error back to none', () async {
+      when(
+        mockProfileRepository.updateProfile(any),
+      ).thenThrow(ApiException('taken', statusCode: 409));
+      await provider.updateProfile(ProfileUpdateRequest(name: 'x'));
+      expect(provider.fieldsError, ProfileFieldsError.usernameTaken);
+
+      when(
+        mockProfileRepository.updateProfile(any),
+      ).thenAnswer((_) async => user(1));
+      await provider.updateProfile(ProfileUpdateRequest(name: 'x'));
+      expect(provider.fieldsError, ProfileFieldsError.none);
+    });
+
+    test('a response that lands after the session changed is dropped and '
+        'leaves photoError untouched (no cross-account leak)', () async {
+      final gate = Completer<String>();
+      when(
+        mockProfileRepository.uploadProfilePhoto(any),
+      ).thenAnswer((_) => gate.future);
+
+      final future = provider.uploadProfilePhoto(File('x.png'));
+      sessionEpoch.invalidate(); // account switch mid-flight
+      gate.completeError(ApiException('bad', statusCode: 400));
+
+      expect(await future, isFalse);
+      expect(provider.photoError, PhotoUploadError.none);
+    });
   });
 }
