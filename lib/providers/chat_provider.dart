@@ -542,11 +542,14 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Apply meal plan from a conversation to today's meal log
-  /// [day] specifies which day (1-7) of the meal plan to apply
+  /// Apply meal plan from a conversation to a meal log.
+  /// [day] specifies which day (1-7) of the meal plan to apply.
+  /// [date] specifies which calendar date to apply it to (defaults to today).
+  /// Already-consumed meals for that date are never touched.
   Future<ApplyMealPlanResult?> applyMealPlanToToday(
     int conversationId, {
     int day = 1,
+    DateTime? date,
   }) async {
     if (isOffline) {
       _errorMessage = 'Cannot apply meal plan offline';
@@ -565,6 +568,7 @@ class ChatProvider extends ChangeNotifier {
       final result = await _chatRepository.applyMealPlanToToday(
         conversationId,
         day: day,
+        date: date,
       );
       if (!_sessionEpoch.isCurrent(token)) return null;
       return result;

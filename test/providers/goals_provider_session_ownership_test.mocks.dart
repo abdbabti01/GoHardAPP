@@ -81,12 +81,14 @@ class MockGoalsRepository extends _i1.Mock implements _i4.GoalsRepository {
           as _i5.Future<void>);
 
   @override
-  _i5.Future<Map<String, int>> getDeletionImpact(int? id) =>
+  _i5.Future<Map<String, dynamic>> getDeletionImpact(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#getDeletionImpact, [id]),
-            returnValue: _i5.Future<Map<String, int>>.value(<String, int>{}),
+            returnValue: _i5.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
           )
-          as _i5.Future<Map<String, int>>);
+          as _i5.Future<Map<String, dynamic>>);
 
   @override
   _i5.Future<void> deleteGoal(int? id) =>
@@ -101,6 +103,24 @@ class MockGoalsRepository extends _i1.Mock implements _i4.GoalsRepository {
   _i5.Future<void> completeGoal(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#completeGoal, [id]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> archiveGoal(int? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#archiveGoal, [id]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> unarchiveGoal(int? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#unarchiveGoal, [id]),
             returnValue: _i5.Future<void>.value(),
             returnValueForMissingStub: _i5.Future<void>.value(),
           )

@@ -25,6 +25,11 @@ Goal _$GoalFromJson(Map<String, dynamic> json) => Goal(
       json['completedAt'] == null
           ? null
           : DateTime.parse(json['completedAt'] as String),
+  isArchived: json['isArchived'] as bool? ?? false,
+  archivedAt:
+      json['archivedAt'] == null
+          ? null
+          : DateTime.parse(json['archivedAt'] as String),
   createdAt: DateTime.parse(json['createdAt'] as String),
   progressHistory:
       (json['progressHistory'] as List<dynamic>?)
@@ -54,6 +59,8 @@ Map<String, dynamic> _$GoalToJson(Goal instance) {
   val['isActive'] = instance.isActive;
   val['isCompleted'] = instance.isCompleted;
   writeNotNull('completedAt', instance.completedAt?.toIso8601String());
+  val['isArchived'] = instance.isArchived;
+  writeNotNull('archivedAt', instance.archivedAt?.toIso8601String());
   val['createdAt'] = instance.createdAt.toIso8601String();
   writeNotNull('progressHistory', instance.progressHistory);
   return val;

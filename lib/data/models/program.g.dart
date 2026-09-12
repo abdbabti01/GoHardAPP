@@ -26,6 +26,7 @@ Program _$ProgramFromJson(Map<String, dynamic> json) => Program(
       json['completedAt'] == null
           ? null
           : DateTime.parse(json['completedAt'] as String),
+  status: json['status'] as String? ?? 'active',
   createdAt: DateTime.parse(json['createdAt'] as String),
   programStructure: json['programStructure'] as String?,
   workouts:
@@ -61,6 +62,7 @@ Map<String, dynamic> _$ProgramToJson(Program instance) {
   val['isActive'] = instance.isActive;
   val['isCompleted'] = instance.isCompleted;
   writeNotNull('completedAt', instance.completedAt?.toIso8601String());
+  val['status'] = instance.status;
   val['createdAt'] = instance.createdAt.toIso8601String();
   writeNotNull('programStructure', instance.programStructure);
   writeNotNull('workouts', instance.workouts);

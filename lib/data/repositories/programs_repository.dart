@@ -295,7 +295,7 @@ class ProgramsRepository {
   }
 
   /// Get deletion impact for a program
-  Future<Map<String, int>> getDeletionImpact(int id) async {
+  Future<Map<String, dynamic>> getDeletionImpact(int id) async {
     final context = await _capture();
     if (context == null) throw const SessionStaleException();
 
@@ -303,10 +303,22 @@ class ProgramsRepository {
       ApiConfig.programDeletionImpact(id),
       sessionContext: context,
     );
-    return {'sessionsCount': data['sessionsCount'] as int};
+    return {
+      'programTitle': data['programTitle'] as String?,
+      'sessionsCount': data['sessionsCount'] as int? ?? 0,
+      'completedSessionsCount': data['completedSessionsCount'] as int?,
+      'exercisesCount': data['exercisesCount'] as int?,
+      'setsCount': data['setsCount'] as int?,
+      'workoutsCount': data['workoutsCount'] as int?,
+      'completedWorkoutsCount': data['completedWorkoutsCount'] as int?,
+      'hasData': data['hasData'] as bool?,
+      'warning': data['warning'] as String?,
+    };
   }
 
-  /// Delete a program
+  /// Delete a program. Linked sessions are detached (not destroyed)
+  /// server-side — they survive with the program link removed; only the
+  /// program's own workout templates are removed with it.
   Future<void> deleteProgram(int id) async {
     final context = await _capture();
     if (context == null) throw const SessionStaleException();
@@ -324,6 +336,29 @@ class ProgramsRepository {
 
     await _apiService.put<void>(
       ApiConfig.programComplete(id),
+      sessionContext: context,
+    );
+  }
+
+  /// Archive (stop) a program: remove it from active use WITHOUT completing
+  /// it. Never touches its workouts or any Session.
+  Future<void> archiveProgram(int id) async {
+    final context = await _capture();
+    if (context == null) throw const SessionStaleException();
+
+    await _apiService.put<void>(
+      ApiConfig.programArchive(id),
+      sessionContext: context,
+    );
+  }
+
+  /// Restore an archived program to active use.
+  Future<void> unarchiveProgram(int id) async {
+    final context = await _capture();
+    if (context == null) throw const SessionStaleException();
+
+    await _apiService.put<void>(
+      ApiConfig.programUnarchive(id),
       sessionContext: context,
     );
   }

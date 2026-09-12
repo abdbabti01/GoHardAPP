@@ -47,21 +47,12 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       if (provider.newlyCreatedProgramId != null) {
         programToSelect = provider.programs.firstWhere(
           (p) => p.id == provider.newlyCreatedProgramId,
-          orElse:
-              () =>
-                  provider.activePrograms.isNotEmpty
-                      ? provider.activePrograms.first
-                      : provider.completedPrograms.first,
+          orElse: () => _firstAvailableProgram(provider)!,
         );
         provider.clearNewlyCreatedProgramId();
       } else {
-        // Auto-select first active program, or first completed if no active
-        programToSelect =
-            provider.activePrograms.isNotEmpty
-                ? provider.activePrograms.first
-                : provider.completedPrograms.isNotEmpty
-                ? provider.completedPrograms.first
-                : null;
+        // Auto-select first active program, falling back to completed, then archived.
+        programToSelect = _firstAvailableProgram(provider);
       }
 
       if (programToSelect != null) {
@@ -71,6 +62,24 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
         });
       }
     }
+  }
+
+  /// The first program to fall back to when nothing is explicitly selected —
+  /// prefers active, then completed, then archived, so a user whose only
+  /// program(s) are archived doesn't hit an empty-list crash. Falls back to
+  /// the raw list as a last resort in case a program somehow belongs to none
+  /// of those three derived buckets.
+  Program? _firstAvailableProgram(ProgramsProvider provider) {
+    if (provider.activePrograms.isNotEmpty) {
+      return provider.activePrograms.first;
+    }
+    if (provider.completedPrograms.isNotEmpty) {
+      return provider.completedPrograms.first;
+    }
+    if (provider.archivedPrograms.isNotEmpty) {
+      return provider.archivedPrograms.first;
+    }
+    return provider.programs.isNotEmpty ? provider.programs.first : null;
   }
 
   void _selectProgram(Program program) {
@@ -99,9 +108,8 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
         // Get selected program
         final program =
             provider.getProgramFromCache(_selectedProgramId ?? 0) ??
-            (provider.activePrograms.isNotEmpty
-                ? provider.activePrograms.first
-                : provider.completedPrograms.first);
+            _firstAvailableProgram(provider) ??
+            provider.programs.first;
 
         // Update selection if needed
         if (_selectedProgramId != program.id) {
@@ -191,7 +199,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     final phaseColor = _getPhaseColor(program.phaseName);
     final progress = program.progressPercentage / 100;
     final hasMultiplePrograms =
-        provider.activePrograms.length + provider.completedPrograms.length > 1;
+        provider.activePrograms.length +
+            provider.completedPrograms.length +
+            provider.archivedPrograms.length >
+        1;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
@@ -524,16 +535,39 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   ],
                 ),
               ),
-            const PopupMenuItem(
-              value: 'complete',
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle_outline_rounded, size: 20),
-                  SizedBox(width: 12),
-                  Text('Mark as Complete'),
-                ],
+            if (!program.isCompleted)
+              const PopupMenuItem(
+                value: 'complete',
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline_rounded, size: 20),
+                    SizedBox(width: 12),
+                    Text('Mark as Complete'),
+                  ],
+                ),
               ),
-            ),
+            if (program.isArchived)
+              const PopupMenuItem(
+                value: 'unarchive',
+                child: Row(
+                  children: [
+                    Icon(Icons.unarchive_outlined, size: 20),
+                    SizedBox(width: 12),
+                    Text('Restore'),
+                  ],
+                ),
+              )
+            else if (!program.isCompleted)
+              const PopupMenuItem(
+                value: 'archive',
+                child: Row(
+                  children: [
+                    Icon(Icons.pause_circle_outline_rounded, size: 20),
+                    SizedBox(width: 12),
+                    Text('Stop Program'),
+                  ],
+                ),
+              ),
             PopupMenuItem(
               value: 'delete',
               child: Row(
@@ -700,6 +734,52 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 ),
               ),
             ],
+            if (provider.archivedPrograms.isNotEmpty) ...[
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                enabled: false,
+                height: 32,
+                child: Text(
+                  'ARCHIVED',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              ...provider.archivedPrograms.map(
+                (p) => PopupMenuItem(
+                  value: p.id,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.pause_circle_outline_rounded,
+                        size: 18,
+                        color:
+                            p.id == selectedProgram.id
+                                ? theme.primaryColor
+                                : context.textSecondary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          p.title,
+                          style: TextStyle(
+                            fontWeight:
+                                p.id == selectedProgram.id
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
       onSelected: (programId) {
         final program = provider.getProgramFromCache(programId);
@@ -779,9 +859,52 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       _recalibrateProgram(context, program);
     } else if (value == 'complete') {
       _showCompleteConfirmation(context, program);
+    } else if (value == 'archive') {
+      _showArchiveConfirmation(context, program);
+    } else if (value == 'unarchive') {
+      context.read<ProgramsProvider>().unarchiveProgram(program.id);
     } else if (value == 'delete') {
       _showDeleteConfirmation(context, program);
     }
+  }
+
+  void _showArchiveConfirmation(BuildContext context, Program program) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('Stop Program?'),
+            content: Text(
+              'Stop following "${program.title}"? This is not the same as '
+              'completing it — stopping just removes its future workout '
+              'suggestions from Today. Any workout you\'ve already started '
+              'keeps its progress. You can restore this program anytime from '
+              'Archived.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final provider = context.read<ProgramsProvider>();
+                  final success = await provider.archiveProgram(program.id);
+                  if (success && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Program stopped')),
+                    );
+                  }
+                },
+                child: const Text('Stop Program'),
+              ),
+            ],
+          ),
+    );
   }
 
   Future<void> _recalibrateProgram(
@@ -873,13 +996,24 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Are you sure you want to delete "${program.title}"?'),
-                  if ((impact['sessionsCount'] ?? 0) > 0) ...[
+                  if (((impact['sessionsCount'] as int?) ?? 0) > 0) ...[
                     const SizedBox(height: 16),
                     Text(
-                      'This will delete ${impact['sessionsCount']} workout session(s).',
-                      style: const TextStyle(color: Colors.red),
+                      (impact['warning'] as String?) ??
+                          'Your ${impact['sessionsCount']} workout session(s) are preserved as history — only the link to this program is removed.',
+                      style: const TextStyle(color: Colors.blue),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  Text(
+                    'The program itself cannot be recovered after deletion. '
+                    'If you just want to stop following it without losing it, '
+                    'use Stop Program instead.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.textSecondary,
+                    ),
+                  ),
                 ],
               ),
               actions: [

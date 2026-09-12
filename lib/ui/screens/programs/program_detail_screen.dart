@@ -140,53 +140,47 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
             },
             tooltip: _showCalendarView ? 'Week View' : 'Calendar View',
           ),
-          if (!program.isCompleted)
-            PopupMenuButton<String>(
-              onSelected: (value) async {
-                // DEBUG: Log menu selection
-                debugPrint('🔔 Menu item selected: $value');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Menu selected: $value'),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-
-                if (value == 'link_goal') {
-                  _showLinkGoalDialog(context, program);
-                } else if (value == 'unlink_goal') {
-                  _unlinkGoal(context, program);
-                } else if (value == 'complete') {
-                  _showCompleteConfirmation(context, program);
-                } else if (value == 'delete') {
-                  debugPrint('🗑️ Calling _showDeleteConfirmation...');
-                  _showDeleteConfirmation(context, program);
-                }
-              },
-              itemBuilder:
-                  (context) => [
-                    if (program.goalId == null)
-                      const PopupMenuItem(
-                        value: 'link_goal',
-                        child: Row(
-                          children: [
-                            Icon(Icons.link),
-                            SizedBox(width: 12),
-                            Text('Link to Goal'),
-                          ],
-                        ),
-                      )
-                    else
-                      const PopupMenuItem(
-                        value: 'unlink_goal',
-                        child: Row(
-                          children: [
-                            Icon(Icons.link_off),
-                            SizedBox(width: 12),
-                            Text('Unlink from Goal'),
-                          ],
-                        ),
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              if (value == 'link_goal') {
+                _showLinkGoalDialog(context, program);
+              } else if (value == 'unlink_goal') {
+                _unlinkGoal(context, program);
+              } else if (value == 'complete') {
+                _showCompleteConfirmation(context, program);
+              } else if (value == 'archive') {
+                _showArchiveConfirmation(context, program);
+              } else if (value == 'unarchive') {
+                context.read<ProgramsProvider>().unarchiveProgram(program.id);
+              } else if (value == 'delete') {
+                _showDeleteConfirmation(context, program);
+              }
+            },
+            itemBuilder:
+                (context) => [
+                  if (program.goalId == null)
+                    const PopupMenuItem(
+                      value: 'link_goal',
+                      child: Row(
+                        children: [
+                          Icon(Icons.link),
+                          SizedBox(width: 12),
+                          Text('Link to Goal'),
+                        ],
                       ),
+                    )
+                  else
+                    const PopupMenuItem(
+                      value: 'unlink_goal',
+                      child: Row(
+                        children: [
+                          Icon(Icons.link_off),
+                          SizedBox(width: 12),
+                          Text('Unlink from Goal'),
+                        ],
+                      ),
+                    ),
+                  if (!program.isCompleted)
                     const PopupMenuItem(
                       value: 'complete',
                       child: Row(
@@ -197,21 +191,43 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                         ],
                       ),
                     ),
+                  if (program.isArchived)
                     const PopupMenuItem(
-                      value: 'delete',
+                      value: 'unarchive',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, color: Colors.red),
+                          Icon(Icons.unarchive_outlined),
                           SizedBox(width: 12),
-                          Text(
-                            'Delete Program',
-                            style: TextStyle(color: Colors.red),
-                          ),
+                          Text('Restore'),
+                        ],
+                      ),
+                    )
+                  else if (!program.isCompleted)
+                    const PopupMenuItem(
+                      value: 'archive',
+                      child: Row(
+                        children: [
+                          Icon(Icons.pause_circle_outline),
+                          SizedBox(width: 12),
+                          Text('Stop Program'),
                         ],
                       ),
                     ),
-                  ],
-            ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, color: Colors.red),
+                        SizedBox(width: 12),
+                        Text(
+                          'Delete Program',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+          ),
         ],
       ),
       body: Column(
@@ -731,10 +747,43 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     );
   }
 
-  void _showDeleteConfirmation(BuildContext context, Program program) async {
-    debugPrint(
-      '🗑️ Delete program requested: ${program.id} - ${program.title}',
+  void _showArchiveConfirmation(BuildContext context, Program program) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Stop Program?'),
+            content: Text(
+              'Stop following "${program.title}"? This is not the same as '
+              'completing it — stopping just removes its future workout '
+              'suggestions from Today. Any workout you\'ve already started '
+              'keeps its progress. You can restore this program anytime from '
+              'Archived.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final provider = context.read<ProgramsProvider>();
+                  final success = await provider.archiveProgram(program.id);
+                  if (success && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Program stopped')),
+                    );
+                  }
+                },
+                child: const Text('Stop Program'),
+              ),
+            ],
+          ),
     );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, Program program) async {
     final provider = context.read<ProgramsProvider>();
 
     // Show loading dialog with message
@@ -755,30 +804,20 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     );
 
     try {
-      debugPrint('📡 Fetching deletion impact for program ${program.id}...');
       final impact = await provider.getDeletionImpact(program.id);
-      debugPrint('✅ Deletion impact: $impact');
-
-      // Show success message briefly
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Impact: ${impact['sessionsCount']} sessions'),
-            duration: const Duration(seconds: 1),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
 
       if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog
+
+      final sessionsCount = (impact['sessionsCount'] as int?) ?? 0;
+      final warning = impact['warning'] as String?;
 
       // Show confirmation with impact
       final confirmed = await showDialog<bool>(
         context: context,
         builder:
             (context) => AlertDialog(
-              title: const Text('⚠️ Delete Program?'),
+              title: const Text('Delete Program?'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -787,45 +826,33 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     'Are you sure you want to delete "${program.title}"?',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  if ((impact['sessionsCount'] ?? 0) > 0) ...[
+                  if (sessionsCount > 0) ...[
                     const SizedBox(height: 16),
-                    const Text(
-                      'This will permanently delete:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '• ${impact['sessionsCount'] ?? 0} Workout Session(s) with all exercises and sets',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.1),
+                        color: Colors.blue.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Colors.red.withValues(alpha: 0.3),
+                          color: Colors.blue.withValues(alpha: 0.3),
                         ),
                       ),
-                      child: const Row(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.warning_amber,
-                            color: Colors.red,
+                          const Icon(
+                            Icons.info_outline,
+                            color: Colors.blue,
                             size: 20,
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'This action cannot be undone!',
-                              style: TextStyle(
-                                color: Colors.red,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                              warning ??
+                                  'Your $sessionsCount workout session(s) are preserved as history — only the link to this program is removed.',
+                              style: const TextStyle(
+                                color: Colors.blue,
+                                fontSize: 13,
                               ),
                             ),
                           ),
@@ -833,6 +860,16 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                       ),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  Text(
+                    'The program itself cannot be recovered after deletion. '
+                    'If you just want to stop following it without losing it, '
+                    'use Stop Program instead.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.textSecondary,
+                    ),
+                  ),
                 ],
               ),
               actions: [
@@ -852,7 +889,9 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       if (confirmed == true && context.mounted) {
         final success = await provider.deleteProgram(program.id);
         if (success && context.mounted) {
-          // Reload both sessions and programs to remove deleted items from cache
+          // Reload both sessions and programs: any sessions that were linked
+          // to this program are now detached (programId cleared) rather than
+          // gone, but their program-derived fields still need a refresh.
           await Future.wait([
             context.read<SessionsProvider>().loadSessions(waitForSync: true),
             context.read<ProgramsProvider>().loadPrograms(),
@@ -865,40 +904,15 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
           Navigator.pop(context);
         }
       }
-    } catch (e) {
-      debugPrint('❌ Error fetching deletion impact: $e');
+    } catch (_) {
       if (!context.mounted) return;
       Navigator.pop(context); // Close loading dialog
 
-      // Show error dialog instead of snackbar for better visibility
-      showDialog(
-        context: context,
-        builder:
-            (context) => AlertDialog(
-              title: const Text('❌ Error'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Failed to fetch deletion impact:'),
-                  const SizedBox(height: 8),
-                  Text(
-                    e.toString(),
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      color: Colors.red,
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to check deletion impact. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

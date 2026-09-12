@@ -427,9 +427,14 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         await context.read<NutritionProvider>().loadTodaysData();
       }
 
+      final skipped = result.skippedMealTypes;
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('Day $dayNumber applied to today\'s nutrition'),
+          content: Text(
+            skipped.isEmpty
+                ? 'Day $dayNumber applied to today\'s nutrition'
+                : 'Day $dayNumber applied — ${skipped.join(', ')} already logged, left untouched',
+          ),
           backgroundColor: Colors.green,
         ),
       );
@@ -545,6 +550,33 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
 
     // Apply based on selection
     if (applyAllDays) {
+      // Applying the full week replaces previously-applied PLANNED
+      // suggestions for that week (any source) — but never anything already
+      // logged as eaten. Make that explicit before committing to it.
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Apply All 7 Days?'),
+              content: const Text(
+                'This replaces any previously-planned (not-yet-eaten) meal '
+                'suggestions for these 7 days with this plan. Meals you\'ve '
+                'already logged as eaten are never touched.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+      );
+      if (confirmed != true || !mounted) return;
+
       // Apply all 7 days
       PremiumLoadingDialog.show(context, message: 'Applying all 7 days...');
 

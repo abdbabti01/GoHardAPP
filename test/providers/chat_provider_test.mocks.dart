@@ -246,12 +246,13 @@ class MockChatRepository extends _i1.Mock implements _i2.ChatRepository {
   _i3.Future<_i2.ApplyMealPlanResult> applyMealPlanToToday(
     int? conversationId, {
     int? day = 1,
+    DateTime? date,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #applyMealPlanToToday,
               [conversationId],
-              {#day: day},
+              {#day: day, #date: date},
             ),
             returnValue: _i3.Future<_i2.ApplyMealPlanResult>.value(
               _FakeApplyMealPlanResult_1(
@@ -259,7 +260,7 @@ class MockChatRepository extends _i1.Mock implements _i2.ChatRepository {
                 Invocation.method(
                   #applyMealPlanToToday,
                   [conversationId],
-                  {#day: day},
+                  {#day: day, #date: date},
                 ),
               ),
             ),
