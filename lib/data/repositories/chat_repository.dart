@@ -884,12 +884,15 @@ class ChatRepository {
     }
   }
 
-  /// Apply meal plan from a conversation to today's meal log.
+  /// Apply meal plan from a conversation to a meal log.
   /// [day] specifies which day (1-7) of the meal plan to apply.
-  /// Requires online connection.
+  /// [date] specifies which calendar date to apply it to (defaults to today).
+  /// Already-consumed meals for that date are never touched. Requires online
+  /// connection.
   Future<ApplyMealPlanResult> applyMealPlanToToday(
     int conversationId, {
     int day = 1,
+    DateTime? date,
   }) async {
     final context = await _requireOnlineContext(
       'Cannot apply meal plan offline',
@@ -897,7 +900,7 @@ class ChatRepository {
 
     try {
       final response = await _apiService.post<Map<String, dynamic>>(
-        ApiConfig.chatApplyMealPlan(conversationId, day: day),
+        ApiConfig.chatApplyMealPlan(conversationId, day: day, date: date),
         sessionContext: context,
       );
 
@@ -920,7 +923,12 @@ class ChatRepository {
   /// [applyAllDays] - if true, applies all 7 days.
   /// [days] - specific days to apply (1-7), ignored if applyAllDays is true.
   /// [startDate] - the date to start applying from (defaults to today).
-  /// [overwriteExisting] - if true, replaces existing meal entries.
+  /// [overwriteExisting] - if true, also replaces previously-applied PLANNED
+  /// suggestions from any source in the targeted meal entries (the "replace
+  /// this day's plan" behavior old clients expect); if false, only this exact
+  /// suggestion's own previously-applied items (same conversation + day) are
+  /// replaced, leaving other planned items alone. Either way, a meal entry
+  /// already marked consumed (actually eaten) is never touched.
   /// Requires online connection.
   Future<ApplyMealPlanWeekResult> applyMealPlanWeek(
     int conversationId, {
@@ -1240,6 +1248,14 @@ class ApplyMealPlanResult {
   /// New daily fat goal (if updated)
   final double? newDailyFatGoal;
 
+  /// Meal types left untouched because they were already marked consumed
+  /// (actually eaten) — the apply never clears or resets these.
+  final List<String> skippedMealTypes;
+
+  /// Meal types where a previously-applied planned suggestion was replaced
+  /// by this apply (idempotent reapply, or an explicit broader replace).
+  final List<String> replacedMealTypes;
+
   ApplyMealPlanResult({
     required this.success,
     required this.message,
@@ -1253,6 +1269,8 @@ class ApplyMealPlanResult {
     this.newDailyProteinGoal,
     this.newDailyCarbsGoal,
     this.newDailyFatGoal,
+    this.skippedMealTypes = const [],
+    this.replacedMealTypes = const [],
   });
 
   factory ApplyMealPlanResult.fromJson(Map<String, dynamic> json) {
@@ -1269,6 +1287,16 @@ class ApplyMealPlanResult {
       newDailyProteinGoal: (json['newDailyProteinGoal'] as num?)?.toDouble(),
       newDailyCarbsGoal: (json['newDailyCarbsGoal'] as num?)?.toDouble(),
       newDailyFatGoal: (json['newDailyFatGoal'] as num?)?.toDouble(),
+      skippedMealTypes:
+          (json['skippedMealTypes'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      replacedMealTypes:
+          (json['replacedMealTypes'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
     );
   }
 }
@@ -1421,6 +1449,13 @@ class DayApplyResult {
   final double carbs;
   final double fat;
 
+  /// Meal types left untouched for this day because they were already consumed.
+  final List<String> skippedMealTypes;
+
+  /// Meal types where a previously-applied planned suggestion was replaced
+  /// for this day.
+  final List<String> replacedMealTypes;
+
   DayApplyResult({
     required this.day,
     required this.date,
@@ -1429,6 +1464,8 @@ class DayApplyResult {
     required this.protein,
     required this.carbs,
     required this.fat,
+    this.skippedMealTypes = const [],
+    this.replacedMealTypes = const [],
   });
 
   factory DayApplyResult.fromJson(Map<String, dynamic> json) {
@@ -1440,6 +1477,16 @@ class DayApplyResult {
       protein: (json['protein'] as num?)?.toDouble() ?? 0,
       carbs: (json['carbs'] as num?)?.toDouble() ?? 0,
       fat: (json['fat'] as num?)?.toDouble() ?? 0,
+      skippedMealTypes:
+          (json['skippedMealTypes'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      replacedMealTypes:
+          (json['replacedMealTypes'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
     );
   }
 }

@@ -115,11 +115,24 @@ class PremiumGoalCard extends StatelessWidget {
                               Icons.notifications_outlined,
                               'Set Reminder',
                             ),
-                            _buildMenuItem(
-                              'complete',
-                              Icons.check_circle_outline,
-                              'Mark Complete',
-                            ),
+                            if (!goal.isCompleted)
+                              _buildMenuItem(
+                                'complete',
+                                Icons.check_circle_outline,
+                                'Mark Complete',
+                              ),
+                            if (goal.isArchived)
+                              _buildMenuItem(
+                                'unarchive',
+                                Icons.unarchive_outlined,
+                                'Restore',
+                              )
+                            else
+                              _buildMenuItem(
+                                'archive',
+                                Icons.archive_outlined,
+                                'Archive',
+                              ),
                             _buildMenuItem(
                               'delete',
                               Icons.delete_outline,

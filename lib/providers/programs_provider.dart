@@ -187,6 +187,7 @@ class ProgramsProvider extends ChangeNotifier {
   final List<Program> _programs = [];
   final List<Program> _activePrograms = [];
   final List<Program> _completedPrograms = [];
+  final List<Program> _archivedPrograms = [];
   bool _isLoading = false;
   bool _isCreating = false;
   String? _errorMessage;
@@ -285,6 +286,7 @@ class ProgramsProvider extends ChangeNotifier {
   List<Program> get programs => _programs;
   List<Program> get activePrograms => _activePrograms;
   List<Program> get completedPrograms => _completedPrograms;
+  List<Program> get archivedPrograms => _archivedPrograms;
   bool get isLoading => _isLoading;
   bool get isCreating => _isCreating;
   bool get isUpdating => _activeUpdateCounts.isNotEmpty;
@@ -396,6 +398,9 @@ class ProgramsProvider extends ChangeNotifier {
     _completedPrograms
       ..clear()
       ..addAll(_programs.where((p) => p.isCompleted));
+    _archivedPrograms
+      ..clear()
+      ..addAll(_programs.where((p) => p.isArchived && !p.isCompleted));
   }
 
   /// Invalidate every request / mutation generation so no in-flight
@@ -630,8 +635,10 @@ class ProgramsProvider extends ChangeNotifier {
     }
   }
 
-  /// Get deletion impact for a program (how many sessions will be deleted)
-  Future<Map<String, int>> getDeletionImpact(int id) async {
+  /// Get deletion impact for a program: how many sessions will be detached
+  /// (not deleted) — they and their exercises/sets are preserved as workout
+  /// history, only the link to this program is removed.
+  Future<Map<String, dynamic>> getDeletionImpact(int id) async {
     final token = _sessionEpoch.capture();
     if (token == null) throw const SessionStaleException();
     final gen = ++_impactGen;
@@ -730,6 +737,97 @@ class ProgramsProvider extends ChangeNotifier {
         _errorMessage =
             'Failed to complete program: ${e.toString().replaceAll('Exception: ', '')}';
         debugPrint('Complete program error: $e');
+        notifyListeners();
+      }
+      return false;
+    }
+  }
+
+  /// Archive (stop) a program: remove it from active use WITHOUT completing
+  /// it. Archiving never sets `isCompleted`/`completedAt`, never marks any
+  /// workout complete, and never creates or touches a Session — Today's
+  /// program-sourced suggestions already filter by `isActive`, so this alone
+  /// stops future suggestions from this program while any already-started
+  /// Session keeps its own status and logged data untouched.
+  Future<bool> archiveProgram(int id) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+    final gen = _bumpProgramMutationGen(id);
+    final errorGen = ++_errorGen;
+
+    bool owns() =>
+        _sessionEpoch.isCurrent(token) && _programMutationGens[id] == gen;
+
+    try {
+      await _programsRepository.archiveProgram(id);
+      if (!owns()) return false;
+
+      final index = _programs.indexWhere((p) => p.id == id);
+      if (index != -1) {
+        final archived = _programs[index].copyWith(
+          status: 'archived',
+          isActive: false,
+        );
+        _reconcileByFilter(id, archived);
+        _recomputeDerivedLists();
+      }
+      _listGen++;
+
+      debugPrint('✅ Archived program $id');
+      notifyListeners();
+      return true;
+    } on SessionStaleException {
+      return false;
+    } on RequestCancelledException {
+      return false;
+    } catch (e) {
+      if (owns() && errorGen == _errorGen) {
+        _errorMessage =
+            'Failed to archive program: ${e.toString().replaceAll('Exception: ', '')}';
+        debugPrint('Archive program error: $e');
+        notifyListeners();
+      }
+      return false;
+    }
+  }
+
+  /// Restore an archived program to active use.
+  Future<bool> unarchiveProgram(int id) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+    final gen = _bumpProgramMutationGen(id);
+    final errorGen = ++_errorGen;
+
+    bool owns() =>
+        _sessionEpoch.isCurrent(token) && _programMutationGens[id] == gen;
+
+    try {
+      await _programsRepository.unarchiveProgram(id);
+      if (!owns()) return false;
+
+      final index = _programs.indexWhere((p) => p.id == id);
+      if (index != -1) {
+        final restored = _programs[index].copyWith(
+          status: 'active',
+          isActive: true,
+        );
+        _reconcileByFilter(id, restored);
+        _recomputeDerivedLists();
+      }
+      _listGen++;
+
+      debugPrint('✅ Unarchived program $id');
+      notifyListeners();
+      return true;
+    } on SessionStaleException {
+      return false;
+    } on RequestCancelledException {
+      return false;
+    } catch (e) {
+      if (owns() && errorGen == _errorGen) {
+        _errorMessage =
+            'Failed to restore program: ${e.toString().replaceAll('Exception: ', '')}';
+        debugPrint('Unarchive program error: $e');
         notifyListeners();
       }
       return false;
@@ -1222,7 +1320,7 @@ class ProgramsProvider extends ChangeNotifier {
   /// resurrect a previous user's error - even when `clear()` is called on its
   /// own, without a preceding `UserSessionEpoch.invalidate()`.
   ///
-  /// The three lists are emptied in place (not reassigned), so any reference a
+  /// The four lists are emptied in place (not reassigned), so any reference a
   /// caller obtained before this call also becomes empty.
   void clear() {
     _invalidateGenerations();
@@ -1230,6 +1328,7 @@ class ProgramsProvider extends ChangeNotifier {
     _programs.clear();
     _activePrograms.clear();
     _completedPrograms.clear();
+    _archivedPrograms.clear();
     _publishedIsActiveFilter = null;
     _latestRequestedIsActiveFilter = null;
     _isLoading = false;

@@ -534,12 +534,14 @@ class MockProgramsRepository extends _i1.Mock
           as _i14.Future<void>);
 
   @override
-  _i14.Future<Map<String, int>> getDeletionImpact(int? id) =>
+  _i14.Future<Map<String, dynamic>> getDeletionImpact(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#getDeletionImpact, [id]),
-            returnValue: _i14.Future<Map<String, int>>.value(<String, int>{}),
+            returnValue: _i14.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
           )
-          as _i14.Future<Map<String, int>>);
+          as _i14.Future<Map<String, dynamic>>);
 
   @override
   _i14.Future<void> deleteProgram(int? id) =>
@@ -554,6 +556,24 @@ class MockProgramsRepository extends _i1.Mock
   _i14.Future<void> completeProgram(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#completeProgram, [id]),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
+
+  @override
+  _i14.Future<void> archiveProgram(int? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#archiveProgram, [id]),
+            returnValue: _i14.Future<void>.value(),
+            returnValueForMissingStub: _i14.Future<void>.value(),
+          )
+          as _i14.Future<void>);
+
+  @override
+  _i14.Future<void> unarchiveProgram(int? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#unarchiveProgram, [id]),
             returnValue: _i14.Future<void>.value(),
             returnValueForMissingStub: _i14.Future<void>.value(),
           )

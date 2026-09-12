@@ -67,8 +67,18 @@ class ApiConfig {
   static const String chatFoodSuggestion = 'chat/food-suggestion';
   static String chatPreviewMealPlan(int conversationId) =>
       'chat/conversations/$conversationId/preview-meal-plan';
-  static String chatApplyMealPlan(int conversationId, {int day = 1}) =>
-      'chat/conversations/$conversationId/apply-meal-plan?day=$day';
+  static String chatApplyMealPlan(
+    int conversationId, {
+    int day = 1,
+    DateTime? date,
+  }) {
+    final base = 'chat/conversations/$conversationId/apply-meal-plan?day=$day';
+    if (date == null) return base;
+    final iso =
+        '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    return '$base&date=$iso';
+  }
+
   static String chatApplyMealPlanWeek(int conversationId) =>
       'chat/conversations/$conversationId/apply-meal-plan-week';
   static const String sharedWorkouts = 'sharedworkouts';
@@ -156,6 +166,8 @@ class ApiConfig {
       '$chatConversations/$conversationId/create-program';
   static String goalById(int id) => '$goals/$id';
   static String goalComplete(int id) => '$goals/$id/complete';
+  static String goalArchive(int id) => '$goals/$id/archive';
+  static String goalUnarchive(int id) => '$goals/$id/unarchive';
   static String goalProgress(int id) => '$goals/$id/progress';
   static String goalHistory(int id) => '$goals/$id/history';
   static String goalDeletionImpact(int id) => '$goals/$id/deletion-impact';
@@ -164,6 +176,8 @@ class ApiConfig {
   static String bodyMetricsChart = '$bodyMetrics/chart';
   static String programById(int id) => '$programs/$id';
   static String programComplete(int id) => '$programs/$id/complete';
+  static String programArchive(int id) => '$programs/$id/archive';
+  static String programUnarchive(int id) => '$programs/$id/unarchive';
   static String programAdvance(int id) => '$programs/$id/advance';
   static String programRecalibrate(int id) => '$programs/$id/recalibrate';
   static String programDeletionImpact(int id) =>

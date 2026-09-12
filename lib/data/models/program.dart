@@ -20,6 +20,11 @@ class Program {
   final bool isActive;
   final bool isCompleted;
   final DateTime? completedAt;
+
+  /// Program lifecycle status: draft, active, completed, or archived.
+  /// "archived" means removed from active use WITHOUT being completed —
+  /// distinct from [isCompleted].
+  final String status;
   final DateTime createdAt;
   final String? programStructure;
   final List<ProgramWorkout>? workouts;
@@ -39,11 +44,14 @@ class Program {
     required this.isActive,
     required this.isCompleted,
     this.completedAt,
+    this.status = 'active',
     required this.createdAt,
     this.programStructure,
     this.workouts,
     this.goal,
   });
+
+  bool get isArchived => status == 'archived';
 
   factory Program.fromJson(Map<String, dynamic> json) {
     // Parse workouts list
@@ -74,6 +82,7 @@ class Program {
       completedAt: DateTimeHelper.parseTimestampOrNullFromJson(
         json['completedAt'],
       ),
+      status: json['status'] as String? ?? 'active',
       createdAt: DateTimeHelper.parseTimestampFromJson(json['createdAt']),
       programStructure: json['programStructure'] as String?,
       workouts: workoutsList,
@@ -231,6 +240,7 @@ class Program {
     bool? isActive,
     bool? isCompleted,
     DateTime? completedAt,
+    String? status,
     DateTime? createdAt,
     String? programStructure,
     List<ProgramWorkout>? workouts,
@@ -250,6 +260,7 @@ class Program {
       isActive: isActive ?? this.isActive,
       isCompleted: isCompleted ?? this.isCompleted,
       completedAt: completedAt ?? this.completedAt,
+      status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       programStructure: programStructure ?? this.programStructure,
       workouts: workouts ?? this.workouts,

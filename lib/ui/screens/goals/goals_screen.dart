@@ -87,7 +87,8 @@ class _GoalsScreenState extends State<GoalsScreen>
               }
 
               if (provider.activeGoals.isEmpty &&
-                  provider.completedGoals.isEmpty) {
+                  provider.completedGoals.isEmpty &&
+                  provider.archivedGoals.isEmpty) {
                 return _buildEmptyState(context);
               }
 
@@ -125,6 +126,26 @@ class _GoalsScreenState extends State<GoalsScreen>
                         ),
                         ...provider.completedGoals.map(
                           (goal) => CompletedGoalCard(goal: goal),
+                        ),
+                      ],
+
+                      // Archived Goals Section — removed from active use
+                      // without being completed; kept discoverable and
+                      // restorable here.
+                      if (provider.archivedGoals.isNotEmpty) ...[
+                        _buildSectionHeader(
+                          context,
+                          'Archived',
+                          provider.archivedGoals.length,
+                        ),
+                        ...provider.archivedGoals.map(
+                          (goal) => PremiumGoalCard(
+                            goal: goal,
+                            streak: _calculateStreak(goal),
+                            onAddProgress: () => _showAddProgressDialog(goal),
+                            onMenuAction:
+                                (action) => _handleGoalAction(goal, action),
+                          ),
                         ),
                       ],
 
@@ -219,6 +240,19 @@ class _GoalsScreenState extends State<GoalsScreen>
       if (confirmed == true && mounted) {
         await provider.completeGoal(goal.id);
       }
+    } else if (action == 'archive') {
+      final confirmed = await _showConfirmDialog(
+        'Archive Goal',
+        'Remove "${goal.goalType}" from your active goals? This is not the '
+            'same as completing it — archiving just hides it from your active '
+            'list. Linked programs and nutrition targets are left exactly as '
+            'they are. You can restore it anytime from Archived.',
+      );
+      if (confirmed == true && mounted) {
+        await provider.archiveGoal(goal.id);
+      }
+    } else if (action == 'unarchive') {
+      await provider.unarchiveGoal(goal.id);
     } else if (action == 'delete') {
       await _showDeleteGoalConfirmation(goal);
     }
@@ -420,7 +454,7 @@ class _GoalsScreenState extends State<GoalsScreen>
     final provider = context.read<GoalsProvider>();
 
     // Show loading dialog
-    PremiumLoadingDialog.show(context, message: 'Creating goal...');
+    PremiumLoadingDialog.show(context, message: 'Checking deletion impact...');
 
     try {
       final impact = await provider.getDeletionImpact(goal.id);
@@ -428,12 +462,16 @@ class _GoalsScreenState extends State<GoalsScreen>
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
 
+      final programsCount = (impact['programsCount'] as int?) ?? 0;
+      final sessionsCount = (impact['sessionsCount'] as int?) ?? 0;
+      final message = impact['message'] as String?;
+
       // Show confirmation with impact
       final confirmed = await showDialog<bool>(
         context: context,
         builder:
             (context) => AlertDialog(
-              title: const Text('⚠️ Delete Goal?'),
+              title: const Text('Delete Goal?'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -442,52 +480,35 @@ class _GoalsScreenState extends State<GoalsScreen>
                     'Are you sure you want to delete "${goal.goalType}"?',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  if ((impact['programsCount'] ?? 0) > 0 ||
-                      (impact['sessionsCount'] ?? 0) > 0) ...[
+                  if (programsCount > 0 || sessionsCount > 0) ...[
                     const SizedBox(height: 16),
-                    const Text(
-                      'This will permanently delete:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if ((impact['programsCount'] ?? 0) > 0)
-                      Text(
-                        '• ${impact['programsCount']} Program(s) with all their workouts',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    if ((impact['sessionsCount'] ?? 0) > 0)
-                      Text(
-                        '• ${impact['sessionsCount']} Workout Session(s) with all exercises and sets',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.1),
+                        color: Colors.blue.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Colors.red.withValues(alpha: 0.3),
+                          color: Colors.blue.withValues(alpha: 0.3),
                         ),
                       ),
-                      child: const Row(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.warning_amber,
-                            color: Colors.red,
+                          const Icon(
+                            Icons.info_outline,
+                            color: Colors.blue,
                             size: 20,
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'This action cannot be undone!',
-                              style: TextStyle(
-                                color: Colors.red,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                              message ??
+                                  'This will unlink $programsCount program(s) from this goal. '
+                                      'Your workout history ($sessionsCount session(s)) is preserved — '
+                                      'only the link to this goal is removed.',
+                              style: const TextStyle(
+                                color: Colors.blue,
+                                fontSize: 13,
                               ),
                             ),
                           ),
@@ -495,6 +516,16 @@ class _GoalsScreenState extends State<GoalsScreen>
                       ),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  Text(
+                    'The goal itself cannot be recovered after deletion. '
+                    'If you just want to stop tracking it without losing it, '
+                    'use Archive instead.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.textSecondary,
+                    ),
+                  ),
                 ],
               ),
               actions: [
@@ -515,7 +546,9 @@ class _GoalsScreenState extends State<GoalsScreen>
         final success = await provider.deleteGoal(goal.id);
 
         if (success && mounted) {
-          // Reload programs and sessions to remove cascade-deleted items
+          // Reload programs and sessions: any that were linked to this goal
+          // are now detached (goalId cleared) rather than gone, but their
+          // goal-derived fields still need a refresh.
           await Future.wait([
             context.read<ProgramsProvider>().loadPrograms(),
             context.read<SessionsProvider>().loadSessions(waitForSync: true),

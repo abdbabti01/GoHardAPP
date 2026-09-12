@@ -1052,6 +1052,7 @@ void main() {
       expect(provider.programs, isEmpty);
       expect(provider.activePrograms, isEmpty);
       expect(provider.completedPrograms, isEmpty);
+      expect(provider.archivedPrograms, isEmpty);
       expect(provider.errorMessage, isNull);
       expect(provider.isLoading, isFalse);
       expect(provider.isCreating, isFalse);
@@ -1715,5 +1716,178 @@ void main() {
       verify(repo.getPrograms(isActive: null)).called(1);
       verifyNever(repo.getPrograms(isActive: true));
     });
+  });
+
+  group('archive / unarchive', () {
+    test('archiveProgram is online-only: publishes archived status only after '
+        'the repository call resolves, and never completes it', () async {
+      await seed([program(1, active: true)]);
+      epoch.activate(1);
+      final c = Completer<void>();
+      when(repo.archiveProgram(1)).thenAnswer((_) => c.future);
+
+      final f = provider.archiveProgram(1);
+      // Online-only: no optimistic edit before the repository call resolves.
+      expect(provider.programs.single.status, 'active');
+      expect(provider.archivedPrograms, isEmpty);
+
+      c.complete();
+      expect(await f, isTrue);
+
+      expect(provider.programs.single.status, 'archived');
+      expect(provider.programs.single.isActive, isFalse);
+      expect(provider.programs.single.isCompleted, isFalse);
+      expect(provider.archivedPrograms, hasLength(1));
+      expect(provider.activePrograms, isEmpty);
+    });
+
+    test('archiveProgram surfaces an error and leaves the program active '
+        'on failure', () async {
+      await seed([program(1, active: true)]);
+      epoch.activate(1);
+      when(repo.archiveProgram(1)).thenThrow(Exception('network error'));
+
+      final ok = await provider.archiveProgram(1);
+
+      expect(ok, isFalse);
+      expect(provider.programs.single.status, 'active');
+      expect(provider.programs.single.isActive, isTrue);
+      expect(provider.errorMessage, contains('Failed to archive program'));
+    });
+
+    test('a stale archiveProgram success cannot modify B', () async {
+      await seed([program(1, active: true)]);
+      epoch.activate(1);
+      final c = Completer<void>();
+      when(repo.archiveProgram(1)).thenAnswer((_) => c.future);
+
+      final f = provider.archiveProgram(1);
+      epoch.invalidate();
+      provider.clear();
+      epoch.activate(2);
+      await seed([program(1, active: true, title: 'B')]);
+
+      c.complete();
+      final ok = await f;
+
+      expect(ok, isFalse);
+      expect(provider.programs.single.status, 'active'); // B's row untouched
+    });
+
+    test('unarchiveProgram restores an archived program to active', () async {
+      await seed([program(1, active: true)]);
+      epoch.activate(1);
+      when(repo.archiveProgram(1)).thenAnswer((_) async {});
+      await provider.archiveProgram(1);
+      expect(provider.archivedPrograms, hasLength(1));
+
+      when(repo.unarchiveProgram(1)).thenAnswer((_) async {});
+      final ok = await provider.unarchiveProgram(1);
+
+      expect(ok, isTrue);
+      expect(provider.archivedPrograms, isEmpty);
+      expect(provider.activePrograms, hasLength(1));
+    });
+
+    test('clear() (logout) empties archivedPrograms too - a later user must '
+        'never see a previous user\'s archived program titles', () async {
+      await seed([program(1, active: true, title: 'Secret')]);
+      epoch.activate(1);
+      when(repo.archiveProgram(1)).thenAnswer((_) async {});
+      await provider.archiveProgram(1);
+      expect(provider.archivedPrograms, hasLength(1));
+
+      provider.clear(); // simulates logout, per SessionCleanupCoordinator
+
+      expect(provider.archivedPrograms, isEmpty);
+    });
+
+    test(
+      'Gap 4: archiving a program removes it from getTodaysWorkouts() '
+      '(future suggestions), while an unrelated active program\'s '
+      'suggestion for today is untouched - no Today redesign needed, since '
+      'getTodaysWorkouts() already only ever reads _activePrograms, which '
+      'archiveProgram\'s isActive:false flip naturally excludes it from',
+      () async {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+
+        final toArchive = Program(
+          id: 1,
+          userId: 1,
+          title: 'To Archive',
+          totalWeeks: 4,
+          currentWeek: 1,
+          currentDay: 1,
+          startDate: DateTime(2024, 1, 1),
+          isActive: true,
+          isCompleted: false,
+          createdAt: DateTime(2024, 1, 1),
+          workouts: [
+            ProgramWorkout(
+              id: 10,
+              programId: 1,
+              weekNumber: 1,
+              dayNumber: 1,
+              workoutName: 'Push Day',
+              exercisesJson: '[]',
+              isCompleted: false,
+              orderIndex: 0,
+              scheduledDate: todayDate,
+            ),
+          ],
+        );
+        final staysActive = Program(
+          id: 2,
+          userId: 1,
+          title: 'Stays Active',
+          totalWeeks: 4,
+          currentWeek: 1,
+          currentDay: 1,
+          startDate: DateTime(2024, 1, 1),
+          isActive: true,
+          isCompleted: false,
+          createdAt: DateTime(2024, 1, 1),
+          workouts: [
+            ProgramWorkout(
+              id: 20,
+              programId: 2,
+              weekNumber: 1,
+              dayNumber: 1,
+              workoutName: 'Leg Day',
+              exercisesJson: '[]',
+              isCompleted: false,
+              orderIndex: 0,
+              scheduledDate: todayDate,
+            ),
+          ],
+        );
+
+        await seed([toArchive, staysActive]);
+        epoch.activate(1);
+
+        // Both suggestions present before archiving.
+        expect(
+          provider.getTodaysWorkouts().map((e) => e.program.id),
+          containsAll(<int>[1, 2]),
+        );
+
+        when(repo.archiveProgram(1)).thenAnswer((_) async {});
+        final ok = await provider.archiveProgram(1);
+        expect(ok, isTrue);
+
+        final remaining = provider.getTodaysWorkouts();
+        expect(remaining.map((e) => e.program.id), isNot(contains(1)));
+        expect(remaining.map((e) => e.program.id), contains(2));
+
+        // Archiving itself never sets completion or awards progress - already
+        // proven server-side by
+        // GoalProgramHistoryPreservationPostgresTests.archiving_a_program_never_completes_it_and_never_touches_workouts_or_sessions;
+        // this asserts the same invariant holds in the client's own published
+        // state after the mutation.
+        final archivedProgram = provider.archivedPrograms.single;
+        expect(archivedProgram.isCompleted, isFalse);
+      },
+    );
   });
 }

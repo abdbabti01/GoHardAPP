@@ -156,7 +156,7 @@ class GoalsRepository {
   }
 
   /// Get deletion impact for a goal
-  Future<Map<String, int>> getDeletionImpact(int id) async {
+  Future<Map<String, dynamic>> getDeletionImpact(int id) async {
     final context = await _capture();
     if (context == null) throw const SessionStaleException();
 
@@ -165,12 +165,14 @@ class GoalsRepository {
       sessionContext: context,
     );
     return {
-      'programsCount': data['programsCount'] as int,
-      'sessionsCount': data['sessionsCount'] as int,
+      'programsCount': data['programsCount'] as int? ?? 0,
+      'sessionsCount': data['sessionsCount'] as int? ?? 0,
+      'message': data['message'] as String?,
     };
   }
 
-  /// Delete a goal
+  /// Delete a goal. Linked programs are detached (not destroyed) server-side —
+  /// they and their session history survive with the goal link removed.
   Future<void> deleteGoal(int id) async {
     final context = await _capture();
     if (context == null) throw const SessionStaleException();
@@ -185,6 +187,29 @@ class GoalsRepository {
 
     await _apiService.put<void>(
       ApiConfig.goalComplete(id),
+      sessionContext: context,
+    );
+  }
+
+  /// Archive a goal: remove it from active use WITHOUT completing it. Never
+  /// touches linked programs or nutrition targets.
+  Future<void> archiveGoal(int id) async {
+    final context = await _capture();
+    if (context == null) throw const SessionStaleException();
+
+    await _apiService.put<void>(
+      ApiConfig.goalArchive(id),
+      sessionContext: context,
+    );
+  }
+
+  /// Restore an archived goal to active use.
+  Future<void> unarchiveGoal(int id) async {
+    final context = await _capture();
+    if (context == null) throw const SessionStaleException();
+
+    await _apiService.put<void>(
+      ApiConfig.goalUnarchive(id),
       sessionContext: context,
     );
   }

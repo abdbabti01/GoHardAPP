@@ -213,8 +213,12 @@ class GoalsProvider extends ChangeNotifier {
   // Getters - derive filtered lists from single source of truth
   List<Goal> get goals => _goals;
   List<Goal> get activeGoals =>
-      _goals.where((g) => g.isActive && !g.isCompleted).toList();
+      _goals
+          .where((g) => g.isActive && !g.isCompleted && !g.isArchived)
+          .toList();
   List<Goal> get completedGoals => _goals.where((g) => g.isCompleted).toList();
+  List<Goal> get archivedGoals =>
+      _goals.where((g) => g.isArchived && !g.isCompleted).toList();
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
@@ -502,11 +506,12 @@ class GoalsProvider extends ChangeNotifier {
     if (_reconcileByFilter(id, goal)) notifyListeners();
   }
 
-  /// Get deletion impact for a goal (how many programs and sessions will be
-  /// deleted). Returned directly to the caller, never stored; a stale session
-  /// or a superseded request throws [SessionStaleException] rather than
-  /// handing back another request's numbers.
-  Future<Map<String, int>> getDeletionImpact(int id) async {
+  /// Get deletion impact for a goal: how many programs will be unlinked (not
+  /// deleted) and how many sessions they carry — all preserved as workout
+  /// history, only the link to this goal is removed. Returned directly to the
+  /// caller, never stored; a stale session or a superseded request throws
+  /// [SessionStaleException] rather than handing back another request's numbers.
+  Future<Map<String, dynamic>> getDeletionImpact(int id) async {
     final token = _sessionEpoch.capture();
     if (token == null) throw const SessionStaleException();
     final gen = ++_impactGen;
@@ -676,6 +681,120 @@ class GoalsProvider extends ChangeNotifier {
               'Failed to complete goal: ${e.toString().replaceAll('Exception: ', '')}';
         }
         debugPrint('Complete goal error: $e');
+        notifyListeners();
+      }
+      return false;
+    }
+  }
+
+  /// Archive a goal with optimistic update. Archiving is NOT completing: it
+  /// never sets `isCompleted`/`completedAt` and never touches any linked
+  /// Program or nutrition target — any further action on those must be an
+  /// explicit, separate call.
+  Future<bool> archiveGoal(int id) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+    final gen = (_goalMutationGens[id] ?? 0) + 1;
+    _goalMutationGens[id] = gen;
+    final errorGen = ++_errorGen;
+
+    bool owns() =>
+        _sessionEpoch.isCurrent(token) && _goalMutationGens[id] == gen;
+
+    _errorMessage = null;
+
+    final originalIndex = _goals.indexWhere((g) => g.id == id);
+    if (originalIndex == -1) {
+      _errorMessage = 'Goal not found';
+      notifyListeners();
+      return false;
+    }
+    final originalGoal = _goals[originalIndex];
+
+    final archivedGoal = originalGoal.copyWith(
+      isArchived: true,
+      isActive: false,
+      archivedAt: DateTime.now().toUtc(),
+    );
+    _reconcileByFilter(id, archivedGoal);
+    notifyListeners();
+
+    try {
+      await _goalsRepository.archiveGoal(id);
+      if (!owns()) return false;
+
+      _reconcileByFilter(id, archivedGoal);
+      _listGen++;
+      notifyListeners();
+      return true;
+    } on SessionStaleException {
+      _rollbackGoal(id, originalGoal, token, gen);
+      return false;
+    } on RequestCancelledException {
+      _rollbackGoal(id, originalGoal, token, gen);
+      return false;
+    } catch (e) {
+      if (owns()) {
+        _reconcileByFilter(id, originalGoal);
+        if (errorGen == _errorGen) {
+          _errorMessage =
+              'Failed to archive goal: ${e.toString().replaceAll('Exception: ', '')}';
+        }
+        notifyListeners();
+      }
+      return false;
+    }
+  }
+
+  /// Restore an archived goal to active use, with optimistic update.
+  Future<bool> unarchiveGoal(int id) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+    final gen = (_goalMutationGens[id] ?? 0) + 1;
+    _goalMutationGens[id] = gen;
+    final errorGen = ++_errorGen;
+
+    bool owns() =>
+        _sessionEpoch.isCurrent(token) && _goalMutationGens[id] == gen;
+
+    _errorMessage = null;
+
+    final originalIndex = _goals.indexWhere((g) => g.id == id);
+    if (originalIndex == -1) {
+      _errorMessage = 'Goal not found';
+      notifyListeners();
+      return false;
+    }
+    final originalGoal = _goals[originalIndex];
+
+    final restoredGoal = originalGoal.copyWith(
+      isArchived: false,
+      isActive: !originalGoal.isCompleted,
+    );
+    _reconcileByFilter(id, restoredGoal);
+    notifyListeners();
+
+    try {
+      await _goalsRepository.unarchiveGoal(id);
+      if (!owns()) return false;
+
+      _reconcileByFilter(id, restoredGoal);
+      _listGen++;
+      notifyListeners();
+      return true;
+    } on SessionStaleException {
+      _rollbackGoal(id, originalGoal, token, gen);
+      return false;
+    } on RequestCancelledException {
+      _rollbackGoal(id, originalGoal, token, gen);
+      return false;
+    } catch (e) {
+      if (owns()) {
+        _reconcileByFilter(id, originalGoal);
+        if (errorGen == _errorGen) {
+          _errorMessage =
+              'Failed to restore goal: ${e.toString().replaceAll('Exception: ', '')}';
+        }
         notifyListeners();
       }
       return false;

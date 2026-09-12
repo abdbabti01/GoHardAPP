@@ -1613,5 +1613,78 @@ void main() {
       expect(result!.id, 9);
       expect(provider.goals.map((g) => g.id), [9]);
     });
+
+    test('73: archiveGoal optimistically archives without completing, and '
+        'converges after success', () async {
+      epoch.activate(1);
+      await seedGoal(1);
+      final c = Completer<void>();
+      when(repo.archiveGoal(1)).thenAnswer((_) => c.future);
+
+      final f = provider.archiveGoal(1);
+
+      // Optimistic: archived immediately, never completed.
+      expect(provider.goals.single.isArchived, isTrue);
+      expect(provider.goals.single.isActive, isFalse);
+      expect(provider.goals.single.isCompleted, isFalse);
+      expect(provider.archivedGoals, hasLength(1));
+      expect(provider.activeGoals, isEmpty);
+      expect(provider.completedGoals, isEmpty);
+
+      c.complete();
+      expect(await f, isTrue);
+
+      expect(provider.goals.single.isArchived, isTrue);
+    });
+
+    test(
+      '74: archiveGoal rolls back to the original goal on failure',
+      () async {
+        epoch.activate(1);
+        await seedGoal(1);
+        when(repo.archiveGoal(1)).thenThrow(Exception('network error'));
+
+        final ok = await provider.archiveGoal(1);
+
+        expect(ok, isFalse);
+        expect(provider.goals.single.isArchived, isFalse);
+        expect(provider.goals.single.isActive, isTrue);
+        expect(provider.errorMessage, contains('Failed to archive goal'));
+      },
+    );
+
+    test('75: a stale archiveGoal success cannot modify B', () async {
+      epoch.activate(1);
+      await seedGoal(1);
+      final c = Completer<void>();
+      when(repo.archiveGoal(1)).thenAnswer((_) => c.future);
+
+      final f = provider.archiveGoal(1);
+      epoch.invalidate();
+      provider.clear();
+      epoch.activate(2);
+      await seedGoal(1); // B creates their own id-1 goal
+
+      c.complete();
+      final ok = await f;
+
+      expect(ok, isFalse);
+      expect(provider.goals.single.isArchived, isFalse); // B's row untouched
+    });
+
+    test('76: unarchiveGoal restores an archived goal to active', () async {
+      epoch.activate(1);
+      await seedGoal(1);
+      when(repo.archiveGoal(1)).thenAnswer((_) async {});
+      await provider.archiveGoal(1);
+      expect(provider.archivedGoals, hasLength(1));
+
+      when(repo.unarchiveGoal(1)).thenAnswer((_) async {});
+      final ok = await provider.unarchiveGoal(1);
+
+      expect(ok, isTrue);
+      expect(provider.archivedGoals, isEmpty);
+      expect(provider.activeGoals, hasLength(1));
+    });
   });
 }

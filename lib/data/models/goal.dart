@@ -18,6 +18,12 @@ class Goal {
   final bool isActive;
   final bool isCompleted;
   final DateTime? completedAt;
+
+  /// Removed from active use without being completed. Distinct from
+  /// [isCompleted]: archiving never awards completion/progress and never
+  /// cascades to linked programs or nutrition targets.
+  final bool isArchived;
+  final DateTime? archivedAt;
   final DateTime createdAt;
   final List<GoalProgress>? progressHistory;
 
@@ -34,6 +40,8 @@ class Goal {
     required this.isActive,
     required this.isCompleted,
     this.completedAt,
+    this.isArchived = false,
+    this.archivedAt,
     required this.createdAt,
     this.progressHistory,
   });
@@ -61,6 +69,10 @@ class Goal {
       // Timestamp fields: parse as UTC
       completedAt: DateTimeHelper.parseTimestampOrNullFromJson(
         json['completedAt'],
+      ),
+      isArchived: json['isArchived'] as bool? ?? false,
+      archivedAt: DateTimeHelper.parseTimestampOrNullFromJson(
+        json['archivedAt'],
       ),
       createdAt: DateTimeHelper.parseTimestampFromJson(json['createdAt']),
       progressHistory: progressList,
@@ -275,6 +287,8 @@ class Goal {
     bool? isActive,
     bool? isCompleted,
     DateTime? completedAt,
+    bool? isArchived,
+    DateTime? archivedAt,
     DateTime? createdAt,
     List<GoalProgress>? progressHistory,
   }) {
@@ -291,6 +305,8 @@ class Goal {
       isActive: isActive ?? this.isActive,
       isCompleted: isCompleted ?? this.isCompleted,
       completedAt: completedAt ?? this.completedAt,
+      isArchived: isArchived ?? this.isArchived,
+      archivedAt: archivedAt ?? this.archivedAt,
       createdAt: createdAt ?? this.createdAt,
       progressHistory: progressHistory ?? this.progressHistory,
     );
