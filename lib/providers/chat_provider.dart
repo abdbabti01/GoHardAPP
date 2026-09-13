@@ -800,7 +800,17 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Create a Program from the current workout plan conversation
+  /// Whether the most recent [createProgramFromPlan] call failed specifically because the
+  /// server rejected the echoed draft revision as stale (409 DRAFT_STALE), as opposed to any
+  /// other failure. The UI uses this to offer "refresh and try again" instead of a generic
+  /// error. Reset at the start of every call.
+  bool get lastCreateProgramWasDraftStale => _lastCreateProgramWasDraftStale;
+  bool _lastCreateProgramWasDraftStale = false;
+
+  /// Create a Program from the current workout plan conversation.
+  ///
+  /// [draftRevision] should be the exact `ChatConversation.draftRevision` the caller's preview
+  /// was rendered from - see [DraftStaleException] for what happens when it no longer matches.
   Future<Map<String, dynamic>?> createProgramFromPlan({
     String? title,
     String? description,
@@ -808,7 +818,10 @@ class ChatProvider extends ChangeNotifier {
     int? totalWeeks,
     int? daysPerWeek,
     DateTime? startDate,
+    String? draftRevision,
   }) async {
+    _lastCreateProgramWasDraftStale = false;
+
     if (isOffline) {
       _errorMessage = 'Cannot create program offline';
       notifyListeners();
@@ -844,10 +857,17 @@ class ChatProvider extends ChangeNotifier {
         totalWeeks: totalWeeks,
         daysPerWeek: daysPerWeek,
         startDate: startDate,
+        draftRevision: draftRevision,
       );
       if (!_sessionEpoch.isCurrent(token)) return null;
 
       return result;
+    } on DraftStaleException catch (e) {
+      if (!_sessionEpoch.isCurrent(token)) return null;
+      _lastCreateProgramWasDraftStale = true;
+      _errorMessage = e.message;
+      debugPrint('Create program rejected - draft stale: $e');
+      return null;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return null;
       _errorMessage =

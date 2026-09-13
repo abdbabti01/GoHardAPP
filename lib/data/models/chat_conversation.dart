@@ -16,6 +16,28 @@ class ChatConversation {
   final List<ChatMessage> messages;
   final int? messageCount; // For list view without loading all messages
 
+  /// If a draft program was auto-created for this (workout_plan) conversation, its id.
+  final int? draftProgramId;
+
+  /// The draft's actual week count — decided once at generation time and never editable at
+  /// confirm time, since the draft is the single reviewed source of truth for activation.
+  final int? draftTotalWeeks;
+
+  /// The draft's proposed (Monday-snapped) start date, shown before activation. The user can
+  /// still override it when confirming.
+  final DateTime? draftProposedStartDate;
+
+  /// Total non-rest-day workouts already materialized on the draft.
+  final int? draftWorkoutCount;
+
+  /// Content fingerprint of the draft's reviewable content (weeks/exercises/schedule shape —
+  /// never the start date). Must be echoed back when confirming activation so the server can
+  /// prove it's acting on exactly this reviewed content, not merely "whatever is latest". Null
+  /// whenever the other draft* fields above are also null/unavailable (no draft, or a cached
+  /// conversation that predates this field / was cached offline before it could be fetched) —
+  /// see ChatConversationScreen's honest-preview handling, which never activates without this.
+  final String? draftRevision;
+
   ChatConversation({
     required this.id,
     required this.userId,
@@ -26,6 +48,11 @@ class ChatConversation {
     this.isArchived = false,
     this.messages = const [],
     this.messageCount,
+    this.draftProgramId,
+    this.draftTotalWeeks,
+    this.draftProposedStartDate,
+    this.draftWorkoutCount,
+    this.draftRevision,
   });
 
   // Helper method to ensure datetime is in UTC
@@ -53,6 +80,13 @@ class ChatConversation {
       isArchived: conversation.isArchived,
       messages: conversation.messages,
       messageCount: conversation.messageCount,
+      draftProgramId: conversation.draftProgramId,
+      draftTotalWeeks: conversation.draftTotalWeeks,
+      draftProposedStartDate: _toUtcNullable(
+        conversation.draftProposedStartDate,
+      ),
+      draftWorkoutCount: conversation.draftWorkoutCount,
+      draftRevision: conversation.draftRevision,
     );
   }
 
@@ -68,6 +102,11 @@ class ChatConversation {
     bool? isArchived,
     List<ChatMessage>? messages,
     int? messageCount,
+    int? draftProgramId,
+    int? draftTotalWeeks,
+    DateTime? draftProposedStartDate,
+    int? draftWorkoutCount,
+    String? draftRevision,
   }) {
     return ChatConversation(
       id: id ?? this.id,
@@ -79,6 +118,12 @@ class ChatConversation {
       isArchived: isArchived ?? this.isArchived,
       messages: messages ?? this.messages,
       messageCount: messageCount ?? this.messageCount,
+      draftProgramId: draftProgramId ?? this.draftProgramId,
+      draftTotalWeeks: draftTotalWeeks ?? this.draftTotalWeeks,
+      draftProposedStartDate:
+          draftProposedStartDate ?? this.draftProposedStartDate,
+      draftWorkoutCount: draftWorkoutCount ?? this.draftWorkoutCount,
+      draftRevision: draftRevision ?? this.draftRevision,
     );
   }
 }

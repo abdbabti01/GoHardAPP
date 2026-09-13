@@ -343,6 +343,7 @@ class MockChatRepository extends _i1.Mock implements _i2.ChatRepository {
     int? totalWeeks,
     int? daysPerWeek,
     DateTime? startDate,
+    String? draftRevision,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#createProgramFromPlan, [], {
@@ -353,6 +354,7 @@ class MockChatRepository extends _i1.Mock implements _i2.ChatRepository {
               #totalWeeks: totalWeeks,
               #daysPerWeek: daysPerWeek,
               #startDate: startDate,
+              #draftRevision: draftRevision,
             }),
             returnValue: _i3.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
