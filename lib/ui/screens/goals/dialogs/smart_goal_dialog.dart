@@ -7,6 +7,7 @@ import '../../../../providers/goals_provider.dart';
 import '../../../../providers/body_metrics_provider.dart';
 import '../../../../providers/nutrition_provider.dart';
 import '../../../../data/models/goal.dart';
+import '../../../../data/models/nutrition_goal.dart';
 import '../../../../routes/route_names.dart';
 
 /// Quick goal template for one-tap creation
@@ -48,9 +49,33 @@ class SmartGoalDialogResult {
 /// Dialog states
 enum SmartGoalDialogState {
   form, // Goal creation form
-  loading, // Creating goal + calculating nutrition
-  summary, // Results + plan generation options
+  loading, // Creating the goal (nutrition is a separate, later, optional step)
+  summary, // Goal created; optional nutrition setup + plan generation options
   error, // Error occurred during creation
+}
+
+/// Sub-states for the OPTIONAL nutrition-setup step inside [SmartGoalDialogState.summary].
+/// Goal creation never depends on this: skipping, canceling, or failing here always leaves
+/// the goal exactly as created and any pre-existing nutrition targets untouched.
+enum _NutritionSetupStep {
+  notStarted,
+  needsMetrics,
+  calculating,
+  previewReady,
+  applying,
+  applied,
+  failed,
+}
+
+class _NutritionCalcParams {
+  final String goalType;
+  final double? targetWeightChange;
+  final int? timeframeWeeks;
+  const _NutritionCalcParams(
+    this.goalType,
+    this.targetWeightChange,
+    this.timeframeWeeks,
+  );
 }
 
 /// Unified smart dialog for goal creation with nutrition calculation and plan generation
@@ -101,8 +126,12 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
   // Validation warnings
   String? _goalWarning;
 
-  // Nutrition calculation status
-  String? _nutritionWarning;
+  // Optional nutrition-setup sub-step (see _NutritionSetupStep) — entirely separate from goal
+  // creation, which has already completed by the time any of this can run.
+  _NutritionSetupStep _nutritionStep = _NutritionSetupStep.notStarted;
+  NutritionGoal? _priorActiveNutritionGoal;
+  String? _nutritionSetupError;
+  bool _nutritionMetricsCheckedFresh = false;
 
   // Quick goal templates
   static const List<GoalTemplate> _templates = [
@@ -388,12 +417,13 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     return '$action ${change.toStringAsFixed(1)} $unit$dateText';
   }
 
-  /// Create goal and calculate nutrition
-  Future<void> _createGoalAndCalculateNutrition() async {
+  /// Create the goal. Nutrition setup is a separate, later, fully optional step offered from
+  /// the summary screen — creating a goal never requires body metrics and never calculates or
+  /// saves nutrition targets on its own.
+  Future<void> _createGoal() async {
     if (!_formKey.currentState!.validate()) return;
 
     final provider = context.read<GoalsProvider>();
-    final nutritionProvider = context.read<NutritionProvider>();
     final messenger = ScaffoldMessenger.of(context);
 
     if (_selectedGoalType == null) {
@@ -406,7 +436,9 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       return;
     }
 
-    // Show warning confirmation if there's a warning
+    // Show warning confirmation if there's a warning. This is a soft, goal-realism warning
+    // (e.g. an aggressive target rate) — distinct from the hard input validators above, which
+    // already blocked getting here on invalid values.
     if (_goalWarning != null) {
       final proceed = await showDialog<bool>(
         context: context,
@@ -438,14 +470,12 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       if (proceed != true) return;
     }
 
-    // Transition to loading state
     setState(() {
       _state = SmartGoalDialogState.loading;
       _loadingMessage = 'Creating goal...';
       _isCreating = true;
     });
 
-    // Create the goal
     final goal = Goal(
       id: 0,
       userId: 0,
@@ -463,58 +493,182 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
 
     final createdGoal = await provider.createGoal(goal);
 
+    if (!mounted) return;
+
     if (createdGoal == null) {
-      if (mounted) {
-        setState(() {
-          _state = SmartGoalDialogState.error;
-          _errorMessage = provider.errorMessage ?? 'Failed to create goal';
-          _isCreating = false;
-        });
-      }
+      setState(() {
+        _state = SmartGoalDialogState.error;
+        _errorMessage = provider.errorMessage ?? 'Failed to create goal';
+        _isCreating = false;
+      });
       return;
     }
 
     _createdGoal = createdGoal;
 
-    // Calculate nutrition
     setState(() {
-      _loadingMessage = 'Calculating your nutrition plan...';
+      _state = SmartGoalDialogState.summary;
+      _isCreating = false;
     });
+  }
 
-    try {
-      _nutrition = await _calculateNutritionForGoal(
-        createdGoal,
-        nutritionProvider,
-      );
-    } on OfflineNutritionException catch (e) {
-      debugPrint('Nutrition calculation offline: $e');
-      _nutritionWarning = e.message;
-      // Continue without nutrition - goal was saved, nutrition will sync later
-    } on MissingMetricsException catch (e) {
-      debugPrint('Missing metrics for nutrition calculation: $e');
-      _nutritionWarning =
-          '${e.message}\n\nGo to Body Metrics to add your ${e.missingFields.join(" and ")}.';
-      // Continue without nutrition - user needs to add metrics first
-    } catch (e) {
-      debugPrint('Nutrition calculation failed: $e');
-      _nutritionWarning =
-          'Nutrition calculation failed. You can set targets manually in the Nutrition tab.';
-      // Continue without nutrition - it's optional
+  // ==================== OPTIONAL NUTRITION SETUP ====================
+  //
+  // Reached only via a button in the summary screen. The goal above is already persisted by
+  // the time any of this runs, so skip/cancel/failure here can never affect it, and existing
+  // nutrition targets are never touched until the user explicitly taps Apply on a preview
+  // they've seen.
+
+  /// Called after the user comes back from the Body Metrics screen (reached from
+  /// [_buildMissingMetricsWarning] while in the [_NutritionSetupStep.needsMetrics] step).
+  /// Forces a fresh metrics re-check — regardless of whether they actually entered anything —
+  /// and moves straight on to a preview if metrics are now complete, rather than leaving the
+  /// user stuck on the same "missing metrics" card with no visible way to proceed. The
+  /// already-created goal and the rest of the dialog's state are untouched by any of this.
+  Future<void> _returnedFromBodyMetrics() async {
+    _nutritionMetricsCheckedFresh = false;
+    await _startNutritionSetup();
+  }
+
+  Future<void> _startNutritionSetup() async {
+    setState(() => _nutritionStep = _NutritionSetupStep.calculating);
+
+    if (!_nutritionMetricsCheckedFresh) {
+      // Re-check current metrics rather than trusting whatever was (or wasn't) loaded when the
+      // goal form first opened.
+      final bodyMetricsProvider = context.read<BodyMetricsProvider>();
+      await bodyMetricsProvider.loadLatestMetric();
+      if (!mounted) return;
+      final latest = bodyMetricsProvider.latestMetric;
+      setState(() {
+        _currentWeight = latest?.weight;
+        _currentHeight = latest?.height;
+        _currentActivityLevel = latest?.activityLevel;
+        _nutritionMetricsCheckedFresh = true;
+      });
     }
 
-    // Transition to summary state
-    if (mounted) {
+    if (!_hasAllRequiredMetrics) {
+      if (mounted) {
+        setState(() => _nutritionStep = _NutritionSetupStep.needsMetrics);
+      }
+      return;
+    }
+
+    await _calculateNutritionPreview();
+  }
+
+  /// Preview-only: calls calculateNutritionFromMetrics (never saves). This method swallows its
+  /// own errors and returns null on failure (see NutritionProvider), so there is nothing to
+  /// rethrow/catch here — just check for a null result.
+  Future<void> _calculateNutritionPreview() async {
+    if (!mounted) return;
+    setState(() {
+      _nutritionStep = _NutritionSetupStep.calculating;
+      _nutritionSetupError = null;
+    });
+
+    final nutritionProvider = context.read<NutritionProvider>();
+
+    // Refresh the currently-active goal so the "this replaces X" comparison below reflects
+    // reality, not stale/never-loaded provider state.
+    await nutritionProvider.loadTodaysData();
+    if (!mounted) return;
+    _priorActiveNutritionGoal = nutritionProvider.activeGoal;
+
+    final params = _deriveNutritionParams(_createdGoal!);
+    final preview = await nutritionProvider.calculateNutritionFromMetrics(
+      goalType: params.goalType,
+      targetWeightChange: params.targetWeightChange,
+      timeframeWeeks: params.timeframeWeeks,
+    );
+
+    if (!mounted) return;
+
+    if (preview == null) {
       setState(() {
-        _state = SmartGoalDialogState.summary;
-        _isCreating = false;
+        _nutritionStep = _NutritionSetupStep.failed;
+        _nutritionSetupError =
+            nutritionProvider.errorMessage ??
+            'Could not calculate nutrition targets.';
+      });
+      return;
+    }
+
+    setState(() {
+      _nutrition = preview;
+      _nutritionStep = _NutritionSetupStep.previewReady;
+    });
+  }
+
+  /// The only call in this dialog that actually saves anything nutrition-related — only
+  /// reachable by an explicit tap on a preview the user has already seen.
+  Future<void> _applyNutritionPreview() async {
+    if (_nutrition == null) return;
+    setState(() => _nutritionStep = _NutritionSetupStep.applying);
+
+    final nutritionProvider = context.read<NutritionProvider>();
+    final params = _deriveNutritionParams(_createdGoal!);
+
+    try {
+      final saved = await nutritionProvider.calculateAndSaveNutrition(
+        goalType: params.goalType,
+        targetWeightChange: params.targetWeightChange,
+        timeframeWeeks: params.timeframeWeeks,
+      );
+
+      if (!mounted) return;
+
+      if (saved == null) {
+        setState(() {
+          _nutritionStep = _NutritionSetupStep.failed;
+          _nutritionSetupError =
+              nutritionProvider.errorMessage ??
+              'Failed to save nutrition targets. Your previous targets were kept.';
+        });
+        return;
+      }
+
+      setState(() {
+        _nutrition = saved;
+        _nutritionStep = _NutritionSetupStep.applied;
+      });
+    } on MissingMetricsException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _nutritionStep = _NutritionSetupStep.needsMetrics;
+        _nutritionSetupError = e.message;
+      });
+    } on OfflineNutritionException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _nutritionStep = _NutritionSetupStep.failed;
+        _nutritionSetupError = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _nutritionStep = _NutritionSetupStep.failed;
+        _nutritionSetupError =
+            'Failed to save nutrition targets. Your previous targets were kept.';
       });
     }
   }
 
-  Future<CalculatedNutrition?> _calculateNutritionForGoal(
-    Goal goal,
-    NutritionProvider nutritionProvider,
-  ) async {
+  /// Leaves whatever nutrition targets already existed completely untouched.
+  void _skipNutritionSetup() {
+    setState(() {
+      _nutritionStep = _NutritionSetupStep.notStarted;
+      _nutrition = null;
+      _nutritionSetupError = null;
+    });
+  }
+
+  void _retryNutritionSetup() {
+    _calculateNutritionPreview();
+  }
+
+  _NutritionCalcParams _deriveNutritionParams(Goal goal) {
     String nutritionGoalType = 'Maintenance';
     double? targetWeightChange;
     int? timeframeWeeks;
@@ -538,10 +692,10 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       if (timeframeWeeks < 1) timeframeWeeks = 1;
     }
 
-    return await nutritionProvider.calculateAndSaveNutrition(
-      goalType: nutritionGoalType,
-      targetWeightChange: targetWeightChange,
-      timeframeWeeks: timeframeWeeks,
+    return _NutritionCalcParams(
+      nutritionGoalType,
+      targetWeightChange,
+      timeframeWeeks,
     );
   }
 
@@ -629,10 +783,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           ),
           if (_showAdvancedForm || !_hasAllRequiredMetrics)
             ElevatedButton(
-              onPressed:
-                  (_isCreating || !_hasAllRequiredMetrics)
-                      ? null
-                      : _createGoalAndCalculateNutrition,
+              onPressed: _isCreating ? null : _createGoal,
               child:
                   _isCreating
                       ? SizedBox(
@@ -692,8 +843,6 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_metricsLoaded && !_hasAllRequiredMetrics)
-              _buildMissingMetricsWarning(),
             if (_metricsLoaded && _hasAllRequiredMetrics && _areMetricsStale)
               _buildStaleMetricsWarning(),
             if (_metricsLoaded && _hasAllRequiredMetrics && !_areMetricsStale)
@@ -973,9 +1122,17 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pushNamed(context, RouteNames.bodyMetrics);
+              onPressed: () async {
+                // Reached only from the post-creation nutrition step now — the goal is
+                // already saved, so push Body Metrics on top instead of popping this
+                // dialog (which would silently skip the "Goal Created!" confirmation and
+                // plan-generation options). Coming back here re-checks metrics with
+                // whatever was just entered and moves on to a preview automatically,
+                // instead of leaving the user stuck on this same "missing metrics" card
+                // with no way to proceed.
+                await Navigator.pushNamed(context, RouteNames.bodyMetrics);
+                if (!mounted) return;
+                await _returnedFromBodyMetrics();
               },
               icon: const Icon(Icons.edit, size: 18),
               label: const Text('Go to Body Metrics'),
@@ -1261,26 +1418,8 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           const SizedBox(height: 16),
           const Divider(),
           const SizedBox(height: 16),
-          if (_nutrition != null) ...[
-            Text(
-              'Your Nutrition Plan',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: context.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildNutritionCard(),
-            if (_nutrition!.hasWarning) ...[
-              const SizedBox(height: 12),
-              _buildAggressiveDeficitWarning(),
-            ],
-            const SizedBox(height: 16),
-          ] else ...[
-            _buildNoNutritionWarning(),
-            const SizedBox(height: 16),
-          ],
+          _buildNutritionSetupSection(),
+          const SizedBox(height: 16),
           Text(
             'Generate Plans (Optional)',
             style: TextStyle(
@@ -1569,34 +1708,208 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     );
   }
 
-  Widget _buildNoNutritionWarning() {
-    final isOffline =
-        _nutritionWarning?.contains('internet') == true ||
-        _nutritionWarning?.contains('offline') == true;
-    final warningColor = isOffline ? Colors.orange : Colors.yellow;
+  Widget _buildNutritionSetupSection() {
+    switch (_nutritionStep) {
+      case _NutritionSetupStep.notStarted:
+        return _buildNutritionSetupPrompt();
+      case _NutritionSetupStep.needsMetrics:
+        return _buildNutritionNeedsMetrics();
+      case _NutritionSetupStep.calculating:
+      case _NutritionSetupStep.applying:
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(child: CircularProgressIndicator()),
+        );
+      case _NutritionSetupStep.previewReady:
+        return _buildNutritionPreviewCard();
+      case _NutritionSetupStep.applied:
+        return _buildNutritionAppliedCard();
+      case _NutritionSetupStep.failed:
+        return _buildNutritionFailedCard();
+    }
+  }
 
+  Widget _buildNutritionSetupPrompt() {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: warningColor.shade50,
+        color: Colors.blue.shade50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: warningColor.shade700),
+        border: Border.all(color: Colors.blue.shade200),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            isOffline ? Icons.wifi_off : Icons.info_outline,
-            color: warningColor.shade800,
-            size: 20,
+          Icon(Icons.restaurant_menu, color: Colors.blue.shade700),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Nutrition Targets (Optional)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Calculate calories and macros for this goal. You'll see the numbers before anything is saved.",
+                  style: TextStyle(fontSize: 12, color: Colors.blue.shade800),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _nutritionWarning ??
-                  'Nutrition calculation unavailable. You can set targets manually in the Nutrition tab.',
-              style: TextStyle(fontSize: 12, color: warningColor.shade900),
+          ElevatedButton(
+            onPressed: _startNutritionSetup,
+            child: const Text('Set Up'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNutritionNeedsMetrics() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildMissingMetricsWarning(),
+        if (_nutritionSetupError != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            _nutritionSetupError!,
+            style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+          ),
+        ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _skipNutritionSetup,
+            child: const Text('Skip nutrition setup'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNutritionPreviewCard() {
+    final nutrition = _nutrition!;
+    final priorGoal = _priorActiveNutritionGoal;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Review Your Nutrition Targets',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: context.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildNutritionCard(),
+        if (nutrition.hasWarning) ...[
+          const SizedBox(height: 12),
+          _buildAggressiveDeficitWarning(),
+        ],
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.orange.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.orange.shade200),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, size: 18, color: Colors.orange.shade800),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  priorGoal != null
+                      ? 'This replaces your current target: '
+                          '${priorGoal.dailyCalories.round()} cal → ${nutrition.dailyCalories.round()} cal.'
+                      : 'This will set your daily nutrition targets.',
+                  style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            TextButton(
+              onPressed: _skipNutritionSetup,
+              child: const Text('Skip'),
             ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: _applyNutritionPreview,
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNutritionAppliedCard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green.shade600, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'Nutrition targets saved',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.green.shade800,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildNutritionCard(),
+      ],
+    );
+  }
+
+  Widget _buildNutritionFailedCard() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _nutritionSetupError ??
+                'Nutrition setup failed. Your existing targets were not changed.',
+            style: TextStyle(fontSize: 13, color: Colors.red.shade900),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              TextButton(
+                onPressed: _skipNutritionSetup,
+                child: const Text('Skip'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _retryNutritionSetup,
+                child: const Text('Retry'),
+              ),
+            ],
           ),
         ],
       ),

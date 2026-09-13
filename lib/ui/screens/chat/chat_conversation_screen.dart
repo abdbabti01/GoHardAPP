@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:intl/intl.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../providers/chat_provider.dart'
@@ -119,6 +120,47 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     final chatProvider = context.read<ChatProvider>();
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
+    // Never activate off a guessed/stale preview: always refresh the conversation first so the
+    // dialog shows the AUTHORITATIVE draft (weeks/workout count/proposed date/revision) as it
+    // exists on the server right now, not whatever a local cache happens to hold. If that fails
+    // (offline, error) and we still have no revision to prove what we'd be activating, block
+    // rather than proceed with a guess.
+    final conversationId = chatProvider.currentConversation?.id;
+    if (conversationId != null) {
+      await chatProvider.loadConversation(conversationId);
+    }
+    if (!mounted) return;
+
+    if (chatProvider.currentConversation?.draftRevision == null) {
+      final retry = await showDialog<bool>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Preview Unavailable'),
+              content: const Text(
+                "We couldn't load the latest version of this plan. Connect to the "
+                'internet and try again — creating the program is disabled until '
+                'the preview can be confirmed.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+      );
+
+      if (retry == true && mounted) {
+        return _saveProgramPlan();
+      }
+      return;
+    }
+
     // Show dialog to collect program details
     final programDetails = await _showProgramDetailsDialog();
 
@@ -127,18 +169,49 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     // Show loading
     PremiumLoadingDialog.show(context, message: 'Creating program...');
 
-    // Create program
+    // Create program — this ACTIVATES the draft materialized at generation time; the server
+    // no longer accepts totalWeeks/daysPerWeek overrides here (the reviewed schedule is fixed
+    // by the draft), only title/description/goal/start-date. draftRevision proves this is the
+    // exact content just previewed above.
     final createResult = await chatProvider.createProgramFromPlan(
       title: programDetails['title'] as String?,
       description: programDetails['description'] as String?,
       goalId: programDetails['goalId'] as int?,
-      totalWeeks: programDetails['totalWeeks'] as int?,
-      daysPerWeek: programDetails['daysPerWeek'] as int?,
       startDate: programDetails['startDate'] as DateTime?,
+      draftRevision: programDetails['draftRevision'] as String?,
     );
 
     if (!mounted) return;
     navigator.pop(); // Close loading
+
+    if (createResult == null && chatProvider.lastCreateProgramWasDraftStale) {
+      final refresh = await showDialog<bool>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Plan Changed'),
+              content: const Text(
+                'This plan changed since you last reviewed it. Refresh to see the '
+                'latest version before creating the program.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Refresh'),
+                ),
+              ],
+            ),
+      );
+
+      if (refresh == true && mounted) {
+        return _saveProgramPlan();
+      }
+      return;
+    }
 
     if (createResult != null) {
       final programId = createResult['program']['id'] as int;
@@ -235,29 +308,34 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     }
   }
 
+  static DateTime _nextMonday(DateTime from) {
+    final daysUntilMonday = (DateTime.monday - from.weekday + 7) % 7;
+    final today = DateTime(from.year, from.month, from.day);
+    return daysUntilMonday == 0
+        ? today
+        : today.add(Duration(days: daysUntilMonday));
+  }
+
   Future<Map<String, dynamic>?> _showProgramDetailsDialog() async {
+    final conversation = context.read<ChatProvider>().currentConversation;
     final titleController = TextEditingController(
-      text:
-          context.read<ChatProvider>().currentConversation?.title ??
-          'My Program',
+      text: conversation?.title ?? 'My Program',
     );
     final descriptionController = TextEditingController(
       text: 'AI-generated workout program',
     );
-    // Programs always start on Monday - calculate next Monday (or today if Monday)
-    final now = DateTime.now();
-    final daysUntilMonday = (DateTime.monday - now.weekday + 7) % 7;
-    final startDate =
-        daysUntilMonday == 0
-            ? DateTime(now.year, now.month, now.day) // Today is Monday
-            : DateTime(
-              now.year,
-              now.month,
-              now.day,
-            ).add(Duration(days: daysUntilMonday));
-    // Use suggested values from goal, fallback to defaults
-    int totalWeeks = widget.suggestedWeeks ?? 8;
-    int daysPerWeek = widget.suggestedDaysPerWeek ?? 4;
+
+    // The draft's schedule (weeks / workout count) was decided once, at generation time, by
+    // ChatController.CreateDraftProgramFromWorkoutData — it is no longer editable here, since
+    // activation must match exactly what was previewed. Only the start date can still move.
+    final draftTotalWeeks = conversation?.draftTotalWeeks;
+    final draftWorkoutCount = conversation?.draftWorkoutCount;
+
+    // Prefer the server's proposed (Monday-snapped) start date from when the draft was
+    // generated; fall back to computing "next Monday" locally only for older/offline-cached
+    // conversations that predate this field.
+    DateTime startDate =
+        conversation?.draftProposedStartDate ?? _nextMonday(DateTime.now());
     int? selectedGoalId =
         widget.goalId; // Pre-select goal if passed from navigation
 
@@ -321,41 +399,68 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                             });
                           },
                         ),
-                        const SizedBox(height: 16),
-                        DropdownButtonFormField<int>(
-                          value: totalWeeks,
-                          decoration: const InputDecoration(
-                            labelText: 'Total Weeks',
-                            border: OutlineInputBorder(),
+                        if (draftTotalWeeks != null ||
+                            draftWorkoutCount != null) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_view_week,
+                                  size: 18,
+                                  color: Colors.blue.shade700,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    [
+                                      if (draftTotalWeeks != null)
+                                        '$draftTotalWeeks weeks',
+                                      if (draftWorkoutCount != null)
+                                        '$draftWorkoutCount workouts',
+                                    ].join(' · '),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.blue.shade900,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          items:
-                              [4, 6, 8, 10, 12, 16, 20].map((weeks) {
-                                return DropdownMenuItem(
-                                  value: weeks,
-                                  child: Text('$weeks weeks'),
-                                );
-                              }).toList(),
-                          onChanged: (value) {
-                            if (value != null) totalWeeks = value;
-                          },
-                        ),
+                        ],
                         const SizedBox(height: 16),
-                        DropdownButtonFormField<int>(
-                          value: daysPerWeek,
-                          decoration: const InputDecoration(
-                            labelText: 'Days Per Week',
-                            border: OutlineInputBorder(),
-                          ),
-                          items:
-                              [3, 4, 5, 6, 7].map((days) {
-                                return DropdownMenuItem(
-                                  value: days,
-                                  child: Text('$days days/week'),
-                                );
-                              }).toList(),
-                          onChanged: (value) {
-                            if (value != null) daysPerWeek = value;
+                        InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: startDate,
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(
+                                const Duration(days: 365),
+                              ),
+                              helpText: 'Select Start Date',
+                            );
+                            if (picked != null) {
+                              setState(() => startDate = picked);
+                            }
                           },
+                          child: InputDecorator(
+                            decoration: const InputDecoration(
+                              labelText: 'Start Date',
+                              border: OutlineInputBorder(),
+                              helperText: 'Programs always start on a Monday',
+                            ),
+                            child: Text(
+                              DateFormat('MMM d, y').format(startDate),
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -373,10 +478,9 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                               descriptionController.text.trim().isEmpty
                                   ? null
                                   : descriptionController.text.trim(),
-                          'totalWeeks': totalWeeks,
-                          'daysPerWeek': daysPerWeek,
                           'startDate': startDate,
                           'goalId': selectedGoalId,
+                          'draftRevision': conversation?.draftRevision,
                         });
                       },
                       child: const Text('Create Program'),

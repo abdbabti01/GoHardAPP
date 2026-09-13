@@ -1165,12 +1165,14 @@ class MockGoalsRepository extends _i1.Mock implements _i29.GoalsRepository {
           as _i25.Future<void>);
 
   @override
-  _i25.Future<Map<String, int>> getDeletionImpact(int? id) =>
+  _i25.Future<Map<String, dynamic>> getDeletionImpact(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#getDeletionImpact, [id]),
-            returnValue: _i25.Future<Map<String, int>>.value(<String, int>{}),
+            returnValue: _i25.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
           )
-          as _i25.Future<Map<String, int>>);
+          as _i25.Future<Map<String, dynamic>>);
 
   @override
   _i25.Future<void> deleteGoal(int? id) =>
@@ -1185,6 +1187,24 @@ class MockGoalsRepository extends _i1.Mock implements _i29.GoalsRepository {
   _i25.Future<void> completeGoal(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#completeGoal, [id]),
+            returnValue: _i25.Future<void>.value(),
+            returnValueForMissingStub: _i25.Future<void>.value(),
+          )
+          as _i25.Future<void>);
+
+  @override
+  _i25.Future<void> archiveGoal(int? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#archiveGoal, [id]),
+            returnValue: _i25.Future<void>.value(),
+            returnValueForMissingStub: _i25.Future<void>.value(),
+          )
+          as _i25.Future<void>);
+
+  @override
+  _i25.Future<void> unarchiveGoal(int? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#unarchiveGoal, [id]),
             returnValue: _i25.Future<void>.value(),
             returnValueForMissingStub: _i25.Future<void>.value(),
           )
@@ -1517,6 +1537,7 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
     int? totalWeeks,
     int? daysPerWeek,
     DateTime? startDate,
+    String? draftRevision,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#createProgramFromPlan, [], {
@@ -1527,6 +1548,7 @@ class MockChatRepository extends _i1.Mock implements _i13.ChatRepository {
               #totalWeeks: totalWeeks,
               #daysPerWeek: daysPerWeek,
               #startDate: startDate,
+              #draftRevision: draftRevision,
             }),
             returnValue: _i25.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
@@ -2141,12 +2163,14 @@ class MockProgramsRepository extends _i1.Mock
           as _i25.Future<void>);
 
   @override
-  _i25.Future<Map<String, int>> getDeletionImpact(int? id) =>
+  _i25.Future<Map<String, dynamic>> getDeletionImpact(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#getDeletionImpact, [id]),
-            returnValue: _i25.Future<Map<String, int>>.value(<String, int>{}),
+            returnValue: _i25.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
           )
-          as _i25.Future<Map<String, int>>);
+          as _i25.Future<Map<String, dynamic>>);
 
   @override
   _i25.Future<void> deleteProgram(int? id) =>
@@ -2161,6 +2185,24 @@ class MockProgramsRepository extends _i1.Mock
   _i25.Future<void> completeProgram(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#completeProgram, [id]),
+            returnValue: _i25.Future<void>.value(),
+            returnValueForMissingStub: _i25.Future<void>.value(),
+          )
+          as _i25.Future<void>);
+
+  @override
+  _i25.Future<void> archiveProgram(int? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#archiveProgram, [id]),
+            returnValue: _i25.Future<void>.value(),
+            returnValueForMissingStub: _i25.Future<void>.value(),
+          )
+          as _i25.Future<void>);
+
+  @override
+  _i25.Future<void> unarchiveProgram(int? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#unarchiveProgram, [id]),
             returnValue: _i25.Future<void>.value(),
             returnValueForMissingStub: _i25.Future<void>.value(),
           )
@@ -2731,6 +2773,23 @@ class MockAuthService extends _i1.Mock implements _i49.AuthService {
   _i25.Future<String?> getUserName() =>
       (super.noSuchMethod(
             Invocation.method(#getUserName, []),
+            returnValue: _i25.Future<String?>.value(),
+          )
+          as _i25.Future<String?>);
+
+  @override
+  _i25.Future<void> saveUsername(String? username) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveUsername, [username]),
+            returnValue: _i25.Future<void>.value(),
+            returnValueForMissingStub: _i25.Future<void>.value(),
+          )
+          as _i25.Future<void>);
+
+  @override
+  _i25.Future<String?> getUsername() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUsername, []),
             returnValue: _i25.Future<String?>.value(),
           )
           as _i25.Future<String?>);

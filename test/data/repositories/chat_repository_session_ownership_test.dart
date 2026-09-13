@@ -16,6 +16,7 @@ import 'package:go_hard_app/data/local/models/local_chat_conversation.dart';
 import 'package:go_hard_app/data/local/models/local_chat_message.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/repositories/chat_repository.dart';
+import 'package:go_hard_app/data/services/api_exception.dart';
 import 'package:go_hard_app/data/services/api_service.dart';
 import 'package:go_hard_app/data/services/auth_service.dart';
 
@@ -1352,6 +1353,66 @@ void main() {
           'that invariant explicitly',
     );
     await scheduledBackgroundSyncs.single;
+  });
+
+  // ================================================================
+  // Phase 2: draft-revision staleness classification. createProgramFromPlan
+  // must classify a 409 DRAFT_STALE response as DraftStaleException (so the
+  // UI can offer "refresh and try again" instead of a generic error), must
+  // send the caller's draftRevision in the request body, and must never
+  // misclassify an unrelated 409 the same way.
+  // ================================================================
+  group('createProgramFromPlan — DraftStaleException classification', () {
+    test('a 409 DRAFT_STALE response is thrown as DraftStaleException '
+        'carrying the server\'s currentRevision', () async {
+      loginAs(userA);
+      adapter.responder = (options) async {
+        expect(options.data['draftRevision'], 'rev-abc');
+        return jsonResponse({
+          'code': 'DRAFT_STALE',
+          'message': 'This plan has changed since it was generated.',
+          'currentRevision': 'rev-new',
+        }, statusCode: 409);
+      };
+
+      await expectLater(
+        () => repository.createProgramFromPlan(
+          conversationId: 1,
+          draftRevision: 'rev-abc',
+        ),
+        throwsA(
+          isA<DraftStaleException>().having(
+            (e) => e.currentRevision,
+            'currentRevision',
+            'rev-new',
+          ),
+        ),
+      );
+    });
+
+    test(
+      'a 409 that is NOT DRAFT_STALE is rethrown as the original ApiException, '
+      'never misclassified as a stale draft',
+      () async {
+        loginAs(userA);
+        adapter.responder =
+            (_) async => jsonResponse({
+              'code': 'SOME_OTHER_CONFLICT',
+              'message': 'unrelated conflict',
+            }, statusCode: 409);
+
+        await expectLater(
+          () => repository.createProgramFromPlan(conversationId: 1),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e is DraftStaleException,
+              'is DraftStaleException',
+              isFalse,
+            ),
+          ),
+        );
+      },
+    );
   });
 }
 

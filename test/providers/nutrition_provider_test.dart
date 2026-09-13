@@ -760,4 +760,129 @@ void main() {
       expect(provider.isLoadingHistory, isFalse);
     });
   });
+
+  // ================================================================
+  // Phase 2 evidence: a nutrition-setup preview/apply that resolves AFTER the
+  // session that requested it has ended (logout, or a different user logging
+  // in) must never publish into the new session, and must never dispatch any
+  // follow-up read/write (e.g. the post-save loadTodaysData reload) under
+  // that dead session's credentials. calculateNutritionFromMetrics/
+  // calculateAndSaveNutrition were previously untested at the provider level
+  // for this specific guard, even though NutritionProvider's own doc comments
+  // already claim it.
+  // ================================================================
+  group('calculateNutritionFromMetrics / calculateAndSaveNutrition — cross-session', () {
+    CalculatedNutrition nutrition({double calories = 2200}) =>
+        CalculatedNutrition(
+          nutritionGoalId: 42,
+          dailyCalories: calories,
+          dailyProtein: 150,
+          dailyCarbohydrates: 200,
+          dailyFat: 65,
+          dailyFiber: 25,
+          dailyWater: 2000,
+          bmr: 1600,
+          tdee: 2400,
+          calorieAdjustment: -200,
+          expectedWeeklyWeightChange: -0.5,
+          explanation: 'test',
+        );
+
+    test(
+      '22. calculateNutritionFromMetrics resolving after logout returns null and never touches state',
+      () async {
+        sessionEpoch.activate(1);
+        final completer = Completer<CalculatedNutrition?>();
+        when(
+          mockRepository.calculateNutritionFromMetrics(
+            goalType: anyNamed('goalType'),
+            targetWeightChange: anyNamed('targetWeightChange'),
+            timeframeWeeks: anyNamed('timeframeWeeks'),
+          ),
+        ).thenAnswer((_) => completer.future);
+
+        final future = provider.calculateNutritionFromMetrics(
+          goalType: 'WeightLoss',
+        );
+
+        sessionEpoch.invalidate(); // logout while the call is in flight
+        completer.complete(nutrition());
+
+        final result = await future;
+
+        expect(result, isNull);
+        expect(provider.errorMessage, isNull);
+      },
+    );
+
+    test(
+      '23. calculateAndSaveNutrition resolving after logout returns null, never '
+      'updates activeGoal, and never dispatches the post-save loadTodaysData reload',
+      () async {
+        sessionEpoch.activate(1);
+        final completer = Completer<CalculatedNutrition?>();
+        when(
+          mockRepository.calculateAndSaveNutrition(
+            goalType: anyNamed('goalType'),
+            targetWeightChange: anyNamed('targetWeightChange'),
+            timeframeWeeks: anyNamed('timeframeWeeks'),
+          ),
+        ).thenAnswer((_) => completer.future);
+        stubHappyLoadTodaysData(); // would be called by a real post-save reload
+
+        final future = provider.calculateAndSaveNutrition(
+          goalType: 'WeightLoss',
+        );
+
+        sessionEpoch.invalidate(); // logout while the save is in flight
+        completer.complete(nutrition());
+
+        final result = await future;
+
+        expect(result, isNull);
+        expect(provider.activeGoal, isNull);
+        // The dead session's response must never dispatch the follow-up reload either.
+        verifyNever(mockRepository.getTodaysMealLog());
+        verifyNever(
+          mockRepository.getNutritionDashboard(date: anyNamed('date')),
+        );
+      },
+    );
+
+    test(
+      '24. calculateAndSaveNutrition resolving after a DIFFERENT user has since logged '
+      "in does not publish user A's result into user B's provider state",
+      () async {
+        sessionEpoch.activate(1);
+        final completer = Completer<CalculatedNutrition?>();
+        when(
+          mockRepository.calculateAndSaveNutrition(
+            goalType: anyNamed('goalType'),
+            targetWeightChange: anyNamed('targetWeightChange'),
+            timeframeWeeks: anyNamed('timeframeWeeks'),
+          ),
+        ).thenAnswer((_) => completer.future);
+
+        final userAFuture = provider.calculateAndSaveNutrition(
+          goalType: 'WeightLoss',
+        );
+
+        // User A logs out, user B logs in - same shared provider instance.
+        sessionEpoch.invalidate();
+        sessionEpoch.activate(2);
+        stubHappyLoadTodaysData(g: goal(99, userId: 2, dailyCalories: 1800));
+        await provider.loadTodaysData();
+        expect(provider.activeGoal?.id, 99);
+
+        // User A's slow response finally resolves.
+        completer.complete(nutrition(calories: 3000));
+        final userAResult = await userAFuture;
+
+        expect(userAResult, isNull);
+        // User B's already-loaded state must be completely undisturbed by A's response.
+        expect(provider.activeGoal?.id, 99);
+        expect(provider.activeGoal?.dailyCalories, 1800);
+      },
+    );
+  });
 }

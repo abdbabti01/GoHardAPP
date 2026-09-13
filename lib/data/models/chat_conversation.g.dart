@@ -24,17 +24,31 @@ ChatConversation _$ChatConversationFromJson(Map<String, dynamic> json) =>
               .toList() ??
           const [],
       messageCount: (json['messageCount'] as num?)?.toInt(),
+      draftProgramId: (json['draftProgramId'] as num?)?.toInt(),
+      draftTotalWeeks: (json['draftTotalWeeks'] as num?)?.toInt(),
+      draftProposedStartDate:
+          json['draftProposedStartDate'] == null
+              ? null
+              : DateTime.parse(json['draftProposedStartDate'] as String),
+      draftWorkoutCount: (json['draftWorkoutCount'] as num?)?.toInt(),
+      draftRevision: json['draftRevision'] as String?,
     );
 
-Map<String, dynamic> _$ChatConversationToJson(ChatConversation instance) =>
-    <String, dynamic>{
-      'id': instance.id,
-      'userId': instance.userId,
-      'title': instance.title,
-      'type': instance.type,
-      'createdAt': instance.createdAt.toIso8601String(),
-      'lastMessageAt': instance.lastMessageAt?.toIso8601String(),
-      'isArchived': instance.isArchived,
-      'messages': instance.messages,
-      'messageCount': instance.messageCount,
-    };
+Map<String, dynamic> _$ChatConversationToJson(
+  ChatConversation instance,
+) => <String, dynamic>{
+  'id': instance.id,
+  'userId': instance.userId,
+  'title': instance.title,
+  'type': instance.type,
+  'createdAt': instance.createdAt.toIso8601String(),
+  'lastMessageAt': instance.lastMessageAt?.toIso8601String(),
+  'isArchived': instance.isArchived,
+  'messages': instance.messages,
+  'messageCount': instance.messageCount,
+  'draftProgramId': instance.draftProgramId,
+  'draftTotalWeeks': instance.draftTotalWeeks,
+  'draftProposedStartDate': instance.draftProposedStartDate?.toIso8601String(),
+  'draftWorkoutCount': instance.draftWorkoutCount,
+  'draftRevision': instance.draftRevision,
+};

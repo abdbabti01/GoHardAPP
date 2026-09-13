@@ -12,6 +12,7 @@ import '../models/food_item.dart';
 import '../models/nutrition_goal.dart';
 import '../models/nutrition_summary.dart';
 import '../models/daily_nutrition_progress.dart';
+import '../services/api_exception.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/session_request_context.dart';
@@ -2636,10 +2637,14 @@ class NutritionRepository {
       }
 
       return result;
-    } on DioException catch (e) {
-      // Check for missing metrics error (400 with specific code)
-      if (e.response?.statusCode == 400) {
-        final data = e.response?.data;
+    } on ApiException catch (e) {
+      // ApiService.post already unwraps DioException into ApiException before it ever
+      // reaches a repository (see ApiService._mapError) - catching DioException here would
+      // never fire, silently masking a missing-metrics 400 as a generic failure instead of
+      // the actionable MissingMetricsException callers (SmartGoalDialog's nutrition-setup
+      // step) rely on to redirect the user to Body Metrics.
+      if (e.statusCode == 400) {
+        final data = e.responseData;
         if (data is Map<String, dynamic> &&
             (data['code'] == 'MISSING_WEIGHT' ||
                 data['code'] == 'MISSING_HEIGHT')) {

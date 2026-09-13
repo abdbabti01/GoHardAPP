@@ -6,6 +6,7 @@ import '../../core/services/session_request_coordinator.dart';
 import '../../core/services/user_session_epoch.dart';
 import '../models/chat_conversation.dart';
 import '../models/chat_message.dart';
+import '../services/api_exception.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/session_request_context.dart';
@@ -1041,6 +1042,17 @@ class ChatRepository {
 
   /// Create a Program from an AI-generated workout plan.
   /// Requires online connection - cannot create programs offline.
+  ///
+  /// [draftRevision] is the content fingerprint the caller's preview was rendered from (see
+  /// `ChatConversation.draftRevision`) - echoed back so the server can prove activation is for
+  /// exactly that reviewed content. Omitting it (null) falls back to the server's weaker legacy
+  /// staleness heuristic; the app should always have one by the time this is called (see
+  /// ChatConversationScreen's honest-preview handling, which refreshes first and refuses to
+  /// proceed without one).
+  ///
+  /// Throws [DraftStaleException] if the server rejects the revision as stale (409
+  /// DRAFT_STALE) - the caller must refresh the conversation and show a new preview rather than
+  /// retry with the same values.
   Future<Map<String, dynamic>> createProgramFromPlan({
     required int conversationId,
     String? title,
@@ -1049,6 +1061,7 @@ class ChatRepository {
     int? totalWeeks,
     int? daysPerWeek,
     DateTime? startDate,
+    String? draftRevision,
   }) async {
     final context = await _requireOnlineContext(
       'Cannot create program offline',
@@ -1062,6 +1075,7 @@ class ChatRepository {
       if (totalWeeks != null) data['totalWeeks'] = totalWeeks;
       if (daysPerWeek != null) data['daysPerWeek'] = daysPerWeek;
       if (startDate != null) data['startDate'] = startDate.toIso8601String();
+      if (draftRevision != null) data['draftRevision'] = draftRevision;
 
       final response = await _apiService.post<Map<String, dynamic>>(
         ApiConfig.chatCreateProgram(conversationId),
@@ -1078,6 +1092,24 @@ class ChatRepository {
       throw Exception(_unauthenticated);
     } on RequestCancelledException {
       throw Exception(_unauthenticated);
+    } on ApiException catch (e) {
+      // ApiService.post already unwraps DioException into ApiException before it ever
+      // reaches a repository (see ApiService._mapError) - catching DioException here would
+      // never fire. ApiException preserves the status code and raw response body needed to
+      // classify a 409 DRAFT_STALE conflict.
+      if (e.statusCode == 409) {
+        final data = e.responseData;
+        if (data is Map<String, dynamic> && data['code'] == 'DRAFT_STALE') {
+          throw DraftStaleException(
+            message:
+                data['message'] as String? ??
+                'This plan has changed since it was generated.',
+            currentRevision: data['currentRevision'] as String?,
+          );
+        }
+      }
+      debugPrint('❌ Error creating program from plan: $e');
+      rethrow;
     } catch (e) {
       debugPrint('❌ Error creating program from plan: $e');
       rethrow;
@@ -1489,4 +1521,20 @@ class DayApplyResult {
           const [],
     );
   }
+}
+
+/// Thrown when the server rejects a program-creation request because the draft's content has
+/// changed since the client's preview was rendered (409 DRAFT_STALE). The caller must refresh
+/// the conversation to get a new preview + revision rather than retry with the same values.
+class DraftStaleException implements Exception {
+  final String message;
+
+  /// The draft's current content fingerprint, if the server included one - lets the caller
+  /// skip a round trip by re-fetching just the conversation rather than guessing.
+  final String? currentRevision;
+
+  DraftStaleException({required this.message, this.currentRevision});
+
+  @override
+  String toString() => message;
 }
