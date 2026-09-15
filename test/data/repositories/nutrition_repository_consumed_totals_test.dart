@@ -743,7 +743,12 @@ void main() {
       'a fresh server fetch caches consumed-only totals and entries consistently',
       () async {
         when(mockConnectivity.isOnline).thenReturn(true);
-        when(mockApiService.get<Map<String, dynamic>>(any)).thenAnswer(
+        when(
+          mockApiService.get<Map<String, dynamic>>(
+            any,
+            queryParameters: anyNamed('queryParameters'),
+          ),
+        ).thenAnswer(
           (_) async => {
             'id': 42,
             'userId': userId,

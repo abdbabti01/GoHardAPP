@@ -790,11 +790,14 @@ class MockNutritionRepository extends _i1.Mock
   );
 
   @override
-  _i25.Future<_i5.MealLog> getTodaysMealLog() =>
+  _i25.Future<_i5.MealLog> getTodaysMealLog({DateTime? date}) =>
       (super.noSuchMethod(
-            Invocation.method(#getTodaysMealLog, []),
+            Invocation.method(#getTodaysMealLog, [], {#date: date}),
             returnValue: _i25.Future<_i5.MealLog>.value(
-              _FakeMealLog_3(this, Invocation.method(#getTodaysMealLog, [])),
+              _FakeMealLog_3(
+                this,
+                Invocation.method(#getTodaysMealLog, [], {#date: date}),
+              ),
             ),
           )
           as _i25.Future<_i5.MealLog>);
@@ -941,6 +944,28 @@ class MockNutritionRepository extends _i1.Mock
             ),
           )
           as _i25.Future<_i8.NutritionGoal>);
+
+  @override
+  _i25.Future<_i8.NutritionGoal?> getGoalForDate(DateTime? date) =>
+      (super.noSuchMethod(
+            Invocation.method(#getGoalForDate, [date]),
+            returnValue: _i25.Future<_i8.NutritionGoal?>.value(),
+          )
+          as _i25.Future<_i8.NutritionGoal?>);
+
+  @override
+  _i25.Future<Map<DateTime, _i10.NutritionHistoryTarget>> getGoalsForDateRange(
+    DateTime? start,
+    DateTime? end,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getGoalsForDateRange, [start, end]),
+            returnValue:
+                _i25.Future<Map<DateTime, _i10.NutritionHistoryTarget>>.value(
+                  <DateTime, _i10.NutritionHistoryTarget>{},
+                ),
+          )
+          as _i25.Future<Map<DateTime, _i10.NutritionHistoryTarget>>);
 
   @override
   _i25.Future<void> updateNutritionGoal(int? id, _i8.NutritionGoal? goal) =>
@@ -2304,6 +2329,24 @@ class MockProgramsRepository extends _i1.Mock
   _i25.Future<void> deleteWorkout(int? workoutId) =>
       (super.noSuchMethod(
             Invocation.method(#deleteWorkout, [workoutId]),
+            returnValue: _i25.Future<void>.value(),
+            returnValueForMissingStub: _i25.Future<void>.value(),
+          )
+          as _i25.Future<void>);
+
+  @override
+  _i25.Future<void> skipWorkout(int? workoutId) =>
+      (super.noSuchMethod(
+            Invocation.method(#skipWorkout, [workoutId]),
+            returnValue: _i25.Future<void>.value(),
+            returnValueForMissingStub: _i25.Future<void>.value(),
+          )
+          as _i25.Future<void>);
+
+  @override
+  _i25.Future<void> unskipWorkout(int? workoutId) =>
+      (super.noSuchMethod(
+            Invocation.method(#unskipWorkout, [workoutId]),
             returnValue: _i25.Future<void>.value(),
             returnValueForMissingStub: _i25.Future<void>.value(),
           )

@@ -448,11 +448,14 @@ class MockNutritionRepository extends _i1.Mock
   );
 
   @override
-  _i13.Future<_i4.MealLog> getTodaysMealLog() =>
+  _i13.Future<_i4.MealLog> getTodaysMealLog({DateTime? date}) =>
       (super.noSuchMethod(
-            Invocation.method(#getTodaysMealLog, []),
+            Invocation.method(#getTodaysMealLog, [], {#date: date}),
             returnValue: _i13.Future<_i4.MealLog>.value(
-              _FakeMealLog_2(this, Invocation.method(#getTodaysMealLog, [])),
+              _FakeMealLog_2(
+                this,
+                Invocation.method(#getTodaysMealLog, [], {#date: date}),
+              ),
             ),
           )
           as _i13.Future<_i4.MealLog>);
@@ -599,6 +602,28 @@ class MockNutritionRepository extends _i1.Mock
             ),
           )
           as _i13.Future<_i7.NutritionGoal>);
+
+  @override
+  _i13.Future<_i7.NutritionGoal?> getGoalForDate(DateTime? date) =>
+      (super.noSuchMethod(
+            Invocation.method(#getGoalForDate, [date]),
+            returnValue: _i13.Future<_i7.NutritionGoal?>.value(),
+          )
+          as _i13.Future<_i7.NutritionGoal?>);
+
+  @override
+  _i13.Future<Map<DateTime, _i9.NutritionHistoryTarget>> getGoalsForDateRange(
+    DateTime? start,
+    DateTime? end,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getGoalsForDateRange, [start, end]),
+            returnValue:
+                _i13.Future<Map<DateTime, _i9.NutritionHistoryTarget>>.value(
+                  <DateTime, _i9.NutritionHistoryTarget>{},
+                ),
+          )
+          as _i13.Future<Map<DateTime, _i9.NutritionHistoryTarget>>);
 
   @override
   _i13.Future<void> updateNutritionGoal(int? id, _i7.NutritionGoal? goal) =>
@@ -840,12 +865,14 @@ class MockProgramsRepository extends _i1.Mock
           as _i13.Future<void>);
 
   @override
-  _i13.Future<Map<String, int>> getDeletionImpact(int? id) =>
+  _i13.Future<Map<String, dynamic>> getDeletionImpact(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#getDeletionImpact, [id]),
-            returnValue: _i13.Future<Map<String, int>>.value(<String, int>{}),
+            returnValue: _i13.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
           )
-          as _i13.Future<Map<String, int>>);
+          as _i13.Future<Map<String, dynamic>>);
 
   @override
   _i13.Future<void> deleteProgram(int? id) =>
@@ -860,6 +887,24 @@ class MockProgramsRepository extends _i1.Mock
   _i13.Future<void> completeProgram(int? id) =>
       (super.noSuchMethod(
             Invocation.method(#completeProgram, [id]),
+            returnValue: _i13.Future<void>.value(),
+            returnValueForMissingStub: _i13.Future<void>.value(),
+          )
+          as _i13.Future<void>);
+
+  @override
+  _i13.Future<void> archiveProgram(int? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#archiveProgram, [id]),
+            returnValue: _i13.Future<void>.value(),
+            returnValueForMissingStub: _i13.Future<void>.value(),
+          )
+          as _i13.Future<void>);
+
+  @override
+  _i13.Future<void> unarchiveProgram(int? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#unarchiveProgram, [id]),
             returnValue: _i13.Future<void>.value(),
             returnValueForMissingStub: _i13.Future<void>.value(),
           )
@@ -965,6 +1010,24 @@ class MockProgramsRepository extends _i1.Mock
             returnValueForMissingStub: _i13.Future<void>.value(),
           )
           as _i13.Future<void>);
+
+  @override
+  _i13.Future<void> skipWorkout(int? workoutId) =>
+      (super.noSuchMethod(
+            Invocation.method(#skipWorkout, [workoutId]),
+            returnValue: _i13.Future<void>.value(),
+            returnValueForMissingStub: _i13.Future<void>.value(),
+          )
+          as _i13.Future<void>);
+
+  @override
+  _i13.Future<void> unskipWorkout(int? workoutId) =>
+      (super.noSuchMethod(
+            Invocation.method(#unskipWorkout, [workoutId]),
+            returnValue: _i13.Future<void>.value(),
+            returnValueForMissingStub: _i13.Future<void>.value(),
+          )
+          as _i13.Future<void>);
 }
 
 /// A class which mocks [AuthService].
@@ -1014,6 +1077,23 @@ class MockAuthService extends _i1.Mock implements _i16.AuthService {
   _i13.Future<String?> getUserName() =>
       (super.noSuchMethod(
             Invocation.method(#getUserName, []),
+            returnValue: _i13.Future<String?>.value(),
+          )
+          as _i13.Future<String?>);
+
+  @override
+  _i13.Future<void> saveUsername(String? username) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveUsername, [username]),
+            returnValue: _i13.Future<void>.value(),
+            returnValueForMissingStub: _i13.Future<void>.value(),
+          )
+          as _i13.Future<void>);
+
+  @override
+  _i13.Future<String?> getUsername() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUsername, []),
             returnValue: _i13.Future<String?>.value(),
           )
           as _i13.Future<String?>);

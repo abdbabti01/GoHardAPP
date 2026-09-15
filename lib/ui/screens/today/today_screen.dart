@@ -80,10 +80,18 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Check if day changed and refresh data if needed
+      // Check if day changed and refresh nutrition (food totals + targets,
+      // loaded together by loadTodaysData) if needed
       context.read<NutritionProvider>().checkAndRefreshIfDayChanged();
-      // Also refresh sessions to update "today's workouts"
+      // Also refresh sessions AND program-based workout schedules on every
+      // resume (not gated on day-change detection, matching sessions'
+      // existing unconditional refresh) - a program can change schedule for
+      // reasons other than the calendar day advancing (e.g. edited while
+      // backgrounded on another device), and Today's program-derived
+      // "today's workouts" must never go stale relative to the sessions list
+      // it's rendered alongside.
       context.read<SessionsProvider>().loadSessions(showLoading: false);
+      context.read<ProgramsProvider>().loadPrograms();
       // Reschedule midnight timer (in case it fired while app was in background)
       _scheduleMidnightRefresh();
     }
@@ -188,9 +196,12 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                 )
                 .length;
 
-        // Nutrition stats
+        // Nutrition stats. Actual consumed calories are always real; a
+        // "remaining" figure only means anything against a real target, so
+        // it is never fabricated from a made-up default goal.
         final calories = nutritionProvider.todaysMealLog?.consumedCalories ?? 0;
-        final calorieGoal = nutritionProvider.activeGoal?.dailyCalories ?? 2000;
+        final hasGoal = nutritionProvider.hasActiveGoal;
+        final calorieGoal = nutritionProvider.activeGoal?.dailyCalories ?? 0;
 
         return Row(
           children: [
@@ -216,8 +227,11 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
               child: _StatCard(
                 icon: Icons.flag_outlined,
                 iconColor: Colors.green,
-                value: (calorieGoal - calories).toStringAsFixed(0),
-                label: 'Calories\nremaining',
+                value:
+                    hasGoal
+                        ? (calorieGoal - calories).toStringAsFixed(0)
+                        : '--',
+                label: hasGoal ? 'Calories\nremaining' : 'No target\nset',
               ),
             ),
           ],
@@ -229,10 +243,41 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
   Widget _buildTodaysWorkouts(BuildContext context) {
     return Consumer2<SessionsProvider, ProgramsProvider>(
       builder: (context, sessionsProvider, programsProvider, child) {
+        // First-load spinner ONLY - a background/silent refresh
+        // (loadSessions(showLoading: false), used on resume/midnight) never
+        // sets isLoading, so existing content stays visible during those.
+        // This is what stops "rest day"/"nothing scheduled" from ever being
+        // asserted before a load has actually completed.
+        final isInitialLoading =
+            sessionsProvider.isLoading || programsProvider.isLoading;
+
+        if (isInitialLoading &&
+            sessionsProvider.sessions.isEmpty &&
+            programsProvider.programs.isEmpty) {
+          return _buildSectionCard(
+            context,
+            title: "Today's Workouts",
+            icon: Icons.fitness_center,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        final hasError =
+            sessionsProvider.errorMessage != null ||
+            programsProvider.errorMessage != null;
+
         final today = DateTime.now();
         final todayStart = DateTime(today.year, today.month, today.day);
 
-        // Separate in-progress workouts from today's scheduled workouts
+        // Separate in-progress workouts from today's scheduled workouts.
+        // Independent of program lifecycle by construction - filtered only
+        // by the session's own status/date, never by its program's
+        // active/archived/deleted state, so an in-progress or already-
+        // scheduled session stays visible here even after its originating
+        // program is archived or deleted.
         final inProgressWorkouts =
             sessionsProvider.sessions
                 .where((s) => s.status == 'in_progress')
@@ -260,12 +305,15 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                 .map((s) => s.programWorkoutId!)
                 .toSet();
 
-        // Filter out program workouts that already have sessions or are completed
+        // Filter out program workouts that already have sessions, are
+        // completed, or were explicitly skipped - skip is a distinct,
+        // resolved outcome, not something still "to do" today.
         final todaysProgramWorkouts =
             allTodaysProgramWorkouts
                 .where(
                   (item) =>
                       !item.workout.isCompleted &&
+                      !item.workout.isSkipped &&
                       !sessionProgramWorkoutIds.contains(item.workout.id),
                 )
                 .toList();
@@ -300,6 +348,23 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                 ],
               ),
               const SizedBox(height: 12),
+
+              // Failure banner - shown ABOVE whatever data did load, so a
+              // programs-load failure never hides sessions that loaded fine
+              // (or vice versa), and always carries a working retry action.
+              if (hasError) ...[
+                _InlineErrorBanner(
+                  message:
+                      programsProvider.errorMessage ??
+                      sessionsProvider.errorMessage ??
+                      'Failed to load today\'s workouts',
+                  onRetry: () {
+                    sessionsProvider.loadSessions();
+                    programsProvider.loadPrograms();
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
 
               // Continue workout section (in-progress from any date)
               if (inProgressWorkouts.isNotEmpty) ...[
@@ -466,34 +531,65 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                 ),
               ],
 
-              // Empty state
-              if (!hasWorkouts)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.event_available,
-                          size: 40,
-                          color: context.textTertiary,
+              // Empty state - only asserted once loading has actually
+              // finished with no error, and distinguishes a genuine rest
+              // day from a program simply having nothing scheduled today
+              // (getTodaysWorkouts alone can't tell these apart - see
+              // ProgramsProvider.todaysScheduleStatus). With an error, the
+              // banner above already explains why data may be incomplete,
+              // so no confident "nothing scheduled" claim is made here.
+              if (!hasWorkouts && !hasError)
+                Builder(
+                  builder: (context) {
+                    final status = programsProvider.todaysScheduleStatus;
+                    final IconData icon;
+                    final String message;
+                    // allResolved gets no "Plan Workout" CTA - there's nothing
+                    // to plan, today's real occurrence(s) are already done.
+                    final showPlanCta =
+                        status != TodaysScheduleStatus.allResolved;
+                    switch (status) {
+                      case TodaysScheduleStatus.restDay:
+                        icon = Icons.self_improvement;
+                        message = 'Rest day - enjoy the recovery';
+                        break;
+                      case TodaysScheduleStatus.allResolved:
+                        icon = Icons.check_circle_outline;
+                        message = 'All done for today';
+                        break;
+                      case TodaysScheduleStatus.noActiveProgram:
+                      case TodaysScheduleStatus.notScheduled:
+                      case TodaysScheduleStatus.hasWorkouts:
+                        icon = Icons.event_available;
+                        message = 'No workouts scheduled';
+                        break;
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Icon(icon, size: 40, color: context.textTertiary),
+                            const SizedBox(height: 8),
+                            Text(
+                              message,
+                              style: TextStyle(color: context.textSecondary),
+                            ),
+                            if (showPlanCta) ...[
+                              const SizedBox(height: 12),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.pushNamed(context, '/plan-workout');
+                                },
+                                icon: const Icon(Icons.add),
+                                label: const Text('Plan Workout'),
+                              ),
+                            ],
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'No workouts scheduled',
-                          style: TextStyle(color: context.textSecondary),
-                        ),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.pushNamed(context, '/plan-workout');
-                          },
-                          icon: const Icon(Icons.add),
-                          label: const Text('Plan Workout'),
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 ),
             ],
           ),
@@ -502,20 +598,91 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
     );
   }
 
+  /// Shared card chrome for a Today section, so the loading/error early
+  /// returns match the same look as the fully-loaded content.
+  Widget _buildSectionCard(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: context.accent, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: context.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
   Widget _buildNutritionSummary(BuildContext context) {
     return Consumer<NutritionProvider>(
       builder: (context, provider, child) {
+        if (provider.isLoading && provider.todaysMealLog == null) {
+          return _buildSectionCard(
+            context,
+            title: "Today's Nutrition",
+            icon: Icons.restaurant_menu,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        if (provider.errorMessage != null && provider.todaysMealLog == null) {
+          return _buildSectionCard(
+            context,
+            title: "Today's Nutrition",
+            icon: Icons.restaurant_menu,
+            child: _InlineErrorBanner(
+              message: provider.errorMessage!,
+              onRetry: () => provider.loadTodaysData(),
+            ),
+          );
+        }
+
         final consumed = provider.todaysMealLog?.consumedCalories ?? 0;
-        final goal = provider.activeGoal?.dailyCalories ?? 2000;
-        final percentage = (consumed / goal * 100).clamp(0, 100);
+        final hasGoal = provider.hasActiveGoal;
+        // Actual consumed totals always render, regardless of whether a
+        // target exists - only the target-relative bits (goal text,
+        // progress bar, percentage) are gated on hasGoal.
+        final goal = provider.activeGoal?.dailyCalories ?? 0;
+        // Guard goal == 0 the same way NutritionProvider.calorieProgressPercentage
+        // does - a zero-calorie goal is not impossible (no positive-value floor
+        // on NutritionGoal) and consumed/0 would otherwise produce NaN/Infinity.
+        final percentage =
+            (hasGoal && goal > 0) ? (consumed / goal * 100).clamp(0, 100) : 0;
 
         final protein = provider.todaysMealLog?.consumedProtein ?? 0;
         final carbs = provider.todaysMealLog?.consumedCarbohydrates ?? 0;
         final fat = provider.todaysMealLog?.consumedFat ?? 0;
 
-        final proteinGoal = provider.activeGoal?.dailyProtein ?? 150;
-        final carbsGoal = provider.activeGoal?.dailyCarbohydrates ?? 200;
-        final fatGoal = provider.activeGoal?.dailyFat ?? 65;
+        final proteinGoal = provider.activeGoal?.dailyProtein ?? 0;
+        final carbsGoal = provider.activeGoal?.dailyCarbohydrates ?? 0;
+        final fatGoal = provider.activeGoal?.dailyFat ?? 0;
 
         // Check if there's nutrition history
         final hasHistory = provider.nutritionHistory.isNotEmpty;
@@ -549,7 +716,9 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                     ),
                     const Spacer(),
                     Text(
-                      '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} kcal',
+                      hasGoal
+                          ? '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} kcal'
+                          : '${consumed.toStringAsFixed(0)} kcal',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -564,51 +733,103 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
+                if (!hasGoal) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 12,
+                        color: context.textTertiary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'No target set - showing actual intake only',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: context.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
-                // Calorie progress bar
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: percentage / 100,
-                    minHeight: 10,
-                    backgroundColor: context.surfaceHighlight,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      percentage >= 100 ? Colors.red : Colors.orange,
+                // Calorie progress bar - only meaningful against a real
+                // target, never rendered against a fabricated default.
+                if (hasGoal) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: percentage / 100,
+                      minHeight: 10,
+                      backgroundColor: context.surfaceHighlight,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        percentage >= 100 ? Colors.red : Colors.orange,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                // Macro bars
-                Row(
-                  children: [
-                    Expanded(
-                      child: _MacroMini(
-                        label: 'Protein',
-                        current: protein,
-                        goal: proteinGoal,
-                        color: Colors.red,
+                  const SizedBox(height: 16),
+                ],
+                // Macro bars - same target-dependence as the calorie bar.
+                if (hasGoal)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MacroMini(
+                          label: 'Protein',
+                          current: protein,
+                          goal: proteinGoal,
+                          color: Colors.red,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _MacroMini(
-                        label: 'Carbs',
-                        current: carbs,
-                        goal: carbsGoal,
-                        color: Colors.blue,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MacroMini(
+                          label: 'Carbs',
+                          current: carbs,
+                          goal: carbsGoal,
+                          color: Colors.blue,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _MacroMini(
-                        label: 'Fat',
-                        current: fat,
-                        goal: fatGoal,
-                        color: Colors.amber,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MacroMini(
+                          label: 'Fat',
+                          current: fat,
+                          goal: fatGoal,
+                          color: Colors.amber,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MacroActualOnly(
+                          label: 'Protein',
+                          value: protein,
+                          color: Colors.red,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MacroActualOnly(
+                          label: 'Carbs',
+                          value: carbs,
+                          color: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MacroActualOnly(
+                          label: 'Fat',
+                          value: fat,
+                          color: Colors.amber,
+                        ),
+                      ),
+                    ],
+                  ),
                 // Yesterday's summary / History link
                 if (hasHistory) ...[
                   const SizedBox(height: 12),
@@ -879,7 +1100,11 @@ class _MacroMini extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percentage = (current / goal * 100).clamp(0, 100);
+    // goal == 0 is a real, reachable value (no positive-value floor on
+    // NutritionGoal's macro fields) - guard it the same way
+    // NutritionProvider's own *ProgressPercentage getters do, rather than
+    // letting current/0 produce NaN/Infinity.
+    final percentage = goal > 0 ? (current / goal * 100).clamp(0, 100) : 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -912,6 +1137,85 @@ class _MacroMini extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Actual-consumption-only macro readout for when no target exists yet -
+/// no progress bar, since there is nothing real to measure it against.
+class _MacroActualOnly extends StatelessWidget {
+  final String label;
+  final double value;
+  final Color color;
+
+  const _MacroActualOnly({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 10, color: context.textSecondary),
+        ),
+        Text(
+          '${value.toStringAsFixed(0)}g',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Inline, retryable failure notice for a single Today section. Icon +
+/// text together (never color alone), and never blocks other sections from
+/// rendering their own data.
+class _InlineErrorBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _InlineErrorBanner({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: context.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.error.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, size: 18, color: context.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(fontSize: 13, color: context.textPrimary),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
     );
   }
 }

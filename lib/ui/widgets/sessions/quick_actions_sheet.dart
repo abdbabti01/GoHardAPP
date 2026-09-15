@@ -80,8 +80,10 @@ class QuickActionsSheet extends StatelessWidget {
               },
             ),
 
-          // Mark as skipped (only for planned workouts)
-          if (session.status == 'planned')
+          // Mark as skipped (only for planned workouts scheduled from a
+          // program - skip operates on the ProgramWorkout occurrence, so a
+          // freeform session with no programWorkoutId has nothing to skip)
+          if (session.status == 'planned' && session.programWorkoutId != null)
             _buildActionItem(
               context,
               icon: Icons.cancel_outlined,
@@ -89,7 +91,8 @@ class QuickActionsSheet extends StatelessWidget {
               subtitle: 'Skip this workout',
               color: Colors.orange,
               onTap: () {
-                Navigator.pop(context, 'skip');
+                Navigator.pop(context);
+                onMarkSkipped?.call();
               },
             ),
 

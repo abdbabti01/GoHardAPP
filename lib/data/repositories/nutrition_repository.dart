@@ -26,6 +26,27 @@ import '../local/models/local_food_item.dart';
 import '../local/models/local_nutrition_goal.dart';
 import '../local/models/local_food_template.dart';
 
+/// Per-day resolution returned by [NutritionRepository.getGoalsForDateRange].
+///
+/// [goal] is null in TWO genuinely different situations, which
+/// [unavailable] distinguishes:
+/// - `unavailable: false` - CONFIRMED no target applied on this date,
+///   either because the server said so, or because local evidence
+///   actually brackets the date (an earlier goal's [effectiveDate] is
+///   `<=` this date and nothing covers it, or every candidate was
+///   deleted before it).
+/// - `unavailable: true` - the online request could not be completed
+///   (offline, or the request failed) AND nothing in the local cache
+///   covers this date, so whether a target ever applied here is
+///   genuinely UNKNOWN - never render this the same as a confirmed
+///   absence, and never substitute today's current target for it either.
+class NutritionHistoryTarget {
+  final NutritionGoal? goal;
+  final bool unavailable;
+
+  const NutritionHistoryTarget({this.goal, this.unavailable = false});
+}
+
 /// Repository for nutrition operations with offline-first support
 ///
 /// ## Local ownership enforcement
@@ -437,9 +458,19 @@ class NutritionRepository {
 
   // ============ Meal Logs - Offline First ============
 
-  /// Get today's meal log - offline-first
-  /// Creates locally if not exists, syncs in background
-  Future<MealLog> getTodaysMealLog() async {
+  /// Get today's meal log - offline-first. Creates locally if not exists,
+  /// syncs in background.
+  ///
+  /// [date] is the app's Today date contract: the device's LOCAL calendar
+  /// date (defaults to [DateTime.now()] - never [DateTime.now().toUtc()]),
+  /// used identically for the local cache lookup/creation AND sent
+  /// explicitly to the server so it can never independently decide a
+  /// different day is "today" (it otherwise defaults to its own UTC date -
+  /// see MealLogsController.GetTodaysMealLog's doc comment). Callers that
+  /// need this to agree with a sibling call (e.g. the nutrition dashboard)
+  /// should capture one DateTime.now() and pass it to both explicitly,
+  /// rather than each calling DateTime.now() separately.
+  Future<MealLog> getTodaysMealLog({DateTime? date}) async {
     final db = _localDb.database;
     final userId = await _authService.getUserId();
 
@@ -447,12 +478,9 @@ class NutritionRepository {
       throw Exception('User not authenticated');
     }
 
-    // Normalize today's date (strip time component)
-    final today = DateTime(
-      DateTime.now().year,
-      DateTime.now().month,
-      DateTime.now().day,
-    );
+    // Normalize today's date (strip time component) - LOCAL, not UTC.
+    final localNow = date ?? DateTime.now();
+    final today = DateTime(localNow.year, localNow.month, localNow.day);
 
     // 1. Check local cache first
     var localLog =
@@ -468,7 +496,7 @@ class NutritionRepository {
 
       if (_connectivity.isOnline) {
         _backgroundSync(
-          (context) => _syncMealLogFromServer(db, context),
+          (context) => _syncMealLogFromServer(db, context, today),
           'Synced today\'s meal log',
         );
       }
@@ -476,11 +504,17 @@ class NutritionRepository {
       return await _localMealLogToMealLogWithEntries(db, localLog);
     }
 
-    // 3. If not found and online, fetch from server
+    // 3. If not found and online, fetch from server. Explicitly tells the
+    // server which calendar day "today" means - the SAME local `today` the
+    // cache lookup above already used - rather than letting the server
+    // default to its own UTC date, which can be a different calendar day
+    // for any user not on UTC (see MealLogsController.GetTodaysMealLog's
+    // doc comment for the shared Today contract).
     if (_connectivity.isOnline) {
       try {
         final data = await _apiService.get<Map<String, dynamic>>(
           ApiConfig.mealLogToday,
+          queryParameters: {'date': today.toIso8601String().split('T')[0]},
         );
         final mealLog = MealLog.fromJson(data);
 
@@ -504,13 +538,20 @@ class NutritionRepository {
   /// [getTodaysMealLog]'s cache-hit path. Bound to [context]: the HTTP
   /// call carries its pinned JWT, and the resulting cache write is fully
   /// gated by [_cacheMealLogWithEntries]'s [UserSessionToken] scoping.
+  /// [localToday] is the SAME local calendar date [getTodaysMealLog] already
+  /// resolved its cache hit against - sent explicitly so this background
+  /// refresh can never disagree with the local cache about which day is
+  /// "today" (see the Today date-contract doc comment on
+  /// MealLogsController.GetTodaysMealLog).
   Future<void> _syncMealLogFromServer(
     Isar db,
     SessionRequestContext context,
+    DateTime localToday,
   ) async {
     final data = await _dispatchBackgroundHttp(
       () => _apiService.get<Map<String, dynamic>>(
         ApiConfig.mealLogToday,
+        queryParameters: {'date': localToday.toIso8601String().split('T')[0]},
         sessionContext: context,
       ),
     );
@@ -1658,6 +1699,195 @@ class NutritionRepository {
     return NutritionGoal.defaultGoal(userId);
   }
 
+  /// The target that actually applied on [date] - never today's active goal
+  /// applied retroactively, and never a guessed/backfilled value. Returns
+  /// null (an honest "no target recorded yet") if none existed at that point
+  /// in the user's history. Offline-first: resolves from the local cache
+  /// first, then refreshes from the authoritative server endpoint when
+  /// online (caching the result for next time).
+  ///
+  /// A locally resolved row that hasn't synced yet (`pending_create`/
+  /// `pending_update`) is trusted over the server's answer rather than
+  /// being queried at all - mirrors the pending-row guard in
+  /// [_syncNutritionGoalFromServer] (never let a background read clobber or
+  /// shadow an edit the server doesn't know about yet). Without this, a
+  /// target just set by the user (still pending its background push) would
+  /// disappear the moment something calls this method, because the server
+  /// would correctly-for-itself report no target yet for that date.
+  Future<NutritionGoal?> getGoalForDate(DateTime date) async {
+    final db = _localDb.database;
+    final userId = await _authService.getUserId();
+    if (userId == null) return null;
+
+    final normalized = DateTime(date.year, date.month, date.day);
+
+    final candidates =
+        await db.localNutritionGoals.filter().userIdEqualTo(userId).findAll();
+    final localResolved = _resolveLocalGoalForDate(candidates, normalized);
+    final hasUnsyncedLocalResolution =
+        localResolved != null && localResolved.syncStatus != 'synced';
+
+    if (_connectivity.isOnline && !hasUnsyncedLocalResolution) {
+      try {
+        final data = await _apiService.get<Map<String, dynamic>>(
+          ApiConfig.nutritionGoalForDate(normalized),
+        );
+        final hasTarget = data['hasTarget'] as bool? ?? false;
+        final goalJson = data['goal'] as Map<String, dynamic>?;
+        if (!hasTarget || goalJson == null) {
+          return null;
+        }
+        final goal = NutritionGoal.fromJson(goalJson);
+        await db.writeTxn(() async {
+          final existing =
+              await db.localNutritionGoals
+                  .filter()
+                  .serverIdEqualTo(goal.id)
+                  .findFirst();
+          final local = ModelMapper.nutritionGoalToLocal(
+            goal,
+            localId: existing?.localId,
+          );
+          await db.localNutritionGoals.put(local);
+        });
+        return goal;
+      } catch (e) {
+        debugPrint('⚠️ Failed to fetch nutrition goal for date: $e');
+      }
+    }
+
+    return localResolved == null
+        ? null
+        : ModelMapper.localToNutritionGoal(localResolved);
+  }
+
+  /// Batch form of [getGoalForDate] for a history view rendering many days at
+  /// once - one round trip instead of one per day when online.
+  ///
+  /// See [NutritionHistoryTarget]: a date whose target could not be
+  /// CONFIRMED one way or the other (offline / request failed, and no
+  /// local evidence covers it) comes back `unavailable: true`, never
+  /// silently collapsed into "confirmed no target" the way a bare
+  /// `NutritionGoal?` would.
+  Future<Map<DateTime, NutritionHistoryTarget>> getGoalsForDateRange(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final db = _localDb.database;
+    final userId = await _authService.getUserId();
+    final startDate = DateTime(start.year, start.month, start.day);
+    final endDate = DateTime(end.year, end.month, end.day);
+
+    if (userId == null) {
+      return {
+        for (
+          var d = startDate;
+          !d.isAfter(endDate);
+          d = d.add(const Duration(days: 1))
+        )
+          d: const NutritionHistoryTarget(unavailable: true),
+      };
+    }
+
+    if (_connectivity.isOnline) {
+      try {
+        final data = await _apiService.get<List<dynamic>>(
+          ApiConfig.nutritionGoalForDates(startDate, endDate),
+        );
+        final result = <DateTime, NutritionHistoryTarget>{};
+        for (final entry in data) {
+          final map = entry as Map<String, dynamic>;
+          final entryDate = DateTime.parse(map['date'] as String);
+          final normalizedEntryDate = DateTime(
+            entryDate.year,
+            entryDate.month,
+            entryDate.day,
+          );
+          final hasTarget = map['hasTarget'] as bool? ?? false;
+          final goalJson = map['goal'] as Map<String, dynamic>?;
+          // A server answer is always confirmed, never "unavailable" -
+          // the server has complete history for this user.
+          result[normalizedEntryDate] = NutritionHistoryTarget(
+            goal:
+                (hasTarget && goalJson != null)
+                    ? NutritionGoal.fromJson(goalJson)
+                    : null,
+          );
+        }
+        return result;
+      } catch (e) {
+        debugPrint('⚠️ Failed to fetch nutrition goals for date range: $e');
+      }
+    }
+
+    // Offline (or the request failed): resolve entirely from the local
+    // cache. A date with no covering local row is genuinely UNKNOWN here
+    // (we were never able to confirm it), not a confirmed absence - the
+    // local cache is only ever populated opportunistically (goals created/
+    // edited on this device, or a date range fetched while online before),
+    // so silence in it proves nothing either way.
+    final candidates =
+        await db.localNutritionGoals.filter().userIdEqualTo(userId).findAll();
+    final result = <DateTime, NutritionHistoryTarget>{};
+    for (
+      var d = startDate;
+      !d.isAfter(endDate);
+      d = d.add(const Duration(days: 1))
+    ) {
+      final resolved = _resolveLocalGoalForDate(candidates, d);
+      result[d] =
+          resolved == null
+              ? const NutritionHistoryTarget(unavailable: true)
+              : NutritionHistoryTarget(
+                goal: ModelMapper.localToNutritionGoal(resolved),
+              );
+    }
+    return result;
+  }
+
+  /// The cached row that actually applied on [date]: the latest
+  /// [LocalNutritionGoal.effectiveDate] that is `<=` date and not yet
+  /// [LocalNutritionGoal.deletedAt] as of that date - mirrors the server's
+  /// `NutritionTargetService.ResolveForDateAsync`.
+  LocalNutritionGoal? _resolveLocalGoalForDate(
+    List<LocalNutritionGoal> candidates,
+    DateTime date,
+  ) {
+    LocalNutritionGoal? best;
+    for (final g in candidates) {
+      final effective = DateTime(
+        g.effectiveDate.year,
+        g.effectiveDate.month,
+        g.effectiveDate.day,
+      );
+      if (effective.isAfter(date)) continue;
+      final deletedAt = g.deletedAt;
+      if (deletedAt != null) {
+        final deletedDate = DateTime(
+          deletedAt.year,
+          deletedAt.month,
+          deletedAt.day,
+        );
+        if (!deletedDate.isAfter(date)) continue;
+      }
+      if (best == null) {
+        best = g;
+        continue;
+      }
+      final bestEffective = DateTime(
+        best.effectiveDate.year,
+        best.effectiveDate.month,
+        best.effectiveDate.day,
+      );
+      if (effective.isAfter(bestEffective) ||
+          (effective.isAtSameMomentAs(bestEffective) &&
+              g.localId > best.localId)) {
+        best = g;
+      }
+    }
+    return best;
+  }
+
   /// Sync nutrition goal from server. Bound to [context]: the HTTP call
   /// carries its pinned JWT, and the resulting cache write is gated
   /// behind three checkpoints plus a direct [NutritionGoal.userId]
@@ -1720,7 +1950,14 @@ class NutritionRepository {
     });
   }
 
-  /// Update nutrition goal - offline-first
+  /// Change the active nutrition target - offline-first. This never mutates
+  /// [id]'s stored row in place: it deactivates it (and any other active row)
+  /// and inserts a NEW local row, mirroring the server's
+  /// `NutritionTargetService.SetActiveGoalAsync` (which this same PUT
+  /// endpoint now routes through) - so whatever applied to past dates through
+  /// the existing row is preserved exactly as it was, both locally and on
+  /// the server. [id] is only used to confirm the caller owns an existing
+  /// goal to change.
   Future<void> updateNutritionGoal(int id, NutritionGoal goal) async {
     final token = await _captureOwnedSessionToken();
     if (token == null) {
@@ -1729,12 +1966,12 @@ class NutritionRepository {
 
     final db = _localDb.database;
 
-    // Find local goal, owned by the captured user
-    final localGoal = await _resolveOwnedNutritionGoal(db, id, token);
+    // Confirm the referenced goal exists and is owned by the captured user.
+    final existing = await _resolveOwnedNutritionGoal(db, id, token);
     if (!_sessionEpoch.isCurrent(token)) {
       throw Exception('User not authenticated');
     }
-    if (localGoal == null) {
+    if (existing == null) {
       throw Exception('Nutrition goal not found');
     }
 
@@ -1743,25 +1980,49 @@ class NutritionRepository {
       throw Exception('User not authenticated');
     }
 
-    // Update locally first
+    final now = DateTime.now();
+    late LocalNutritionGoal savedGoal;
+
     await db.writeTxn(() async {
       await _runTestHook(insideWriteTxnForTesting);
       if (!_sessionEpoch.isCurrent(token)) return;
 
-      localGoal.dailyCalories = goal.dailyCalories;
-      localGoal.dailyProtein = goal.dailyProtein;
-      localGoal.dailyCarbohydrates = goal.dailyCarbohydrates;
-      localGoal.dailyFat = goal.dailyFat;
-      localGoal.dailyFiber = goal.dailyFiber;
-      localGoal.dailyWater = goal.dailyWater;
-      localGoal.name = goal.name;
-      localGoal.updatedAt = DateTime.now();
-      localGoal.lastModifiedLocal = DateTime.now().toUtc();
-      localGoal.isSynced = false;
-      if (localGoal.serverId != null) {
-        localGoal.syncStatus = 'pending_update';
+      final activeGoals =
+          await db.localNutritionGoals
+              .filter()
+              .userIdEqualTo(token.userId)
+              .isActiveEqualTo(true)
+              .findAll();
+      for (final g in activeGoals) {
+        g.isActive = false;
+        g.lastModifiedLocal = now;
+        g.isSynced = false;
+        if (g.serverId != null) {
+          g.syncStatus = 'pending_update';
+        }
+        await db.localNutritionGoals.put(g);
       }
-      await db.localNutritionGoals.put(localGoal);
+
+      final local = LocalNutritionGoal(
+        userId: token.userId,
+        name: goal.name,
+        dailyCalories: goal.dailyCalories,
+        dailyProtein: goal.dailyProtein,
+        dailyCarbohydrates: goal.dailyCarbohydrates,
+        dailyFat: goal.dailyFat,
+        dailyFiber: goal.dailyFiber,
+        dailySodium: goal.dailySodium,
+        dailySugar: goal.dailySugar,
+        dailyWater: goal.dailyWater,
+        isActive: true,
+        effectiveDate: now,
+        createdAt: now,
+        isSynced: false,
+        syncStatus: 'pending_create',
+        lastModifiedLocal: now,
+      );
+      await db.localNutritionGoals.put(local);
+      savedGoal = local;
     });
 
     await _runTestHook(afterWriteTxnForTesting);
@@ -1769,19 +2030,15 @@ class NutritionRepository {
       throw Exception('User not authenticated');
     }
 
-    debugPrint('✅ Updated nutrition goal locally');
+    debugPrint('✅ Set new nutrition goal locally (history preserved)');
 
-    // Sync in background if online
-    if (_connectivity.isOnline && localGoal.serverId != null) {
+    // Sync in background if online. Routes through the same create path
+    // (_syncNutritionGoalToServer -> POST nutritiongoals) as createNutritionGoal,
+    // since this is now genuinely a new row - not a PUT to the original id.
+    if (_connectivity.isOnline) {
       _backgroundSync(
-        (context) => _dispatchBackgroundHttp(
-          () => _apiService.put<void>(
-            ApiConfig.nutritionGoalById(localGoal.serverId!),
-            data: goal.toJson(),
-            sessionContext: context,
-          ),
-        ),
-        'Synced nutrition goal update',
+        (context) => _syncNutritionGoalToServer(savedGoal, context),
+        'Synced new nutrition goal',
       );
     }
   }
@@ -1830,6 +2087,7 @@ class NutritionRepository {
         dailySugar: goal.dailySugar,
         dailyWater: goal.dailyWater,
         isActive: true,
+        effectiveDate: now,
         createdAt: now,
         isSynced: false,
         syncStatus: 'pending_create',
@@ -2060,17 +2318,17 @@ class NutritionRepository {
       targetDate.day,
     );
 
-    final localGoal =
-        await db.localNutritionGoals
-            .filter()
-            .userIdEqualTo(userId)
-            .isActiveEqualTo(true)
-            .findFirst();
+    // Date-aware resolution (mirrors the server's ResolveForDateAsync) -
+    // never today's "active" flag applied retroactively, and - unlike the
+    // legacy getProgress() fallback above - never a fabricated 2000-calorie
+    // default when nothing was ever recorded; NutritionDashboardData.goal is
+    // nullable precisely so callers can show "no target set" honestly.
+    final candidates =
+        await db.localNutritionGoals.filter().userIdEqualTo(userId).findAll();
+    final localGoal = _resolveLocalGoalForDate(candidates, normalizedDate);
 
     final goal =
-        localGoal != null
-            ? ModelMapper.localToNutritionGoal(localGoal)
-            : NutritionGoal.defaultGoal(userId);
+        localGoal != null ? ModelMapper.localToNutritionGoal(localGoal) : null;
 
     // Get meal log for the date to calculate planned/consumed
     final localLog =
@@ -2115,7 +2373,7 @@ class NutritionRepository {
       id: 0,
       userId: userId,
       date: normalizedDate,
-      nutritionGoalId: goal.id,
+      nutritionGoalId: goal?.id,
       plannedCalories: plannedCalories,
       plannedProtein: plannedProtein,
       plannedCarbohydrates: plannedCarbs,

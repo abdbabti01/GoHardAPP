@@ -78,7 +78,7 @@ void main() {
 
   void stubHappyLoadTodaysData({MealLog? log, NutritionGoal? g}) {
     when(
-      mockRepository.getTodaysMealLog(),
+      mockRepository.getTodaysMealLog(date: anyNamed('date')),
     ).thenAnswer((_) async => log ?? mealLog(1));
     when(
       mockRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -96,7 +96,7 @@ void main() {
     test('1. with no active session, never calls the repository', () async {
       await provider.loadTodaysData();
 
-      verifyNever(mockRepository.getTodaysMealLog());
+      verifyNever(mockRepository.getTodaysMealLog(date: anyNamed('date')));
       expect(provider.todaysMealLog, isNull);
       expect(provider.isLoading, isFalse);
     });
@@ -105,7 +105,7 @@ void main() {
       sessionEpoch.activate(1);
       final completer = Completer<MealLog>();
       when(
-        mockRepository.getTodaysMealLog(),
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) => completer.future);
       when(
         mockRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -134,7 +134,7 @@ void main() {
       sessionEpoch.activate(1);
       final completer = Completer<MealLog>();
       when(
-        mockRepository.getTodaysMealLog(),
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) => completer.future);
       when(
         mockRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -162,7 +162,7 @@ void main() {
       sessionEpoch.activate(1);
       final completerA = Completer<MealLog>();
       when(
-        mockRepository.getTodaysMealLog(),
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) => completerA.future);
       when(
         mockRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -178,7 +178,7 @@ void main() {
 
       final completerB = Completer<MealLog>();
       when(
-        mockRepository.getTodaysMealLog(),
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) => completerB.future);
 
       // B's own load must be allowed to start - no blanket "already
@@ -217,6 +217,139 @@ void main() {
 
       expect(provider.todaysMealLog?.id, 1);
       expect(provider.activeGoal?.id, 1);
+      expect(provider.isLoading, isFalse);
+    });
+
+    test('24. a late response for the day that just ended cannot replace the '
+        'newly loaded day\'s data - e.g. a manual refresh still in flight '
+        'when a day-change reload fires for the SAME session, so the '
+        'session-epoch token alone cannot tell the two calls apart', () async {
+      sessionEpoch.activate(1);
+
+      // Call A ("yesterday's" in-flight refresh) starts first and stalls.
+      final mealLogA = Completer<MealLog>();
+      final dashboardA = Completer<NutritionDashboardData>();
+      when(
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
+      ).thenAnswer((_) => mealLogA.future);
+      when(
+        mockRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) => dashboardA.future);
+      when(mockRepository.getStreak()).thenAnswer((_) async => streak());
+
+      final futureA = provider.loadTodaysData();
+      expect(provider.isLoading, isTrue);
+
+      // Call B (today's day-change reload) starts while A is still
+      // pending - same session, so the epoch token cannot distinguish
+      // them; only the request-generation guard can.
+      final mealLogB = Completer<MealLog>();
+      final dashboardB = Completer<NutritionDashboardData>();
+      when(
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
+      ).thenAnswer((_) => mealLogB.future);
+      when(
+        mockRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) => dashboardB.future);
+
+      final futureB = provider.loadTodaysData();
+      expect(provider.isLoading, isTrue);
+
+      // B (the newer, currently-requested load) resolves FIRST.
+      mealLogB.complete(mealLog(2));
+      dashboardB.complete(dashboard(g: goal(2)));
+      await futureB;
+
+      expect(provider.todaysMealLog?.id, 2);
+      expect(provider.activeGoal?.id, 2);
+      expect(provider.isLoading, isFalse);
+
+      // A (the older, now-stale load) resolves LAST - its response for
+      // the day that just ended must not overwrite B's data, and its
+      // finally-block must not flip isLoading back on.
+      mealLogA.complete(mealLog(1));
+      dashboardA.complete(dashboard(g: goal(1)));
+      await futureA;
+
+      expect(
+        provider.todaysMealLog?.id,
+        2,
+        reason: "A's stale meal log must never replace B's newer data",
+      );
+      expect(
+        provider.activeGoal?.id,
+        2,
+        reason: "A's stale goal must never replace B's newer data",
+      );
+      expect(provider.errorMessage, isNull);
+      expect(
+        provider.isLoading,
+        isFalse,
+        reason: "A's stale finally must not reopen B's closed loading state",
+      );
+    });
+
+    test('25. a stale load\'s error cannot surface once a newer load has '
+        'started, under the SAME session', () async {
+      sessionEpoch.activate(1);
+
+      final mealLogA = Completer<MealLog>();
+      when(
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
+      ).thenAnswer((_) => mealLogA.future);
+      when(
+        mockRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer((_) async => dashboard());
+      when(mockRepository.getStreak()).thenAnswer((_) async => streak());
+
+      final futureA = provider.loadTodaysData();
+
+      stubHappyLoadTodaysData(g: goal(2));
+      final futureB = provider.loadTodaysData();
+      await futureB;
+
+      expect(provider.activeGoal?.id, 2);
+      expect(provider.isLoading, isFalse);
+
+      mealLogA.completeError(Exception('stale boom'));
+      await futureA;
+
+      expect(
+        provider.errorMessage,
+        isNull,
+        reason: "A's stale error must never surface once B has committed",
+      );
+      expect(provider.activeGoal?.id, 2);
+      expect(provider.isLoading, isFalse);
+    });
+
+    test('26. cached meal log/goal/progress survive a subsequent failed '
+        'refresh - e.g. offline pull-to-refresh - instead of being blanked '
+        'out by the failure', () async {
+      sessionEpoch.activate(1);
+      stubHappyLoadTodaysData(g: goal(1));
+
+      await provider.loadTodaysData();
+      expect(provider.todaysMealLog?.id, 1);
+      expect(provider.activeGoal?.id, 1);
+
+      when(
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
+      ).thenThrow(Exception('offline'));
+
+      await provider.loadTodaysData();
+
+      expect(
+        provider.todaysMealLog?.id,
+        1,
+        reason: 'a failed refresh must not clear previously loaded data',
+      );
+      expect(
+        provider.activeGoal?.id,
+        1,
+        reason: 'a failed refresh must not clear the previously loaded goal',
+      );
+      expect(provider.errorMessage, isNotNull);
       expect(provider.isLoading, isFalse);
     });
   });
@@ -262,7 +395,7 @@ void main() {
       connectivityController.add(true);
       await pumpEventQueue();
 
-      verifyNever(mockRepository.getTodaysMealLog());
+      verifyNever(mockRepository.getTodaysMealLog(date: anyNamed('date')));
       expect(loggedOutProvider.todaysMealLog, isNull);
       expect(loggedOutProvider.errorMessage, isNull);
       expect(loggedOutProvider.isLoading, isFalse);
@@ -292,7 +425,7 @@ void main() {
       connectivityController.add(true);
       await pumpEventQueue();
 
-      verify(mockRepository.getTodaysMealLog()).called(1);
+      verify(mockRepository.getTodaysMealLog(date: anyNamed('date'))).called(1);
       expect(onlineProvider.todaysMealLog?.id, 1);
     });
 
@@ -301,7 +434,7 @@ void main() {
       sessionEpoch.activate(1);
       final completer = Completer<MealLog>();
       when(
-        mockRepository.getTodaysMealLog(),
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) => completer.future);
       when(
         mockRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -402,7 +535,7 @@ void main() {
       sessionEpoch.activate(1);
       stubHappyLoadTodaysData();
       await provider.loadTodaysData();
-      verify(mockRepository.getTodaysMealLog()).called(1);
+      verify(mockRepository.getTodaysMealLog(date: anyNamed('date'))).called(1);
 
       final completer = Completer<FoodItem>();
       when(
@@ -420,7 +553,7 @@ void main() {
       final result = await future;
 
       expect(result, isFalse);
-      verifyNever(mockRepository.getTodaysMealLog());
+      verifyNever(mockRepository.getTodaysMealLog(date: anyNamed('date')));
     });
 
     test('13. markMealAsConsumed finishing after invalidation does not start '
@@ -428,7 +561,7 @@ void main() {
       sessionEpoch.activate(1);
       stubHappyLoadTodaysData();
       await provider.loadTodaysData();
-      verify(mockRepository.getTodaysMealLog()).called(1);
+      verify(mockRepository.getTodaysMealLog(date: anyNamed('date'))).called(1);
 
       final completer = Completer<void>();
       when(
@@ -446,7 +579,7 @@ void main() {
       final result = await future;
 
       expect(result, isFalse);
-      verifyNever(mockRepository.getTodaysMealLog());
+      verifyNever(mockRepository.getTodaysMealLog(date: anyNamed('date')));
     });
 
     test('14. updateWaterIntake finishing after invalidation does not start '
@@ -454,7 +587,7 @@ void main() {
       sessionEpoch.activate(1);
       stubHappyLoadTodaysData();
       await provider.loadTodaysData();
-      verify(mockRepository.getTodaysMealLog()).called(1);
+      verify(mockRepository.getTodaysMealLog(date: anyNamed('date'))).called(1);
 
       final completer = Completer<void>();
       when(
@@ -468,7 +601,7 @@ void main() {
       final result = await future;
 
       expect(result, isFalse);
-      verifyNever(mockRepository.getTodaysMealLog());
+      verifyNever(mockRepository.getTodaysMealLog(date: anyNamed('date')));
     });
 
     test('15. clearAllFood finishing after invalidation does not start a '
@@ -476,7 +609,7 @@ void main() {
       sessionEpoch.activate(1);
       stubHappyLoadTodaysData();
       await provider.loadTodaysData();
-      verify(mockRepository.getTodaysMealLog()).called(1);
+      verify(mockRepository.getTodaysMealLog(date: anyNamed('date'))).called(1);
 
       final completer = Completer<MealLog>();
       when(
@@ -490,7 +623,7 @@ void main() {
       final result = await future;
 
       expect(result, isFalse);
-      verifyNever(mockRepository.getTodaysMealLog());
+      verifyNever(mockRepository.getTodaysMealLog(date: anyNamed('date')));
     });
 
     test('16. a nested reload already in flight cannot repopulate B\'s '
@@ -498,7 +631,7 @@ void main() {
       sessionEpoch.activate(1);
       stubHappyLoadTodaysData();
       await provider.loadTodaysData();
-      verify(mockRepository.getTodaysMealLog()).called(1);
+      verify(mockRepository.getTodaysMealLog(date: anyNamed('date'))).called(1);
 
       // The mutation itself succeeds while the session is still valid,
       // so the nested reload DOES start (unlike tests 12-15).
@@ -512,7 +645,7 @@ void main() {
 
       final reloadCompleter = Completer<MealLog>();
       when(
-        mockRepository.getTodaysMealLog(),
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) => reloadCompleter.future);
 
       final future = provider.quickAddFood(mealEntryId: 1, foodTemplateId: 2);
@@ -842,7 +975,7 @@ void main() {
         expect(result, isNull);
         expect(provider.activeGoal, isNull);
         // The dead session's response must never dispatch the follow-up reload either.
-        verifyNever(mockRepository.getTodaysMealLog());
+        verifyNever(mockRepository.getTodaysMealLog(date: anyNamed('date')));
         verifyNever(
           mockRepository.getNutritionDashboard(date: anyNamed('date')),
         );

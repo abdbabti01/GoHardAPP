@@ -17,6 +17,7 @@ class SessionCard extends StatelessWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onReschedule;
   final VoidCallback? onDuplicate;
+  final VoidCallback? onMarkSkipped;
 
   /// Optional, read-only derived sync diagnostics for [session] (see
   /// `SessionsProvider.diagnosticsFor`). `null` means healthy - nothing is
@@ -33,6 +34,7 @@ class SessionCard extends StatelessWidget {
     this.onDelete,
     this.onReschedule,
     this.onDuplicate,
+    this.onMarkSkipped,
     this.diagnostics,
   });
 
@@ -350,6 +352,7 @@ class SessionCard extends StatelessWidget {
       session,
       onReschedule: onReschedule,
       onDuplicate: onDuplicate,
+      onMarkSkipped: onMarkSkipped,
     );
   }
 

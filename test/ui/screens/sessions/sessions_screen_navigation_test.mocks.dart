@@ -829,6 +829,24 @@ class MockProgramsRepository extends _i1.Mock
             returnValueForMissingStub: _i16.Future<void>.value(),
           )
           as _i16.Future<void>);
+
+  @override
+  _i16.Future<void> skipWorkout(int? workoutId) =>
+      (super.noSuchMethod(
+            Invocation.method(#skipWorkout, [workoutId]),
+            returnValue: _i16.Future<void>.value(),
+            returnValueForMissingStub: _i16.Future<void>.value(),
+          )
+          as _i16.Future<void>);
+
+  @override
+  _i16.Future<void> unskipWorkout(int? workoutId) =>
+      (super.noSuchMethod(
+            Invocation.method(#unskipWorkout, [workoutId]),
+            returnValue: _i16.Future<void>.value(),
+            returnValueForMissingStub: _i16.Future<void>.value(),
+          )
+          as _i16.Future<void>);
 }
 
 /// A class which mocks [RunningRepository].
@@ -1124,11 +1142,14 @@ class MockNutritionRepository extends _i1.Mock
   );
 
   @override
-  _i16.Future<_i9.MealLog> getTodaysMealLog() =>
+  _i16.Future<_i9.MealLog> getTodaysMealLog({DateTime? date}) =>
       (super.noSuchMethod(
-            Invocation.method(#getTodaysMealLog, []),
+            Invocation.method(#getTodaysMealLog, [], {#date: date}),
             returnValue: _i16.Future<_i9.MealLog>.value(
-              _FakeMealLog_7(this, Invocation.method(#getTodaysMealLog, [])),
+              _FakeMealLog_7(
+                this,
+                Invocation.method(#getTodaysMealLog, [], {#date: date}),
+              ),
             ),
           )
           as _i16.Future<_i9.MealLog>);
@@ -1275,6 +1296,28 @@ class MockNutritionRepository extends _i1.Mock
             ),
           )
           as _i16.Future<_i12.NutritionGoal>);
+
+  @override
+  _i16.Future<_i12.NutritionGoal?> getGoalForDate(DateTime? date) =>
+      (super.noSuchMethod(
+            Invocation.method(#getGoalForDate, [date]),
+            returnValue: _i16.Future<_i12.NutritionGoal?>.value(),
+          )
+          as _i16.Future<_i12.NutritionGoal?>);
+
+  @override
+  _i16.Future<Map<DateTime, _i14.NutritionHistoryTarget>> getGoalsForDateRange(
+    DateTime? start,
+    DateTime? end,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getGoalsForDateRange, [start, end]),
+            returnValue:
+                _i16.Future<Map<DateTime, _i14.NutritionHistoryTarget>>.value(
+                  <DateTime, _i14.NutritionHistoryTarget>{},
+                ),
+          )
+          as _i16.Future<Map<DateTime, _i14.NutritionHistoryTarget>>);
 
   @override
   _i16.Future<void> updateNutritionGoal(int? id, _i12.NutritionGoal? goal) =>

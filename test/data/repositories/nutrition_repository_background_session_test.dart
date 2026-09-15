@@ -210,6 +210,7 @@ void main() {
       serverId: serverId,
       userId: uid,
       dailyCalories: dailyCalories,
+      effectiveDate: now,
       createdAt: now,
       isSynced: serverId != null,
       syncStatus: serverId != null ? 'synced' : 'pending_create',

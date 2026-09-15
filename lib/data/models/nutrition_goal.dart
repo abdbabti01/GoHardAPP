@@ -19,6 +19,18 @@ class NutritionGoal {
   final double? carbohydratesPercentage;
   final double? fatPercentage;
   final bool isActive;
+
+  /// The calendar date this target starts applying from (UTC midnight,
+  /// matching the meal-log date convention). Historical resolution always
+  /// picks the row whose [effectiveDate] is the latest one `<=` the queried
+  /// date and not yet [deletedAt] as of that date - never "today's active
+  /// goal" applied retroactively. See `NutritionRepository.getGoalForDate`.
+  final DateTime effectiveDate;
+
+  /// Soft-delete marker. A deleted goal still answers historical queries for
+  /// dates before this timestamp - only dates on/after it stop seeing it.
+  final DateTime? deletedAt;
+
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -50,13 +62,15 @@ class NutritionGoal {
     this.carbohydratesPercentage,
     this.fatPercentage,
     this.isActive = true,
+    DateTime? effectiveDate,
+    this.deletedAt,
     required this.createdAt,
     this.updatedAt,
     this.explanation,
     this.bmr,
     this.tdee,
     this.calorieAdjustment,
-  });
+  }) : effectiveDate = effectiveDate ?? DateTime.now();
 
   factory NutritionGoal.fromJson(Map<String, dynamic> json) =>
       _$NutritionGoalFromJson(json);
@@ -112,6 +126,8 @@ class NutritionGoal {
     double? carbohydratesPercentage,
     double? fatPercentage,
     bool? isActive,
+    DateTime? effectiveDate,
+    DateTime? deletedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? explanation,
@@ -136,6 +152,8 @@ class NutritionGoal {
           carbohydratesPercentage ?? this.carbohydratesPercentage,
       fatPercentage: fatPercentage ?? this.fatPercentage,
       isActive: isActive ?? this.isActive,
+      effectiveDate: effectiveDate ?? this.effectiveDate,
+      deletedAt: deletedAt ?? this.deletedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       explanation: explanation ?? this.explanation,

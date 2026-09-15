@@ -68,9 +68,21 @@ void main() {
       mockAuthService.getUserEmail(),
     ).thenAnswer((_) async => 'test@example.com');
     when(mockConnectivity.isOnline).thenReturn(true);
+    // Empty, never-emitting stream: `isOnline` above already covers every
+    // online-gated code path this suite exercises. A `Stream.value(true)`
+    // here previously fired an incidental "connection restored" reload on
+    // every provider construction that no test in this file exercises or
+    // asserts on - harmless before NutritionProvider.loadTodaysData()
+    // gained same-session request-generation staleness protection, but
+    // afterward it raced the explicit `loadTodaysData()` call each test
+    // awaits: the constructor-triggered reload could be requested SECOND
+    // (a later generation) and thus be the one to legitimately "win",
+    // while the awaited call - now correctly treated as superseded -
+    // finishes without committing, leaving state briefly null right when
+    // the test asserts.
     when(
       mockConnectivity.connectivityStream,
-    ).thenAnswer((_) => Stream.value(true));
+    ).thenAnswer((_) => const Stream<bool>.empty());
   });
 
   // Helper function to create a test NutritionGoal
@@ -874,7 +886,7 @@ void main() {
       );
 
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => mealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -939,7 +951,7 @@ void main() {
       );
 
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => mealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -984,7 +996,7 @@ void main() {
       );
 
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => mealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -1013,7 +1025,9 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Assert - getTodaysMealLog should NOT have been called again
-      verifyNever(mockNutritionRepository.getTodaysMealLog());
+      verifyNever(
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
+      );
     });
 
     test('loadNutritionHistory loads past meal logs', () async {
@@ -1051,7 +1065,9 @@ void main() {
 
       // Stub today's data methods
       final goal = createTestGoal();
-      when(mockNutritionRepository.getTodaysMealLog()).thenAnswer(
+      when(
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
+      ).thenAnswer(
         (_) async => MealLog(
           id: 1,
           userId: 1,
@@ -1146,7 +1162,7 @@ void main() {
       );
 
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => mealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -1371,7 +1387,7 @@ void main() {
       () async {
         // Arrange
         when(
-          mockNutritionRepository.getTodaysMealLog(),
+          mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
         ).thenThrow(Exception('API unavailable'));
 
         final provider = NutritionProvider(
@@ -1489,7 +1505,7 @@ void main() {
       );
 
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => mealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -2119,7 +2135,7 @@ void main() {
         ),
       ).thenAnswer((_) async => historyLogs);
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => todayMealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -2173,7 +2189,7 @@ void main() {
         );
 
         when(
-          mockNutritionRepository.getTodaysMealLog(),
+          mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
         ).thenAnswer((_) async => mealLog);
         when(
           mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -2248,7 +2264,7 @@ void main() {
       );
 
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => mealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -2307,7 +2323,7 @@ void main() {
       );
 
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => mealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -2436,7 +2452,7 @@ void main() {
       );
 
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => cachedMealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -2593,7 +2609,7 @@ void main() {
       );
 
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => emptyMealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -2793,7 +2809,7 @@ void main() {
         );
 
         when(
-          mockNutritionRepository.getTodaysMealLog(),
+          mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
         ).thenAnswer((_) async => mealLog);
         when(
           mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),
@@ -2854,7 +2870,7 @@ void main() {
       );
 
       when(
-        mockNutritionRepository.getTodaysMealLog(),
+        mockNutritionRepository.getTodaysMealLog(date: anyNamed('date')),
       ).thenAnswer((_) async => mealLog);
       when(
         mockNutritionRepository.getNutritionDashboard(date: anyNamed('date')),

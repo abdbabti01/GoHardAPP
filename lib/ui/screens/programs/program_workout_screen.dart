@@ -367,8 +367,8 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                     Expanded(
                       flex: 1,
                       child: OutlinedButton.icon(
-                        onPressed: () => _showCompleteDialog(context, workout),
-                        icon: const Icon(Icons.check, size: 20),
+                        onPressed: () => _showSkipDialog(context, workout),
+                        icon: const Icon(Icons.skip_next, size: 20),
                         label: const Text(
                           'Skip',
                           style: TextStyle(
@@ -656,6 +656,89 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                 icon: const Icon(Icons.check),
                 label: const Text('Complete'),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _showSkipDialog(BuildContext context, ProgramWorkout workout) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.skip_next, color: Colors.orange),
+                SizedBox(width: 12),
+                Text('Skip Workout?'),
+              ],
+            ),
+            content: Text(
+              'Skip "${workout.workoutName}"? It will be marked as skipped, '
+              'not completed, and won\'t count toward your progress.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final provider = context.read<ProgramsProvider>();
+                  final messenger = ScaffoldMessenger.of(context);
+                  final navigator = Navigator.of(context);
+
+                  final result = await provider.skipWorkout(workout.id);
+
+                  if (!context.mounted) return;
+
+                  if (result.success) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Workout skipped'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                    navigator.pop();
+                  } else if (result.isBlocked) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: const Text(
+                          'This workout already has a session in progress. '
+                          'Resume or manage it instead of skipping.',
+                        ),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 4),
+                        action:
+                            result.blockingSessionId == null
+                                ? null
+                                : SnackBarAction(
+                                  label: 'View',
+                                  onPressed: () {
+                                    navigator.pushNamed(
+                                      RouteNames.sessionDetail,
+                                      arguments: result.blockingSessionId,
+                                    );
+                                  },
+                                ),
+                      ),
+                    );
+                  } else {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          provider.errorMessage ?? 'Failed to skip workout',
+                        ),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.skip_next),
+                label: const Text('Skip'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
               ),
             ],
           ),

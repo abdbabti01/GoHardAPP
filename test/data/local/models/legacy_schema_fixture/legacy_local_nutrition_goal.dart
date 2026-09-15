@@ -1,8 +1,27 @@
 import 'package:isar/isar.dart';
 
-part 'local_nutrition_goal.g.dart';
+part 'legacy_local_nutrition_goal.g.dart';
 
-/// Local database model for nutrition goals with offline sync support
+/// TEST-ONLY fixture: a byte-for-byte copy of the `LocalNutritionGoal`
+/// collection exactly as it was at this branch's base commit (`HEAD` at the
+/// time this fixture was written), BEFORE Phase 3's `effectiveDate`/
+/// `deletedAt` fields existed. This is never imported by production code -
+/// its sole purpose is to let a test write real, on-disk Isar data using the
+/// OLD generated schema, then reopen that same on-disk database with the
+/// CURRENT production schema (`lib/data/local/models/local_nutrition_goal.dart`,
+/// imported side-by-side under a different prefix) to prove the additive
+/// schema change opens and reads old data safely.
+///
+/// The class name is deliberately `LocalNutritionGoal` (matching production)
+/// so Isar's collection identity (derived from the collection NAME, hashed -
+/// see `CollectionSchema.id` in the generated file) is the SAME collection as
+/// production's `LocalNutritionGoal` - this is what makes cross-schema-version
+/// opening of the SAME on-disk directory possible without ever touching or
+/// renaming the real production model.
+///
+/// Do NOT update this file when `local_nutrition_goal.dart` changes again -
+/// it must stay frozen at the pre-effectiveDate/deletedAt shape to keep
+/// testing the specific upgrade this fixture exists for.
 @collection
 class LocalNutritionGoal {
   /// Local database ID (auto-increment)
@@ -56,17 +75,6 @@ class LocalNutritionGoal {
   /// Whether this is the active goal
   @Index()
   bool isActive;
-
-  /// The calendar date this target starts applying from. Historical
-  /// resolution always picks the row with the latest [effectiveDate] that is
-  /// `<=` the queried date and not yet [deletedAt] as of that date - never
-  /// "the current active goal" applied retroactively.
-  @Index()
-  DateTime effectiveDate;
-
-  /// Soft-delete marker. A deleted goal still answers historical queries for
-  /// dates before this timestamp.
-  DateTime? deletedAt;
 
   /// Timestamp when goal was created
   DateTime createdAt;
@@ -128,8 +136,6 @@ class LocalNutritionGoal {
     this.carbohydratesPercentage,
     this.fatPercentage,
     this.isActive = true,
-    required this.effectiveDate,
-    this.deletedAt,
     required this.createdAt,
     this.updatedAt,
     this.explanation,

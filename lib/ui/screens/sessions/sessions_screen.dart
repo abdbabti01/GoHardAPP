@@ -192,6 +192,44 @@ class _SessionsScreenState extends State<SessionsScreen>
     }
   }
 
+  Future<void> _handleSkipSession(int programWorkoutId) async {
+    final programsProvider = context.read<ProgramsProvider>();
+    final sessionsProvider = context.read<SessionsProvider>();
+
+    final result = await programsProvider.skipWorkout(programWorkoutId);
+
+    if (!mounted) return;
+
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Workout skipped'),
+          backgroundColor: context.warning,
+        ),
+      );
+      await sessionsProvider.loadSessions(showLoading: false);
+    } else if (result.isBlocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'This workout already has a session in progress. Resume or '
+            'manage it instead of skipping.',
+          ),
+          backgroundColor: context.error,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            programsProvider.errorMessage ?? 'Failed to skip workout',
+          ),
+          backgroundColor: context.error,
+        ),
+      );
+    }
+  }
+
   Future<void> _handleSessionTap(
     int sessionId,
     String status, [
@@ -1317,6 +1355,12 @@ class _SessionsScreenState extends State<SessionsScreen>
                                     ),
                                 onDelete:
                                     () => _handleDeleteSession(session.id),
+                                onMarkSkipped:
+                                    session.programWorkoutId == null
+                                        ? null
+                                        : () => _handleSkipSession(
+                                          session.programWorkoutId!,
+                                        ),
                               ),
                             ),
                           ],
@@ -1341,6 +1385,12 @@ class _SessionsScreenState extends State<SessionsScreen>
                                     ),
                                 onDelete:
                                     () => _handleDeleteSession(session.id),
+                                onMarkSkipped:
+                                    session.programWorkoutId == null
+                                        ? null
+                                        : () => _handleSkipSession(
+                                          session.programWorkoutId!,
+                                        ),
                               ),
                             ),
                           ],
@@ -1365,6 +1415,12 @@ class _SessionsScreenState extends State<SessionsScreen>
                                     ),
                                 onDelete:
                                     () => _handleDeleteSession(session.id),
+                                onMarkSkipped:
+                                    session.programWorkoutId == null
+                                        ? null
+                                        : () => _handleSkipSession(
+                                          session.programWorkoutId!,
+                                        ),
                               ),
                             ),
                           ],
@@ -1386,6 +1442,12 @@ class _SessionsScreenState extends State<SessionsScreen>
                                       ),
                                   onDelete:
                                       () => _handleDeleteSession(session.id),
+                                  onMarkSkipped:
+                                      session.programWorkoutId == null
+                                          ? null
+                                          : () => _handleSkipSession(
+                                            session.programWorkoutId!,
+                                          ),
                                 ),
                               ),
                             ],

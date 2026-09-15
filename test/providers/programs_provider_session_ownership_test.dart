@@ -1890,4 +1890,128 @@ void main() {
       },
     );
   });
+
+  group('skip / unskip workout', () {
+    test('skipWorkout is online-only: publishes isSkipped only after the '
+        'repository call resolves, and never sets completion', () async {
+      await seed([
+        program(1, active: true, workouts: [workout(10, programId: 1)]),
+      ]);
+      epoch.activate(1);
+      final c = Completer<void>();
+      when(repo.skipWorkout(10)).thenAnswer((_) => c.future);
+
+      final f = provider.skipWorkout(10);
+      // Online-only: no optimistic edit before the repository call resolves.
+      expect(provider.programs.single.workouts!.single.isSkipped, isFalse);
+
+      c.complete();
+      final result = await f;
+
+      expect(result.success, isTrue);
+      final updated = provider.programs.single.workouts!.single;
+      expect(updated.isSkipped, isTrue);
+      expect(updated.skippedAt, isNotNull);
+      expect(updated.isCompleted, isFalse);
+      expect(updated.completedAt, isNull);
+    });
+
+    test(
+      'skipWorkout blocked by an in-progress session returns a distinguishable '
+      'blocked result carrying the session id, not a generic error',
+      () async {
+        await seed([
+          program(1, active: true, workouts: [workout(10, programId: 1)]),
+        ]);
+        epoch.activate(1);
+        when(
+          repo.skipWorkout(10),
+        ).thenThrow(const WorkoutSkipBlockedException(sessionId: 99));
+
+        final result = await provider.skipWorkout(10);
+
+        expect(result.success, isFalse);
+        expect(result.isBlocked, isTrue);
+        expect(result.blockingSessionId, 99);
+        // Not treated as a generic failure - no error message surfaced.
+        expect(provider.errorMessage, isNull);
+        expect(provider.programs.single.workouts!.single.isSkipped, isFalse);
+      },
+    );
+
+    test('skipWorkout surfaces a generic error and leaves the workout '
+        'unskipped on failure', () async {
+      await seed([
+        program(1, active: true, workouts: [workout(10, programId: 1)]),
+      ]);
+      epoch.activate(1);
+      when(repo.skipWorkout(10)).thenThrow(Exception('network error'));
+
+      final result = await provider.skipWorkout(10);
+
+      expect(result.success, isFalse);
+      expect(result.isBlocked, isFalse);
+      expect(provider.programs.single.workouts!.single.isSkipped, isFalse);
+      expect(provider.errorMessage, contains('Failed to skip workout'));
+    });
+
+    test('a stale skipWorkout success cannot modify B\'s workouts', () async {
+      await seed([
+        program(1, active: true, workouts: [workout(10, programId: 1)]),
+      ]);
+      epoch.activate(1);
+      final c = Completer<void>();
+      when(repo.skipWorkout(10)).thenAnswer((_) => c.future);
+
+      final f = provider.skipWorkout(10);
+      epoch.invalidate();
+      provider.clear();
+      epoch.activate(2);
+      await seed([
+        program(1, active: true, workouts: [workout(10, programId: 1)]),
+      ]);
+
+      c.complete();
+      final result = await f;
+
+      expect(result.success, isFalse);
+      // B's row untouched.
+      expect(provider.programs.single.workouts!.single.isSkipped, isFalse);
+    });
+
+    test(
+      'unskipWorkout restores the occurrence and clears skippedAt (copyWith '
+      'cannot null it out, so this exercises the dedicated reset path)',
+      () async {
+        await seed([
+          program(1, active: true, workouts: [workout(10, programId: 1)]),
+        ]);
+        epoch.activate(1);
+        when(repo.skipWorkout(10)).thenAnswer((_) async {});
+        await provider.skipWorkout(10);
+        expect(provider.programs.single.workouts!.single.isSkipped, isTrue);
+
+        when(repo.unskipWorkout(10)).thenAnswer((_) async {});
+        final ok = await provider.unskipWorkout(10);
+
+        expect(ok, isTrue);
+        final restored = provider.programs.single.workouts!.single;
+        expect(restored.isSkipped, isFalse);
+        expect(restored.skippedAt, isNull);
+      },
+    );
+
+    test('logged-out skipWorkout is a no-op: returns failed without calling '
+        'the repository', () async {
+      await seed([
+        program(1, active: true, workouts: [workout(10, programId: 1)]),
+      ]);
+      epoch.invalidate();
+
+      final result = await provider.skipWorkout(10);
+
+      expect(result.success, isFalse);
+      verifyNever(repo.skipWorkout(any));
+    });
+  });
 }

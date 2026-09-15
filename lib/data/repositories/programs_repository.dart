@@ -10,7 +10,19 @@ import '../services/api_service.dart';
 import '../local/services/local_database_service.dart';
 import '../services/session_request_context.dart';
 import '../services/session_request_exceptions.dart';
+import '../services/api_exception.dart';
 import '../local/models/local_session.dart';
+
+/// Thrown when [ProgramsRepository.skipWorkout] is refused because the
+/// occurrence already has an in-progress or completed [Session] - the caller
+/// should direct the user to resume/manage that session instead of silently
+/// abandoning its logged data.
+class WorkoutSkipBlockedException implements Exception {
+  final int? sessionId;
+  final String? sessionStatus;
+
+  const WorkoutSkipBlockedException({this.sessionId, this.sessionStatus});
+}
 
 /// Repository for programs operations.
 ///
@@ -476,6 +488,43 @@ class ProgramsRepository {
 
     await _apiService.delete(
       ApiConfig.programWorkoutById(workoutId),
+      sessionContext: context,
+    );
+  }
+
+  /// Mark a scheduled workout occurrence as skipped. Online-only, matching
+  /// [completeWorkout]/[deleteWorkout] - never queued offline. Throws
+  /// [WorkoutSkipBlockedException] (not a generic failure) when the server
+  /// refuses because the occurrence already has an in-progress or completed
+  /// session, so the caller can route the user to resume/manage it instead.
+  Future<void> skipWorkout(int workoutId) async {
+    final context = await _capture();
+    if (context == null) throw const SessionStaleException();
+
+    try {
+      await _apiService.put<void>(
+        ApiConfig.programWorkoutSkip(workoutId),
+        sessionContext: context,
+      );
+    } on ApiException catch (e) {
+      if (e.statusCode == 409) {
+        final data = e.responseData;
+        throw WorkoutSkipBlockedException(
+          sessionId: data is Map ? data['sessionId'] as int? : null,
+          sessionStatus: data is Map ? data['sessionStatus'] as String? : null,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Undo a skip, restoring the scheduled occurrence to its normal state.
+  Future<void> unskipWorkout(int workoutId) async {
+    final context = await _capture();
+    if (context == null) throw const SessionStaleException();
+
+    await _apiService.put<void>(
+      ApiConfig.programWorkoutUnskip(workoutId),
       sessionContext: context,
     );
   }

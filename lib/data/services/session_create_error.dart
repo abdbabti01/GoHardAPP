@@ -18,6 +18,11 @@ import 'rate_limited_exception.dart';
 /// * `404 { "code": "program_not_found" }`
 /// * `409 { "code": "operation_canceled" }`
 /// * `409 { "code": "operation_incomplete" }`
+/// * `409 { "code": "program_workout_skipped" }` - the target ProgramWorkout
+///   was skipped (see `ProgramWorkoutOccurrenceLock` server-side); create is
+///   refused until the occurrence is explicitly unskipped
+///   (`PUT programs/workouts/{id}/unskip`). Applies to BOTH the generic
+///   endpoint (when linked to a ProgramWorkout) and `from-program-workout`.
 /// * `410 { "code": "operation_target_deleted" }`
 /// * `400 { "code": "program_workout_data_invalid" }` -
 ///   `from-program-workout` ONLY: the source `ProgramWorkout.ExercisesJson`
@@ -76,6 +81,16 @@ enum SessionCreateErrorKind {
   /// HTTP 410 `{ "code": "operation_target_deleted" }`.
   operationTargetDeleted,
 
+  /// HTTP 409 `{ "code": "program_workout_skipped" }` - the target
+  /// ProgramWorkout was skipped; create is refused until it is explicitly
+  /// unskipped. Terminal on the server like [operationCanceled] /
+  /// [operationTargetDeleted] - retrying the identical request can never
+  /// succeed without that separate action - but see the class doc comment:
+  /// this codebase's current, deliberate policy still treats it as soft
+  /// (leave the row alone rather than hard-cleanup) pending the same
+  /// future "needs-attention" classification work.
+  programWorkoutSkipped,
+
   /// HTTP 400 `{ "code": "program_workout_data_invalid" }` -
   /// `from-program-workout` ONLY. See the class doc comment.
   programWorkoutDataInvalid,
@@ -114,6 +129,10 @@ abstract final class SessionCreateError {
     'operation_target_deleted': (
       status: 410,
       kind: SessionCreateErrorKind.operationTargetDeleted,
+    ),
+    'program_workout_skipped': (
+      status: 409,
+      kind: SessionCreateErrorKind.programWorkoutSkipped,
     ),
     'program_workout_data_invalid': (
       status: 400,
@@ -186,15 +205,16 @@ abstract final class SessionCreateError {
   /// transaction always commits or rolls back the operation row and the
   /// Session together), and nothing there will ever later set its
   /// `CompletedAt`/`CanceledAt` without server/manual intervention if it is
-  /// ever actually observed. [programNotFound], [operationCanceled] and
-  /// [operationTargetDeleted] are semantically TERMINAL on the server -
-  /// re-POSTing the identical body/key can never succeed. All four
+  /// ever actually observed. [programNotFound], [operationCanceled],
+  /// [operationTargetDeleted], and [programWorkoutSkipped] are semantically
+  /// TERMINAL on the server - re-POSTing the identical body/key can never
+  /// succeed (the last one needs an explicit unskip first). All five
   /// (excluding [throttled]) are still treated as soft here on purpose: this
   /// PR only adds the durable `clientOperationId` these codes need to become
   /// reachable at all - it intentionally leaves this classification
   /// unchanged. A follow-up PR must introduce an explicit terminal
-  /// "needs-attention" classification for the three truly-terminal codes
-  /// instead of indefinite silent retry; that PR is also where
+  /// "needs-attention" classification for the truly-terminal codes instead
+  /// of indefinite silent retry; that PR is also where
   /// `operationIncomplete`'s "safe but not self-healing" nuance should be
   /// reflected in behavior, not just in this comment.
   static bool isSoftRetryable(Object? error) {
@@ -204,6 +224,7 @@ abstract final class SessionCreateError {
       case SessionCreateErrorKind.operationCanceled:
       case SessionCreateErrorKind.operationIncomplete:
       case SessionCreateErrorKind.operationTargetDeleted:
+      case SessionCreateErrorKind.programWorkoutSkipped:
         return true;
       case SessionCreateErrorKind.programWorkoutDataInvalid:
       // Blindly retrying the SAME unparseable ProgramWorkout data will not

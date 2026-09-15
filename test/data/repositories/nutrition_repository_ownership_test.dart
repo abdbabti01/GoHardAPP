@@ -198,6 +198,7 @@ void main() {
       userId: uid,
       dailyCalories: dailyCalories,
       isActive: isActive,
+      effectiveDate: now,
       createdAt: now,
       isSynced: serverId != null,
       syncStatus: serverId != null ? 'synced' : 'pending_create',
@@ -654,18 +655,38 @@ void main() {
       },
     );
 
-    test('a server-backed record can be updated via its server ID', () async {
-      final goal = await insertNutritionGoal(serverId: 55, dailyCalories: 2000);
+    test(
+      'a server-backed record can be updated via its server ID - inserts a '
+      'new row (history preserved) rather than mutating the old one in place',
+      () async {
+        final goal = await insertNutritionGoal(
+          serverId: 55,
+          dailyCalories: 2000,
+        );
 
-      await repository.updateNutritionGoal(
-        55,
-        goalPayload(dailyCalories: 2600),
-      );
+        await repository.updateNutritionGoal(
+          55,
+          goalPayload(dailyCalories: 2600),
+        );
 
-      final stored = await isar.localNutritionGoals.get(goal.localId);
-      expect(stored!.dailyCalories, 2600);
-      expect(stored.syncStatus, 'pending_update');
-    });
+        // The original row is untouched - just deactivated.
+        final original = await isar.localNutritionGoals.get(goal.localId);
+        expect(original!.dailyCalories, 2000);
+        expect(original.isActive, isFalse);
+
+        // A new row carries the changed value and is now the active one.
+        final active =
+            await isar.localNutritionGoals
+                .filter()
+                .userIdEqualTo(goal.userId)
+                .isActiveEqualTo(true)
+                .findFirst();
+        expect(active, isNotNull);
+        expect(active!.dailyCalories, 2600);
+        expect(active.syncStatus, 'pending_create');
+        expect(active.localId, isNot(goal.localId));
+      },
+    );
 
     test(
       'a server-backed food item can have its quantity updated via server ID',
@@ -952,16 +973,28 @@ void main() {
 
   group('legitimate same-user behavior is unchanged', () {
     test(
-      'updateNutritionGoal still PUTs the correct payload when online',
+      'updateNutritionGoal POSTs a new goal (history-preserving) when online, '
+      'not a PUT to the old id',
       () async {
         when(mockConnectivity.isOnline).thenReturn(true);
         when(
-          mockApiService.put<void>(
+          mockApiService.post<Map<String, dynamic>>(
             any,
             data: anyNamed('data'),
             sessionContext: anyNamed('sessionContext'),
           ),
-        ).thenAnswer((_) async {});
+        ).thenAnswer(
+          (_) async => {
+            'id': 900,
+            'userId': userId,
+            'dailyCalories': 3000,
+            'dailyProtein': 150,
+            'dailyCarbohydrates': 200,
+            'dailyFat': 65,
+            'isActive': true,
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+        );
         final goal = await insertNutritionGoal(
           serverId: 71,
           dailyCalories: 2000,
@@ -973,7 +1006,7 @@ void main() {
         );
 
         await untilCalled(
-          mockApiService.put<void>(
+          mockApiService.post<Map<String, dynamic>>(
             any,
             data: anyNamed('data'),
             sessionContext: anyNamed('sessionContext'),
@@ -981,20 +1014,39 @@ void main() {
         );
         await Future<void>.delayed(const Duration(milliseconds: 50));
 
+        verifyNever(
+          mockApiService.put<void>(
+            any,
+            data: anyNamed('data'),
+            sessionContext: anyNamed('sessionContext'),
+          ),
+        );
         final captured =
             verify(
-              mockApiService.put<void>(
+              mockApiService.post<Map<String, dynamic>>(
                 captureAny,
                 data: captureAnyNamed('data'),
                 sessionContext: anyNamed('sessionContext'),
               ),
             ).captured;
-        expect(captured[0], 'nutritiongoals/71');
+        expect(captured[0], 'nutritiongoals');
         final payload = captured[1] as Map<String, dynamic>;
         expect(payload['dailyCalories'], 3000);
 
-        final stored = await isar.localNutritionGoals.get(goal.localId);
-        expect(stored!.dailyCalories, 3000);
+        // The old server-backed row is untouched, deactivated; the new one
+        // (now linked to server id 900) carries the changed value.
+        final original = await isar.localNutritionGoals.get(goal.localId);
+        expect(original!.dailyCalories, 2000);
+        expect(original.isActive, isFalse);
+
+        final newRow =
+            await isar.localNutritionGoals
+                .filter()
+                .serverIdEqualTo(900)
+                .findFirst();
+        expect(newRow, isNotNull);
+        expect(newRow!.dailyCalories, 3000);
+        expect(newRow.isSynced, isTrue);
       },
     );
 
@@ -1034,5 +1086,126 @@ void main() {
         expect(captured[1], 1500);
       },
     );
+  });
+
+  group('getGoalForDate - pending local edits are never shadowed', () {
+    test('an unsynced local goal for the resolved date is returned without '
+        'ever calling the server, even while online', () async {
+      when(mockConnectivity.isOnline).thenReturn(true);
+      final today = DateTime.now();
+      await insertNutritionGoal(
+        dailyCalories: 1800,
+      ); // serverId omitted -> pending_create
+
+      final result = await repository.getGoalForDate(today);
+
+      expect(result, isNotNull);
+      expect(result!.dailyCalories, 1800);
+      verifyNever(mockApiService.get<Map<String, dynamic>>(any));
+    });
+
+    test(
+      'a synced local goal is refreshed from the server as normal when online',
+      () async {
+        when(mockConnectivity.isOnline).thenReturn(true);
+        final today = DateTime.now();
+        await insertNutritionGoal(serverId: 900, dailyCalories: 1800);
+        when(mockApiService.get<Map<String, dynamic>>(any)).thenAnswer(
+          (_) async => {
+            'hasTarget': true,
+            'goal': {
+              'id': 900,
+              'userId': userId,
+              'dailyCalories': 2200,
+              'dailyProtein': 150,
+              'dailyCarbohydrates': 200,
+              'dailyFat': 65,
+              'isActive': true,
+              'createdAt': today.toIso8601String(),
+            },
+          },
+        );
+
+        final result = await repository.getGoalForDate(today);
+
+        expect(result, isNotNull);
+        expect(result!.dailyCalories, 2200);
+        verify(mockApiService.get<Map<String, dynamic>>(any)).called(1);
+      },
+    );
+  });
+
+  group('getTodaysMealLog - Today date contract', () {
+    test('an explicit date is sent to the server as a LOCAL calendar-date '
+        'label (YYYY-MM-DD), never UTC-shifted - the app-wide Today contract '
+        '(see MealLogsController.GetTodaysMealLog\'s doc comment) is that the '
+        'device\'s own local calendar date is what "today" means, not the '
+        'server\'s UTC date', () async {
+      when(mockConnectivity.isOnline).thenReturn(true);
+      // An arbitrary, deliberately distinctive local date - what matters
+      // here is only the exact string sent as the query parameter, which
+      // must survive untouched regardless of the test machine's own
+      // timezone (no .toUtc() conversion may ever be applied to it).
+      final localDate = DateTime(2026, 1, 15, 23, 45);
+
+      when(
+        mockApiService.get<Map<String, dynamic>>(
+          any,
+          queryParameters: anyNamed('queryParameters'),
+        ),
+      ).thenAnswer(
+        (_) async => {
+          'id': 99,
+          'userId': userId,
+          'date': '2026-01-15T00:00:00.000Z',
+          'createdAt': '2026-01-15T00:00:00.000Z',
+        },
+      );
+
+      await repository.getTodaysMealLog(date: localDate);
+
+      final captured =
+          verify(
+                mockApiService.get<Map<String, dynamic>>(
+                  any,
+                  queryParameters: captureAnyNamed('queryParameters'),
+                ),
+              ).captured.single
+              as Map<String, dynamic>;
+
+      expect(
+        captured['date'],
+        '2026-01-15',
+        reason:
+            'the exact Y-M-D of the supplied LOCAL date, never a '
+            'UTC-shifted value and never the server\'s own clock',
+      );
+    });
+
+    test('the SAME local date is used for both the local cache lookup and '
+        'the server request - a cache hit for that date resolves entirely '
+        'from the local cache, with zero server interaction (offline here '
+        'specifically to make that claim airtight - the online case ALSO '
+        'hits cache first, per the earlier assertion, but additionally '
+        'fires a fire-and-forget background refresh that is not what this '
+        'test is about)', () async {
+      when(mockConnectivity.isOnline).thenReturn(false);
+      final localDate = DateTime(2026, 2, 20, 6);
+      await insertMealLog(
+        date: DateTime(2026, 2, 20),
+        serverId: 500,
+        waterIntake: 250,
+      );
+
+      final result = await repository.getTodaysMealLog(date: localDate);
+
+      expect(result.waterIntake, 250);
+      verifyNever(
+        mockApiService.get<Map<String, dynamic>>(
+          any,
+          queryParameters: anyNamed('queryParameters'),
+        ),
+      );
+    });
   });
 }

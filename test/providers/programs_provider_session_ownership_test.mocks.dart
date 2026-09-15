@@ -239,6 +239,24 @@ class MockProgramsRepository extends _i1.Mock
             returnValueForMissingStub: _i5.Future<void>.value(),
           )
           as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> skipWorkout(int? workoutId) =>
+      (super.noSuchMethod(
+            Invocation.method(#skipWorkout, [workoutId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> unskipWorkout(int? workoutId) =>
+      (super.noSuchMethod(
+            Invocation.method(#unskipWorkout, [workoutId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
 }
 
 /// A class which mocks [ConnectivityService].

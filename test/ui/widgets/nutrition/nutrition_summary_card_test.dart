@@ -82,8 +82,12 @@ void main() {
         createdAt: now,
       );
 
-      when(mockRepository.getTodaysMealLog()).thenAnswer((_) async => mealLog);
-      when(mockRepository.getNutritionDashboard()).thenAnswer(
+      when(
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
+      ).thenAnswer((_) async => mealLog);
+      when(
+        mockRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer(
         (_) async => NutritionDashboardData(
           date: now,
           goal: activeGoal,
