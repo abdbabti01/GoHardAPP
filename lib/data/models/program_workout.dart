@@ -21,6 +21,8 @@ class ProgramWorkout {
   final bool isCompleted;
   final DateTime? completedAt;
   final String? completionNotes;
+  final bool isSkipped;
+  final DateTime? skippedAt;
   final int orderIndex;
 
   /// The actual calendar date this workout is scheduled for.
@@ -43,6 +45,8 @@ class ProgramWorkout {
     required this.isCompleted,
     this.completedAt,
     this.completionNotes,
+    this.isSkipped = false,
+    this.skippedAt,
     required this.orderIndex,
     this.scheduledDate,
   });
@@ -67,6 +71,8 @@ class ProgramWorkout {
         json['completedAt'],
       ),
       completionNotes: json['completionNotes'] as String?,
+      isSkipped: json['isSkipped'] as bool? ?? false,
+      skippedAt: DateTimeHelper.parseTimestampOrNullFromJson(json['skippedAt']),
       orderIndex: json['orderIndex'] as int,
       // Date-only field: parse as local date
       scheduledDate: DateTimeHelper.parseDateOrNullFromJson(
@@ -133,6 +139,32 @@ class ProgramWorkout {
         workoutName.toLowerCase().contains('rest');
   }
 
+  /// Restore this occurrence to its normal scheduled state after a skip.
+  /// [copyWith] can't express clearing [skippedAt] back to null (its `??`
+  /// pattern keeps the existing value for any omitted/null argument), so
+  /// this constructs the updated instance directly.
+  ProgramWorkout withoutSkip() => ProgramWorkout(
+    id: id,
+    programId: programId,
+    weekNumber: weekNumber,
+    dayNumber: dayNumber,
+    dayName: dayName,
+    workoutName: workoutName,
+    workoutType: workoutType,
+    description: description,
+    estimatedDuration: estimatedDuration,
+    exercisesJson: exercisesJson,
+    warmUp: warmUp,
+    coolDown: coolDown,
+    isCompleted: isCompleted,
+    completedAt: completedAt,
+    completionNotes: completionNotes,
+    isSkipped: false,
+    skippedAt: null,
+    orderIndex: orderIndex,
+    scheduledDate: scheduledDate,
+  );
+
   ProgramWorkout copyWith({
     int? id,
     int? programId,
@@ -149,6 +181,8 @@ class ProgramWorkout {
     bool? isCompleted,
     DateTime? completedAt,
     String? completionNotes,
+    bool? isSkipped,
+    DateTime? skippedAt,
     int? orderIndex,
     DateTime? scheduledDate,
   }) {
@@ -168,6 +202,8 @@ class ProgramWorkout {
       isCompleted: isCompleted ?? this.isCompleted,
       completedAt: completedAt ?? this.completedAt,
       completionNotes: completionNotes ?? this.completionNotes,
+      isSkipped: isSkipped ?? this.isSkipped,
+      skippedAt: skippedAt ?? this.skippedAt,
       orderIndex: orderIndex ?? this.orderIndex,
       scheduledDate: scheduledDate ?? this.scheduledDate,
     );

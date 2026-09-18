@@ -128,8 +128,12 @@ void main() {
     required DailyNutritionProgress Function() progress,
     NutritionGoal? activeGoal,
   }) async {
-    when(mockRepository.getTodaysMealLog()).thenAnswer((_) async => mealLog());
-    when(mockRepository.getNutritionDashboard()).thenAnswer(
+    when(
+      mockRepository.getTodaysMealLog(date: anyNamed('date')),
+    ).thenAnswer((_) async => mealLog());
+    when(
+      mockRepository.getNutritionDashboard(date: anyNamed('date')),
+    ).thenAnswer(
       (_) async => NutritionDashboardData(
         date: DateTime.now(),
         goal: activeGoal,
@@ -348,9 +352,11 @@ void main() {
           final frozenStaleProgress = staleProgress();
 
           when(
-            mockRepository.getTodaysMealLog(),
+            mockRepository.getTodaysMealLog(date: anyNamed('date')),
           ).thenAnswer((_) async => currentLog);
-          when(mockRepository.getNutritionDashboard()).thenAnswer(
+          when(
+            mockRepository.getNutritionDashboard(date: anyNamed('date')),
+          ).thenAnswer(
             (_) async => NutritionDashboardData(
               date: now,
               goal: activeGoal,
@@ -396,7 +402,7 @@ void main() {
 
           // Simulate the repository's local write completing (production
           // writes Isar synchronously before returning) by updating what the
-          // next getTodaysMealLog() call returns - the mocked dailyProgress
+          // next getTodaysMealLog(date: anyNamed('date')) call returns - the mocked dailyProgress
           // is left untouched throughout.
           currentLog = currentLog.copyWith(
             mealEntries: [
@@ -448,9 +454,11 @@ void main() {
           );
 
           when(
-            mockRepository.getTodaysMealLog(),
+            mockRepository.getTodaysMealLog(date: anyNamed('date')),
           ).thenAnswer((_) async => currentLog);
-          when(mockRepository.getNutritionDashboard()).thenAnswer(
+          when(
+            mockRepository.getNutritionDashboard(date: anyNamed('date')),
+          ).thenAnswer(
             (_) async => NutritionDashboardData(
               date: now,
               goal: activeGoal,
@@ -523,8 +531,12 @@ void main() {
         final activeGoal = goal();
         var callCount = 0;
 
-        when(mockRepository.getTodaysMealLog()).thenAnswer((_) async => log);
-        when(mockRepository.getNutritionDashboard()).thenAnswer((_) async {
+        when(
+          mockRepository.getTodaysMealLog(date: anyNamed('date')),
+        ).thenAnswer((_) async => log);
+        when(
+          mockRepository.getNutritionDashboard(date: anyNamed('date')),
+        ).thenAnswer((_) async {
           callCount++;
           final wrong = callCount == 1 ? 111.0 : 9999.0;
           return NutritionDashboardData(

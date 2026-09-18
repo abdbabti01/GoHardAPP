@@ -58,6 +58,16 @@ class NutritionProvider extends ChangeNotifier {
 
   // Nutrition history
   List<MealLog> _nutritionHistory = [];
+
+  /// The target that actually applied on each history day (keyed by
+  /// midnight-normalized local date), from the same [loadNutritionHistory]
+  /// call that populated [_nutritionHistory]. Never today's [_activeGoal]
+  /// applied retroactively. A day missing from this map, or whose entry
+  /// has [NutritionHistoryTarget.unavailable] set, was never confirmed
+  /// one way or the other (see [isHistoryTargetUnavailable]) - only a
+  /// present, non-unavailable entry with a null [NutritionHistoryTarget.goal]
+  /// genuinely had no recorded target.
+  Map<DateTime, NutritionHistoryTarget> _historyTargets = {};
   bool _isLoadingHistory = false;
   String _historyFilter = 'week'; // 'week', 'month', '3months'
 
@@ -73,6 +83,20 @@ class NutritionProvider extends ChangeNotifier {
   /// too, so an in-flight history request is invalidated independently of
   /// the session epoch as well.
   int _historyRequestGeneration = 0;
+
+  /// Monotonically increasing id for the most recently *requested*
+  /// [loadTodaysData] call, mirroring [_historyRequestGeneration]. Needed
+  /// because two calls can legitimately overlap under the SAME session -
+  /// e.g. a manual pull-to-refresh still in flight when local midnight (or
+  /// app-resume day-change detection) fires a second call for the new day.
+  /// The session-epoch token alone can't distinguish them (same user, same
+  /// token), so without this the OLDER call's response - for the day that
+  /// just ended - could resolve after the newer one and silently overwrite
+  /// the freshly loaded day's meal log/goal/progress. Only the call whose
+  /// captured generation still matches this field when it resolves may
+  /// commit, so the latest *requested* load always wins regardless of
+  /// resolution order.
+  int _todaysDataRequestGeneration = 0;
 
   StreamSubscription<bool>? _connectivitySubscription;
 
@@ -102,6 +126,12 @@ class NutritionProvider extends ChangeNotifier {
   // Getters
   MealLog? get todaysMealLog => _todaysMealLog;
   NutritionGoal? get activeGoal => _activeGoal;
+
+  /// True only when a real, recorded target exists for today - never a
+  /// synthesized/default one. UI must check this before showing a
+  /// target-based percentage/remaining metric, rather than assuming
+  /// [activeGoal] is always meaningful.
+  bool get hasActiveGoal => _activeGoal != null;
   NutritionProgress? get todaysProgress => _todaysProgress;
   DailyNutritionProgress? get dailyProgress => _dailyProgress;
   List<FoodTemplate> get recentFoods => _recentFoods;
@@ -116,29 +146,71 @@ class NutritionProvider extends ChangeNotifier {
   bool get isLoadingHistory => _isLoadingHistory;
   String get historyFilter => _historyFilter;
 
+  /// The target that actually applied on [date] - from the most recent
+  /// [loadNutritionHistory] call, never [activeGoal] (today's current
+  /// target) applied retroactively. Returns null if no target had been
+  /// recorded yet as of that date OR if that couldn't be confirmed (see
+  /// [isHistoryTargetUnavailable]) - callers must check the latter before
+  /// rendering a null result as a confirmed "no recorded target", never a
+  /// guess either way.
+  NutritionGoal? targetForHistoryDate(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return _historyTargets[normalized]?.goal;
+  }
+
+  /// True when [date]'s target could not be confirmed one way or the other
+  /// - the last [loadNutritionHistory] call was offline or its request
+  /// failed, and nothing in the local cache covers this date. Callers must
+  /// render this distinctly from a confirmed "no recorded target" (e.g.
+  /// "unavailable offline" rather than implying the user never had a
+  /// target that day), and must never substitute [activeGoal] for it.
+  bool isHistoryTargetUnavailable(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return _historyTargets[normalized]?.unavailable ?? false;
+  }
+
   /// Load today's meal log, active goal, and progress.
   ///
-  /// Session-epoch guarded: [token] is captured before any await, and
-  /// re-checked after the await (including inside catch/finally) before
-  /// touching any field or calling notifyListeners(). If the session that
-  /// requested this load has since ended - logout, or a different user
-  /// logging in - the response is dropped silently.
+  /// Guarded by BOTH session identity and [_todaysDataRequestGeneration]:
+  /// - [token] is captured before any await and re-checked after (including
+  ///   inside catch/finally) before touching any field or calling
+  ///   notifyListeners() - drops a response that resolves after the session
+  ///   that requested it has ended (logout, or a different user logging in).
+  /// - [requestGeneration] guards the SAME-session case the token can't:
+  ///   two calls overlapping (e.g. a manual refresh still in flight when a
+  ///   day-change reload fires). Only the call holding the CURRENT
+  ///   generation when it resolves may commit, so a late response for the
+  ///   day that just ended can never replace the newly loaded day's data.
   Future<void> loadTodaysData() async {
     final token = _sessionEpoch.capture();
     if (token == null) return;
+
+    final requestGeneration = ++_todaysDataRequestGeneration;
+    bool ownsRequest() =>
+        _sessionEpoch.isCurrent(token) &&
+        requestGeneration == _todaysDataRequestGeneration;
 
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      // Load in parallel
+      // Captured once, up front, and threaded through to both calls below -
+      // never two separate DateTime.now() calls, which could theoretically
+      // straddle a local midnight mid-load and disagree with each other.
+      // This is the app's Today date contract: the device's LOCAL calendar
+      // date, passed explicitly, so the meal log and the target/progress
+      // dashboard can never resolve to two different days (previously the
+      // dashboard call passed no date at all, silently falling back to the
+      // SERVER's UTC day - see MealLogsController.GetTodaysMealLog's doc
+      // comment for the full contract).
+      final today = DateTime.now();
       final results = await Future.wait([
-        _nutritionRepository.getTodaysMealLog(),
-        _nutritionRepository.getNutritionDashboard(),
+        _nutritionRepository.getTodaysMealLog(date: today),
+        _nutritionRepository.getNutritionDashboard(date: today),
         _nutritionRepository.getStreak(),
       ]);
-      if (!_sessionEpoch.isCurrent(token)) return;
+      if (!ownsRequest()) return;
 
       _todaysMealLog = results[0] as MealLog;
       final dashboardData = results[1] as NutritionDashboardData;
@@ -153,12 +225,12 @@ class NutritionProvider extends ChangeNotifier {
         '✅ Loaded nutrition data - planned: ${_dailyProgress?.plannedCalories.toStringAsFixed(0)}, consumed: ${_dailyProgress?.consumedCalories.toStringAsFixed(0)} cals',
       );
     } catch (e) {
-      if (!_sessionEpoch.isCurrent(token)) return;
+      if (!ownsRequest()) return;
       _errorMessage =
           'Failed to load nutrition data: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Load nutrition data error: $e');
     } finally {
-      if (_sessionEpoch.isCurrent(token)) {
+      if (ownsRequest()) {
         _isLoading = false;
         notifyListeners();
       }
@@ -212,16 +284,37 @@ class NutritionProvider extends ChangeNotifier {
     try {
       final now = DateTime.now();
       final startDate = _getHistoryStartDate(now);
+      final endDate = now.subtract(const Duration(days: 1)); // Exclude today
 
+      // Fetched together so a history render never pairs one day's actual
+      // consumption with a DIFFERENT day's target - each day gets the
+      // target that actually applied to it (see _historyTargets), never
+      // today's current activeGoal applied retroactively. The two calls
+      // fail independently: a target-fetch problem must not blank out meal
+      // logs that loaded fine (each day just renders "no recorded target"
+      // instead), matching the same "one section's failure doesn't hide
+      // another's good data" principle applied elsewhere.
       final results = await _nutritionRepository.getMealLogs(
         startDate: startDate,
-        endDate: now.subtract(const Duration(days: 1)), // Exclude today
+        endDate: endDate,
       );
+      if (!ownsRequest()) return;
+
+      Map<DateTime, NutritionHistoryTarget> targets = {};
+      try {
+        targets = await _nutritionRepository.getGoalsForDateRange(
+          startDate,
+          endDate,
+        );
+      } catch (e) {
+        debugPrint('Load nutrition history targets error: $e');
+      }
       if (!ownsRequest()) return;
 
       // Sort by date descending (most recent first)
       results.sort((a, b) => b.date.compareTo(a.date));
       _nutritionHistory = results;
+      _historyTargets = targets;
 
       debugPrint(
         '✅ Loaded ${_nutritionHistory.length} days of nutrition history',
@@ -1062,10 +1155,11 @@ class NutritionProvider extends ChangeNotifier {
 
   /// Clear all data (called on logout). Immediate and synchronous - no
   /// await here, so nothing can race this method itself. Also bumps
-  /// [_historyRequestGeneration] so any in-flight [loadNutritionHistory]
-  /// request is invalidated independently of the session epoch (this
-  /// remains a complete invalidation even if clear() is ever invoked
-  /// without a preceding UserSessionEpoch.invalidate() call).
+  /// [_historyRequestGeneration] and [_todaysDataRequestGeneration] so any
+  /// in-flight [loadNutritionHistory] / [loadTodaysData] request is
+  /// invalidated independently of the session epoch (this remains a
+  /// complete invalidation even if clear() is ever invoked without a
+  /// preceding UserSessionEpoch.invalidate() call).
   void clear() {
     _todaysMealLog = null;
     _activeGoal = null;
@@ -1081,8 +1175,10 @@ class NutritionProvider extends ChangeNotifier {
     _isAddingFood = false;
     _lastLoadedDate = null;
     _nutritionHistory = [];
+    _historyTargets = {};
     _isLoadingHistory = false;
     _historyRequestGeneration++;
+    _todaysDataRequestGeneration++;
     notifyListeners();
     debugPrint('🧹 NutritionProvider cleared');
   }

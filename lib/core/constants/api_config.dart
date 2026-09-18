@@ -190,6 +190,10 @@ class ApiConfig {
       '$programs/workouts/$workoutId';
   static String programWorkoutComplete(int workoutId) =>
       '$programs/workouts/$workoutId/complete';
+  static String programWorkoutSkip(int workoutId) =>
+      '$programs/workouts/$workoutId/skip';
+  static String programWorkoutUnskip(int workoutId) =>
+      '$programs/workouts/$workoutId/unskip';
 
   // Nutrition helper methods
   static String foodTemplateById(int id) => '$foodTemplates/$id';
@@ -222,6 +226,10 @@ class ApiConfig {
   static String nutritionGoalProgressToday = '$nutritionGoals/progress/today';
   static String nutritionGoalProgressByDate(DateTime date) =>
       '$nutritionGoals/progress/date/${date.toIso8601String().split('T')[0]}';
+  static String nutritionGoalForDate(DateTime date) =>
+      '$nutritionGoals/for-date?date=${date.toIso8601String().split('T')[0]}';
+  static String nutritionGoalForDates(DateTime start, DateTime end) =>
+      '$nutritionGoals/for-dates?start=${start.toIso8601String().split('T')[0]}&end=${end.toIso8601String().split('T')[0]}';
   static String nutritionAnalyticsDailySummary =
       '$nutritionAnalytics/summary/daily';
   static String nutritionAnalyticsWeeklySummary =

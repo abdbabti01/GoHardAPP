@@ -1017,13 +1017,27 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     MealLog log,
     NutritionProvider provider,
   ) {
-    final goal = provider.activeGoal;
-    final goalCalories = goal?.dailyCalories ?? 2000;
-    final progressPercent = (log.consumedCalories / goalCalories * 100).clamp(
-      0,
-      150,
-    );
-    final isGoalMet = progressPercent >= 80 && progressPercent <= 110;
+    // The target that actually applied on THIS day - never today's current
+    // activeGoal applied retroactively. Null is an honest "no recorded
+    // target for this date", not backfilled with a guess - UNLESS
+    // [isUnavailable] is set, in which case it isn't even confirmed
+    // absent: the fetch couldn't be completed (offline/failed) and
+    // nothing local covers this date, so it must render as "unknown",
+    // never as "no recorded target".
+    final goal = provider.targetForHistoryDate(log.date);
+    final isUnavailable = provider.isHistoryTargetUnavailable(log.date);
+    // goal.dailyCalories == 0 is a real, reachable value (no positive-value
+    // floor on NutritionGoal) - guarded the same way
+    // NutritionProvider.calorieProgressPercentage guards it for "today",
+    // rather than letting consumedCalories/0 produce NaN/Infinity (which
+    // would otherwise render as the literal text "NaN% of goal").
+    final hasTarget = goal != null && goal.dailyCalories > 0;
+    final progressPercent =
+        hasTarget
+            ? (log.consumedCalories / goal.dailyCalories * 100).clamp(0, 150)
+            : 0;
+    final isGoalMet =
+        hasTarget && progressPercent >= 80 && progressPercent <= 110;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1050,15 +1064,26 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
               Row(
                 children: [
                   Icon(
-                    isGoalMet
+                    !hasTarget
+                        ? (isUnavailable ? Icons.cloud_off : Icons.help_outline)
+                        : isGoalMet
                         ? Icons.check_circle
                         : Icons.remove_circle_outline,
                     size: 14,
-                    color: isGoalMet ? Colors.green : context.textTertiary,
+                    color:
+                        !hasTarget
+                            ? context.textTertiary
+                            : isGoalMet
+                            ? Colors.green
+                            : context.textTertiary,
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    '${progressPercent.toStringAsFixed(0)}% of goal',
+                    !hasTarget
+                        ? (isUnavailable
+                            ? 'Unavailable offline'
+                            : 'No recorded target')
+                        : '${progressPercent.toStringAsFixed(0)}% of goal',
                     style: TextStyle(
                       fontSize: 12,
                       color: isGoalMet ? Colors.green : context.textSecondary,

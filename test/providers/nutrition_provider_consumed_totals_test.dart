@@ -100,8 +100,12 @@ void main() {
 
   Future<NutritionProvider> loadedProvider(MealLog mealLog) async {
     final activeGoal = goal();
-    when(mockRepository.getTodaysMealLog()).thenAnswer((_) async => mealLog);
-    when(mockRepository.getNutritionDashboard()).thenAnswer(
+    when(
+      mockRepository.getTodaysMealLog(date: anyNamed('date')),
+    ).thenAnswer((_) async => mealLog);
+    when(
+      mockRepository.getNutritionDashboard(date: anyNamed('date')),
+    ).thenAnswer(
       (_) async => NutritionDashboardData(
         date: DateTime.now(),
         goal: activeGoal,
@@ -192,7 +196,9 @@ void main() {
         final activeGoal = goal();
         final historyLog = mixedMealLog(id: 2);
 
-        when(mockRepository.getTodaysMealLog()).thenAnswer(
+        when(
+          mockRepository.getTodaysMealLog(date: anyNamed('date')),
+        ).thenAnswer(
           (_) async => MealLog(
             id: 4,
             userId: 1,
@@ -201,7 +207,9 @@ void main() {
             mealEntries: const [],
           ),
         );
-        when(mockRepository.getNutritionDashboard()).thenAnswer(
+        when(
+          mockRepository.getNutritionDashboard(date: anyNamed('date')),
+        ).thenAnswer(
           (_) async => NutritionDashboardData(
             date: DateTime.now(),
             goal: activeGoal,

@@ -26,6 +26,11 @@ ProgramWorkout _$ProgramWorkoutFromJson(Map<String, dynamic> json) =>
               ? null
               : DateTime.parse(json['completedAt'] as String),
       completionNotes: json['completionNotes'] as String?,
+      isSkipped: json['isSkipped'] as bool? ?? false,
+      skippedAt:
+          json['skippedAt'] == null
+              ? null
+              : DateTime.parse(json['skippedAt'] as String),
       orderIndex: (json['orderIndex'] as num).toInt(),
       scheduledDate:
           json['scheduledDate'] == null
@@ -58,6 +63,8 @@ Map<String, dynamic> _$ProgramWorkoutToJson(ProgramWorkout instance) {
   val['isCompleted'] = instance.isCompleted;
   writeNotNull('completedAt', instance.completedAt?.toIso8601String());
   writeNotNull('completionNotes', instance.completionNotes);
+  val['isSkipped'] = instance.isSkipped;
+  writeNotNull('skippedAt', instance.skippedAt?.toIso8601String());
   val['orderIndex'] = instance.orderIndex;
   writeNotNull('scheduledDate', instance.scheduledDate?.toIso8601String());
   return val;

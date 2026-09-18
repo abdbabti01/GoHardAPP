@@ -179,6 +179,52 @@ import '../core/services/connectivity_service.dart';
 /// requested view, so it never silently widens a filtered list to unfiltered
 /// - and it is bound by the exact same [_listGen] ordering as a manual
 /// refresh, so it can never overwrite a newer mutation.
+/// Today's schedule status across every active program - see
+/// [ProgramsProvider.todaysScheduleStatus].
+enum TodaysScheduleStatus {
+  /// No active program at all.
+  noActiveProgram,
+
+  /// At least one active program's occurrence for today is a rest day, and
+  /// no program has a real workout today.
+  restDay,
+
+  /// No active program has ANY row scheduled for today at all - a genuinely
+  /// blank day, distinct from [allResolved] (something WAS scheduled, it's
+  /// just already done).
+  notScheduled,
+
+  /// At least one active program had a real occurrence scheduled for today,
+  /// and every one of them is already completed or skipped - distinct from
+  /// [notScheduled] (nothing was ever scheduled) so the UI can say "all done
+  /// for today" instead of implying the day was empty from the start.
+  allResolved,
+
+  /// At least one active program has a real, not-yet-resolved workout
+  /// scheduled for today.
+  hasWorkouts,
+}
+
+/// Outcome of [ProgramsProvider.skipWorkout]. Distinguishes a successful
+/// skip from one refused because the occurrence already has an in-progress
+/// or completed session, so callers can route the user to resume/manage
+/// that session (via [blockingSessionId]) instead of treating it as a
+/// generic failure.
+class WorkoutSkipResult {
+  final bool success;
+  final int? blockingSessionId;
+
+  const WorkoutSkipResult._(this.success, this.blockingSessionId);
+
+  static const ok = WorkoutSkipResult._(true, null);
+  static const failed = WorkoutSkipResult._(false, null);
+
+  factory WorkoutSkipResult.blocked(int? sessionId) =>
+      WorkoutSkipResult._(false, sessionId);
+
+  bool get isBlocked => !success && blockingSessionId != null;
+}
+
 class ProgramsProvider extends ChangeNotifier {
   final ProgramsRepository _programsRepository;
   final UserSessionEpoch _sessionEpoch;
@@ -1223,6 +1269,118 @@ class ProgramsProvider extends ChangeNotifier {
     }
   }
 
+  /// Mark a scheduled workout occurrence as skipped. This never fabricates a
+  /// completed Session and never deletes anything - it only flips the
+  /// occurrence's own skip flag. Online-only (see [ProgramsRepository.skipWorkout]);
+  /// a network failure surfaces as an error rather than an optimistic
+  /// success. If the occurrence already has an in-progress or completed
+  /// session the skip is refused server-side and this returns a
+  /// [WorkoutSkipResult] carrying that session's id so the caller can direct
+  /// the user to resume/manage it instead.
+  Future<WorkoutSkipResult> skipWorkout(int workoutId) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return WorkoutSkipResult.failed;
+    final programId = _parentProgramIdForWorkout(workoutId);
+    final key = (programId ?? -1, workoutId);
+    final gen = _bumpWorkoutMutationGen(key);
+    final errorGen = ++_errorGen;
+
+    bool owns() =>
+        _sessionEpoch.isCurrent(token) && _workoutMutationGens[key] == gen;
+
+    try {
+      await _programsRepository.skipWorkout(workoutId);
+      if (!owns()) return WorkoutSkipResult.failed;
+
+      if (programId != null) {
+        final pIndex = _programs.indexWhere((p) => p.id == programId);
+        if (pIndex != -1 && _programs[pIndex].workouts != null) {
+          final workouts = List<ProgramWorkout>.from(
+            _programs[pIndex].workouts!,
+          );
+          final wIndex = workouts.indexWhere((w) => w.id == workoutId);
+          if (wIndex != -1) {
+            workouts[wIndex] = workouts[wIndex].copyWith(
+              isSkipped: true,
+              skippedAt: DateTime.now().toUtc(),
+            );
+            _programs[pIndex] = _programs[pIndex].copyWith(workouts: workouts);
+            _recomputeDerivedLists();
+          }
+        }
+      }
+      _listGen++;
+
+      debugPrint('⏭️ Skipped workout $workoutId');
+      notifyListeners();
+      return WorkoutSkipResult.ok;
+    } on WorkoutSkipBlockedException catch (e) {
+      return WorkoutSkipResult.blocked(e.sessionId);
+    } on SessionStaleException {
+      return WorkoutSkipResult.failed;
+    } on RequestCancelledException {
+      return WorkoutSkipResult.failed;
+    } catch (e) {
+      if (owns() && errorGen == _errorGen) {
+        _errorMessage =
+            'Failed to skip workout: ${e.toString().replaceAll('Exception: ', '')}';
+        debugPrint('Skip workout error: $e');
+        notifyListeners();
+      }
+      return WorkoutSkipResult.failed;
+    }
+  }
+
+  /// Undo a skip, restoring the occurrence to its normal scheduled state.
+  Future<bool> unskipWorkout(int workoutId) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return false;
+    final programId = _parentProgramIdForWorkout(workoutId);
+    final key = (programId ?? -1, workoutId);
+    final gen = _bumpWorkoutMutationGen(key);
+    final errorGen = ++_errorGen;
+
+    bool owns() =>
+        _sessionEpoch.isCurrent(token) && _workoutMutationGens[key] == gen;
+
+    try {
+      await _programsRepository.unskipWorkout(workoutId);
+      if (!owns()) return false;
+
+      if (programId != null) {
+        final pIndex = _programs.indexWhere((p) => p.id == programId);
+        if (pIndex != -1 && _programs[pIndex].workouts != null) {
+          final workouts = List<ProgramWorkout>.from(
+            _programs[pIndex].workouts!,
+          );
+          final wIndex = workouts.indexWhere((w) => w.id == workoutId);
+          if (wIndex != -1) {
+            workouts[wIndex] = workouts[wIndex].withoutSkip();
+            _programs[pIndex] = _programs[pIndex].copyWith(workouts: workouts);
+            _recomputeDerivedLists();
+          }
+        }
+      }
+      _listGen++;
+
+      debugPrint('↩️ Unskipped workout $workoutId');
+      notifyListeners();
+      return true;
+    } on SessionStaleException {
+      return false;
+    } on RequestCancelledException {
+      return false;
+    } catch (e) {
+      if (owns() && errorGen == _errorGen) {
+        _errorMessage =
+            'Failed to restore workout: ${e.toString().replaceAll('Exception: ', '')}';
+        debugPrint('Unskip workout error: $e');
+        notifyListeners();
+      }
+      return false;
+    }
+  }
+
   /// Delete a workout
   Future<bool> deleteWorkout(int workoutId) async {
     final token = _sessionEpoch.capture();
@@ -1269,47 +1427,92 @@ class ProgramsProvider extends ChangeNotifier {
     }
   }
 
+  /// The calendar date (local, midnight-normalized) [workout] is scheduled
+  /// for within [program] - the stored `scheduledDate` when present,
+  /// otherwise the same week/day-number calculation used historically for
+  /// data that predates it.
+  DateTime _scheduledDateOf(Program program, ProgramWorkout workout) {
+    if (workout.scheduledDate != null) {
+      return DateTime(
+        workout.scheduledDate!.year,
+        workout.scheduledDate!.month,
+        workout.scheduledDate!.day,
+      );
+    }
+    final localStartDate = program.startDate.toLocal();
+    final startDate = DateTime(
+      localStartDate.year,
+      localStartDate.month,
+      localStartDate.day,
+    );
+    return startDate.add(
+      Duration(days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1)),
+    );
+  }
+
   /// Get all program workouts scheduled for today from active programs
   /// Returns a list of (Program, ProgramWorkout) tuples
   List<({Program program, ProgramWorkout workout})> getTodaysWorkouts() {
-    final today = DateTime.now();
-    final todayDate = DateTime(today.year, today.month, today.day);
+    final todayDate = DateTime.now();
+    final today = DateTime(todayDate.year, todayDate.month, todayDate.day);
     final result = <({Program program, ProgramWorkout workout})>[];
 
     for (final program in _activePrograms) {
       if (program.workouts == null || program.workouts!.isEmpty) continue;
 
       for (final workout in program.workouts!) {
-        // Use stored scheduledDate if available, otherwise fall back to calculation
-        DateTime workoutDate;
-        if (workout.scheduledDate != null) {
-          workoutDate = DateTime(
-            workout.scheduledDate!.year,
-            workout.scheduledDate!.month,
-            workout.scheduledDate!.day,
-          );
-        } else {
-          // Fallback for old data without scheduledDate
-          final localStartDate = program.startDate.toLocal();
-          final startDate = DateTime(
-            localStartDate.year,
-            localStartDate.month,
-            localStartDate.day,
-          );
-          workoutDate = startDate.add(
-            Duration(
-              days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1),
-            ),
-          );
-        }
-
-        if (workoutDate == todayDate && !workout.isRestDay) {
+        if (_scheduledDateOf(program, workout) == today && !workout.isRestDay) {
           result.add((program: program, workout: workout));
         }
       }
     }
 
     return result;
+  }
+
+  /// Today's schedule status across every active program - lets callers
+  /// (Today) tell a genuine rest day, an already-fully-resolved day, and a
+  /// truly blank day apart, rather than collapsing all three into the same
+  /// empty [getTodaysWorkouts] result. Aggregation across multiple active
+  /// programs, in priority order: [hasWorkouts] wins if ANY program has a
+  /// real, unresolved workout today (so one program's rest day or finished
+  /// workout never hides another's still-pending session); else
+  /// [allResolved] if some real (non-rest) occurrence WAS scheduled today
+  /// and every one is already completed/skipped (distinct from
+  /// [notScheduled] - something happened today, it's just already done);
+  /// else [restDay] if any occurrence today is a rest day; else
+  /// [notScheduled] if no active program has any row at all for today; else
+  /// [noActiveProgram] if there is no active program.
+  TodaysScheduleStatus get todaysScheduleStatus {
+    if (_activePrograms.isEmpty) return TodaysScheduleStatus.noActiveProgram;
+    // Excludes occurrences already resolved (completed/skipped) - a workout
+    // that's done isn't still "to do today", so it must not count toward
+    // hasWorkouts here.
+    final hasUnresolvedWorkoutToday = getTodaysWorkouts().any(
+      (item) => !item.workout.isCompleted && !item.workout.isSkipped,
+    );
+    if (hasUnresolvedWorkoutToday) return TodaysScheduleStatus.hasWorkouts;
+
+    final todayDate = DateTime.now();
+    final today = DateTime(todayDate.year, todayDate.month, todayDate.day);
+    var anyRestDay = false;
+    var anyResolvedRealWorkout = false;
+
+    for (final program in _activePrograms) {
+      if (program.workouts == null) continue;
+      for (final workout in program.workouts!) {
+        if (_scheduledDateOf(program, workout) != today) continue;
+        if (workout.isRestDay) {
+          anyRestDay = true;
+        } else if (workout.isCompleted || workout.isSkipped) {
+          anyResolvedRealWorkout = true;
+        }
+      }
+    }
+
+    if (anyResolvedRealWorkout) return TodaysScheduleStatus.allResolved;
+    if (anyRestDay) return TodaysScheduleStatus.restDay;
+    return TodaysScheduleStatus.notScheduled;
   }
 
   /// Clear all programs data (called on logout via [SessionCleanupCoordinator]).

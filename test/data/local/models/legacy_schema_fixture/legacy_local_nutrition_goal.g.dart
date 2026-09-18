@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'local_nutrition_goal.dart';
+part of 'legacy_local_nutrition_goal.dart';
 
 // **************************************************************************
 // IsarCollectionGenerator
@@ -74,72 +74,62 @@ const LocalNutritionGoalSchema = CollectionSchema(
       name: r'dailyWater',
       type: IsarType.double,
     ),
-    r'deletedAt': PropertySchema(
-      id: 12,
-      name: r'deletedAt',
-      type: IsarType.dateTime,
-    ),
-    r'effectiveDate': PropertySchema(
-      id: 13,
-      name: r'effectiveDate',
-      type: IsarType.dateTime,
-    ),
     r'explanation': PropertySchema(
-      id: 14,
+      id: 12,
       name: r'explanation',
       type: IsarType.string,
     ),
     r'fatPercentage': PropertySchema(
-      id: 15,
+      id: 13,
       name: r'fatPercentage',
       type: IsarType.double,
     ),
-    r'isActive': PropertySchema(id: 16, name: r'isActive', type: IsarType.bool),
-    r'isSynced': PropertySchema(id: 17, name: r'isSynced', type: IsarType.bool),
+    r'isActive': PropertySchema(id: 14, name: r'isActive', type: IsarType.bool),
+    r'isSynced': PropertySchema(id: 15, name: r'isSynced', type: IsarType.bool),
     r'lastModifiedLocal': PropertySchema(
-      id: 18,
+      id: 16,
       name: r'lastModifiedLocal',
       type: IsarType.dateTime,
     ),
     r'lastModifiedServer': PropertySchema(
-      id: 19,
+      id: 17,
       name: r'lastModifiedServer',
       type: IsarType.dateTime,
     ),
     r'lastSyncAttempt': PropertySchema(
-      id: 20,
+      id: 18,
       name: r'lastSyncAttempt',
       type: IsarType.dateTime,
     ),
-    r'name': PropertySchema(id: 21, name: r'name', type: IsarType.string),
+    r'name': PropertySchema(id: 19, name: r'name', type: IsarType.string),
     r'proteinPercentage': PropertySchema(
-      id: 22,
+      id: 20,
       name: r'proteinPercentage',
       type: IsarType.double,
     ),
-    r'serverId': PropertySchema(id: 23, name: r'serverId', type: IsarType.long),
+    r'serverId': PropertySchema(id: 21, name: r'serverId', type: IsarType.long),
     r'syncError': PropertySchema(
-      id: 24,
+      id: 22,
       name: r'syncError',
       type: IsarType.string,
     ),
     r'syncRetryCount': PropertySchema(
-      id: 25,
+      id: 23,
       name: r'syncRetryCount',
       type: IsarType.long,
     ),
     r'syncStatus': PropertySchema(
-      id: 26,
+      id: 24,
       name: r'syncStatus',
       type: IsarType.string,
     ),
-    r'tdee': PropertySchema(id: 27, name: r'tdee', type: IsarType.double),
+    r'tdee': PropertySchema(id: 25, name: r'tdee', type: IsarType.double),
     r'updatedAt': PropertySchema(
-      id: 28,
+      id: 26,
       name: r'updatedAt',
       type: IsarType.dateTime,
     ),
-    r'userId': PropertySchema(id: 29, name: r'userId', type: IsarType.long),
+    r'userId': PropertySchema(id: 27, name: r'userId', type: IsarType.long),
   },
   estimateSize: _localNutritionGoalEstimateSize,
   serialize: _localNutritionGoalSerialize,
@@ -168,19 +158,6 @@ const LocalNutritionGoalSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'isActive',
-          type: IndexType.value,
-          caseSensitive: false,
-        ),
-      ],
-    ),
-    r'effectiveDate': IndexSchema(
-      id: -7077868408091942357,
-      name: r'effectiveDate',
-      unique: false,
-      replace: false,
-      properties: [
-        IndexPropertySchema(
-          name: r'effectiveDate',
           type: IndexType.value,
           caseSensitive: false,
         ),
@@ -267,24 +244,22 @@ void _localNutritionGoalSerialize(
   writer.writeDouble(offsets[9], object.dailySodium);
   writer.writeDouble(offsets[10], object.dailySugar);
   writer.writeDouble(offsets[11], object.dailyWater);
-  writer.writeDateTime(offsets[12], object.deletedAt);
-  writer.writeDateTime(offsets[13], object.effectiveDate);
-  writer.writeString(offsets[14], object.explanation);
-  writer.writeDouble(offsets[15], object.fatPercentage);
-  writer.writeBool(offsets[16], object.isActive);
-  writer.writeBool(offsets[17], object.isSynced);
-  writer.writeDateTime(offsets[18], object.lastModifiedLocal);
-  writer.writeDateTime(offsets[19], object.lastModifiedServer);
-  writer.writeDateTime(offsets[20], object.lastSyncAttempt);
-  writer.writeString(offsets[21], object.name);
-  writer.writeDouble(offsets[22], object.proteinPercentage);
-  writer.writeLong(offsets[23], object.serverId);
-  writer.writeString(offsets[24], object.syncError);
-  writer.writeLong(offsets[25], object.syncRetryCount);
-  writer.writeString(offsets[26], object.syncStatus);
-  writer.writeDouble(offsets[27], object.tdee);
-  writer.writeDateTime(offsets[28], object.updatedAt);
-  writer.writeLong(offsets[29], object.userId);
+  writer.writeString(offsets[12], object.explanation);
+  writer.writeDouble(offsets[13], object.fatPercentage);
+  writer.writeBool(offsets[14], object.isActive);
+  writer.writeBool(offsets[15], object.isSynced);
+  writer.writeDateTime(offsets[16], object.lastModifiedLocal);
+  writer.writeDateTime(offsets[17], object.lastModifiedServer);
+  writer.writeDateTime(offsets[18], object.lastSyncAttempt);
+  writer.writeString(offsets[19], object.name);
+  writer.writeDouble(offsets[20], object.proteinPercentage);
+  writer.writeLong(offsets[21], object.serverId);
+  writer.writeString(offsets[22], object.syncError);
+  writer.writeLong(offsets[23], object.syncRetryCount);
+  writer.writeString(offsets[24], object.syncStatus);
+  writer.writeDouble(offsets[25], object.tdee);
+  writer.writeDateTime(offsets[26], object.updatedAt);
+  writer.writeLong(offsets[27], object.userId);
 }
 
 LocalNutritionGoal _localNutritionGoalDeserialize(
@@ -306,24 +281,22 @@ LocalNutritionGoal _localNutritionGoalDeserialize(
     dailySodium: reader.readDoubleOrNull(offsets[9]),
     dailySugar: reader.readDoubleOrNull(offsets[10]),
     dailyWater: reader.readDoubleOrNull(offsets[11]),
-    deletedAt: reader.readDateTimeOrNull(offsets[12]),
-    effectiveDate: reader.readDateTime(offsets[13]),
-    explanation: reader.readStringOrNull(offsets[14]),
-    fatPercentage: reader.readDoubleOrNull(offsets[15]),
-    isActive: reader.readBoolOrNull(offsets[16]) ?? true,
-    isSynced: reader.readBoolOrNull(offsets[17]) ?? false,
-    lastModifiedLocal: reader.readDateTime(offsets[18]),
-    lastModifiedServer: reader.readDateTimeOrNull(offsets[19]),
-    lastSyncAttempt: reader.readDateTimeOrNull(offsets[20]),
-    name: reader.readStringOrNull(offsets[21]),
-    proteinPercentage: reader.readDoubleOrNull(offsets[22]),
-    serverId: reader.readLongOrNull(offsets[23]),
-    syncError: reader.readStringOrNull(offsets[24]),
-    syncRetryCount: reader.readLongOrNull(offsets[25]) ?? 0,
-    syncStatus: reader.readStringOrNull(offsets[26]) ?? 'pending_create',
-    tdee: reader.readDoubleOrNull(offsets[27]),
-    updatedAt: reader.readDateTimeOrNull(offsets[28]),
-    userId: reader.readLong(offsets[29]),
+    explanation: reader.readStringOrNull(offsets[12]),
+    fatPercentage: reader.readDoubleOrNull(offsets[13]),
+    isActive: reader.readBoolOrNull(offsets[14]) ?? true,
+    isSynced: reader.readBoolOrNull(offsets[15]) ?? false,
+    lastModifiedLocal: reader.readDateTime(offsets[16]),
+    lastModifiedServer: reader.readDateTimeOrNull(offsets[17]),
+    lastSyncAttempt: reader.readDateTimeOrNull(offsets[18]),
+    name: reader.readStringOrNull(offsets[19]),
+    proteinPercentage: reader.readDoubleOrNull(offsets[20]),
+    serverId: reader.readLongOrNull(offsets[21]),
+    syncError: reader.readStringOrNull(offsets[22]),
+    syncRetryCount: reader.readLongOrNull(offsets[23]) ?? 0,
+    syncStatus: reader.readStringOrNull(offsets[24]) ?? 'pending_create',
+    tdee: reader.readDoubleOrNull(offsets[25]),
+    updatedAt: reader.readDateTimeOrNull(offsets[26]),
+    userId: reader.readLong(offsets[27]),
   );
   object.localId = id;
   return object;
@@ -361,40 +334,36 @@ P _localNutritionGoalDeserializeProp<P>(
     case 11:
       return (reader.readDoubleOrNull(offset)) as P;
     case 12:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 13:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 14:
-      return (reader.readStringOrNull(offset)) as P;
-    case 15:
-      return (reader.readDoubleOrNull(offset)) as P;
-    case 16:
       return (reader.readBoolOrNull(offset) ?? true) as P;
-    case 17:
+    case 15:
       return (reader.readBoolOrNull(offset) ?? false) as P;
-    case 18:
+    case 16:
       return (reader.readDateTime(offset)) as P;
+    case 17:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 18:
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 19:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 20:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 21:
-      return (reader.readStringOrNull(offset)) as P;
-    case 22:
-      return (reader.readDoubleOrNull(offset)) as P;
-    case 23:
       return (reader.readLongOrNull(offset)) as P;
-    case 24:
+    case 22:
       return (reader.readStringOrNull(offset)) as P;
-    case 25:
+    case 23:
       return (reader.readLongOrNull(offset) ?? 0) as P;
-    case 26:
+    case 24:
       return (reader.readStringOrNull(offset) ?? 'pending_create') as P;
-    case 27:
+    case 25:
       return (reader.readDoubleOrNull(offset)) as P;
-    case 28:
+    case 26:
       return (reader.readDateTimeOrNull(offset)) as P;
-    case 29:
+    case 27:
       return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -442,15 +411,6 @@ extension LocalNutritionGoalQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'isActive'),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterWhere>
-  anyEffectiveDate() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        const IndexWhereClause.any(indexName: r'effectiveDate'),
       );
     });
   }
@@ -685,109 +645,6 @@ extension LocalNutritionGoalQueryWhere
               ),
             );
       }
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterWhereClause>
-  effectiveDateEqualTo(DateTime effectiveDate) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        IndexWhereClause.equalTo(
-          indexName: r'effectiveDate',
-          value: [effectiveDate],
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterWhereClause>
-  effectiveDateNotEqualTo(DateTime effectiveDate) {
-    return QueryBuilder.apply(this, (query) {
-      if (query.whereSort == Sort.asc) {
-        return query
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'effectiveDate',
-                lower: [],
-                upper: [effectiveDate],
-                includeUpper: false,
-              ),
-            )
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'effectiveDate',
-                lower: [effectiveDate],
-                includeLower: false,
-                upper: [],
-              ),
-            );
-      } else {
-        return query
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'effectiveDate',
-                lower: [effectiveDate],
-                includeLower: false,
-                upper: [],
-              ),
-            )
-            .addWhereClause(
-              IndexWhereClause.between(
-                indexName: r'effectiveDate',
-                lower: [],
-                upper: [effectiveDate],
-                includeUpper: false,
-              ),
-            );
-      }
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterWhereClause>
-  effectiveDateGreaterThan(DateTime effectiveDate, {bool include = false}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        IndexWhereClause.between(
-          indexName: r'effectiveDate',
-          lower: [effectiveDate],
-          includeLower: include,
-          upper: [],
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterWhereClause>
-  effectiveDateLessThan(DateTime effectiveDate, {bool include = false}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        IndexWhereClause.between(
-          indexName: r'effectiveDate',
-          lower: [],
-          upper: [effectiveDate],
-          includeUpper: include,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterWhereClause>
-  effectiveDateBetween(
-    DateTime lowerEffectiveDate,
-    DateTime upperEffectiveDate, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        IndexWhereClause.between(
-          indexName: r'effectiveDate',
-          lower: [lowerEffectiveDate],
-          includeLower: includeLower,
-          upper: [upperEffectiveDate],
-          includeUpper: includeUpper,
-        ),
-      );
     });
   }
 
@@ -1858,134 +1715,6 @@ extension LocalNutritionGoalQueryFilter
           upper: upper,
           includeUpper: includeUpper,
           epsilon: epsilon,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterFilterCondition>
-  deletedAtIsNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNull(property: r'deletedAt'),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterFilterCondition>
-  deletedAtIsNotNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        const FilterCondition.isNotNull(property: r'deletedAt'),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterFilterCondition>
-  deletedAtEqualTo(DateTime? value) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'deletedAt', value: value),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterFilterCondition>
-  deletedAtGreaterThan(DateTime? value, {bool include = false}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'deletedAt',
-          value: value,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterFilterCondition>
-  deletedAtLessThan(DateTime? value, {bool include = false}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'deletedAt',
-          value: value,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterFilterCondition>
-  deletedAtBetween(
-    DateTime? lower,
-    DateTime? upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'deletedAt',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterFilterCondition>
-  effectiveDateEqualTo(DateTime value) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.equalTo(property: r'effectiveDate', value: value),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterFilterCondition>
-  effectiveDateGreaterThan(DateTime value, {bool include = false}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.greaterThan(
-          include: include,
-          property: r'effectiveDate',
-          value: value,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterFilterCondition>
-  effectiveDateLessThan(DateTime value, {bool include = false}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.lessThan(
-          include: include,
-          property: r'effectiveDate',
-          value: value,
-        ),
-      );
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterFilterCondition>
-  effectiveDateBetween(
-    DateTime lower,
-    DateTime upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(
-        FilterCondition.between(
-          property: r'effectiveDate',
-          lower: lower,
-          includeLower: includeLower,
-          upper: upper,
-          includeUpper: includeUpper,
         ),
       );
     });
@@ -3584,34 +3313,6 @@ extension LocalNutritionGoalQuerySortBy
   }
 
   QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterSortBy>
-  sortByDeletedAt() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'deletedAt', Sort.asc);
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterSortBy>
-  sortByDeletedAtDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'deletedAt', Sort.desc);
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterSortBy>
-  sortByEffectiveDate() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'effectiveDate', Sort.asc);
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterSortBy>
-  sortByEffectiveDateDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'effectiveDate', Sort.desc);
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterSortBy>
   sortByExplanation() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'explanation', Sort.asc);
@@ -4007,34 +3708,6 @@ extension LocalNutritionGoalQuerySortThenBy
   }
 
   QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterSortBy>
-  thenByDeletedAt() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'deletedAt', Sort.asc);
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterSortBy>
-  thenByDeletedAtDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'deletedAt', Sort.desc);
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterSortBy>
-  thenByEffectiveDate() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'effectiveDate', Sort.asc);
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterSortBy>
-  thenByEffectiveDateDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'effectiveDate', Sort.desc);
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QAfterSortBy>
   thenByExplanation() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'explanation', Sort.asc);
@@ -4360,20 +4033,6 @@ extension LocalNutritionGoalQueryWhereDistinct
   }
 
   QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QDistinct>
-  distinctByDeletedAt() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'deletedAt');
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QDistinct>
-  distinctByEffectiveDate() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'effectiveDate');
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, LocalNutritionGoal, QDistinct>
   distinctByExplanation({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'explanation', caseSensitive: caseSensitive);
@@ -4574,20 +4233,6 @@ extension LocalNutritionGoalQueryProperty
   dailyWaterProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'dailyWater');
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, DateTime?, QQueryOperations>
-  deletedAtProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'deletedAt');
-    });
-  }
-
-  QueryBuilder<LocalNutritionGoal, DateTime, QQueryOperations>
-  effectiveDateProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'effectiveDate');
     });
   }
 

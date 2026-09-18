@@ -7,6 +7,7 @@ import '../../../core/utils/date_utils.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/exercises_provider.dart';
 import '../../../providers/active_workout_provider.dart';
+import '../../../providers/programs_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/sessions/session_card.dart';
 import '../sessions/session_detail_screen.dart';
@@ -131,6 +132,44 @@ class _TrainScreenState extends State<TrainScreen>
       if (mounted) {
         await sessionsProvider.loadSessions(showLoading: false);
       }
+    }
+  }
+
+  Future<void> _handleSkipSession(int programWorkoutId) async {
+    final programsProvider = context.read<ProgramsProvider>();
+    final sessionsProvider = context.read<SessionsProvider>();
+
+    final result = await programsProvider.skipWorkout(programWorkoutId);
+
+    if (!mounted) return;
+
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Workout skipped'),
+          backgroundColor: context.warning,
+        ),
+      );
+      await sessionsProvider.loadSessions(showLoading: false);
+    } else if (result.isBlocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'This workout already has a session in progress. Resume or '
+            'manage it instead of skipping.',
+          ),
+          backgroundColor: context.error,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            programsProvider.errorMessage ?? 'Failed to skip workout',
+          ),
+          backgroundColor: context.error,
+        ),
+      );
     }
   }
 
@@ -604,6 +643,11 @@ class _TrainScreenState extends State<TrainScreen>
                                 provider.localIdFor(s),
                               ),
                           onDelete: () => _handleDeleteSession(s.id),
+                          onMarkSkipped:
+                              s.programWorkoutId == null
+                                  ? null
+                                  : () =>
+                                      _handleSkipSession(s.programWorkoutId!),
                         ),
                       ),
                     ],
@@ -625,6 +669,11 @@ class _TrainScreenState extends State<TrainScreen>
                                 provider.localIdFor(s),
                               ),
                           onDelete: () => _handleDeleteSession(s.id),
+                          onMarkSkipped:
+                              s.programWorkoutId == null
+                                  ? null
+                                  : () =>
+                                      _handleSkipSession(s.programWorkoutId!),
                         ),
                       ),
                     ],
@@ -646,6 +695,11 @@ class _TrainScreenState extends State<TrainScreen>
                                 provider.localIdFor(s),
                               ),
                           onDelete: () => _handleDeleteSession(s.id),
+                          onMarkSkipped:
+                              s.programWorkoutId == null
+                                  ? null
+                                  : () =>
+                                      _handleSkipSession(s.programWorkoutId!),
                         ),
                       ),
                     ],
@@ -664,6 +718,11 @@ class _TrainScreenState extends State<TrainScreen>
                                   provider.localIdFor(s),
                                 ),
                             onDelete: () => _handleDeleteSession(s.id),
+                            onMarkSkipped:
+                                s.programWorkoutId == null
+                                    ? null
+                                    : () =>
+                                        _handleSkipSession(s.programWorkoutId!),
                           ),
                         ),
                       ],

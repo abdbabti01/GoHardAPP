@@ -27,7 +27,8 @@ import 'sync_service_test.mocks.dart';
 /// signal throttling (429) or an API operation state today's client cannot
 /// yet reconcile - a recognised `code` on its EXACT contract status
 /// (404 `program_not_found`, 409 `operation_canceled`, 409
-/// `operation_incomplete`, 410 `operation_target_deleted`): the
+/// `operation_incomplete`, 409 `program_workout_skipped`, 410
+/// `operation_target_deleted`): the
 /// `pending_create` row and its unsynced children are preserved, never marked
 /// synced, never deleted, and never advance the `syncRetryCount` diagnostic -
 /// so the create stays retryable. A known code on the WRONG status, an unknown
@@ -255,6 +256,11 @@ void main() {
           status: 410,
           code: 'operation_target_deleted',
           kind: SessionCreateErrorKind.operationTargetDeleted,
+        ),
+        (
+          status: 409,
+          code: 'program_workout_skipped',
+          kind: SessionCreateErrorKind.programWorkoutSkipped,
         ),
       ];
 
@@ -573,6 +579,23 @@ void main() {
       expect(stored!.syncStatus, 'pending_create');
       expect(stored.serverId, isNull);
       expect(stored.isSynced, isFalse);
+      expect(stored.syncRetryCount, 0);
+    });
+
+    test('8b. program_workout_skipped (409) does not become success and is '
+        'preserved as retryable - the workout must be explicitly unskipped '
+        'server-side before this key can ever succeed, but this classifier '
+        'intentionally does not force that decision (see the class doc '
+        'comment on isSoftRetryable)', () async {
+      final s = await insertPendingCreateSession();
+      stubPostThrow(apiError(409, body: {'code': 'program_workout_skipped'}));
+
+      await syncService.sync();
+
+      final stored = await reload(s.localId);
+      expect(stored!.isSynced, isFalse);
+      expect(stored.syncStatus, 'pending_create');
+      expect(stored.serverId, isNull);
       expect(stored.syncRetryCount, 0);
     });
 

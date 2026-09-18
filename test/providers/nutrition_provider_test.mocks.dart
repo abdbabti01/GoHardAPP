@@ -132,11 +132,14 @@ class MockNutritionRepository extends _i1.Mock
   );
 
   @override
-  _i8.Future<_i2.MealLog> getTodaysMealLog() =>
+  _i8.Future<_i2.MealLog> getTodaysMealLog({DateTime? date}) =>
       (super.noSuchMethod(
-            Invocation.method(#getTodaysMealLog, []),
+            Invocation.method(#getTodaysMealLog, [], {#date: date}),
             returnValue: _i8.Future<_i2.MealLog>.value(
-              _FakeMealLog_0(this, Invocation.method(#getTodaysMealLog, [])),
+              _FakeMealLog_0(
+                this,
+                Invocation.method(#getTodaysMealLog, [], {#date: date}),
+              ),
             ),
           )
           as _i8.Future<_i2.MealLog>);
@@ -281,6 +284,28 @@ class MockNutritionRepository extends _i1.Mock
             ),
           )
           as _i8.Future<_i5.NutritionGoal>);
+
+  @override
+  _i8.Future<_i5.NutritionGoal?> getGoalForDate(DateTime? date) =>
+      (super.noSuchMethod(
+            Invocation.method(#getGoalForDate, [date]),
+            returnValue: _i8.Future<_i5.NutritionGoal?>.value(),
+          )
+          as _i8.Future<_i5.NutritionGoal?>);
+
+  @override
+  _i8.Future<Map<DateTime, _i7.NutritionHistoryTarget>> getGoalsForDateRange(
+    DateTime? start,
+    DateTime? end,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getGoalsForDateRange, [start, end]),
+            returnValue:
+                _i8.Future<Map<DateTime, _i7.NutritionHistoryTarget>>.value(
+                  <DateTime, _i7.NutritionHistoryTarget>{},
+                ),
+          )
+          as _i8.Future<Map<DateTime, _i7.NutritionHistoryTarget>>);
 
   @override
   _i8.Future<void> updateNutritionGoal(int? id, _i5.NutritionGoal? goal) =>

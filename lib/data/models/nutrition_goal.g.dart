@@ -25,6 +25,14 @@ NutritionGoal _$NutritionGoalFromJson(Map<String, dynamic> json) =>
           (json['carbohydratesPercentage'] as num?)?.toDouble(),
       fatPercentage: (json['fatPercentage'] as num?)?.toDouble(),
       isActive: json['isActive'] as bool? ?? true,
+      effectiveDate:
+          json['effectiveDate'] == null
+              ? null
+              : DateTime.parse(json['effectiveDate'] as String),
+      deletedAt:
+          json['deletedAt'] == null
+              ? null
+              : DateTime.parse(json['deletedAt'] as String),
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt:
           json['updatedAt'] == null
@@ -58,6 +66,8 @@ Map<String, dynamic> _$NutritionGoalToJson(NutritionGoal instance) {
   writeNotNull('carbohydratesPercentage', instance.carbohydratesPercentage);
   writeNotNull('fatPercentage', instance.fatPercentage);
   val['isActive'] = instance.isActive;
+  val['effectiveDate'] = instance.effectiveDate.toIso8601String();
+  writeNotNull('deletedAt', instance.deletedAt?.toIso8601String());
   val['createdAt'] = instance.createdAt.toIso8601String();
   writeNotNull('updatedAt', instance.updatedAt?.toIso8601String());
   writeNotNull('explanation', instance.explanation);
