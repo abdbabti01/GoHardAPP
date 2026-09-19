@@ -126,8 +126,10 @@ class ProfileProvider extends ChangeNotifier {
         return ThemeMode.light;
       case 'dark':
         return ThemeMode.dark;
+      case 'system':
+        return ThemeMode.system;
       default:
-        return ThemeMode.dark; // Default to dark mode
+        return ThemeMode.dark; // No preference set yet - default to dark
     }
   }
 

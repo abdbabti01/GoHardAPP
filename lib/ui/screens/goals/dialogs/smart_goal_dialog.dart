@@ -912,6 +912,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       children: [
         DropdownButtonFormField<String>(
           value: _selectedGoalType,
+          isExpanded: true,
           decoration: const InputDecoration(
             labelText: 'Goal Type',
             prefixIcon: Icon(Icons.flag),
@@ -1012,6 +1013,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           value: _selectedUnit,
+          isExpanded: true,
           decoration: const InputDecoration(
             labelText: 'Unit',
             prefixIcon: Icon(Icons.straighten),

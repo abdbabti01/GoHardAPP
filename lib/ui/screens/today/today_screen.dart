@@ -710,7 +710,12 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                       size: 20,
                     ),
                     const SizedBox(width: 8),
-                    Flexible(
+                    // Expanded (not Flexible) so the title claims all space
+                    // left over after the trailing value+chevron, instead
+                    // of splitting the row evenly with a competing Spacer -
+                    // that previously forced "Today's Nutrition" into an
+                    // ellipsis even with plenty of width to spare.
+                    Expanded(
                       child: Text(
                         "Today's Nutrition",
                         style: AppTypography.titleLarge.copyWith(
@@ -720,7 +725,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     Flexible(
                       child: Text(
                         hasGoal

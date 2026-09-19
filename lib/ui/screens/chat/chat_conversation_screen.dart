@@ -93,11 +93,31 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
 
     // Send message
     final provider = context.read<ChatProvider>();
-    final success = await provider.sendMessage(message);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-    // Scroll to bottom after sending
-    if (success && mounted) {
+    // Operation-local error capture (matches generateWorkoutPlan /
+    // generateMealPlan's onError contract elsewhere in this file) - never
+    // read the shared provider.errorMessage here. That field is written by
+    // every other ChatProvider operation too (loadConversation,
+    // deleteConversation, createProgramFromPlan, applyMealPlanToToday,
+    // regenerate, ...), any of which can race with an in-flight send and
+    // overwrite it before or after this call resolves. onError is only
+    // ever invoked by THIS sendMessage call, with THIS call's own message,
+    // and only when the provider has confirmed (via its session/conversation
+    // ownership check) that the call is still current - so a logout, user
+    // switch, or conversation switch mid-flight leaves errorMessage null
+    // and this method shows nothing, rather than stale or foreign feedback.
+    String? errorMessage;
+    final success = await provider.sendMessage(
+      message,
+      onError: (message) => errorMessage = message,
+    );
+    if (!mounted) return;
+
+    if (success) {
       _scrollToBottom();
+    } else if (errorMessage != null) {
+      scaffoldMessenger.showSnackBar(SnackBar(content: Text(errorMessage!)));
     }
   }
 

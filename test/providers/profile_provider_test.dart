@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
@@ -420,5 +421,49 @@ void main() {
       expect(await future, isFalse);
       expect(provider.photoError, PhotoUploadError.none);
     });
+  });
+
+  group('themeMode', () {
+    // Regression: the Settings screen offers Light/Dark/System, and shows
+    // "Current: System" as the out-of-the-box selection - but the mapping
+    // below had no 'system' case, so it fell through to the catch-all
+    // default and rendered dark unconditionally, ignoring the device's own
+    // light/dark setting entirely.
+    test('a saved "system" preference follows the OS setting, not a hardcoded '
+        'dark fallback', () async {
+      final authService = MockAuthService();
+      when(authService.getThemePreference()).thenAnswer((_) async => 'system');
+      final fresh = ProfileProvider(
+        mockProfileRepository,
+        authService,
+        UserSessionEpoch(),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(fresh.themeMode, ThemeMode.system);
+    });
+
+    test('a saved "light" preference maps to ThemeMode.light', () async {
+      final authService = MockAuthService();
+      when(authService.getThemePreference()).thenAnswer((_) async => 'light');
+      final fresh = ProfileProvider(
+        mockProfileRepository,
+        authService,
+        UserSessionEpoch(),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(fresh.themeMode, ThemeMode.light);
+    });
+
+    test(
+      'no saved preference yet defaults to dark, not the device setting',
+      () async {
+        // provider (from setUp) has getThemePreference() stubbed to null.
+        await Future<void>.delayed(Duration.zero);
+
+        expect(provider.themeMode, ThemeMode.dark);
+      },
+    );
   });
 }
