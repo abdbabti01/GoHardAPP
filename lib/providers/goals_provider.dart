@@ -802,7 +802,11 @@ class GoalsProvider extends ChangeNotifier {
   }
 
   /// Add progress entry for a goal
-  Future<bool> addProgress(int goalId, GoalProgress progress) async {
+  Future<bool> addProgress(
+    int goalId,
+    GoalProgress progress, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
     final gen = (_goalMutationGens[goalId] ?? 0) + 1;
@@ -831,11 +835,15 @@ class GoalsProvider extends ChangeNotifier {
     } on RequestCancelledException {
       return false;
     } catch (e) {
-      if (!owns() || errorGen != _errorGen) return false;
-      _errorMessage =
+      if (!owns()) return false;
+      final message =
           'Failed to add progress: ${e.toString().replaceAll('Exception: ', '')}';
+      if (errorGen == _errorGen) {
+        _errorMessage = message;
+        notifyListeners();
+      }
       debugPrint('Add progress error: $e');
-      notifyListeners();
+      onError?.call(message);
       return false;
     }
   }

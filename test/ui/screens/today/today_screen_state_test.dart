@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
@@ -69,6 +70,18 @@ void _stubHealthyNutrition(
       pageSize: anyNamed('pageSize'),
     ),
   ).thenAnswer((_) async => <MealLog>[]);
+}
+
+/// Stubs a clean, error-free running dashboard load so tests focused on the
+/// workouts/programs sections aren't cluttered by the Running section's own
+/// independent loading/error UI.
+void _stubHealthyRunning(MockRunningRepository runningRepo) {
+  when(
+    runningRepo.getRecentRuns(limit: anyNamed('limit')),
+  ).thenAnswer((_) async => []);
+  when(
+    runningRepo.getWeeklyStats(),
+  ).thenAnswer((_) async => <String, dynamic>{});
 }
 
 /// Today must represent actual state: loading is never mistaken for empty,
@@ -236,6 +249,7 @@ void main() {
         programsRepo.getPrograms(isActive: anyNamed('isActive')),
       ).thenThrow(Exception('network error'));
       _stubHealthyNutrition(nutritionRepo, todayDate);
+      _stubHealthyRunning(runningRepo);
 
       await tester.pumpWidget(host());
       await tester.pump();
@@ -246,8 +260,8 @@ void main() {
       expect(find.text('Leg Day'), findsOneWidget);
       // The programs failure is surfaced with a working retry action, not
       // silently swallowed into a false "nothing scheduled" claim - scoped
-      // to the workouts card specifically, since an unrelated nutrition
-      // section is stubbed to succeed cleanly in this test.
+      // to the workouts card specifically, since unrelated nutrition and
+      // running sections are stubbed to succeed cleanly in this test.
       expect(find.text('No workouts scheduled'), findsNothing);
       expect(find.byIcon(Icons.error_outline), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
@@ -705,4 +719,68 @@ void main() {
       expect(find.text('No target\nset'), findsNothing);
     },
   );
+
+  testWidgets('the "Today\'s Nutrition" card heading renders in full, never '
+      'ellipsized, at normal width and font scale - regression for a Row '
+      'that put a Spacer() in flex competition with the title\'s own '
+      'Flexible, forcing an unnecessary ellipsis even though the row had '
+      'plenty of spare width once the Spacer stopped claiming an equal '
+      'one-third share of it', (tester) async {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    when(nutritionRepo.getTodaysMealLog(date: anyNamed('date'))).thenAnswer(
+      (_) async =>
+          MealLog(id: 1, userId: 1, date: todayDate, createdAt: todayDate),
+    );
+    // No goal - matches the real-device repro (a freshly-created account
+    // with no nutrition target configured yet), which also renders the
+    // extra "No target set" sub-row that further tightens the row.
+    when(
+      nutritionRepo.getNutritionDashboard(date: anyNamed('date')),
+    ).thenAnswer(
+      (_) async => NutritionDashboardData(
+        date: todayDate,
+        goal: null,
+        progress: DailyNutritionProgress(
+          id: 0,
+          userId: 1,
+          date: todayDate,
+          createdAt: todayDate,
+        ),
+      ),
+    );
+    when(nutritionRepo.getStreak()).thenAnswer((_) async => StreakInfo());
+    when(
+      nutritionRepo.getMealLogs(
+        startDate: anyNamed('startDate'),
+        endDate: anyNamed('endDate'),
+        page: anyNamed('page'),
+        pageSize: anyNamed('pageSize'),
+      ),
+    ).thenAnswer((_) async => <MealLog>[]);
+    _stubHealthyRunning(runningRepo);
+
+    await tester.pumpWidget(host());
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    // find.text matches on the widget's full string regardless of visual
+    // ellipsis (TextOverflow.ellipsis only affects painting, not the
+    // Text widget's `data`), so this alone would not have caught the
+    // bug - the real assertion is on the RenderParagraph below.
+    expect(find.text("Today's Nutrition"), findsOneWidget);
+
+    final renderParagraph = tester.renderObject<RenderParagraph>(
+      find.text("Today's Nutrition"),
+    );
+    expect(
+      renderParagraph.didExceedMaxLines,
+      isFalse,
+      reason:
+          '"Today\'s Nutrition" was visually truncated to an ellipsis '
+          'despite the row having enough total width - a competing '
+          'Spacer() was claiming space the title needed.',
+    );
+  });
 }

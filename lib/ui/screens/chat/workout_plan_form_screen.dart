@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
+import '../../../core/theme/typography.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/common/offline_banner.dart';
@@ -56,6 +58,7 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
+    String? errorMessage;
     final conversation = await provider.generateWorkoutPlan(
       goal: _goalController.text.trim(),
       experienceLevel: _experienceLevel,
@@ -65,6 +68,7 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
           _limitationsController.text.trim().isEmpty
               ? null
               : _limitationsController.text.trim(),
+      onError: (message) => errorMessage = message,
     );
 
     if (mounted) {
@@ -79,12 +83,12 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
             'goalId': widget.goalId,
           },
         );
-      } else if (provider.errorMessage != null) {
+      } else if (errorMessage != null) {
         // Show error
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(provider.errorMessage!),
-            backgroundColor: Colors.red,
+            content: Text(errorMessage!),
+            backgroundColor: context.error,
           ),
         );
       }
@@ -109,11 +113,10 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Tell us about your fitness goals',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                      style: AppTypography.headline.copyWith(
+                        color: context.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -125,7 +128,6 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
                         labelText: 'Fitness Goal',
                         hintText:
                             'e.g., Build muscle, Lose weight, Gain strength',
-                        border: OutlineInputBorder(),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -139,9 +141,14 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
                     // Experience Level
                     DropdownButtonFormField<String>(
                       value: _experienceLevel,
+                      // Without this, the selected item's Row sizes itself
+                      // to its own content (MainAxisSize.min) instead of
+                      // the available field width, so it can overflow at
+                      // narrow widths and enlarged text scales instead of
+                      // ellipsizing.
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Experience Level',
-                        border: OutlineInputBorder(),
                       ),
                       items: const [
                         DropdownMenuItem(
@@ -166,11 +173,10 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
                     const SizedBox(height: 16),
 
                     // Days Per Week
-                    const Text(
+                    Text(
                       'Days Per Week',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                      style: AppTypography.titleMedium.copyWith(
+                        color: context.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -201,9 +207,9 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
                     // Equipment
                     DropdownButtonFormField<String>(
                       value: _equipment,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Available Equipment',
-                        border: OutlineInputBorder(),
                       ),
                       items: const [
                         DropdownMenuItem(
@@ -237,7 +243,6 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Injuries or Limitations (Optional)',
                         hintText: 'e.g., Lower back pain, knee injury',
-                        border: OutlineInputBorder(),
                       ),
                       maxLines: 3,
                     ),
@@ -251,13 +256,7 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
                           return ElevatedButton(
                             onPressed:
                                 provider.isOffline ? null : _generatePlan,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text(
-                              'Generate Workout Plan',
-                              style: TextStyle(fontSize: 16),
-                            ),
+                            child: const Text('Generate Workout Plan'),
                           );
                         },
                       ),
@@ -269,20 +268,21 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.blue[50],
+                        color: context.info.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue[200]!),
+                        border: Border.all(
+                          color: context.info.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.info_outline, color: Colors.blue[700]),
+                          Icon(Icons.info_outline, color: context.info),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'AI will create a personalized workout plan based on your inputs. You can chat with it to adjust the plan.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.blue[900],
+                              style: AppTypography.bodySmall.copyWith(
+                                color: context.info,
                               ),
                             ),
                           ),

@@ -7,6 +7,7 @@ import '../../../providers/nutrition_provider.dart';
 import '../../../data/models/meal_entry.dart';
 import '../../../data/models/meal_log.dart';
 import '../../../data/models/food_item.dart';
+import '../../widgets/common/offline_banner.dart';
 import '../../widgets/nutrition/meal_card_widget.dart';
 import 'food_search_screen.dart';
 
@@ -47,6 +48,12 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      children: [const OfflineBanner(), Expanded(child: _buildBody(context))],
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     return Consumer<NutritionProvider>(
       builder: (context, provider, child) {
         if (provider.isLoading && provider.todaysMealLog == null) {
@@ -58,16 +65,12 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.error_outline,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.error,
-                ),
+                Icon(Icons.error_outline, size: 64, color: context.error),
                 const SizedBox(height: 16),
                 Text(
                   provider.errorMessage!,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: TextStyle(color: context.error),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
@@ -108,12 +111,16 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                 // Meals section header with clear button
                 Row(
                   children: [
-                    Text(
-                      "Today's Meals",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: context.textPrimary,
+                    Flexible(
+                      child: Text(
+                        "Today's Meals",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: context.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const Spacer(),
@@ -198,11 +205,18 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     final isOverConsumed = consumed > goal;
     final isOverPlanned = planned > goal;
 
-    // Check if using default/uncalculated goal (no explanation means not personalized)
-    final isDefaultGoal = activeGoal == null || activeGoal.explanation == null;
+    // Setup is "complete" the moment a real goal exists - manually-entered
+    // targets are just as configured as AI-calculated ones. `explanation`
+    // is calculation metadata (see NutritionGoal.explanation), not a
+    // configured/unconfigured signal: NutritionProvider.activeGoal is only
+    // ever null (the /dashboard endpoint returns Goal: null, never a
+    // synthesized placeholder) or a real, persisted goal, so this mirrors
+    // the same `hasActiveGoal` check TodayScreen already uses for the
+    // identical question.
+    final hasNoGoal = activeGoal == null;
 
-    // Show setup prompt if using default goal
-    if (isDefaultGoal) {
+    // Show setup prompt only when no goal has been saved at all.
+    if (hasNoGoal) {
       return _buildSetupPromptCard(context, consumed);
     }
 
@@ -463,9 +477,13 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
       children: [
         Icon(icon, size: 16, color: color),
         const SizedBox(width: 8),
-        Text(
-          label,
-          style: TextStyle(fontSize: 12, color: context.textSecondary),
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12, color: context.textSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         const Spacer(),
         Text(
@@ -513,23 +531,28 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
               strokeWidth: 12,
             ),
           ),
-          // Center text - show consumed
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                consumed.toStringAsFixed(0),
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: context.textPrimary,
+          // Center text - show consumed. FittedBox keeps this inside the
+          // fixed 120x120 ring at large accessibility text scales instead
+          // of overflowing it.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  consumed.toStringAsFixed(0),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: context.textPrimary,
+                  ),
                 ),
-              ),
-              Text(
-                'eaten',
-                style: TextStyle(fontSize: 11, color: context.textSecondary),
-              ),
-            ],
+                Text(
+                  'eaten',
+                  style: TextStyle(fontSize: 11, color: context.textSecondary),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -615,19 +638,29 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: context.textPrimary,
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: context.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            Text(
-              '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} g',
-              style: TextStyle(
-                fontSize: 12,
-                color: isOver ? Colors.red : context.textSecondary,
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} g',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isOver ? Colors.red : context.textSecondary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
               ),
             ),
           ],
@@ -688,9 +721,14 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                 ),
               ),
               const Spacer(),
-              Text(
-                '${waterMl.toStringAsFixed(0)} / ${goalMl.toStringAsFixed(0)} ml',
-                style: TextStyle(fontSize: 14, color: context.textSecondary),
+              Flexible(
+                child: Text(
+                  '${waterMl.toStringAsFixed(0)} / ${goalMl.toStringAsFixed(0)} ml',
+                  style: TextStyle(fontSize: 14, color: context.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                ),
               ),
             ],
           ),
@@ -706,11 +744,18 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
           ),
           const SizedBox(height: 12),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildWaterButton(context, provider, 250, '250ml'),
-              _buildWaterButton(context, provider, 500, '500ml'),
-              _buildWaterButton(context, provider, 750, '750ml'),
+              Expanded(
+                child: _buildWaterButton(context, provider, 250, '250ml'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildWaterButton(context, provider, 500, '500ml'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildWaterButton(context, provider, 750, '750ml'),
+              ),
             ],
           ),
         ],
@@ -725,9 +770,30 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     String label,
   ) {
     return OutlinedButton(
-      onPressed: () => provider.addWater(amount),
-      style: OutlinedButton.styleFrom(side: BorderSide(color: context.border)),
-      child: Text(label),
+      onPressed: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        final errorColor = context.error;
+        String? errorMessage;
+        final success = await provider.addWater(
+          amount,
+          onError: (message) => errorMessage = message,
+        );
+        // onError fires only for this call's own genuine, still-owned
+        // failure - never for a stale session or a call superseded by a
+        // newer mutation, and never with another overlapping call's
+        // message. See ProgramsProvider's onError doc comment for the
+        // full contract this mirrors.
+        if (!success && context.mounted && errorMessage != null) {
+          messenger.showSnackBar(
+            SnackBar(content: Text(errorMessage!), backgroundColor: errorColor),
+          );
+        }
+      },
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: context.border),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      ),
+      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
     );
   }
 
@@ -765,14 +831,20 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                 ),
               ),
               const Spacer(),
-              GestureDetector(
+              InkWell(
                 onTap: () => _showFullExplanation(context, goal.explanation!),
-                child: Text(
-                  'Details',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.blue.shade600,
-                    decoration: TextDecoration.underline,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 12,
+                  ),
+                  child: Text(
+                    'Details',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.info,
+                      decoration: TextDecoration.underline,
+                    ),
                   ),
                 ),
               ),
@@ -899,22 +971,28 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
             color: Colors.orange,
           ),
           const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${streak.currentStreak} Day Streak!',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: context.textPrimary,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${streak.currentStreak} Day Streak!',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: context.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              Text(
-                'Longest: ${streak.longestStreak} days',
-                style: TextStyle(fontSize: 12, color: context.textSecondary),
-              ),
-            ],
+                Text(
+                  'Longest: ${streak.longestStreak} days',
+                  style: TextStyle(fontSize: 12, color: context.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -940,36 +1018,60 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
               ),
             ),
             const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: context.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: context.border),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: provider.historyFilter,
-                  isDense: true,
-                  icon: Icon(
-                    Icons.keyboard_arrow_down,
-                    color: context.textSecondary,
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: context.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: context.border),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: provider.historyFilter,
+                    isDense: true,
+                    isExpanded: true,
+                    icon: Icon(
+                      Icons.keyboard_arrow_down,
+                      color: context.textSecondary,
+                    ),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: context.textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'week',
+                        child: Text(
+                          'Last Week',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 'month',
+                        child: Text(
+                          'Last Month',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: '3months',
+                        child: Text(
+                          '3 Months',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        provider.setHistoryFilter(value);
+                      }
+                    },
                   ),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: context.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'week', child: Text('Last Week')),
-                    DropdownMenuItem(value: 'month', child: Text('Last Month')),
-                    DropdownMenuItem(value: '3months', child: Text('3 Months')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      provider.setHistoryFilter(value);
-                    }
-                  },
                 ),
               ),
             ),
@@ -1146,6 +1248,8 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
 
   Future<void> _showEditFoodDialog(BuildContext context, FoodItem food) async {
     final provider = context.read<NutritionProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final errorColor = context.error;
     final quantityController = TextEditingController(
       text: food.quantity.toStringAsFixed(1),
     );
@@ -1161,9 +1265,7 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
               children: [
                 Text(
                   'Serving: ${food.servingSize.toStringAsFixed(0)}${food.servingUnit}',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  style: TextStyle(color: context.textSecondary),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -1173,14 +1275,13 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
                   ),
                   decoration: const InputDecoration(
                     labelText: 'Quantity (servings)',
-                    border: OutlineInputBorder(),
                   ),
                   autofocus: true,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Per serving: ${(food.calories / food.quantity).toStringAsFixed(0)} kcal',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: TextStyle(color: context.textSecondary),
                 ),
               ],
             ),
@@ -1201,15 +1302,37 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
             ],
           ),
     );
+    quantityController.dispose();
 
     if (result != null && result != food.quantity) {
-      await provider.updateFoodQuantity(food.id, result);
+      String? errorMessage;
+      final success = await provider.updateFoodQuantity(
+        food.id,
+        result,
+        onError: (message) => errorMessage = message,
+      );
+      if (!success && context.mounted && errorMessage != null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(errorMessage!), backgroundColor: errorColor),
+        );
+      }
     }
   }
 
   Future<void> _deleteFood(BuildContext context, FoodItem food) async {
     final provider = context.read<NutritionProvider>();
-    await provider.deleteFoodItem(food.id);
+    final messenger = ScaffoldMessenger.of(context);
+    final errorColor = context.error;
+    String? errorMessage;
+    final success = await provider.deleteFoodItem(
+      food.id,
+      onError: (message) => errorMessage = message,
+    );
+    if (!success && context.mounted && errorMessage != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(errorMessage!), backgroundColor: errorColor),
+      );
+    }
   }
 
   Future<void> _markMealConsumed(
@@ -1219,15 +1342,27 @@ class _NutritionDashboardScreenState extends State<NutritionDashboardScreen>
     if (mealEntry == null || mealEntry.id == 0) return;
 
     final provider = context.read<NutritionProvider>();
-    final success = await provider.markMealAsConsumed(mealEntry.id);
+    final messenger = ScaffoldMessenger.of(context);
+    final successColor = context.success;
+    final errorColor = context.error;
+    String? errorMessage;
+    final success = await provider.markMealAsConsumed(
+      mealEntry.id,
+      onError: (message) => errorMessage = message,
+    );
 
-    if (success && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (!context.mounted) return;
+    if (success) {
+      messenger.showSnackBar(
         SnackBar(
           content: Text('${mealEntry.mealType} marked as eaten'),
-          backgroundColor: Colors.green,
+          backgroundColor: successColor,
           duration: const Duration(seconds: 2),
         ),
+      );
+    } else if (errorMessage != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(errorMessage!), backgroundColor: errorColor),
       );
     }
   }
@@ -1395,6 +1530,7 @@ class _FoodAlternativesSheetState extends State<_FoodAlternativesSheet> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
+                    tooltip: 'Close',
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -1567,9 +1703,11 @@ class _FoodAlternativesSheetState extends State<_FoodAlternativesSheet> {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
+    String? errorMessage;
     final success = await widget.provider.replaceFoodWithAlternative(
       widget.food,
       alt,
+      onError: (message) => errorMessage = message,
     );
 
     // Close loading dialog
@@ -1586,15 +1724,10 @@ class _FoodAlternativesSheetState extends State<_FoodAlternativesSheet> {
           ),
         );
       }
-    } else {
+    } else if (errorMessage != null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.provider.errorMessage ?? 'Failed to replace food',
-            ),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(errorMessage!), backgroundColor: Colors.red),
         );
       }
     }

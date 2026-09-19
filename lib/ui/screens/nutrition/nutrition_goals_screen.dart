@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/theme/typography.dart';
 import '../../../providers/nutrition_provider.dart';
+import '../../widgets/common/offline_banner.dart';
 
 /// Screen for configuring nutrition goals (calories, protein, carbs, fat, water)
 class NutritionGoalsScreen extends StatefulWidget {
@@ -84,8 +86,10 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
     });
 
     final provider = context.read<NutritionProvider>();
+    String? errorMessage;
     final result = await provider.calculateNutritionFromMetrics(
       goalType: _selectedGoalType,
+      onError: (message) => errorMessage = message,
     );
 
     if (result != null && mounted) {
@@ -100,20 +104,14 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Nutrition calculated from your profile!'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: const Text('Nutrition calculated from your profile!'),
+          backgroundColor: context.success,
         ),
       );
-    } else if (mounted) {
+    } else if (mounted && errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            provider.errorMessage ??
-                'Failed to calculate. Make sure your weight and height are set in your profile.',
-          ),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(errorMessage!), backgroundColor: context.error),
       );
     }
 
@@ -136,6 +134,8 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
     final water = double.tryParse(_waterController.text);
 
     bool success;
+    String? errorMessage;
+    void onError(String message) => errorMessage = message;
     // Check if we have a real goal (id > 0) or just the default placeholder (id == 0)
     final existingGoal = provider.activeGoal;
     if (existingGoal != null && existingGoal.id > 0) {
@@ -146,6 +146,7 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
         dailyFat: fat,
         dailyFiber: fiber,
         dailyWater: water,
+        onError: onError,
       );
     } else {
       success = await provider.createNutritionGoal(
@@ -155,23 +156,21 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
         dailyFat: fat,
         dailyFiber: fiber,
         dailyWater: water,
+        onError: onError,
       );
     }
 
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Goals saved successfully!'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: const Text('Goals saved successfully!'),
+          backgroundColor: context.success,
         ),
       );
       Navigator.pop(context);
-    } else if (mounted) {
+    } else if (mounted && errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(provider.errorMessage ?? 'Failed to save goals'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(errorMessage!), backgroundColor: context.error),
       );
     }
   }
@@ -186,286 +185,310 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
           'Nutrition Goals',
           style: TextStyle(color: context.textPrimary),
         ),
-        actions: [
-          Consumer<NutritionProvider>(
-            builder: (context, provider, child) {
-              return TextButton(
-                onPressed: provider.isLoading ? null : _saveGoals,
-                child:
-                    provider.isLoading
-                        ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : Text(
-                          'Save',
-                          style: TextStyle(
-                            color: context.accent,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-              );
-            },
-          ),
-        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Calculate from metrics card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: context.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: context.accent.withValues(alpha: 0.3),
-                  ),
-                ),
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.calculate, color: context.accent),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Calculate from your body metrics',
-                            style: TextStyle(
-                              color: context.textPrimary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                    // Calculate from metrics card
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: context.accent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: context.accent.withValues(alpha: 0.3),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Auto-calculate based on your weight, height, age, and activity level.',
-                      style: TextStyle(
-                        color: context.textSecondary,
-                        fontSize: 14,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Goal type selector
-                    Row(
-                      children: [
-                        Text(
-                          'Goal: ',
-                          style: TextStyle(
-                            color: context.textSecondary,
-                            fontSize: 14,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.calculate, color: context.accent),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Calculate from your body metrics',
+                                  style: AppTypography.titleLarge.copyWith(
+                                    color: context.textPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: context.surface,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: context.border),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Auto-calculate based on your weight, height, age, and activity level.',
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: context.textSecondary,
                             ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _selectedGoalType,
-                                isExpanded: true,
-                                dropdownColor: context.surface,
-                                style: TextStyle(color: context.textPrimary),
-                                items: const [
-                                  DropdownMenuItem(
-                                    value: 'WeightLoss',
-                                    child: Text('Weight Loss'),
+                          ),
+                          const SizedBox(height: 16),
+                          // Goal type selector
+                          Row(
+                            children: [
+                              Text(
+                                'Goal: ',
+                                style: TextStyle(
+                                  color: context.textSecondary,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
                                   ),
-                                  DropdownMenuItem(
-                                    value: 'Maintenance',
-                                    child: Text('Maintenance'),
+                                  decoration: BoxDecoration(
+                                    color: context.surface,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: context.border),
                                   ),
-                                  DropdownMenuItem(
-                                    value: 'MuscleGain',
-                                    child: Text('Muscle Gain'),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _selectedGoalType,
+                                      isExpanded: true,
+                                      dropdownColor: context.surface,
+                                      style: TextStyle(
+                                        color: context.textPrimary,
+                                      ),
+                                      items: const [
+                                        DropdownMenuItem(
+                                          value: 'WeightLoss',
+                                          child: Text('Weight Loss'),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: 'Maintenance',
+                                          child: Text('Maintenance'),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: 'MuscleGain',
+                                          child: Text('Muscle Gain'),
+                                        ),
+                                      ],
+                                      onChanged: (value) {
+                                        if (value != null) {
+                                          setState(() {
+                                            _selectedGoalType = value;
+                                          });
+                                        }
+                                      },
+                                    ),
                                   ),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() {
-                                      _selectedGoalType = value;
-                                    });
-                                  }
-                                },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  _isCalculating ? null : _calculateFromMetrics,
+                              icon:
+                                  _isCalculating
+                                      ? SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: context.accent,
+                                        ),
+                                      )
+                                      : const Icon(Icons.auto_fix_high),
+                              label: Text(
+                                _isCalculating ? 'Calculating...' : 'Calculate',
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: context.accent,
+                                side: BorderSide(color: context.accent),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed:
-                            _isCalculating ? null : _calculateFromMetrics,
-                        icon:
-                            _isCalculating
-                                ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                                : const Icon(Icons.auto_fix_high),
-                        label: Text(
-                          _isCalculating ? 'Calculating...' : 'Calculate',
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: context.accent,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              if (_calculationExplanation != null) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.green.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        Icons.lightbulb_outline,
-                        color: Colors.green,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _calculationExplanation!,
-                          style: TextStyle(
-                            color: context.textSecondary,
-                            fontSize: 13,
+                    if (_calculationExplanation != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: context.success.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: context.success.withValues(alpha: 0.3),
                           ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.lightbulb_outline,
+                              color: context.success,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _calculationExplanation!,
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: context.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
+                    const SizedBox(height: 24),
+
+                    // Calories section
+                    _buildSectionTitle(
+                      context,
+                      'Calories',
+                      Icons.local_fire_department,
+                      Colors.orange,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildGoalInput(
+                      context,
+                      controller: _caloriesController,
+                      label: 'Daily Calories',
+                      hint: 'e.g., 2000',
+                      suffix: 'kcal',
+                      icon: Icons.local_fire_department,
+                      iconColor: Colors.orange,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Macros section
+                    _buildSectionTitle(
+                      context,
+                      'Macronutrients',
+                      Icons.pie_chart,
+                      Colors.blue,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildGoalInput(
+                      context,
+                      controller: _proteinController,
+                      label: 'Daily Protein',
+                      hint: 'e.g., 150',
+                      suffix: 'g',
+                      icon: Icons.egg_outlined,
+                      iconColor: Colors.red,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildGoalInput(
+                      context,
+                      controller: _carbsController,
+                      label: 'Daily Carbohydrates',
+                      hint: 'e.g., 200',
+                      suffix: 'g',
+                      icon: Icons.grain,
+                      iconColor: Colors.blue,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildGoalInput(
+                      context,
+                      controller: _fatController,
+                      label: 'Daily Fat',
+                      hint: 'e.g., 65',
+                      suffix: 'g',
+                      icon: Icons.opacity,
+                      iconColor: Colors.amber,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Other nutrients section
+                    _buildSectionTitle(
+                      context,
+                      'Other',
+                      Icons.more_horiz,
+                      Colors.grey,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildGoalInput(
+                      context,
+                      controller: _fiberController,
+                      label: 'Daily Fiber',
+                      hint: 'e.g., 25',
+                      suffix: 'g',
+                      icon: Icons.grass,
+                      iconColor: Colors.green,
+                      isOptional: true,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildGoalInput(
+                      context,
+                      controller: _waterController,
+                      label: 'Daily Water',
+                      hint: 'e.g., 2000',
+                      suffix: 'ml',
+                      icon: Icons.water_drop,
+                      iconColor: Colors.blue,
+                      isOptional: true,
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Macro breakdown preview
+                    _buildMacroPreview(context),
+
+                    const SizedBox(height: 24),
+                  ],
                 ),
-              ],
-              const SizedBox(height: 24),
-
-              // Calories section
-              _buildSectionTitle(
-                context,
-                'Calories',
-                Icons.local_fire_department,
-                Colors.orange,
               ),
-              const SizedBox(height: 12),
-              _buildGoalInput(
-                context,
-                controller: _caloriesController,
-                label: 'Daily Calories',
-                hint: 'e.g., 2000',
-                suffix: 'kcal',
-                icon: Icons.local_fire_department,
-                iconColor: Colors.orange,
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: context.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(
+                  alpha: context.isDarkMode ? 0.3 : 0.08,
+                ),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
               ),
-              const SizedBox(height: 24),
-
-              // Macros section
-              _buildSectionTitle(
-                context,
-                'Macronutrients',
-                Icons.pie_chart,
-                Colors.blue,
-              ),
-              const SizedBox(height: 12),
-              _buildGoalInput(
-                context,
-                controller: _proteinController,
-                label: 'Daily Protein',
-                hint: 'e.g., 150',
-                suffix: 'g',
-                icon: Icons.egg_outlined,
-                iconColor: Colors.red,
-              ),
-              const SizedBox(height: 12),
-              _buildGoalInput(
-                context,
-                controller: _carbsController,
-                label: 'Daily Carbohydrates',
-                hint: 'e.g., 200',
-                suffix: 'g',
-                icon: Icons.grain,
-                iconColor: Colors.blue,
-              ),
-              const SizedBox(height: 12),
-              _buildGoalInput(
-                context,
-                controller: _fatController,
-                label: 'Daily Fat',
-                hint: 'e.g., 65',
-                suffix: 'g',
-                icon: Icons.opacity,
-                iconColor: Colors.amber,
-              ),
-              const SizedBox(height: 24),
-
-              // Other nutrients section
-              _buildSectionTitle(
-                context,
-                'Other',
-                Icons.more_horiz,
-                Colors.grey,
-              ),
-              const SizedBox(height: 12),
-              _buildGoalInput(
-                context,
-                controller: _fiberController,
-                label: 'Daily Fiber',
-                hint: 'e.g., 25',
-                suffix: 'g',
-                icon: Icons.grass,
-                iconColor: Colors.green,
-                isOptional: true,
-              ),
-              const SizedBox(height: 12),
-              _buildGoalInput(
-                context,
-                controller: _waterController,
-                label: 'Daily Water',
-                hint: 'e.g., 2000',
-                suffix: 'ml',
-                icon: Icons.water_drop,
-                iconColor: Colors.blue,
-                isOptional: true,
-              ),
-              const SizedBox(height: 32),
-
-              // Macro breakdown preview
-              _buildMacroPreview(context),
-
-              const SizedBox(height: 100),
             ],
+          ),
+          child: Consumer<NutritionProvider>(
+            builder: (context, provider, child) {
+              return SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: provider.isLoading ? null : _saveGoals,
+                  child:
+                      provider.isLoading
+                          ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                          : const Text('Save Goals'),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -484,11 +507,7 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
         const SizedBox(width: 8),
         Text(
           title,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: context.textPrimary,
-          ),
+          style: AppTypography.titleLarge.copyWith(color: context.textPrimary),
         ),
       ],
     );
@@ -507,7 +526,7 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
     return Container(
       decoration: BoxDecoration(
         color: context.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.border),
       ),
       child: TextFormField(
@@ -528,19 +547,16 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
             vertical: 16,
           ),
         ),
-        validator:
-            isOptional
-                ? null
-                : (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Required';
-                  }
-                  final number = double.tryParse(value);
-                  if (number == null || number <= 0) {
-                    return 'Enter a valid number';
-                  }
-                  return null;
-                },
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return isOptional ? null : 'Required';
+          }
+          final number = double.tryParse(value);
+          if (number == null || (isOptional ? number < 0 : number <= 0)) {
+            return 'Enter a valid number';
+          }
+          return null;
+        },
       ),
     );
   }
@@ -574,9 +590,7 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
         children: [
           Text(
             'Macro Breakdown',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+            style: AppTypography.titleMedium.copyWith(
               color: context.textPrimary,
             ),
           ),
@@ -615,7 +629,9 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
           Center(
             child: Text(
               'Total from macros: ${totalMacroCals.toStringAsFixed(0)} kcal',
-              style: TextStyle(fontSize: 12, color: context.textSecondary),
+              style: AppTypography.labelSmall.copyWith(
+                color: context.textSecondary,
+              ),
             ),
           ),
         ],
@@ -642,15 +658,13 @@ class _NutritionGoalsScreenState extends State<NutritionGoalsScreen> {
         const SizedBox(height: 4),
         Text(
           label,
-          style: TextStyle(fontSize: 12, color: context.textSecondary),
+          style: AppTypography.labelSmall.copyWith(
+            color: context.textSecondary,
+          ),
         ),
         Text(
           '${percentage.toStringAsFixed(0)}%',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: context.textPrimary,
-          ),
+          style: AppTypography.titleMedium.copyWith(color: context.textPrimary),
         ),
       ],
     );

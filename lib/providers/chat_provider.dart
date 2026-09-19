@@ -194,10 +194,16 @@ class ChatProvider extends ChangeNotifier {
   /// [sendMessage] call is ever in flight for this provider at a time, so
   /// there is never a "newer" send operation for this one's `finally` block
   /// to incorrectly clear.
-  Future<bool> sendMessage(String message) async {
+  Future<bool> sendMessage(
+    String message, {
+    void Function(String message)? onError,
+  }) async {
     if (isOffline) {
-      _errorMessage = 'Cannot send messages offline - AI requires connection';
+      const offlineMessage =
+          'Cannot send messages offline - AI requires connection';
+      _errorMessage = offlineMessage;
       notifyListeners();
+      onError?.call(offlineMessage);
       return false;
     }
 
@@ -205,8 +211,10 @@ class ChatProvider extends ChangeNotifier {
 
     final conversation = _currentConversation;
     if (conversation == null) {
-      _errorMessage = 'No active conversation';
+      const noConversationMessage = 'No active conversation';
+      _errorMessage = noConversationMessage;
       notifyListeners();
+      onError?.call(noConversationMessage);
       return false;
     }
 
@@ -259,7 +267,9 @@ class ChatProvider extends ChangeNotifier {
         _currentConversation = owned.copyWith(
           messages: owned.messages.where((m) => m.id != 0).toList(),
         );
-        _errorMessage = 'Failed to get AI response';
+        const failureMessage = 'Failed to get AI response';
+        _errorMessage = failureMessage;
+        onError?.call(failureMessage);
         return false;
       }
 
@@ -284,7 +294,9 @@ class ChatProvider extends ChangeNotifier {
         _currentConversation = owned.copyWith(
           messages: owned.messages.where((m) => m.id != 0).toList(),
         );
-        _errorMessage = 'Failed to get AI response';
+        const failureMessage = 'Failed to get AI response';
+        _errorMessage = failureMessage;
+        onError?.call(failureMessage);
         return false;
       }
     } catch (e) {
@@ -294,8 +306,10 @@ class ChatProvider extends ChangeNotifier {
         _currentConversation = owned.copyWith(
           messages: owned.messages.where((m) => m.id != 0).toList(),
         );
-        _errorMessage =
+        final errorText =
             'Failed to send message: ${e.toString().replaceAll('Exception: ', '')}';
+        _errorMessage = errorText;
+        onError?.call(errorText);
       }
       debugPrint('Send message error: $e');
       return false;
@@ -414,10 +428,13 @@ class ChatProvider extends ChangeNotifier {
     required int daysPerWeek,
     required String equipment,
     String? limitations,
+    void Function(String message)? onError,
   }) async {
     if (isOffline) {
-      _errorMessage = 'Cannot generate workout plan offline';
+      const message = 'Cannot generate workout plan offline';
+      _errorMessage = message;
       notifyListeners();
+      onError?.call(message);
       return null;
     }
 
@@ -446,9 +463,11 @@ class ChatProvider extends ChangeNotifier {
       return conversation;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return null;
-      _errorMessage =
+      final message =
           'Failed to generate workout plan: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Generate workout plan error: $e');
+      onError?.call(message);
       return null;
     } finally {
       if (_sessionEpoch.isCurrent(token)) {
@@ -465,10 +484,13 @@ class ChatProvider extends ChangeNotifier {
     String? macros,
     String? restrictions,
     String? preferences,
+    void Function(String message)? onError,
   }) async {
     if (isOffline) {
-      _errorMessage = 'Cannot generate meal plan offline';
+      const message = 'Cannot generate meal plan offline';
+      _errorMessage = message;
       notifyListeners();
+      onError?.call(message);
       return null;
     }
 
@@ -497,9 +519,11 @@ class ChatProvider extends ChangeNotifier {
       return conversation;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return null;
-      _errorMessage =
+      final message =
           'Failed to generate meal plan: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Generate meal plan error: $e');
+      onError?.call(message);
       return null;
     } finally {
       if (_sessionEpoch.isCurrent(token)) {

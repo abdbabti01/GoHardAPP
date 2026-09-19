@@ -617,7 +617,21 @@ class ProgramsProvider extends ChangeNotifier {
   }
 
   /// Update an existing program
-  Future<bool> updateProgram(int id, Program program) async {
+  /// [onError] is invoked synchronously, exactly once, if and only if THIS
+  /// call's own operation genuinely failed while still owning its session
+  /// and target (`owns()` true) - never for a stale session, a cancelled
+  /// request, or a call superseded by a newer mutation on the same target,
+  /// and never with another overlapping call's message. This is a separate,
+  /// race-free channel from the shared [errorMessage] field: two overlapping
+  /// calls on different targets can set that shared field out of order
+  /// (`errorGen` only decides which one's message *persists* there for
+  /// other unrelated readers), so a caller must not infer its own outcome
+  /// from reading [errorMessage] after the fact.
+  Future<bool> updateProgram(
+    int id,
+    Program program, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
     final gen = _bumpProgramMutationGen(id);
@@ -665,10 +679,14 @@ class ProgramsProvider extends ChangeNotifier {
     } on RequestCancelledException {
       return false;
     } catch (e) {
-      if (owns() && errorGen == _errorGen) {
-        _errorMessage =
+      if (owns()) {
+        final message =
             'Failed to update program: ${e.toString().replaceAll('Exception: ', '')}';
+        if (errorGen == _errorGen) {
+          _errorMessage = message;
+        }
         debugPrint('Update program error: $e');
+        onError?.call(message);
       }
       return false;
     } finally {
@@ -705,8 +723,14 @@ class ProgramsProvider extends ChangeNotifier {
     }
   }
 
-  /// Delete a program
-  Future<bool> deleteProgram(int id) async {
+  /// Delete a program. See [updateProgram]'s doc comment for the [onError]
+  /// contract - it reports only this call's own genuine, still-owned
+  /// failure, never a stale/superseded outcome or another overlapping
+  /// call's error.
+  Future<bool> deleteProgram(
+    int id, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
     final gen = _bumpProgramMutationGen(id);
@@ -733,18 +757,26 @@ class ProgramsProvider extends ChangeNotifier {
     } on RequestCancelledException {
       return false;
     } catch (e) {
-      if (owns() && errorGen == _errorGen) {
-        _errorMessage =
+      if (owns()) {
+        final message =
             'Failed to delete program: ${e.toString().replaceAll('Exception: ', '')}';
+        if (errorGen == _errorGen) {
+          _errorMessage = message;
+          notifyListeners();
+        }
         debugPrint('Delete program error: $e');
-        notifyListeners();
+        onError?.call(message);
       }
       return false;
     }
   }
 
-  /// Mark a program as completed
-  Future<bool> completeProgram(int id) async {
+  /// Mark a program as completed. See [updateProgram]'s doc comment for the
+  /// [onError] contract.
+  Future<bool> completeProgram(
+    int id, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
     final gen = _bumpProgramMutationGen(id);
@@ -779,11 +811,15 @@ class ProgramsProvider extends ChangeNotifier {
     } on RequestCancelledException {
       return false;
     } catch (e) {
-      if (owns() && errorGen == _errorGen) {
-        _errorMessage =
+      if (owns()) {
+        final message =
             'Failed to complete program: ${e.toString().replaceAll('Exception: ', '')}';
+        if (errorGen == _errorGen) {
+          _errorMessage = message;
+          notifyListeners();
+        }
         debugPrint('Complete program error: $e');
-        notifyListeners();
+        onError?.call(message);
       }
       return false;
     }
@@ -794,8 +830,12 @@ class ProgramsProvider extends ChangeNotifier {
   /// workout complete, and never creates or touches a Session — Today's
   /// program-sourced suggestions already filter by `isActive`, so this alone
   /// stops future suggestions from this program while any already-started
-  /// Session keeps its own status and logged data untouched.
-  Future<bool> archiveProgram(int id) async {
+  /// Session keeps its own status and logged data untouched. See
+  /// [updateProgram]'s doc comment for the [onError] contract.
+  Future<bool> archiveProgram(
+    int id, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
     final gen = _bumpProgramMutationGen(id);
@@ -827,18 +867,26 @@ class ProgramsProvider extends ChangeNotifier {
     } on RequestCancelledException {
       return false;
     } catch (e) {
-      if (owns() && errorGen == _errorGen) {
-        _errorMessage =
+      if (owns()) {
+        final message =
             'Failed to archive program: ${e.toString().replaceAll('Exception: ', '')}';
+        if (errorGen == _errorGen) {
+          _errorMessage = message;
+          notifyListeners();
+        }
         debugPrint('Archive program error: $e');
-        notifyListeners();
+        onError?.call(message);
       }
       return false;
     }
   }
 
-  /// Restore an archived program to active use.
-  Future<bool> unarchiveProgram(int id) async {
+  /// Restore an archived program to active use. See [updateProgram]'s doc
+  /// comment for the [onError] contract.
+  Future<bool> unarchiveProgram(
+    int id, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
     final gen = _bumpProgramMutationGen(id);
@@ -870,11 +918,15 @@ class ProgramsProvider extends ChangeNotifier {
     } on RequestCancelledException {
       return false;
     } catch (e) {
-      if (owns() && errorGen == _errorGen) {
-        _errorMessage =
+      if (owns()) {
+        final message =
             'Failed to restore program: ${e.toString().replaceAll('Exception: ', '')}';
+        if (errorGen == _errorGen) {
+          _errorMessage = message;
+          notifyListeners();
+        }
         debugPrint('Unarchive program error: $e');
-        notifyListeners();
+        onError?.call(message);
       }
       return false;
     }
@@ -882,7 +934,10 @@ class ProgramsProvider extends ChangeNotifier {
 
   /// Recalibrate a program's start date to Monday of its week
   /// Fixes calendar alignment issues for programs created on non-Monday days
-  Future<bool> recalibrateProgram(int id) async {
+  Future<bool> recalibrateProgram(
+    int id, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
     final gen = _bumpProgramMutationGen(id);
@@ -912,18 +967,25 @@ class ProgramsProvider extends ChangeNotifier {
     } on RequestCancelledException {
       return false;
     } catch (e) {
-      if (owns() && errorGen == _errorGen) {
-        _errorMessage =
+      if (owns()) {
+        final message =
             'Failed to recalibrate program: ${e.toString().replaceAll('Exception: ', '')}';
+        if (errorGen == _errorGen) {
+          _errorMessage = message;
+          notifyListeners();
+        }
         debugPrint('Recalibrate program error: $e');
-        notifyListeners();
+        onError?.call(message);
       }
       return false;
     }
   }
 
   /// Advance to next workout (increment day/week)
-  Future<bool> advanceProgram(int id) async {
+  Future<bool> advanceProgram(
+    int id, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
     final gen = _bumpProgramMutationGen(id);
@@ -956,11 +1018,15 @@ class ProgramsProvider extends ChangeNotifier {
     } on RequestCancelledException {
       return false;
     } catch (e) {
-      if (owns() && errorGen == _errorGen) {
-        _errorMessage =
+      if (owns()) {
+        final message =
             'Failed to advance program: ${e.toString().replaceAll('Exception: ', '')}';
+        if (errorGen == _errorGen) {
+          _errorMessage = message;
+          notifyListeners();
+        }
         debugPrint('Advance program error: $e');
-        notifyListeners();
+        onError?.call(message);
       }
       return false;
     }
@@ -1277,7 +1343,10 @@ class ProgramsProvider extends ChangeNotifier {
   /// session the skip is refused server-side and this returns a
   /// [WorkoutSkipResult] carrying that session's id so the caller can direct
   /// the user to resume/manage it instead.
-  Future<WorkoutSkipResult> skipWorkout(int workoutId) async {
+  Future<WorkoutSkipResult> skipWorkout(
+    int workoutId, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return WorkoutSkipResult.failed;
     final programId = _parentProgramIdForWorkout(workoutId);
@@ -1321,11 +1390,15 @@ class ProgramsProvider extends ChangeNotifier {
     } on RequestCancelledException {
       return WorkoutSkipResult.failed;
     } catch (e) {
-      if (owns() && errorGen == _errorGen) {
-        _errorMessage =
+      if (owns()) {
+        final message =
             'Failed to skip workout: ${e.toString().replaceAll('Exception: ', '')}';
+        if (errorGen == _errorGen) {
+          _errorMessage = message;
+          notifyListeners();
+        }
         debugPrint('Skip workout error: $e');
-        notifyListeners();
+        onError?.call(message);
       }
       return WorkoutSkipResult.failed;
     }

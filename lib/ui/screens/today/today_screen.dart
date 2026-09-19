@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/theme/typography.dart';
+import '../../../core/constants/colors.dart';
 import '../../../core/services/tab_navigation_service.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/nutrition_provider.dart';
@@ -167,12 +169,14 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
       children: [
         Icon(icon, color: context.accent, size: 28),
         const SizedBox(width: 12),
-        Text(
-          greeting,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: context.textPrimary,
+        Expanded(
+          child: Text(
+            greeting,
+            style: Theme.of(
+              context,
+            ).textTheme.displaySmall!.copyWith(color: context.textPrimary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -208,7 +212,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
             Expanded(
               child: _StatCard(
                 icon: Icons.fitness_center,
-                iconColor: Colors.blue,
+                iconColor: context.accentBlue,
                 value: '$thisWeekWorkouts',
                 label: 'Workouts\nthis week',
               ),
@@ -217,7 +221,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
             Expanded(
               child: _StatCard(
                 icon: Icons.local_fire_department,
-                iconColor: Colors.orange,
+                iconColor: context.accentAmber,
                 value: calories.toStringAsFixed(0),
                 label: 'Calories\ntoday',
               ),
@@ -226,7 +230,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
             Expanded(
               child: _StatCard(
                 icon: Icons.flag_outlined,
-                iconColor: Colors.green,
+                iconColor: context.accent,
                 value:
                     hasGoal
                         ? (calorieGoal - calories).toStringAsFixed(0)
@@ -327,7 +331,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: context.surface,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: context.border),
           ),
           child: Column(
@@ -337,12 +341,14 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                 children: [
                   Icon(Icons.fitness_center, color: context.accent, size: 20),
                   const SizedBox(width: 8),
-                  Text(
-                    "Today's Workouts",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: context.textPrimary,
+                  Flexible(
+                    child: Text(
+                      "Today's Workouts",
+                      style: AppTypography.titleLarge.copyWith(
+                        color: context.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -388,9 +394,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                       const SizedBox(width: 6),
                       Text(
                         'Continue Workout',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        style: AppTypography.labelLarge.copyWith(
                           color: context.accent,
                         ),
                       ),
@@ -427,9 +431,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
                       'Scheduled for Today',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                      style: AppTypography.labelLarge.copyWith(
                         color: context.textSecondary,
                       ),
                     ),
@@ -476,7 +478,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.purple.withValues(alpha: 0.1),
+                    color: AppColors.iosSystemPurple.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -485,15 +487,13 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                       Icon(
                         Icons.calendar_today,
                         size: 14,
-                        color: Colors.purple,
+                        color: AppColors.iosSystemPurple,
                       ),
                       const SizedBox(width: 6),
                       Text(
                         'From Program',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.purple,
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.iosSystemPurple,
                         ),
                       ),
                     ],
@@ -573,7 +573,9 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                             const SizedBox(height: 8),
                             Text(
                               message,
-                              style: TextStyle(color: context.textSecondary),
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: context.textSecondary,
+                              ),
                             ),
                             if (showPlanCta) ...[
                               const SizedBox(height: 12),
@@ -610,7 +612,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: context.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.border),
       ),
       child: Column(
@@ -622,9 +624,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
               const SizedBox(width: 8),
               Text(
                 title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                style: AppTypography.titleLarge.copyWith(
                   color: context.textPrimary,
                 ),
               ),
@@ -696,7 +696,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: context.surface,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: context.border),
             ),
             child: Column(
@@ -704,25 +704,40 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.restaurant_menu, color: Colors.orange, size: 20),
+                    Icon(
+                      Icons.restaurant_menu,
+                      color: context.accentAmber,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
-                    Text(
-                      "Today's Nutrition",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: context.textPrimary,
+                    // Expanded (not Flexible) so the title claims all space
+                    // left over after the trailing value+chevron, instead
+                    // of splitting the row evenly with a competing Spacer -
+                    // that previously forced "Today's Nutrition" into an
+                    // ellipsis even with plenty of width to spare.
+                    Expanded(
+                      child: Text(
+                        "Today's Nutrition",
+                        style: AppTypography.titleLarge.copyWith(
+                          color: context.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Spacer(),
-                    Text(
-                      hasGoal
-                          ? '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} kcal'
-                          : '${consumed.toStringAsFixed(0)} kcal',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: context.textSecondary,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        hasGoal
+                            ? '${consumed.toStringAsFixed(0)} / ${goal.toStringAsFixed(0)} kcal'
+                            : '${consumed.toStringAsFixed(0)} kcal',
+                        style: AppTypography.bodyMedium.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: context.textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -743,11 +758,14 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                         color: context.textTertiary,
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        'No target set - showing actual intake only',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: context.textTertiary,
+                      Expanded(
+                        child: Text(
+                          'No target set - showing actual intake only',
+                          style: AppTypography.labelSmall.copyWith(
+                            color: context.textTertiary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -764,7 +782,7 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                       minHeight: 10,
                       backgroundColor: context.surfaceHighlight,
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        percentage >= 100 ? Colors.red : Colors.orange,
+                        percentage >= 100 ? context.error : context.warning,
                       ),
                     ),
                   ),
@@ -853,18 +871,21 @@ class _TodayScreenState extends State<TodayScreen> with WidgetsBindingObserver {
                         const SizedBox(width: 6),
                         Text(
                           'Yesterday: ${provider.nutritionHistory.isNotEmpty ? provider.nutritionHistory.first.consumedCalories.toStringAsFixed(0) : 0} kcal',
-                          style: TextStyle(
-                            fontSize: 12,
+                          style: AppTypography.bodySmall.copyWith(
                             color: context.textSecondary,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          'View History',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: context.accent,
+                        GestureDetector(
+                          onTap:
+                              () => context
+                                  .read<TabNavigationService>()
+                                  .switchTab(2),
+                          child: Text(
+                            'View History',
+                            style: AppTypography.labelLarge.copyWith(
+                              color: context.accent,
+                            ),
                           ),
                         ),
                       ],
@@ -908,17 +929,17 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: context.textPrimary,
-            ),
+            style: AppTypography.statTiny.copyWith(color: context.textPrimary),
           ),
           const SizedBox(height: 4),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 10, color: context.textSecondary),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.labelSmall.copyWith(
+              color: context.textSecondary,
+            ),
           ),
         ],
       ),
@@ -988,14 +1009,14 @@ class _WorkoutMiniCard extends StatelessWidget {
               isActive
                   ? context.accent.withValues(alpha: 0.1)
                   : isCompleted
-                  ? Colors.green.withValues(alpha: 0.1)
+                  ? context.success.withValues(alpha: 0.1)
                   : context.surfaceHighlight,
           borderRadius: BorderRadius.circular(12),
           border:
               isActive
                   ? Border.all(color: context.accent)
                   : isCompleted
-                  ? Border.all(color: Colors.green.withValues(alpha: 0.5))
+                  ? Border.all(color: context.success.withValues(alpha: 0.5))
                   : null,
         ),
         child: Row(
@@ -1008,7 +1029,7 @@ class _WorkoutMiniCard extends StatelessWidget {
                     isActive
                         ? context.accent
                         : isCompleted
-                        ? Colors.green
+                        ? context.success
                         : context.surface,
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -1028,16 +1049,17 @@ class _WorkoutMiniCard extends StatelessWidget {
                 children: [
                   Text(
                     name,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.titleMedium.copyWith(
                       color: context.textPrimary,
                     ),
                   ),
                   Text(
                     _getSubtitle(),
-                    style: TextStyle(
-                      fontSize: 12,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
                       color: context.textSecondary,
                     ),
                   ),
@@ -1051,10 +1073,9 @@ class _WorkoutMiniCard extends StatelessWidget {
                   color: context.accent,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
+                child: Text(
                   'ACTIVE',
-                  style: TextStyle(
-                    fontSize: 10,
+                  style: AppTypography.labelMedium.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
@@ -1064,13 +1085,12 @@ class _WorkoutMiniCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green,
+                  color: context.success,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
+                child: Text(
                   'DONE',
-                  style: TextStyle(
-                    fontSize: 10,
+                  style: AppTypography.labelMedium.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
@@ -1112,14 +1132,19 @@ class _MacroMini extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label,
-              style: TextStyle(fontSize: 10, color: context.textSecondary),
+            Flexible(
+              child: Text(
+                label,
+                style: AppTypography.labelSmall.copyWith(
+                  color: context.textSecondary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             Text(
               '${current.toStringAsFixed(0)}g',
-              style: TextStyle(
-                fontSize: 10,
+              style: AppTypography.labelSmall.copyWith(
                 fontWeight: FontWeight.bold,
                 color: context.textPrimary,
               ),
@@ -1159,14 +1184,19 @@ class _MacroActualOnly extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 10, color: context.textSecondary),
+        Flexible(
+          child: Text(
+            label,
+            style: AppTypography.labelSmall.copyWith(
+              color: context.textSecondary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         Text(
           '${value.toStringAsFixed(0)}g',
-          style: TextStyle(
-            fontSize: 10,
+          style: AppTypography.labelSmall.copyWith(
             fontWeight: FontWeight.bold,
             color: color,
           ),
@@ -1201,16 +1231,17 @@ class _InlineErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: TextStyle(fontSize: 13, color: context.textPrimary),
+              style: AppTypography.bodyMedium.copyWith(
+                color: context.textPrimary,
+              ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           TextButton(
             onPressed: onRetry,
             style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size(64, 44),
             ),
             child: const Text('Retry'),
           ),
@@ -1245,13 +1276,15 @@ class _ProgramWorkoutMiniCard extends StatelessWidget {
         decoration: BoxDecoration(
           color:
               isCompleted
-                  ? Colors.green.withValues(alpha: 0.1)
-                  : Colors.purple.withValues(alpha: 0.05),
+                  ? context.success.withValues(alpha: 0.1)
+                  : AppColors.iosSystemPurple.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
           border:
               isCompleted
-                  ? Border.all(color: Colors.green.withValues(alpha: 0.5))
-                  : Border.all(color: Colors.purple.withValues(alpha: 0.2)),
+                  ? Border.all(color: context.success.withValues(alpha: 0.5))
+                  : Border.all(
+                    color: AppColors.iosSystemPurple.withValues(alpha: 0.2),
+                  ),
         ),
         child: Row(
           children: [
@@ -1259,7 +1292,8 @@ class _ProgramWorkoutMiniCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: isCompleted ? Colors.green : Colors.purple,
+                color:
+                    isCompleted ? context.success : AppColors.iosSystemPurple,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
@@ -1275,16 +1309,17 @@ class _ProgramWorkoutMiniCard extends StatelessWidget {
                 children: [
                   Text(
                     name,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.titleMedium.copyWith(
                       color: context.textPrimary,
                     ),
                   ),
                   Text(
                     '$programName • $exerciseCount exercises',
-                    style: TextStyle(
-                      fontSize: 12,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
                       color: context.textSecondary,
                     ),
                   ),
@@ -1295,13 +1330,12 @@ class _ProgramWorkoutMiniCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green,
+                  color: context.success,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
+                child: Text(
                   'DONE',
-                  style: TextStyle(
-                    fontSize: 10,
+                  style: AppTypography.labelMedium.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),

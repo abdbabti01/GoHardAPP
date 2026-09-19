@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
@@ -73,7 +74,6 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
       );
     }
 
-    final theme = Theme.of(context);
     final workout = _workout!;
     final exercises = workout.exercises;
 
@@ -86,18 +86,18 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
               margin: const EdgeInsets.only(right: 12),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.2),
+                color: context.success.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 18),
-                  SizedBox(width: 6),
+                  Icon(Icons.check_circle, color: context.success, size: 18),
+                  const SizedBox(width: 6),
                   Text(
                     'Completed',
                     style: TextStyle(
-                      color: Colors.green,
+                      color: context.success,
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
@@ -113,9 +113,9 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: theme.primaryColor.withValues(alpha: 0.05),
+              color: context.accent.withValues(alpha: 0.05),
               border: Border(
-                bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+                bottom: BorderSide(color: context.borderSubtle, width: 1),
               ),
             ),
             child: Column(
@@ -131,7 +131,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                             workout.workoutIdentifier,
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey.shade600,
+                              color: context.textSecondary,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -155,7 +155,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                       _buildInfoChip(
                         Icons.category_outlined,
                         workout.workoutType!,
-                        theme.primaryColor,
+                        context.accent,
                       ),
                       const SizedBox(width: 12),
                     ],
@@ -163,14 +163,14 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                       _buildInfoChip(
                         Icons.access_time,
                         '${workout.estimatedDuration} min',
-                        Colors.orange,
+                        context.warning,
                       ),
                       const SizedBox(width: 12),
                     ],
                     _buildInfoChip(
                       Icons.fitness_center,
                       '${exercises.length} exercises',
-                      Colors.blue,
+                      context.info,
                     ),
                   ],
                 ),
@@ -178,7 +178,10 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                   const SizedBox(height: 12),
                   Text(
                     workout.description!,
-                    style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+                    style: TextStyle(
+                      color: context.textSecondary,
+                      fontSize: 14,
+                    ),
                   ),
                 ],
               ],
@@ -192,7 +195,11 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
               children: [
                 // Warm-up Section
                 if (workout.warmUp != null && workout.warmUp!.isNotEmpty) ...[
-                  _buildSectionHeader(Icons.wb_sunny, 'Warm-up', Colors.orange),
+                  _buildSectionHeader(
+                    Icons.wb_sunny,
+                    'Warm-up',
+                    context.warning,
+                  ),
                   const SizedBox(height: 8),
                   _buildInfoCard(workout.warmUp!),
                   const SizedBox(height: 20),
@@ -202,7 +209,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                 _buildSectionHeader(
                   Icons.fitness_center,
                   'Exercises',
-                  theme.primaryColor,
+                  context.accent,
                 ),
                 const SizedBox(height: 12),
                 if (exercises.isEmpty)
@@ -211,7 +218,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                       padding: const EdgeInsets.all(32),
                       child: Text(
                         'No exercises in this workout',
-                        style: TextStyle(color: Colors.grey.shade600),
+                        style: TextStyle(color: context.textSecondary),
                       ),
                     ),
                   )
@@ -227,7 +234,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                 // Cool-down Section
                 if (workout.coolDown != null &&
                     workout.coolDown!.isNotEmpty) ...[
-                  _buildSectionHeader(Icons.ac_unit, 'Cool-down', Colors.blue),
+                  _buildSectionHeader(Icons.ac_unit, 'Cool-down', context.info),
                   const SizedBox(height: 8),
                   _buildInfoCard(workout.coolDown!),
                   const SizedBox(height: 20),
@@ -235,7 +242,11 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
 
                 // Completion Notes (if completed)
                 if (workout.isCompleted && workout.completionNotes != null) ...[
-                  _buildSectionHeader(Icons.notes, 'Notes', Colors.grey),
+                  _buildSectionHeader(
+                    Icons.notes,
+                    'Notes',
+                    context.textSecondary,
+                  ),
                   const SizedBox(height: 8),
                   _buildInfoCard(workout.completionNotes!),
                   const SizedBox(height: 20),
@@ -249,10 +260,12 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.surface,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
+                    color: Colors.black.withValues(
+                      alpha: context.isDarkMode ? 0.3 : 0.1,
+                    ),
                     blurRadius: 10,
                     offset: const Offset(0, -2),
                   ),
@@ -270,17 +283,19 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                               context.read<SessionsProvider>();
                           final messenger = ScaffoldMessenger.of(context);
                           final navigator = Navigator.of(context);
+                          final successColor = context.success;
+                          final errorColor = context.error;
 
                           // Show confirmation dialog first
                           final confirmed = await showDialog<bool>(
                             context: context,
                             builder:
                                 (context) => AlertDialog(
-                                  title: const Row(
+                                  title: Row(
                                     children: [
                                       Icon(
                                         Icons.add_circle_outline,
-                                        color: Colors.blue,
+                                        color: context.info,
                                       ),
                                       SizedBox(width: 12),
                                       Text('Add to My Workouts?'),
@@ -328,7 +343,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                                 content: Text(
                                   '${workout.workoutName} started!',
                                 ),
-                                backgroundColor: Colors.green,
+                                backgroundColor: successColor,
                                 duration: const Duration(seconds: 2),
                               ),
                             );
@@ -340,7 +355,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                             messenger.showSnackBar(
                               SnackBar(
                                 content: Text(errorMsg),
-                                backgroundColor: Colors.red,
+                                backgroundColor: errorColor,
                                 duration: const Duration(seconds: 3),
                               ),
                             );
@@ -439,17 +454,17 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
   Widget _buildInfoCard(String content) {
     return Card(
       elevation: 0,
-      color: Colors.grey.shade50,
+      color: context.surfaceHighlight,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200, width: 1),
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: context.borderSubtle, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Text(
           content,
           style: TextStyle(
-            color: Colors.grey.shade700,
+            color: context.textSecondary,
             fontSize: 14,
             height: 1.5,
           ),
@@ -459,7 +474,6 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
   }
 
   Widget _buildExerciseCard(int number, Map<String, dynamic> exercise) {
-    final theme = Theme.of(context);
     final name = exercise['name'] ?? 'Exercise $number';
     final sets = exercise['sets']?.toString() ?? '-';
     final reps = exercise['reps']?.toString() ?? '-';
@@ -469,8 +483,11 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: context.borderSubtle, width: 1),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -482,7 +499,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: theme.primaryColor,
+                    color: context.accent,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Center(
@@ -512,7 +529,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.shade50,
+                color: context.surfaceHighlight,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -535,28 +552,21 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.05),
+                  color: context.info.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Colors.blue.withValues(alpha: 0.2),
+                    color: context.info.withValues(alpha: 0.3),
                     width: 1,
                   ),
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 16,
-                      color: Colors.blue.shade700,
-                    ),
+                    Icon(Icons.info_outline, size: 16, color: context.info),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         notes,
-                        style: TextStyle(
-                          color: Colors.blue.shade700,
-                          fontSize: 13,
-                        ),
+                        style: TextStyle(color: context.info, fontSize: 13),
                       ),
                     ),
                   ],
@@ -574,7 +584,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
       children: [
         Text(
           label,
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          style: TextStyle(color: context.textSecondary, fontSize: 12),
         ),
         const SizedBox(height: 4),
         Text(
@@ -586,7 +596,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
   }
 
   Widget _buildVerticalDivider() {
-    return Container(width: 1, height: 30, color: Colors.grey.shade300);
+    return Container(width: 1, height: 30, color: context.borderSubtle);
   }
 
   void _showCompleteDialog(BuildContext context, ProgramWorkout workout) {
@@ -594,11 +604,11 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Row(
+            title: Row(
               children: [
-                Icon(Icons.check_circle_outline, color: Colors.green),
-                SizedBox(width: 12),
-                Text('Complete Workout?'),
+                Icon(Icons.check_circle_outline, color: context.success),
+                const SizedBox(width: 12),
+                const Text('Complete Workout?'),
               ],
             ),
             content: Column(
@@ -643,9 +653,9 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                     if (!context.mounted) return;
 
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Workout completed!'),
-                        backgroundColor: Colors.green,
+                      SnackBar(
+                        content: const Text('Workout completed!'),
+                        backgroundColor: context.success,
                       ),
                     );
 
@@ -655,7 +665,9 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                 },
                 icon: const Icon(Icons.check),
                 label: const Text('Complete'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.success,
+                ),
               ),
             ],
           ),
@@ -667,11 +679,11 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Row(
+            title: Row(
               children: [
-                Icon(Icons.skip_next, color: Colors.orange),
-                SizedBox(width: 12),
-                Text('Skip Workout?'),
+                Icon(Icons.skip_next, color: context.warning),
+                const SizedBox(width: 12),
+                const Text('Skip Workout?'),
               ],
             ),
             content: Text(
@@ -690,15 +702,19 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                   final messenger = ScaffoldMessenger.of(context);
                   final navigator = Navigator.of(context);
 
-                  final result = await provider.skipWorkout(workout.id);
+                  String? errorMessage;
+                  final result = await provider.skipWorkout(
+                    workout.id,
+                    onError: (message) => errorMessage = message,
+                  );
 
                   if (!context.mounted) return;
 
                   if (result.success) {
                     messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text('Workout skipped'),
-                        backgroundColor: Colors.orange,
+                      SnackBar(
+                        content: const Text('Workout skipped'),
+                        backgroundColor: context.warning,
                       ),
                     );
                     navigator.pop();
@@ -709,7 +725,7 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                           'This workout already has a session in progress. '
                           'Resume or manage it instead of skipping.',
                         ),
-                        backgroundColor: Colors.red,
+                        backgroundColor: context.error,
                         duration: const Duration(seconds: 4),
                         action:
                             result.blockingSessionId == null
@@ -725,20 +741,20 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
                                 ),
                       ),
                     );
-                  } else {
+                  } else if (errorMessage != null) {
                     messenger.showSnackBar(
                       SnackBar(
-                        content: Text(
-                          provider.errorMessage ?? 'Failed to skip workout',
-                        ),
-                        backgroundColor: Colors.red,
+                        content: Text(errorMessage!),
+                        backgroundColor: context.error,
                       ),
                     );
                   }
                 },
                 icon: const Icon(Icons.skip_next),
                 label: const Text('Skip'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.warning,
+                ),
               ),
             ],
           ),

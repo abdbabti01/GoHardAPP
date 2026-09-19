@@ -627,7 +627,7 @@ class CompletedGoalCard extends StatelessWidget {
                                   : '',
                         )
                         .join(' '),
-                    style: AppTypography.titleMedium.copyWith(
+                    style: AppTypography.cardTitle.copyWith(
                       color: context.textPrimary,
                     ),
                   ),

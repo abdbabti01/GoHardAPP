@@ -107,8 +107,6 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     // Initialize tab controller if needed
     _initTabController(program);
 
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: Text(program.title),
@@ -151,7 +149,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
               } else if (value == 'archive') {
                 _showArchiveConfirmation(context, program);
               } else if (value == 'unarchive') {
-                context.read<ProgramsProvider>().unarchiveProgram(program.id);
+                _unarchiveProgram(context, program);
               } else if (value == 'delete') {
                 _showDeleteConfirmation(context, program);
               }
@@ -213,15 +211,15 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                         ],
                       ),
                     ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'delete',
                     child: Row(
                       children: [
-                        Icon(Icons.delete_outline, color: Colors.red),
-                        SizedBox(width: 12),
+                        Icon(Icons.delete_outline, color: context.error),
+                        const SizedBox(width: 12),
                         Text(
                           'Delete Program',
-                          style: TextStyle(color: Colors.red),
+                          style: TextStyle(color: context.error),
                         ),
                       ],
                     ),
@@ -236,7 +234,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: theme.primaryColor.withValues(alpha: 0.05),
+              color: context.accent.withValues(alpha: 0.05),
               border: Border(
                 bottom: BorderSide(color: context.border, width: 1),
               ),
@@ -255,7 +253,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: theme.primaryColor,
+                              color: context.accent,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -277,7 +275,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
-                            color: theme.primaryColor,
+                            color: context.accent,
                           ),
                         ),
                         Text(
@@ -298,9 +296,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     value: program.progressPercentage / 100,
                     minHeight: 10,
                     backgroundColor: context.surfaceElevated,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      theme.primaryColor,
-                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(context.accent),
                   ),
                 ),
                 if (program.description != null) ...[
@@ -325,22 +321,22 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: theme.primaryColor.withValues(alpha: 0.1),
+                        color: context.accent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: theme.primaryColor.withValues(alpha: 0.3),
+                          color: context.accent.withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.flag, size: 16, color: theme.primaryColor),
+                          Icon(Icons.flag, size: 16, color: context.accent),
                           const SizedBox(width: 6),
                           Text(
                             'Goal: ${program.goal!.goalType}',
                             style: TextStyle(
-                              color: theme.primaryColor,
+                              color: context.accent,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -349,7 +345,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                           Icon(
                             Icons.arrow_forward_ios,
                             size: 10,
-                            color: theme.primaryColor,
+                            color: context.accent,
                           ),
                         ],
                       ),
@@ -387,8 +383,8 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
               TabBar(
                 controller: _tabController,
                 isScrollable: true,
-                indicatorColor: theme.primaryColor,
-                labelColor: theme.primaryColor,
+                indicatorColor: context.accent,
+                labelColor: context.accent,
                 unselectedLabelColor: context.textSecondary,
                 tabs: List.generate(
                   program.totalWeeks,
@@ -488,26 +484,30 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
   Future<void> _advanceToNextWorkout(Program program) async {
     final provider = context.read<ProgramsProvider>();
     final messenger = ScaffoldMessenger.of(context);
+    final successColor = context.success;
+    final errorColor = context.error;
 
-    final success = await provider.advanceProgram(program.id);
+    String? errorMessage;
+    final success = await provider.advanceProgram(
+      program.id,
+      onError: (message) => errorMessage = message,
+    );
 
     if (success && mounted) {
       await _loadProgram(); // Reload to show new current position
 
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Advanced to next workout'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: const Text('Advanced to next workout'),
+          backgroundColor: successColor,
+          duration: const Duration(seconds: 2),
         ),
       );
-    } else if (!success && mounted) {
+    } else if (!success && mounted && errorMessage != null) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            provider.errorMessage ?? 'Failed to advance to next workout',
-          ),
-          backgroundColor: Colors.red,
+          content: Text(errorMessage!),
+          backgroundColor: errorColor,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -519,22 +519,21 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     ProgramWorkout workout,
     Program program,
   ) {
-    final theme = Theme.of(context);
     final isCurrentWorkout = program.isCurrentWorkout(workout);
     final isMissed = program.isWorkoutMissed(workout);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: isCurrentWorkout ? 4 : 1,
+      elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         side:
             isCurrentWorkout
-                ? BorderSide(color: theme.primaryColor, width: 2)
-                : BorderSide.none,
+                ? BorderSide(color: context.accent, width: 2)
+                : BorderSide(color: context.borderSubtle),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         onTap: () {
           // Navigate to workout detail screen to show details first
           Navigator.pushNamed(
@@ -559,11 +558,11 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     decoration: BoxDecoration(
                       color:
                           isCurrentWorkout
-                              ? theme.primaryColor
+                              ? context.accent
                               : workout.isCompleted
-                              ? Colors.green
+                              ? context.success
                               : isMissed
-                              ? Colors.orange
+                              ? context.warning
                               : context.surfaceElevated,
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -606,11 +605,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     ),
                   ),
                   if (workout.isCompleted)
-                    const Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: 24,
-                    )
+                    Icon(Icons.check_circle, color: context.success, size: 24)
                   else if (isCurrentWorkout)
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -618,13 +613,13 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: theme.primaryColor.withValues(alpha: 0.1),
+                        color: context.accent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         'TODAY',
                         style: TextStyle(
-                          color: theme.primaryColor,
+                          color: context.accent,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -637,13 +632,13 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.1),
+                        color: context.warning.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text(
+                      child: Text(
                         'MISSED',
                         style: TextStyle(
-                          color: Colors.orange,
+                          color: context.warning,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -694,12 +689,12 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                   ),
                   if (workout.isRestDay) ...[
                     const SizedBox(width: 16),
-                    Icon(Icons.hotel, size: 16, color: Colors.orange.shade700),
+                    Icon(Icons.hotel, size: 16, color: context.warning),
                     const SizedBox(width: 4),
                     Text(
                       'Rest Day',
                       style: TextStyle(
-                        color: Colors.orange.shade700,
+                        color: context.warning,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -712,6 +707,31 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _unarchiveProgram(BuildContext context, Program program) async {
+    final provider = context.read<ProgramsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    // onError only fires for THIS call's own genuine, still-owned failure -
+    // never for a stale session, cancelled request, or superseded mutation,
+    // and never with a different overlapping call's message. Reading
+    // provider.errorMessage after the fact would race with any other
+    // mutation the provider is concurrently handling.
+    String? errorMessage;
+    final success = await provider.unarchiveProgram(
+      program.id,
+      onError: (message) => errorMessage = message,
+    );
+
+    if (!context.mounted) return;
+    if (success) {
+      messenger.showSnackBar(const SnackBar(content: Text('Program restored')));
+    } else if (errorMessage != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(errorMessage!), backgroundColor: context.error),
+      );
+    }
   }
 
   void _showCompleteConfirmation(BuildContext context, Program program) {
@@ -732,12 +752,25 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                 onPressed: () async {
                   Navigator.pop(context);
                   final provider = context.read<ProgramsProvider>();
-                  final success = await provider.completeProgram(program.id);
-                  if (success && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  final messenger = ScaffoldMessenger.of(context);
+                  String? errorMessage;
+                  final success = await provider.completeProgram(
+                    program.id,
+                    onError: (message) => errorMessage = message,
+                  );
+                  if (!context.mounted) return;
+                  if (success) {
+                    messenger.showSnackBar(
                       const SnackBar(content: Text('Program completed!')),
                     );
                     Navigator.pop(context);
+                  } else if (errorMessage != null) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(errorMessage!),
+                        backgroundColor: context.error,
+                      ),
+                    );
                   }
                 },
                 child: const Text('Complete'),
@@ -769,10 +802,23 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                 onPressed: () async {
                   Navigator.pop(context);
                   final provider = context.read<ProgramsProvider>();
-                  final success = await provider.archiveProgram(program.id);
-                  if (success && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  final messenger = ScaffoldMessenger.of(context);
+                  String? errorMessage;
+                  final success = await provider.archiveProgram(
+                    program.id,
+                    onError: (message) => errorMessage = message,
+                  );
+                  if (!context.mounted) return;
+                  if (success) {
+                    messenger.showSnackBar(
                       const SnackBar(content: Text('Program stopped')),
+                    );
+                  } else if (errorMessage != null) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(errorMessage!),
+                        backgroundColor: context.error,
+                      ),
                     );
                   }
                 },
@@ -831,18 +877,18 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.1),
+                        color: context.info.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Colors.blue.withValues(alpha: 0.3),
+                          color: context.info.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.info_outline,
-                            color: Colors.blue,
+                            color: context.info,
                             size: 20,
                           ),
                           const SizedBox(width: 8),
@@ -850,8 +896,8 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                             child: Text(
                               warning ??
                                   'Your $sessionsCount workout session(s) are preserved as history — only the link to this program is removed.',
-                              style: const TextStyle(
-                                color: Colors.blue,
+                              style: TextStyle(
+                                color: context.info,
                                 fontSize: 13,
                               ),
                             ),
@@ -879,7 +925,10 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                 ),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: context.error,
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text('Delete'),
                 ),
               ],
@@ -887,8 +936,13 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       );
 
       if (confirmed == true && context.mounted) {
-        final success = await provider.deleteProgram(program.id);
-        if (success && context.mounted) {
+        String? errorMessage;
+        final success = await provider.deleteProgram(
+          program.id,
+          onError: (message) => errorMessage = message,
+        );
+        if (!context.mounted) return;
+        if (success) {
           // Reload both sessions and programs: any sessions that were linked
           // to this program are now detached (programId cleared) rather than
           // gone, but their program-derived fields still need a refresh.
@@ -902,6 +956,13 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
             context,
           ).showSnackBar(const SnackBar(content: Text('Program deleted')));
           Navigator.pop(context);
+        } else if (errorMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage!),
+              backgroundColor: context.error,
+            ),
+          );
         }
       }
     } catch (_) {
@@ -909,9 +970,11 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       Navigator.pop(context); // Close loading dialog
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to check deletion impact. Please try again.'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: const Text(
+            'Failed to check deletion impact. Please try again.',
+          ),
+          backgroundColor: context.error,
         ),
       );
     }
@@ -955,7 +1018,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     trailing: Text(
                       '${goal.progressPercentage.toStringAsFixed(0)}%',
                       style: TextStyle(
-                        color: Theme.of(context).primaryColor,
+                        color: context.accent,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1001,13 +1064,25 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
       goal: program.goal,
     );
 
-    final success = await provider.updateProgram(program.id, updatedProgram);
+    final messenger = ScaffoldMessenger.of(context);
+    final errorColor = context.error;
+    String? errorMessage;
+    final success = await provider.updateProgram(
+      program.id,
+      updatedProgram,
+      onError: (message) => errorMessage = message,
+    );
 
-    if (success && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Program linked to goal')));
+    if (!mounted) return;
+    if (success) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Program linked to goal')),
+      );
       await _loadProgram(); // Reload to show updated goal
+    } else if (errorMessage != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(errorMessage!), backgroundColor: errorColor),
+      );
     }
   }
 
@@ -1036,13 +1111,24 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
     );
 
     final messenger = ScaffoldMessenger.of(context);
-    final success = await provider.updateProgram(program.id, updatedProgram);
+    final errorColor = context.error;
+    String? errorMessage;
+    final success = await provider.updateProgram(
+      program.id,
+      updatedProgram,
+      onError: (message) => errorMessage = message,
+    );
 
-    if (success && mounted) {
+    if (!context.mounted) return;
+    if (success) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Program unlinked from goal')),
       );
       await _loadProgram(); // Reload to show changes
+    } else if (errorMessage != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(errorMessage!), backgroundColor: errorColor),
+      );
     }
   }
 
@@ -1086,10 +1172,10 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: theme.primaryColor.withValues(alpha: 0.1),
+                        color: context.accent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(Icons.flag, color: theme.primaryColor),
+                      child: Icon(Icons.flag, color: context.accent),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -1108,7 +1194,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                             style: TextStyle(
                               color:
                                   goal.isCompleted
-                                      ? Colors.green
+                                      ? context.success
                                       : context.textSecondary,
                             ),
                           ),
@@ -1134,7 +1220,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                           '${goal.progressPercentage.toStringAsFixed(0)}%',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: theme.primaryColor,
+                            color: context.accent,
                           ),
                         ),
                       ],
@@ -1146,7 +1232,7 @@ class _ProgramDetailScreenState extends State<ProgramDetailScreen>
                         value: progress,
                         minHeight: 10,
                         backgroundColor: context.border,
-                        valueColor: AlwaysStoppedAnimation(theme.primaryColor),
+                        valueColor: AlwaysStoppedAnimation(context.accent),
                       ),
                     ),
                   ],

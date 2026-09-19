@@ -534,7 +534,19 @@ class NutritionProvider extends ChangeNotifier {
 
   /// Update food item quantity. Same outer/nested ownership guarding as
   /// [quickAddFood]; no loading flag of its own, matching prior behavior.
-  Future<bool> updateFoodQuantity(int foodItemId, double quantity) async {
+  /// [onError] is invoked synchronously, exactly once, if and only if THIS
+  /// call's own operation genuinely failed while the session was still
+  /// current at the time of the failure - never for a stale/ended session.
+  /// This is a separate, race-free channel from the shared [errorMessage]
+  /// field: NutritionProvider's mutations share that one field with no
+  /// per-call generation protection at all, so two overlapping calls can
+  /// overwrite it in either order - a caller must not infer its own outcome
+  /// from reading [errorMessage] after the fact.
+  Future<bool> updateFoodQuantity(
+    int foodItemId,
+    double quantity, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
 
@@ -548,17 +560,23 @@ class NutritionProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return false;
-      _errorMessage =
+      final message =
           'Failed to update quantity: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Update food quantity error: $e');
       notifyListeners();
+      onError?.call(message);
       return false;
     }
   }
 
   /// Delete food item. Same outer/nested ownership guarding as
   /// [quickAddFood]; no loading flag of its own, matching prior behavior.
-  Future<bool> deleteFoodItem(int foodItemId) async {
+  /// See [updateFoodQuantity]'s doc comment for the [onError] contract.
+  Future<bool> deleteFoodItem(
+    int foodItemId, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
 
@@ -573,10 +591,12 @@ class NutritionProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return false;
-      _errorMessage =
+      final message =
           'Failed to delete food: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Delete food error: $e');
       notifyListeners();
+      onError?.call(message);
       return false;
     }
   }
@@ -615,8 +635,9 @@ class NutritionProvider extends ChangeNotifier {
   /// session.
   Future<bool> replaceFoodWithAlternative(
     FoodItem oldFood,
-    FoodAlternative alternative,
-  ) async {
+    FoodAlternative alternative, {
+    void Function(String message)? onError,
+  }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
 
@@ -650,19 +671,23 @@ class NutritionProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return false;
-      _errorMessage =
+      final message =
           'Failed to replace food: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Replace food error: $e');
       notifyListeners();
+      onError?.call(message);
       return false;
     }
   }
 
   /// Mark meal as consumed. Same outer/nested ownership guarding as
   /// [quickAddFood]; no loading flag of its own, matching prior behavior.
+  /// See [updateFoodQuantity]'s doc comment for the [onError] contract.
   Future<bool> markMealAsConsumed(
     int mealEntryId, {
     bool isConsumed = true,
+    void Function(String message)? onError,
   }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
@@ -681,17 +706,23 @@ class NutritionProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return false;
-      _errorMessage =
+      final message =
           'Failed to update meal: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Mark meal consumed error: $e');
       notifyListeners();
+      onError?.call(message);
       return false;
     }
   }
 
   /// Update water intake. Same outer/nested ownership guarding as
   /// [quickAddFood]; no loading flag of its own, matching prior behavior.
-  Future<bool> updateWaterIntake(double waterMl) async {
+  /// See [updateFoodQuantity]'s doc comment for the [onError] contract.
+  Future<bool> updateWaterIntake(
+    double waterMl, {
+    void Function(String message)? onError,
+  }) async {
     if (_todaysMealLog == null) return false;
 
     final token = _sessionEpoch.capture();
@@ -707,18 +738,24 @@ class NutritionProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return false;
-      _errorMessage =
+      final message =
           'Failed to update water: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Update water error: $e');
       notifyListeners();
+      onError?.call(message);
       return false;
     }
   }
 
-  /// Add water (incremental)
-  Future<bool> addWater(double amountMl) async {
+  /// Add water (incremental). See [updateFoodQuantity]'s doc comment for
+  /// the [onError] contract.
+  Future<bool> addWater(
+    double amountMl, {
+    void Function(String message)? onError,
+  }) async {
     final currentWater = _todaysMealLog?.waterIntake ?? 0;
-    return updateWaterIntake(currentWater + amountMl);
+    return updateWaterIntake(currentWater + amountMl, onError: onError);
   }
 
   /// Get meal entry by type from today's log
@@ -786,6 +823,7 @@ class NutritionProvider extends ChangeNotifier {
     required double dailyFat,
     double? dailyFiber,
     double? dailyWater,
+    void Function(String message)? onError,
   }) async {
     if (_activeGoal == null) return false;
 
@@ -822,9 +860,11 @@ class NutritionProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return false;
-      _errorMessage =
+      final message =
           'Failed to update goals: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Update nutrition goal error: $e');
+      onError?.call(message);
       return false;
     } finally {
       if (_sessionEpoch.isCurrent(token)) {
@@ -844,6 +884,7 @@ class NutritionProvider extends ChangeNotifier {
     required double dailyFat,
     double? dailyFiber,
     double? dailyWater,
+    void Function(String message)? onError,
   }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return false;
@@ -877,9 +918,11 @@ class NutritionProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return false;
-      _errorMessage =
+      final message =
           'Failed to create goals: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Create nutrition goal error: $e');
+      onError?.call(message);
       return false;
     } finally {
       if (_sessionEpoch.isCurrent(token)) {
@@ -1046,6 +1089,7 @@ class NutritionProvider extends ChangeNotifier {
     required String goalType,
     double? targetWeightChange,
     int? timeframeWeeks,
+    void Function(String message)? onError,
   }) async {
     final token = _sessionEpoch.capture();
     if (token == null) return null;
@@ -1066,14 +1110,27 @@ class NutritionProvider extends ChangeNotifier {
         debugPrint(
           '✅ Calculated nutrition: ${result.dailyCalories.toStringAsFixed(0)} cals, ${result.dailyProtein.toStringAsFixed(0)}g protein',
         );
+      } else {
+        // The repository swallows its own failures (offline, missing
+        // profile metrics, network errors) and returns null rather than
+        // throwing, so this is the only place a message can originate -
+        // but only while still owning the session, so a result that came
+        // back after logout/account-switch stays silent like every other
+        // path here.
+        const message =
+            'Failed to calculate. Make sure your weight and height are set in your profile.';
+        _errorMessage = message;
+        onError?.call(message);
       }
 
       return result;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return null;
-      _errorMessage =
+      final message =
           'Failed to calculate nutrition: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Calculate nutrition error: $e');
+      onError?.call(message);
       return null;
     } finally {
       if (_sessionEpoch.isCurrent(token)) {
