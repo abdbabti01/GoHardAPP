@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/theme_colors.dart';
+import '../../../core/theme/typography.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../providers/nutrition_provider.dart';
 import '../../../routes/route_names.dart';
@@ -101,6 +103,7 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
+    String? errorMessage;
     final conversation = await provider.generateMealPlan(
       dietaryGoal: _goalController.text.trim(),
       targetCalories: targetCalories,
@@ -113,6 +116,7 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
           _preferencesController.text.trim().isEmpty
               ? null
               : _preferencesController.text.trim(),
+      onError: (message) => errorMessage = message,
     );
 
     if (mounted) {
@@ -124,12 +128,12 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
           RouteNames.chatConversation,
           arguments: conversation.id,
         );
-      } else if (provider.errorMessage != null) {
+      } else if (errorMessage != null) {
         // Show error
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(provider.errorMessage!),
-            backgroundColor: Colors.red,
+            content: Text(errorMessage!),
+            backgroundColor: context.error,
           ),
         );
       }
@@ -154,11 +158,10 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Tell us about your nutrition goals',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                      style: AppTypography.headline.copyWith(
+                        color: context.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -169,7 +172,6 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Dietary Goal',
                         hintText: 'e.g., Muscle gain, Fat loss, Maintenance',
-                        border: OutlineInputBorder(),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -186,7 +188,6 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Target Calories',
                         hintText: 'e.g., 2500',
-                        border: OutlineInputBorder(),
                         suffixText: 'cal/day',
                       ),
                       keyboardType: TextInputType.number,
@@ -206,11 +207,10 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                     const SizedBox(height: 16),
 
                     // Macro Targets
-                    const Text(
+                    Text(
                       'Macro Targets',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                      style: AppTypography.titleMedium.copyWith(
+                        color: context.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -222,7 +222,6 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Protein',
                               hintText: '150',
-                              border: OutlineInputBorder(),
                               suffixText: 'g',
                             ),
                             keyboardType: TextInputType.number,
@@ -238,7 +237,6 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Carbs',
                               hintText: '200',
-                              border: OutlineInputBorder(),
                               suffixText: 'g',
                             ),
                             keyboardType: TextInputType.number,
@@ -254,7 +252,6 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Fat',
                               hintText: '65',
-                              border: OutlineInputBorder(),
                               suffixText: 'g',
                             ),
                             keyboardType: TextInputType.number,
@@ -274,7 +271,6 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                         labelText: 'Dietary Restrictions (Optional)',
                         hintText:
                             'e.g., Vegetarian, Vegan, Gluten-free, Lactose intolerant',
-                        border: OutlineInputBorder(),
                       ),
                       maxLines: 2,
                     ),
@@ -287,7 +283,6 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                         labelText: 'Food Preferences (Optional)',
                         hintText:
                             'e.g., I love chicken, No seafood, 5 meals per day',
-                        border: OutlineInputBorder(),
                       ),
                       maxLines: 3,
                     ),
@@ -301,13 +296,7 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                           return ElevatedButton(
                             onPressed:
                                 provider.isOffline ? null : _generatePlan,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text(
-                              'Generate Meal Plan',
-                              style: TextStyle(fontSize: 16),
-                            ),
+                            child: const Text('Generate Meal Plan'),
                           );
                         },
                       ),
@@ -319,20 +308,21 @@ class _MealPlanFormScreenState extends State<MealPlanFormScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.green[50],
+                        color: context.info.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green[200]!),
+                        border: Border.all(
+                          color: context.info.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.info_outline, color: Colors.green[700]),
+                          Icon(Icons.info_outline, color: context.info),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'AI will create a personalized meal plan with recipes and macros. You can chat with it to adjust meals.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.green[900],
+                              style: AppTypography.bodySmall.copyWith(
+                                color: context.info,
                               ),
                             ),
                           ),

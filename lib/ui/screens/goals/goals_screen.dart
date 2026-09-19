@@ -304,6 +304,7 @@ class _GoalsScreenState extends State<GoalsScreen>
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final nutritionProvider = context.read<NutritionProvider>();
+    final warningColor = context.warning;
 
     final createdGoal = await showDialog<Goal>(
       context: context,
@@ -331,8 +332,10 @@ class _GoalsScreenState extends State<GoalsScreen>
         debugPrint('Nutrition calculation failed: $e');
         messenger.showSnackBar(
           SnackBar(
-            content: Text('Could not calculate nutrition: $e'),
-            backgroundColor: Colors.orange,
+            content: const Text(
+              'Could not calculate nutrition targets. You can set them manually later.',
+            ),
+            backgroundColor: warningColor,
           ),
         );
       }
@@ -485,18 +488,18 @@ class _GoalsScreenState extends State<GoalsScreen>
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.1),
+                        color: context.info.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Colors.blue.withValues(alpha: 0.3),
+                          color: context.info.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.info_outline,
-                            color: Colors.blue,
+                            color: context.info,
                             size: 20,
                           ),
                           const SizedBox(width: 8),
@@ -506,8 +509,8 @@ class _GoalsScreenState extends State<GoalsScreen>
                                   'This will unlink $programsCount program(s) from this goal. '
                                       'Your workout history ($sessionsCount session(s)) is preserved — '
                                       'only the link to this goal is removed.',
-                              style: const TextStyle(
-                                color: Colors.blue,
+                              style: TextStyle(
+                                color: context.info,
                                 fontSize: 13,
                               ),
                             ),
@@ -535,7 +538,10 @@ class _GoalsScreenState extends State<GoalsScreen>
                 ),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: context.error,
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text('Delete'),
                 ),
               ],
@@ -559,9 +565,11 @@ class _GoalsScreenState extends State<GoalsScreen>
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong while deleting this goal.'),
+        ),
+      );
     }
   }
 
@@ -888,14 +896,17 @@ class _GoalsScreenState extends State<GoalsScreen>
             content: Text(
               chatProvider.errorMessage ?? 'Failed to generate meal plan',
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: context.error,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: const Text('Something went wrong. Please try again.'),
+            backgroundColor: context.error,
+          ),
         );
       }
     }
@@ -948,14 +959,17 @@ class _GoalsScreenState extends State<GoalsScreen>
             content: Text(
               chatProvider.errorMessage ?? 'Failed to create conversation',
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: context.error,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: const Text('Something went wrong. Please try again.'),
+            backgroundColor: context.error,
+          ),
         );
       }
     }
@@ -1169,14 +1183,17 @@ Format each meal with: Name, Calories, Protein, Carbs, Fat''';
             content: Text(
               chatProvider.errorMessage ?? 'Failed to create conversation',
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: context.error,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: const Text('Something went wrong. Please try again.'),
+            backgroundColor: context.error,
+          ),
         );
       }
     }
@@ -1333,7 +1350,12 @@ class _AddProgressDialogState extends State<AddProgressDialog> {
     );
 
     final provider = context.read<GoalsProvider>();
-    final success = await provider.addProgress(widget.goal.id, progress);
+    String? errorMessage;
+    final success = await provider.addProgress(
+      widget.goal.id,
+      progress,
+      onError: (message) => errorMessage = message,
+    );
 
     if (mounted) {
       setState(() => _isAdding = false);
@@ -1343,11 +1365,11 @@ class _AddProgressDialogState extends State<AddProgressDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Progress added successfully')),
         );
-      } else {
+      } else if (errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(provider.errorMessage ?? 'Failed to add progress'),
-            backgroundColor: Colors.red,
+            content: Text(errorMessage!),
+            backgroundColor: context.error,
           ),
         );
       }
@@ -1372,13 +1394,13 @@ class _AddProgressDialogState extends State<AddProgressDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: context.info.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 widget.goal.getProgressDescription(),
                 style: TextStyle(
-                  color: Colors.blue.shade700,
+                  color: context.info,
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
                 ),

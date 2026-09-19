@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/theme_colors.dart';
+import '../../../../core/theme/typography.dart';
+import '../../../../core/constants/colors.dart';
 import '../../../../core/services/goal_validation_service.dart';
 import '../../../../providers/goals_provider.dart';
 import '../../../../providers/body_metrics_provider.dart';
@@ -141,7 +143,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       targetChange: -10,
       unit: 'lb',
       icon: Icons.trending_down,
-      color: Colors.orange,
+      color: AppColors.accentAmber,
     ),
     GoalTemplate(
       name: 'Lose 20 lbs',
@@ -157,7 +159,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       targetChange: 5,
       unit: 'lb',
       icon: Icons.fitness_center,
-      color: Colors.blue,
+      color: AppColors.accentSky,
     ),
     GoalTemplate(
       name: 'Gain 10 lbs muscle',
@@ -428,9 +430,9 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
 
     if (_selectedGoalType == null) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Please select a goal type'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: const Text('Please select a goal type'),
+          backgroundColor: context.error,
         ),
       );
       return;
@@ -444,11 +446,11 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
         context: context,
         builder:
             (dialogContext) => AlertDialog(
-              title: const Row(
+              title: Row(
                 children: [
-                  Icon(Icons.warning_amber, color: Colors.orange),
-                  SizedBox(width: 8),
-                  Text('Goal Warning'),
+                  Icon(Icons.warning_amber, color: context.warning),
+                  const SizedBox(width: 8),
+                  const Text('Goal Warning'),
                 ],
               ),
               content: Text(
@@ -744,7 +746,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       case SmartGoalDialogState.summary:
         return Row(
           children: [
-            Icon(Icons.check_circle, color: Colors.green.shade600, size: 28),
+            Icon(Icons.check_circle, color: context.success, size: 28),
             const SizedBox(width: 12),
             const Expanded(child: Text('Goal Created!')),
           ],
@@ -752,7 +754,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       case SmartGoalDialogState.error:
         return Row(
           children: [
-            Icon(Icons.error_outline, color: Colors.red.shade600, size: 28),
+            Icon(Icons.error_outline, color: context.error, size: 28),
             const SizedBox(width: 12),
             const Expanded(child: Text('Error')),
           ],
@@ -870,7 +872,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
-                color: Colors.grey.shade700,
+                color: context.textSecondary,
               ),
             ),
           ],
@@ -969,7 +971,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           Row(
             children: [
               const SizedBox(width: 40),
-              Icon(Icons.auto_awesome, size: 14, color: Colors.green.shade600),
+              Icon(Icons.auto_awesome, size: 14, color: context.success),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -978,7 +980,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
                       : 'Auto-filled from latest body metric',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.green.shade600,
+                    color: context.success,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -1034,7 +1036,9 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
               _targetDate != null
                   ? DateFormat('MMM d, y').format(_targetDate!)
                   : 'Select target date',
-              style: TextStyle(color: _targetDate != null ? null : Colors.grey),
+              style: TextStyle(
+                color: _targetDate != null ? null : context.textTertiary,
+              ),
             ),
           ),
         ),
@@ -1072,26 +1076,22 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.orange.shade50,
+        color: context.warning.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange),
+        border: Border.all(color: context.warning),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.warning_amber,
-                color: Colors.orange.shade700,
-                size: 20,
-              ),
+              Icon(Icons.warning_amber, color: context.warning, size: 20),
               const SizedBox(width: 8),
               Text(
                 'Complete your body metrics first',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: Colors.orange.shade800,
+                  color: context.warning,
                 ),
               ),
             ],
@@ -1137,7 +1137,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
               icon: const Icon(Icons.edit, size: 18),
               label: const Text('Go to Body Metrics'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
+                backgroundColor: context.warning,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -1153,18 +1153,18 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.yellow.shade50,
+        color: context.warning.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.yellow.shade700),
+        border: Border.all(color: context.warning),
       ),
       child: Row(
         children: [
-          Icon(Icons.update, color: Colors.yellow.shade800, size: 20),
+          Icon(Icons.update, color: context.warning, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               'Your metrics are $daysSince days old. Consider updating them.',
-              style: TextStyle(fontSize: 12, color: Colors.yellow.shade900),
+              style: TextStyle(fontSize: 12, color: context.warning),
             ),
           ),
           TextButton(
@@ -1186,7 +1186,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
         children: [
           Icon(
             hasValue ? Icons.check_circle : Icons.cancel,
-            color: hasValue ? Colors.green : Colors.red,
+            color: hasValue ? context.success : context.error,
             size: 16,
           ),
           const SizedBox(width: 8),
@@ -1195,7 +1195,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
             hasValue ? value! : 'Missing',
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: hasValue ? Colors.green.shade700 : Colors.red,
+              color: hasValue ? context.success : context.error,
             ),
           ),
         ],
@@ -1208,22 +1208,22 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.green.shade50,
+        color: context.success.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.green.shade200),
+        border: Border.all(color: context.success.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.person, color: Colors.green.shade700, size: 20),
+              Icon(Icons.person, color: context.success, size: 20),
               const SizedBox(width: 8),
               Text(
                 'Your Current Stats',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: Colors.green.shade800,
+                  color: context.success,
                 ),
               ),
             ],
@@ -1253,18 +1253,18 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.only(top: 12),
       decoration: BoxDecoration(
-        color: Colors.orange.shade50,
+        color: context.warning.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange),
+        border: Border.all(color: context.warning),
       ),
       child: Row(
         children: [
-          Icon(Icons.warning_amber, color: Colors.orange.shade700, size: 20),
+          Icon(Icons.warning_amber, color: context.warning, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               _goalWarning!,
-              style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+              style: TextStyle(fontSize: 12, color: context.warning),
             ),
           ),
         ],
@@ -1325,7 +1325,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
             const SizedBox(height: 4),
             Text(
               'Target: ${DateFormat('MMM d, yyyy').format(_targetDate!)}',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 13, color: context.textSecondary),
             ),
           ],
         ],
@@ -1336,17 +1336,21 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
   // ==================== LOADING CONTENT ====================
 
   Widget _buildLoadingContent() {
-    return SizedBox(
-      height: 150,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 150),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             const CircularProgressIndicator(),
             const SizedBox(height: 16),
             Text(
               _loadingMessage ?? 'Please wait...',
-              style: TextStyle(color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMedium.copyWith(
+                color: context.textSecondary,
+              ),
             ),
           ],
         ),
@@ -1357,39 +1361,34 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
   // ==================== ERROR CONTENT ====================
 
   Widget _buildErrorContent() {
-    return SizedBox(
-      height: 200,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 200),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.red.shade50,
+                color: context.error.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                Icons.error_outline,
-                size: 48,
-                color: Colors.red.shade400,
-              ),
+              child: Icon(Icons.error_outline, size: 48, color: context.error),
             ),
             const SizedBox(height: 16),
             Text(
               'Failed to create goal',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.red.shade700,
-              ),
+              style: AppTypography.titleLarge.copyWith(color: context.error),
             ),
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 _errorMessage ?? 'An unexpected error occurred',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                style: AppTypography.bodyMedium.copyWith(
+                  color: context.textSecondary,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -1431,14 +1430,14 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           const SizedBox(height: 8),
           Text(
             'Select one or both to have AI create personalized plans:',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 12, color: context.textSecondary),
           ),
           const SizedBox(height: 12),
           _buildPlanCheckboxOption(
             icon: Icons.fitness_center,
             label: 'Workout Plan',
             description: 'AI creates a personalized program',
-            color: Colors.blue,
+            color: context.info,
             value: _generateWorkoutPlan,
             onChanged:
                 (value) =>
@@ -1449,7 +1448,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
             icon: Icons.restaurant_menu,
             label: 'Meal Plan',
             description: 'AI creates meals matching your macros',
-            color: Colors.green,
+            color: context.success,
             value: _generateMealPlan,
             onChanged:
                 (value) => setState(() => _generateMealPlan = value ?? false),
@@ -1469,16 +1468,16 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: context.info.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.shade200),
+        border: Border.all(color: context.info.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.flag, color: Colors.blue.shade700, size: 20),
+              Icon(Icons.flag, color: context.info, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1494,13 +1493,13 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           const SizedBox(height: 8),
           Text(
             '${goal.currentValue.toStringAsFixed(1)} → ${goal.targetValue.toStringAsFixed(1)} ${goal.unit ?? ''}',
-            style: TextStyle(fontSize: 15, color: Colors.blue.shade900),
+            style: TextStyle(fontSize: 15, color: context.info),
           ),
           if (goal.targetDate != null) ...[
             const SizedBox(height: 4),
             Text(
               'Target: ${DateFormat('MMM d, y').format(goal.targetDate!)}${weeks != null ? ' ($weeks weeks)' : ''}',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 13, color: context.textSecondary),
             ),
           ],
         ],
@@ -1514,9 +1513,9 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.green.shade50,
+        color: context.success.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.green.shade200),
+        border: Border.all(color: context.success.withValues(alpha: 0.4)),
       ),
       child: Column(
         children: [
@@ -1555,7 +1554,10 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: isDeficit ? Colors.orange.shade100 : Colors.green.shade100,
+              color:
+                  isDeficit
+                      ? context.warning.withValues(alpha: 0.12)
+                      : context.success.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
@@ -1564,10 +1566,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
                 Icon(
                   isDeficit ? Icons.trending_down : Icons.trending_up,
                   size: 18,
-                  color:
-                      isDeficit
-                          ? Colors.orange.shade800
-                          : Colors.green.shade800,
+                  color: isDeficit ? context.warning : context.success,
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -1576,10 +1575,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
                       : '${_nutrition!.calorieAdjustment.round()} cal surplus/day',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color:
-                        isDeficit
-                            ? Colors.orange.shade800
-                            : Colors.green.shade800,
+                    color: isDeficit ? context.warning : context.success,
                   ),
                 ),
               ],
@@ -1589,7 +1585,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
             const SizedBox(height: 8),
             Text(
               'Expected: ${_nutrition!.expectedWeeklyWeightChange > 0 ? '+' : ''}${_nutrition!.expectedWeeklyWeightChange.toStringAsFixed(1)} lbs/week',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 13, color: context.textSecondary),
             ),
           ],
         ],
@@ -1601,27 +1597,23 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.orange.shade50,
+        color: context.warning.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange.shade300),
+        border: Border.all(color: context.warning.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.warning_amber,
-                color: Colors.orange.shade700,
-                size: 20,
-              ),
+              Icon(Icons.warning_amber, color: context.warning, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Aggressive Plan Warning',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.orange.shade800,
+                    color: context.warning,
                     fontSize: 14,
                   ),
                 ),
@@ -1631,33 +1623,32 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           const SizedBox(height: 8),
           Text(
             _nutrition!.warning!,
-            style: TextStyle(fontSize: 13, color: Colors.orange.shade900),
+            style: TextStyle(fontSize: 13, color: context.warning),
           ),
           if (_nutrition!.recommendation != null) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
+                color: context.success.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.green.shade200),
+                border: Border.all(
+                  color: context.success.withValues(alpha: 0.4),
+                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
                     Icons.lightbulb_outline,
-                    color: Colors.green.shade700,
+                    color: context.success,
                     size: 18,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _nutrition!.recommendation!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.green.shade800,
-                      ),
+                      style: TextStyle(fontSize: 12, color: context.success),
                     ),
                   ),
                 ],
@@ -1733,14 +1724,14 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: context.info.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.shade200),
+        border: Border.all(color: context.info.withValues(alpha: 0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.restaurant_menu, color: Colors.blue.shade700),
+          Icon(Icons.restaurant_menu, color: context.info),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1750,13 +1741,13 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
                   'Nutrition Targets (Optional)',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade900,
+                    color: context.info,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   "Calculate calories and macros for this goal. You'll see the numbers before anything is saved.",
-                  style: TextStyle(fontSize: 12, color: Colors.blue.shade800),
+                  style: TextStyle(fontSize: 12, color: context.info),
                 ),
               ],
             ),
@@ -1780,7 +1771,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           const SizedBox(height: 4),
           Text(
             _nutritionSetupError!,
-            style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+            style: TextStyle(fontSize: 12, color: context.error),
           ),
         ],
         Align(
@@ -1819,14 +1810,14 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.orange.shade50,
+            color: context.warning.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.orange.shade200),
+            border: Border.all(color: context.warning.withValues(alpha: 0.4)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline, size: 18, color: Colors.orange.shade800),
+              Icon(Icons.info_outline, size: 18, color: context.warning),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1834,7 +1825,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
                       ? 'This replaces your current target: '
                           '${priorGoal.dailyCalories.round()} cal → ${nutrition.dailyCalories.round()} cal.'
                       : 'This will set your daily nutrition targets.',
-                  style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                  style: TextStyle(fontSize: 12, color: context.warning),
                 ),
               ),
             ],
@@ -1864,13 +1855,13 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
       children: [
         Row(
           children: [
-            Icon(Icons.check_circle, color: Colors.green.shade600, size: 18),
+            Icon(Icons.check_circle, color: context.success, size: 18),
             const SizedBox(width: 8),
             Text(
               'Nutrition targets saved',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.green.shade800,
+                color: context.success,
               ),
             ),
           ],
@@ -1885,9 +1876,9 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.red.shade50,
+        color: context.error.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.red.shade200),
+        border: Border.all(color: context.error.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1895,7 +1886,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           Text(
             _nutritionSetupError ??
                 'Nutrition setup failed. Your existing targets were not changed.',
-            style: TextStyle(fontSize: 13, color: Colors.red.shade900),
+            style: TextStyle(fontSize: 13, color: context.error),
           ),
           const SizedBox(height: 8),
           Row(
@@ -1936,7 +1927,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: value ? color : Colors.grey.shade300,
+              color: value ? color : context.borderSubtle,
               width: value ? 2 : 1,
             ),
           ),
@@ -1976,7 +1967,7 @@ class _SmartGoalDialogState extends State<SmartGoalDialog> {
                       description,
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade600,
+                        color: context.textSecondary,
                       ),
                     ),
                   ],

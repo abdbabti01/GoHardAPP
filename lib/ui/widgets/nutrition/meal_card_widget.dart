@@ -61,10 +61,14 @@ class MealCardWidget extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              mealType,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            Flexible(
+                              child: Text(
+                                mealType,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             if (isPlanned) ...[
                               const SizedBox(width: 8),
@@ -106,6 +110,7 @@ class MealCardWidget extends StatelessWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.add_circle_outline),
+                    tooltip: 'Add food',
                     onPressed: onAddFood,
                     color: Theme.of(context).colorScheme.primary,
                   ),

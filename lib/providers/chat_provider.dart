@@ -414,10 +414,13 @@ class ChatProvider extends ChangeNotifier {
     required int daysPerWeek,
     required String equipment,
     String? limitations,
+    void Function(String message)? onError,
   }) async {
     if (isOffline) {
-      _errorMessage = 'Cannot generate workout plan offline';
+      const message = 'Cannot generate workout plan offline';
+      _errorMessage = message;
       notifyListeners();
+      onError?.call(message);
       return null;
     }
 
@@ -446,9 +449,11 @@ class ChatProvider extends ChangeNotifier {
       return conversation;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return null;
-      _errorMessage =
+      final message =
           'Failed to generate workout plan: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Generate workout plan error: $e');
+      onError?.call(message);
       return null;
     } finally {
       if (_sessionEpoch.isCurrent(token)) {
@@ -465,10 +470,13 @@ class ChatProvider extends ChangeNotifier {
     String? macros,
     String? restrictions,
     String? preferences,
+    void Function(String message)? onError,
   }) async {
     if (isOffline) {
-      _errorMessage = 'Cannot generate meal plan offline';
+      const message = 'Cannot generate meal plan offline';
+      _errorMessage = message;
       notifyListeners();
+      onError?.call(message);
       return null;
     }
 
@@ -497,9 +505,11 @@ class ChatProvider extends ChangeNotifier {
       return conversation;
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return null;
-      _errorMessage =
+      final message =
           'Failed to generate meal plan: ${e.toString().replaceAll('Exception: ', '')}';
+      _errorMessage = message;
       debugPrint('Generate meal plan error: $e');
+      onError?.call(message);
       return null;
     } finally {
       if (_sessionEpoch.isCurrent(token)) {

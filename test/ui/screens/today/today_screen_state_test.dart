@@ -71,6 +71,18 @@ void _stubHealthyNutrition(
   ).thenAnswer((_) async => <MealLog>[]);
 }
 
+/// Stubs a clean, error-free running dashboard load so tests focused on the
+/// workouts/programs sections aren't cluttered by the Running section's own
+/// independent loading/error UI.
+void _stubHealthyRunning(MockRunningRepository runningRepo) {
+  when(
+    runningRepo.getRecentRuns(limit: anyNamed('limit')),
+  ).thenAnswer((_) async => []);
+  when(
+    runningRepo.getWeeklyStats(),
+  ).thenAnswer((_) async => <String, dynamic>{});
+}
+
 /// Today must represent actual state: loading is never mistaken for empty,
 /// one section's failure never hides another's good data, cached content
 /// survives a failed refresh, and a genuine rest day is distinguished from
@@ -236,6 +248,7 @@ void main() {
         programsRepo.getPrograms(isActive: anyNamed('isActive')),
       ).thenThrow(Exception('network error'));
       _stubHealthyNutrition(nutritionRepo, todayDate);
+      _stubHealthyRunning(runningRepo);
 
       await tester.pumpWidget(host());
       await tester.pump();
@@ -246,8 +259,8 @@ void main() {
       expect(find.text('Leg Day'), findsOneWidget);
       // The programs failure is surfaced with a working retry action, not
       // silently swallowed into a false "nothing scheduled" claim - scoped
-      // to the workouts card specifically, since an unrelated nutrition
-      // section is stubbed to succeed cleanly in this test.
+      // to the workouts card specifically, since unrelated nutrition and
+      // running sections are stubbed to succeed cleanly in this test.
       expect(find.text('No workouts scheduled'), findsNothing);
       expect(find.byIcon(Icons.error_outline), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
@@ -158,8 +160,13 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: ChangeNotifierProvider<NutritionProvider>.value(
-          value: provider,
+        home: MultiProvider(
+          providers: [
+            ChangeNotifierProvider<NutritionProvider>.value(value: provider),
+            ChangeNotifierProvider<ConnectivityService>.value(
+              value: mockConnectivity,
+            ),
+          ],
           child: const Scaffold(body: NutritionDashboardScreen()),
         ),
       ),
@@ -237,6 +244,31 @@ void main() {
         // "Eaten" in the setup prompt must show the real consumed total (300)
         // from MealLog, not the stale dailyProgress value (0).
         expect(find.text('300'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'a manually-saved goal (no AI explanation) is treated as configured, '
+      'not the setup prompt',
+      (tester) async {
+        // Regression for a bug where a real, manually-entered goal (no
+        // `explanation` because the user typed values directly rather than
+        // using "Calculate from metrics") was misclassified as unconfigured
+        // and the dashboard kept showing "Set Your Nutrition Goals" forever,
+        // even though setup was already complete.
+        await pumpDashboard(
+          tester,
+          mealLog: mixedMealLog,
+          progress: staleProgress,
+          activeGoal: goal(explanation: null),
+        );
+
+        expect(find.text('Set Your Nutrition Goals'), findsNothing);
+        // The real calorie summary card renders instead, using the manually
+        // saved goal's own values (2000 goal, 300 consumed, 1700 remaining).
+        expect(find.text('2000'), findsWidgets);
+        expect(find.text('300'), findsWidgets);
+        expect(find.text('1700'), findsOneWidget);
       },
     );
 
@@ -387,8 +419,15 @@ void main() {
           );
           await tester.pumpWidget(
             MaterialApp(
-              home: ChangeNotifierProvider<NutritionProvider>.value(
-                value: provider,
+              home: MultiProvider(
+                providers: [
+                  ChangeNotifierProvider<NutritionProvider>.value(
+                    value: provider,
+                  ),
+                  ChangeNotifierProvider<ConnectivityService>.value(
+                    value: mockConnectivity,
+                  ),
+                ],
                 child: const Scaffold(body: NutritionDashboardScreen()),
               ),
             ),
@@ -489,8 +528,15 @@ void main() {
           );
           await tester.pumpWidget(
             MaterialApp(
-              home: ChangeNotifierProvider<NutritionProvider>.value(
-                value: provider,
+              home: MultiProvider(
+                providers: [
+                  ChangeNotifierProvider<NutritionProvider>.value(
+                    value: provider,
+                  ),
+                  ChangeNotifierProvider<ConnectivityService>.value(
+                    value: mockConnectivity,
+                  ),
+                ],
                 child: const Scaffold(body: NutritionDashboardScreen()),
               ),
             ),
@@ -566,8 +612,15 @@ void main() {
         );
         await tester.pumpWidget(
           MaterialApp(
-            home: ChangeNotifierProvider<NutritionProvider>.value(
-              value: provider,
+            home: MultiProvider(
+              providers: [
+                ChangeNotifierProvider<NutritionProvider>.value(
+                  value: provider,
+                ),
+                ChangeNotifierProvider<ConnectivityService>.value(
+                  value: mockConnectivity,
+                ),
+              ],
               child: const Scaffold(body: NutritionDashboardScreen()),
             ),
           ),
@@ -587,5 +640,191 @@ void main() {
         expect(find.text('111'), findsNothing);
       },
     );
+  });
+
+  group('mutation-error feedback: distinguishes stale/superseded from genuine '
+      'failure', () {
+    // Regression for two Phase-4 mutation-feedback bugs on the failure
+    // feedback added to
+    // _buildWaterButton/_deleteFood/_showEditFoodDialog/_markMealConsumed:
+    //
+    // Bug 1: a synthesized generic snackbar ("Failed to log water", etc.)
+    // showed whenever the mutation returned `false` - but NutritionProvider
+    // returns `false` for TWO very different outcomes it deliberately
+    // distinguishes via `errorMessage`: a genuine failure (message set) vs.
+    // a stale/ended session (left untouched). `provider.errorMessage ??
+    // 'generic fallback'` collapsed that distinction, so a late response
+    // after logout/account switch showed a made-up failure snackbar.
+    //
+    // Bug 2: fixing Bug 1 by gating on `errorMessage != null` is still
+    // wrong, because `errorMessage` is a single field SHARED across every
+    // mutation the provider is handling - an old, already-displayed error
+    // can sit there and get re-shown for an unrelated later operation that
+    // also returns `false`. The fix is [NutritionProvider.onError]: a
+    // synchronous, per-call callback fired if and only if THAT call's own
+    // operation genuinely failed while the session was still current -
+    // never read from the shared field - so a caller's feedback decision
+    // cannot be confused by unrelated past or concurrent activity.
+    //
+    // The "prime" tests below seed the shared `errorMessage` field with an
+    // unrelated, already-displayed failure first, specifically to prove
+    // the next operation's feedback decision does not depend on it.
+    Future<void> primeExistingWaterError(WidgetTester tester) async {
+      when(
+        mockRepository.updateWaterIntake(1, any),
+      ).thenThrow(Exception('primed failure'));
+
+      await tester.ensureVisible(find.text('250ml'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('250ml'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('primed failure'), findsOneWidget);
+      // Outlive the SnackBar's default display duration.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
+
+      clearInteractions(mockRepository);
+    }
+
+    testWidgets(
+      'an existing error followed by a stale (logout) addWater result '
+      'shows no snackbar and does not resurface the old message',
+      (tester) async {
+        final provider = await pumpDashboard(
+          tester,
+          mealLog: mixedMealLog,
+          progress: staleProgress,
+          activeGoal: goal(),
+        );
+
+        await primeExistingWaterError(tester);
+
+        final gate = Completer<void>();
+        when(
+          mockRepository.updateWaterIntake(1, any),
+        ).thenAnswer((_) => gate.future);
+
+        await tester.ensureVisible(find.text('250ml'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('250ml'));
+        await tester.pump();
+
+        // The session ends (logout / account switch) while this second,
+        // unrelated water update is still in flight.
+        sessionEpoch.invalidate();
+        gate.complete();
+        await tester.pumpAndSettle();
+
+        // Confirms the tap genuinely reached the button and the mutation
+        // ran, rather than this test passing merely because the tap
+        // silently missed.
+        verify(mockRepository.updateWaterIntake(1, any)).called(1);
+        // The shared field still holds the OLD, already-displayed message
+        // - proving that a UI which merely checked `errorMessage != null`
+        // would incorrectly resurface it here. The onError-based call site
+        // never reads this field, so nothing is shown regardless.
+        expect(provider.errorMessage, contains('primed failure'));
+        expect(find.byType(SnackBar), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'an existing error followed by a genuine current-operation addWater '
+      'failure still shows that new failure, not the old one',
+      (tester) async {
+        await pumpDashboard(
+          tester,
+          mealLog: mixedMealLog,
+          progress: staleProgress,
+          activeGoal: goal(),
+        );
+
+        await primeExistingWaterError(tester);
+
+        when(
+          mockRepository.updateWaterIntake(1, any),
+        ).thenThrow(Exception('fresh failure'));
+
+        await tester.ensureVisible(find.text('250ml'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('250ml'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(SnackBar), findsOneWidget);
+        expect(find.textContaining('fresh failure'), findsOneWidget);
+        expect(find.textContaining('primed failure'), findsNothing);
+      },
+    );
+
+    // Not a widget test: NutritionProvider has no per-target mutation
+    // generation (unlike ProgramsProvider), so two overlapping mutations
+    // on this SAME provider instance race directly on the shared
+    // `errorMessage` field with nothing to arbitrate between them. This
+    // exercises NutritionProvider.onError directly on two concurrent
+    // calls - updateFoodQuantity and addWater - using the exact callback
+    // the UI relies on, proving neither call's feedback depends on or
+    // contaminates the other's.
+    test('overlapping operations (updateFoodQuantity, addWater): each '
+        "call's own outcome surfaces via its own onError and never "
+        "contaminates, or is contaminated by, the other's", () async {
+      final provider = NutritionProvider(
+        mockRepository,
+        sessionEpoch,
+        mockConnectivity,
+      );
+      // Give the provider a loaded meal log so addWater's null-guard
+      // passes and it can compute a new water target.
+      when(
+        mockRepository.getTodaysMealLog(date: anyNamed('date')),
+      ).thenAnswer((_) async => mixedMealLog());
+      when(
+        mockRepository.getNutritionDashboard(date: anyNamed('date')),
+      ).thenAnswer(
+        (_) async => NutritionDashboardData(
+          date: DateTime.now(),
+          goal: goal(),
+          progress: staleProgress(),
+        ),
+      );
+      when(
+        mockRepository.getStreak(),
+      ).thenAnswer((_) async => StreakInfo(currentStreak: 0, longestStreak: 0));
+      await provider.loadTodaysData();
+
+      final gateFood = Completer<void>();
+      final gateWater = Completer<void>();
+      when(
+        mockRepository.updateFoodQuantity(1, any),
+      ).thenAnswer((_) => gateFood.future);
+      when(
+        mockRepository.updateWaterIntake(any, any),
+      ).thenAnswer((_) => gateWater.future);
+
+      String? foodError;
+      String? waterError;
+
+      final foodFuture = provider.updateFoodQuantity(
+        1,
+        2,
+        onError: (m) => foodError = m,
+      );
+      final waterFuture = provider.addWater(
+        250,
+        onError: (m) => waterError = m,
+      );
+
+      // The food update fails genuinely.
+      gateFood.completeError(Exception('food failed'));
+      expect(await foodFuture, isFalse);
+      expect(foodError, contains('food failed'));
+
+      // The water update succeeds, and must never have received the
+      // food call's message nor produced one of its own.
+      gateWater.complete();
+      expect(await waterFuture, isTrue);
+      expect(waterError, isNull);
+    });
   });
 }

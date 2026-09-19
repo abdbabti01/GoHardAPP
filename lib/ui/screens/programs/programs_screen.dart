@@ -451,12 +451,14 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             Icons.calendar_view_week_rounded,
             !_showMonthView,
             () => setState(() => _showMonthView = false),
+            'Week view',
           ),
           _buildToggleButton(
             context,
             Icons.calendar_month_rounded,
             _showMonthView,
             () => setState(() => _showMonthView = true),
+            'Month view',
           ),
         ],
       ),
@@ -468,24 +470,38 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     IconData icon,
     bool isActive,
     VoidCallback onTap,
+    String label,
   ) {
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: isActive ? theme.primaryColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: isActive ? Colors.white : context.textSecondary,
+    return Semantics(
+      button: true,
+      selected: isActive,
+      label: label,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Tooltip(
+          message: label,
+          child: Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isActive ? context.accent : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: isActive ? Colors.white : context.textSecondary,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -509,7 +525,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   children: [
                     Icon(Icons.link_rounded, size: 20),
                     SizedBox(width: 12),
-                    Text('Link to Goal'),
+                    Flexible(
+                      child: Text(
+                        'Link to Goal',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
               )
@@ -520,7 +542,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   children: [
                     Icon(Icons.link_off_rounded, size: 20),
                     SizedBox(width: 12),
-                    Text('Unlink from Goal'),
+                    Flexible(
+                      child: Text(
+                        'Unlink from Goal',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -531,7 +559,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   children: [
                     Icon(Icons.calendar_today_rounded, size: 20),
                     SizedBox(width: 12),
-                    Text('Fix Calendar Dates'),
+                    Flexible(
+                      child: Text(
+                        'Fix Calendar Dates',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -542,7 +576,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   children: [
                     Icon(Icons.check_circle_outline_rounded, size: 20),
                     SizedBox(width: 12),
-                    Text('Mark as Complete'),
+                    Flexible(
+                      child: Text(
+                        'Mark as Complete',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -553,7 +593,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   children: [
                     Icon(Icons.unarchive_outlined, size: 20),
                     SizedBox(width: 12),
-                    Text('Restore'),
+                    Flexible(
+                      child: Text(
+                        'Restore',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
               )
@@ -564,7 +610,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   children: [
                     Icon(Icons.pause_circle_outline_rounded, size: 20),
                     SizedBox(width: 12),
-                    Text('Stop Program'),
+                    Flexible(
+                      child: Text(
+                        'Stop Program',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -578,9 +630,13 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     color: Colors.red,
                   ),
                   const SizedBox(width: 12),
-                  const Text(
-                    'Delete Program',
-                    style: TextStyle(color: Colors.red),
+                  const Flexible(
+                    child: Text(
+                      'Delete Program',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.red),
+                    ),
                   ),
                 ],
               ),
@@ -862,9 +918,34 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     } else if (value == 'archive') {
       _showArchiveConfirmation(context, program);
     } else if (value == 'unarchive') {
-      context.read<ProgramsProvider>().unarchiveProgram(program.id);
+      _unarchiveProgram(context, program);
     } else if (value == 'delete') {
       _showDeleteConfirmation(context, program);
+    }
+  }
+
+  Future<void> _unarchiveProgram(BuildContext context, Program program) async {
+    final provider = context.read<ProgramsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    // onError only fires for THIS call's own genuine, still-owned failure -
+    // never for a stale session, cancelled request, or superseded mutation,
+    // and never with a different overlapping call's message. Reading
+    // provider.errorMessage after the fact would race with any other
+    // mutation the provider is concurrently handling.
+    String? errorMessage;
+    final success = await provider.unarchiveProgram(
+      program.id,
+      onError: (message) => errorMessage = message,
+    );
+
+    if (!context.mounted) return;
+    if (success) {
+      messenger.showSnackBar(const SnackBar(content: Text('Program restored')));
+    } else if (errorMessage != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(errorMessage!), backgroundColor: context.error),
+      );
     }
   }
 
@@ -893,10 +974,23 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 onPressed: () async {
                   Navigator.pop(context);
                   final provider = context.read<ProgramsProvider>();
-                  final success = await provider.archiveProgram(program.id);
-                  if (success && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  final messenger = ScaffoldMessenger.of(context);
+                  String? errorMessage;
+                  final success = await provider.archiveProgram(
+                    program.id,
+                    onError: (message) => errorMessage = message,
+                  );
+                  if (!context.mounted) return;
+                  if (success) {
+                    messenger.showSnackBar(
                       const SnackBar(content: Text('Program stopped')),
+                    );
+                  } else if (errorMessage != null) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(errorMessage!),
+                        backgroundColor: context.error,
+                      ),
                     );
                   }
                 },
@@ -914,21 +1008,25 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     final provider = context.read<ProgramsProvider>();
     final messenger = ScaffoldMessenger.of(context);
 
-    final success = await provider.recalibrateProgram(program.id);
+    String? errorMessage;
+    final success = await provider.recalibrateProgram(
+      program.id,
+      onError: (message) => errorMessage = message,
+    );
 
-    if (success && mounted) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Calendar dates fixed! Days now align correctly.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else if (!success && mounted) {
+    if (!context.mounted) return;
+    if (success) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(provider.errorMessage ?? 'Failed to fix calendar'),
-          backgroundColor: Colors.red,
+          content: const Text(
+            'Calendar dates fixed! Days now align correctly.',
+          ),
+          backgroundColor: context.success,
         ),
+      );
+    } else if (errorMessage != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(errorMessage!), backgroundColor: context.error),
       );
     }
   }
@@ -954,10 +1052,23 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 onPressed: () async {
                   Navigator.pop(context);
                   final provider = context.read<ProgramsProvider>();
-                  final success = await provider.completeProgram(program.id);
-                  if (success && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  final messenger = ScaffoldMessenger.of(context);
+                  String? errorMessage;
+                  final success = await provider.completeProgram(
+                    program.id,
+                    onError: (message) => errorMessage = message,
+                  );
+                  if (!context.mounted) return;
+                  if (success) {
+                    messenger.showSnackBar(
                       const SnackBar(content: Text('Program completed!')),
+                    );
+                  } else if (errorMessage != null) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(errorMessage!),
+                        backgroundColor: context.error,
+                      ),
                     );
                   }
                 },
@@ -973,6 +1084,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     final sessionsProvider = context.read<SessionsProvider>();
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    final errorColor = context.error;
 
     PremiumLoadingDialog.show(context, message: 'Checking deletion impact...');
 
@@ -1001,7 +1113,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     Text(
                       (impact['warning'] as String?) ??
                           'Your ${impact['sessionsCount']} workout session(s) are preserved as history — only the link to this program is removed.',
-                      style: const TextStyle(color: Colors.blue),
+                      style: TextStyle(color: context.info),
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -1023,7 +1135,10 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: context.error,
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text('Delete'),
                 ),
               ],
@@ -1031,20 +1146,32 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       );
 
       if (confirmed == true && mounted) {
-        final success = await provider.deleteProgram(program.id);
-        if (success && mounted) {
+        String? errorMessage;
+        final success = await provider.deleteProgram(
+          program.id,
+          onError: (message) => errorMessage = message,
+        );
+        if (!mounted) return;
+        if (success) {
           await sessionsProvider.loadSessions(waitForSync: true);
           messenger.showSnackBar(
             const SnackBar(content: Text('Program deleted')),
           );
           _loadPrograms();
+        } else if (errorMessage != null) {
+          messenger.showSnackBar(
+            SnackBar(content: Text(errorMessage!), backgroundColor: errorColor),
+          );
         }
       }
     } catch (e) {
       if (!mounted) return;
       navigator.pop();
       messenger.showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: const Text('Something went wrong. Please try again.'),
+          backgroundColor: errorColor,
+        ),
       );
     }
   }
@@ -1135,19 +1262,30 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       goal: program.goal,
     );
 
-    final success = await provider.updateProgram(program.id, updatedProgram);
+    String? errorMessage;
+    final success = await provider.updateProgram(
+      program.id,
+      updatedProgram,
+      onError: (message) => errorMessage = message,
+    );
 
-    if (success && mounted) {
+    if (!mounted) return;
+    if (success) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Program linked to goal')),
       );
       await provider.loadPrograms();
+    } else if (errorMessage != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(errorMessage!), backgroundColor: context.error),
+      );
     }
   }
 
   Future<void> _unlinkGoal(BuildContext context, Program program) async {
     final provider = context.read<ProgramsProvider>();
     final messenger = ScaffoldMessenger.of(context);
+    final errorColor = context.error;
 
     final updatedProgram = Program(
       id: program.id,
@@ -1169,13 +1307,23 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
       goal: program.goal,
     );
 
-    final success = await provider.updateProgram(program.id, updatedProgram);
+    String? errorMessage;
+    final success = await provider.updateProgram(
+      program.id,
+      updatedProgram,
+      onError: (message) => errorMessage = message,
+    );
 
-    if (success && mounted) {
+    if (!mounted) return;
+    if (success) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Program unlinked from goal')),
       );
       await provider.loadPrograms();
+    } else if (errorMessage != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(errorMessage!), backgroundColor: errorColor),
+      );
     }
   }
 
