@@ -72,18 +72,18 @@ class _WorkoutNameDialogState extends State<WorkoutNameDialog> {
                 ),
                 // Workout options in this group
                 ...entry.value.map(
-                  (name) => RadioListTile<String>(
-                    title: Text(name),
-                    value: name,
+                  (name) => RadioGroup<String>(
                     groupValue: _selectedName,
-                    onChanged:
-                        _useCustomName
-                            ? null
-                            : (value) {
-                              if (value != null) _handleSelection(value);
-                            },
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
+                    onChanged: (value) {
+                      if (value != null) _handleSelection(value);
+                    },
+                    child: RadioListTile<String>(
+                      title: Text(name),
+                      value: name,
+                      enabled: !_useCustomName,
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
                 ),
               ];

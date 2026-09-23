@@ -117,7 +117,7 @@ class _TemplateFormDialogState extends State<TemplateFormDialog> {
 
               // Category dropdown
               DropdownButtonFormField<String>(
-                value: _category,
+                initialValue: _category,
                 decoration: const InputDecoration(labelText: 'Category'),
                 items:
                     _categories.map((cat) {
@@ -149,9 +149,7 @@ class _TemplateFormDialogState extends State<TemplateFormDialog> {
               ),
               const SizedBox(height: 8),
 
-              RadioListTile<String>(
-                title: const Text('Daily'),
-                value: 'daily',
+              RadioGroup<String>(
                 groupValue: _recurrencePattern,
                 onChanged: (value) {
                   setState(() {
@@ -160,11 +158,13 @@ class _TemplateFormDialogState extends State<TemplateFormDialog> {
                     _intervalDays = null;
                   });
                 },
+                child: const RadioListTile<String>(
+                  title: Text('Daily'),
+                  value: 'daily',
+                ),
               ),
 
-              RadioListTile<String>(
-                title: const Text('Weekly (specific days)'),
-                value: 'weekly',
+              RadioGroup<String>(
                 groupValue: _recurrencePattern,
                 onChanged: (value) {
                   setState(() {
@@ -172,6 +172,10 @@ class _TemplateFormDialogState extends State<TemplateFormDialog> {
                     _intervalDays = null;
                   });
                 },
+                child: const RadioListTile<String>(
+                  title: Text('Weekly (specific days)'),
+                  value: 'weekly',
+                ),
               ),
 
               if (_recurrencePattern == 'weekly') ...[
@@ -199,9 +203,7 @@ class _TemplateFormDialogState extends State<TemplateFormDialog> {
                 ),
               ],
 
-              RadioListTile<String>(
-                title: const Text('Custom interval'),
-                value: 'custom',
+              RadioGroup<String>(
                 groupValue: _recurrencePattern,
                 onChanged: (value) {
                   setState(() {
@@ -209,6 +211,10 @@ class _TemplateFormDialogState extends State<TemplateFormDialog> {
                     _selectedDays = [];
                   });
                 },
+                child: const RadioListTile<String>(
+                  title: Text('Custom interval'),
+                  value: 'custom',
+                ),
               ),
 
               if (_recurrencePattern == 'custom') ...[

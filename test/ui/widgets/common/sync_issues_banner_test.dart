@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
@@ -189,6 +188,6 @@ void main() {
         'retry will continue.',
       ),
     );
-    expect(semantics.hasFlag(SemanticsFlag.isLiveRegion), isTrue);
+    expect(semantics.flagsCollection.isLiveRegion, isTrue);
   });
 }

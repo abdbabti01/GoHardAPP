@@ -615,7 +615,7 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _selectedActivityLevel,
+                initialValue: _selectedActivityLevel,
                 decoration: const InputDecoration(
                   labelText: 'Activity Level',
                   prefixIcon: Icon(Icons.directions_run),

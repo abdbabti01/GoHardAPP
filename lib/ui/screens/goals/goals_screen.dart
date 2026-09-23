@@ -704,9 +704,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                             'weekly',
                             'biweekly',
                           ].map(
-                            (freq) => RadioListTile<String>(
-                              title: Text(_getFrequencyDisplay(freq)),
-                              value: freq,
+                            (freq) => RadioGroup<String>(
                               groupValue: selectedFrequency,
                               onChanged: (value) {
                                 if (value != null) {
@@ -715,6 +713,10 @@ class _GoalsScreenState extends State<GoalsScreen>
                                   });
                                 }
                               },
+                              child: RadioListTile<String>(
+                                title: Text(_getFrequencyDisplay(freq)),
+                                value: freq,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),

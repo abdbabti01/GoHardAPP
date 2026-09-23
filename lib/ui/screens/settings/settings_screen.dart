@@ -244,7 +244,7 @@ class SettingsScreen extends StatelessWidget {
       subtitle: Text(subtitle),
       value: enabled,
       onChanged: onChanged,
-      activeColor: Theme.of(context).primaryColor,
+      activeThumbColor: Theme.of(context).primaryColor,
     );
   }
 
@@ -349,7 +349,7 @@ class SettingsScreen extends StatelessWidget {
                         : 'Sync workouts with $platformName',
                   ),
                   value: healthService.isEnabled,
-                  activeColor: context.accent,
+                  activeThumbColor: context.accent,
                   onChanged: (value) async {
                     if (value) {
                       final success = await healthService.enable();
