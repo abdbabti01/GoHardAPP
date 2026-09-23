@@ -204,45 +204,61 @@ class EmptyStateIllustrated extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // This content's natural height (140px illustration + title + message +
+    // optional action) can exceed the space a caller gives it - e.g. the
+    // active workout screen's exercise list shrinks once the timer card
+    // switches to its running layout. Center it when it fits; scroll rather
+    // than overflow when it does not.
     return FadeSlideAnimation(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Illustration or fallback
-              illustration ?? _buildFallbackIllustration(context),
-              const SizedBox(height: 32),
-              // Title
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: context.textPrimary,
-                  letterSpacing: -0.5,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              // Message
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: context.textSecondary,
-                    height: 1.6,
+      child: LayoutBuilder(
+        builder:
+            (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Illustration or fallback
+                        illustration ?? _buildFallbackIllustration(context),
+                        const SizedBox(height: 32),
+                        // Title
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: context.textPrimary,
+                            letterSpacing: -0.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        // Message
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            message,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: context.textSecondary,
+                              height: 1.6,
+                            ),
+                          ),
+                        ),
+                        if (action != null) ...[
+                          const SizedBox(height: 32),
+                          action!,
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-              if (action != null) ...[const SizedBox(height: 32), action!],
-            ],
-          ),
-        ),
+            ),
       ),
     );
   }

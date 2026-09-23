@@ -45,10 +45,12 @@ import '../core/services/user_session_epoch.dart';
 ///   independently of result ownership, so a load whose result was superseded
 ///   can still release its own spinner without a stale finally ever clearing a
 ///   newer operation's / user B's spinner. See the field doc.
-/// - [addExercise] / [createWorkoutFromAI] appends are NOT given a per-append
-///   generation: two rapid adds on the same workout must both land. They rely
-///   on `_requestGeneration` (a replaced/cleared workout supersedes them) plus
-///   the `_currentSession.id` check.
+/// - [addExercise] appends are NOT given a per-append generation: two rapid
+///   adds on the same workout must both land, and a same-workout [loadSession]
+///   must never drop or overwrite one (the write is already persisted). They
+///   rely on the session epoch plus the `_currentSession.id` check;
+///   [_appendGeneration] lets an older in-flight load merge appended exercises.
+///   [createWorkoutFromAI] still relies on `_requestGeneration`.
 /// - [_timerGeneration] - see [_startTimer].
 /// - [_lifecycleGeneration] - invalidates lifecycle-started async work.
 ///
@@ -122,6 +124,13 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// yet. A newer loading operation also bumps this claim, so a stale finally
   /// can never clear a newer operation's spinner.
   int _loadingClaim = 0;
+
+  /// Clock + log of exercises appended by [addExercise]. [loadSession] records
+  /// the clock when it starts and, when its (older) snapshot is published,
+  /// merges any exercise appended after that point, so a snapshot read before
+  /// an add's write cannot erase it. Reset by [_invalidateGenerations].
+  int _appendGeneration = 0;
+  final List<({int gen, Exercise exercise})> _appendedExercises = [];
 
   /// See [_startTimer] / [_stopTimer] / [_stopTimerIfOwned].
   int _timerGeneration = 0;
@@ -297,6 +306,7 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
     // A (re)load supersedes any in-flight in-place edit AND vice versa: a
     // newer edit that bumps `_editGeneration` supersedes THIS load's result.
     final myEdit = ++_editGeneration;
+    final myAppend = _appendGeneration;
 
     // The RESULT ownership predicate - governs publishing the loaded session,
     // an error, and the timer/elapsed recalculation.
@@ -342,7 +352,21 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     if (ownsResult()) {
       if (failure == null && loaded != null) {
-        _currentSession = loaded;
+        final snapshot = loaded;
+        final have = snapshot.exercises.map((e) => e.id).toSet();
+        final appendedSince = [
+          for (final a in _appendedExercises)
+            if (a.gen > myAppend &&
+                a.exercise.sessionId == snapshot.id &&
+                !have.contains(a.exercise.id))
+              a.exercise,
+        ];
+        _currentSession =
+            appendedSince.isEmpty
+                ? snapshot
+                : snapshot.copyWith(
+                  exercises: [...snapshot.exercises, ...appendedSince],
+                );
         changed = true;
 
         debugPrint('⏱️ TIMER DEBUG - loadSession called');
@@ -857,18 +881,19 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_disposed || _currentSession == null) return;
     final token = _sessionEpoch.capture();
     if (token == null) return;
-    final req = _requestGeneration;
     final workoutId = _currentSession!.id;
 
     // Deliberately NOT gated by a per-add generation: two rapid adds on the
     // same workout must BOTH land (each reads the live exercise list at write
-    // time). `req == _requestGeneration` supersedes an add whose workout was
-    // replaced or whose session was cleared (`_invalidateGenerations()` bumps
-    // `_requestGeneration`); `isCurrent(token)` supersedes a cross-user one.
+    // time). `isCurrent(token)` supersedes a cross-user add. The exercise is
+    // already persisted to THIS workout by the time we get
+    // here, so a same-workout reload (which bumps `_requestGeneration`, e.g.
+    // the one ActiveWorkoutScreen.initState schedules) must not discard it.
+    // Logout/clear (null session or epoch change), disposal, and a different
+    // workout being shown are still rejected.
     bool owns() =>
         !_disposed &&
         _sessionEpoch.isCurrent(token) &&
-        req == _requestGeneration &&
         _currentSession?.id == workoutId;
 
     try {
@@ -878,9 +903,17 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
       if (!owns()) return;
 
-      // Read the CURRENT list at write time so a concurrent add is not lost.
-      final updatedExercises = [..._currentSession!.exercises, newExercise];
-      _currentSession = _currentSession!.copyWith(exercises: updatedExercises);
+      // Read the CURRENT list at write time so a concurrent add is not lost;
+      // skip if a reload that read after the write already contains it.
+      final current = _currentSession!;
+      if (!current.exercises.any((e) => e.id == newExercise.id)) {
+        _currentSession = current.copyWith(
+          exercises: [...current.exercises, newExercise],
+        );
+      }
+      // Lets an older in-flight loadSession merge this exercise instead of
+      // overwriting it with a snapshot read before the write.
+      _appendedExercises.add((gen: ++_appendGeneration, exercise: newExercise));
 
       debugPrint('✅ Exercise added to session (timer preserved)');
       notifyListeners();
@@ -1009,6 +1042,7 @@ class ActiveWorkoutProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// `UserSessionEpoch.invalidate()`.
   void _invalidateGenerations() {
     _requestGeneration++;
+    _appendedExercises.clear();
     _editGeneration++;
     _loadingClaim++;
     _timerGeneration++;

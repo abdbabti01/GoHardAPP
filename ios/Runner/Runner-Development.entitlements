@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Used only for the release-optimized, Development-signed physical-
+	     device test build (build-ios-signed with export_method=development).
+	     Selected via the GOHARD_CODE_SIGN_ENTITLEMENTS xcconfig variable
+	     (see ios/Flutter/Release.xcconfig) - never by editing
+	     Runner-Release.entitlements, which stays production/App-Store-bound. -->
+	<key>aps-environment</key>
+	<string>development</string>
+	<!-- Matches lib/core/services/health_service.dart's actual usage (steps,
+	     heart rate, active energy, workouts) - no clinical-record access. -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+</dict>
+</plist>

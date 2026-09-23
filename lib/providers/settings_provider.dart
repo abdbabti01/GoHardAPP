@@ -26,11 +26,16 @@ class SettingsProvider extends ChangeNotifier {
     _initialize();
   }
 
-  /// Initialize settings and request permissions
+  /// Initialize settings.
+  ///
+  /// Deliberately does NOT request notification permission - this provider
+  /// is constructed unconditionally at app startup (see main.dart), and the
+  /// OS permission dialog must only ever appear in response to an explicit
+  /// user action (see setMorningReminderEnabled/setEveningReminderEnabled/
+  /// setNutritionReminderEnabled). Scheduling a reminder here when
+  /// permission hasn't been granted yet is harmless: the OS silently holds
+  /// the request undelivered until the user later grants permission.
   Future<void> _initialize() async {
-    // Request notification permissions first
-    await _notificationService.requestPermissions();
-    // Then load and schedule notifications
     await loadSettings();
   }
 
@@ -144,8 +149,17 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
 
-  /// Set morning reminder enabled/disabled
-  Future<void> setMorningReminderEnabled(bool enabled) async {
+  /// Set morning reminder enabled/disabled.
+  ///
+  /// Turning it on requests OS notification permission if not already
+  /// granted (this is the explicit user action that makes the request
+  /// contextual). Returns false without enabling anything if permission is
+  /// denied, so the UI can show a way to open Settings.
+  Future<bool> setMorningReminderEnabled(bool enabled) async {
+    if (enabled && !await _notificationService.ensurePermission()) {
+      return false;
+    }
+
     _morningReminderEnabled = enabled;
     await _storage.write(
       key: 'morning_reminder_enabled',
@@ -162,10 +176,16 @@ class SettingsProvider extends ChangeNotifier {
     }
 
     notifyListeners();
+    return true;
   }
 
-  /// Set evening reminder enabled/disabled
-  Future<void> setEveningReminderEnabled(bool enabled) async {
+  /// Set evening reminder enabled/disabled. See
+  /// [setMorningReminderEnabled]'s doc comment for the permission flow.
+  Future<bool> setEveningReminderEnabled(bool enabled) async {
+    if (enabled && !await _notificationService.ensurePermission()) {
+      return false;
+    }
+
     _eveningReminderEnabled = enabled;
     await _storage.write(
       key: 'evening_reminder_enabled',
@@ -182,6 +202,7 @@ class SettingsProvider extends ChangeNotifier {
     }
 
     notifyListeners();
+    return true;
   }
 
   /// Set morning reminder time
@@ -228,8 +249,13 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Set nutrition reminder enabled/disabled
-  Future<void> setNutritionReminderEnabled(bool enabled) async {
+  /// Set nutrition reminder enabled/disabled. See
+  /// [setMorningReminderEnabled]'s doc comment for the permission flow.
+  Future<bool> setNutritionReminderEnabled(bool enabled) async {
+    if (enabled && !await _notificationService.ensurePermission()) {
+      return false;
+    }
+
     _nutritionReminderEnabled = enabled;
     await _storage.write(
       key: 'nutrition_reminder_enabled',
@@ -247,6 +273,7 @@ class SettingsProvider extends ChangeNotifier {
     }
 
     notifyListeners();
+    return true;
   }
 
   /// Set nutrition reminder time
@@ -273,7 +300,7 @@ class SettingsProvider extends ChangeNotifier {
 
   /// Request notification permissions
   Future<bool> requestNotificationPermissions() async {
-    return await _notificationService.requestPermissions();
+    return await _notificationService.ensurePermission();
   }
 
   /// Show test notification

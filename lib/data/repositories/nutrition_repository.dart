@@ -472,11 +472,11 @@ class NutritionRepository {
   /// rather than each calling DateTime.now() separately.
   Future<MealLog> getTodaysMealLog({DateTime? date}) async {
     final db = _localDb.database;
-    final userId = await _authService.getUserId();
-
-    if (userId == null) {
+    final token = await _captureOwnedSessionToken();
+    if (token == null) {
       throw Exception('User not authenticated');
     }
+    final userId = token.userId;
 
     // Normalize today's date (strip time component) - LOCAL, not UTC.
     final localNow = date ?? DateTime.now();
@@ -489,6 +489,9 @@ class NutritionRepository {
             .userIdEqualTo(userId)
             .dateEqualTo(today)
             .findFirst();
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
 
     // 2. If found locally, return immediately and sync in background
     if (localLog != null) {
@@ -517,13 +520,27 @@ class NutritionRepository {
           queryParameters: {'date': today.toIso8601String().split('T')[0]},
         );
         final mealLog = MealLog.fromJson(data);
+        if (!_sessionEpoch.isCurrent(token)) {
+          throw Exception('User not authenticated');
+        }
 
         // Cache locally with entries
         await _cacheMealLogWithEntries(db, mealLog);
+        if (!_sessionEpoch.isCurrent(token)) {
+          throw Exception('User not authenticated');
+        }
         debugPrint('✅ Fetched and cached today\'s meal log from server');
 
         return mealLog;
       } catch (e) {
+        // A failure that arrives after the session ended (typically the 401
+        // caused by logout clearing the token) is NOT "offline": the server
+        // may already hold this day's log, and fabricating a local
+        // pending_create row for an ended session later POSTs into
+        // "A meal log already exists for this date".
+        if (!_sessionEpoch.isCurrent(token)) {
+          throw Exception('User not authenticated');
+        }
         debugPrint('⚠️ API failed, creating local meal log: $e');
         // Fall through to create locally
       }
@@ -531,7 +548,7 @@ class NutritionRepository {
 
     // 4. Create locally (offline or API failed)
     debugPrint('📴 Creating meal log locally');
-    return await _createLocalMealLog(db, userId, today);
+    return await _createLocalMealLog(db, token, today);
   }
 
   /// Sync meal log from server - background refresh triggered by
@@ -710,15 +727,17 @@ class NutritionRepository {
   /// Create a local meal log with default entries
   Future<MealLog> _createLocalMealLog(
     Isar db,
-    int userId,
+    UserSessionToken token,
     DateTime date,
   ) async {
+    final userId = token.userId;
     final now = DateTime.now();
 
     late LocalMealLog savedLog;
     final entries = <MealEntry>[];
 
     await db.writeTxn(() async {
+      if (!_sessionEpoch.isCurrent(token)) return;
       // Create meal log
       final localLog = LocalMealLog(
         userId: userId,
@@ -768,6 +787,9 @@ class NutritionRepository {
         );
       }
     });
+    if (!_sessionEpoch.isCurrent(token)) {
+      throw Exception('User not authenticated');
+    }
 
     debugPrint('💾 Created local meal log for $date');
 

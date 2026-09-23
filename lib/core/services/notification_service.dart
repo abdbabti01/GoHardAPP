@@ -45,11 +45,16 @@ class NotificationService {
         '@mipmap/ic_launcher',
       );
 
-      // iOS initialization settings
+      // iOS initialization settings. Permission flags are deliberately
+      // false: this method only registers the plugin (channels, timezone,
+      // tap callback) and must never trigger the OS permission dialog on
+      // its own - it runs unconditionally at every cold launch via
+      // main.dart. Permission is requested only contextually, via
+      // ensurePermission() below, from an explicit user action.
       const iosSettings = DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
       );
 
       const initSettings = InitializationSettings(
@@ -63,15 +68,6 @@ class NotificationService {
         onDidReceiveNotificationResponse: _onNotificationTapped,
       );
 
-      // For iOS, explicitly request permissions
-      if (defaultTargetPlatform == TargetPlatform.iOS) {
-        await _notifications
-            .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin
-            >()
-            ?.requestPermissions(alert: true, badge: true, sound: true);
-      }
-
       _isInitialized = true;
     } catch (e, stackTrace) {
       debugPrint('Failed to initialize notifications: $e');
@@ -84,6 +80,58 @@ class NotificationService {
     debugPrint('Notification tapped: ${response.payload}');
     // Navigation will be handled by the app router based on payload
   }
+
+  /// Returns whether the OS notification permission is currently granted.
+  /// A pure status check - never shows any UI, so unlike
+  /// [requestPermissions]/[ensurePermission] this is always safe to call,
+  /// including at startup.
+  Future<bool> hasPermission() async {
+    try {
+      return (await Permission.notification.status).isGranted;
+    } catch (e) {
+      debugPrint('Failed to check notification permission status: $e');
+      return false;
+    }
+  }
+
+  /// In-flight ensurePermission() call, if any - see its doc comment.
+  Future<bool>? _pendingEnsurePermission;
+
+  /// Requests the OS notification permission only if it isn't already
+  /// granted, then returns whether it ended up granted.
+  ///
+  /// Callers must only invoke this from an explicit user action (e.g.
+  /// turning on a reminder toggle) - never from app startup/provider
+  /// construction. If the user already granted or already denied it, the
+  /// underlying platform request is a safe no-op that just returns the
+  /// existing decision (iOS shows its permission dialog at most once per
+  /// install regardless), so calling this repeatedly never surprises the
+  /// user with a duplicate dialog.
+  ///
+  /// Single-flight: the Settings screen has multiple independent reminder
+  /// toggles that can each call this. On Android, the native side only
+  /// allows one requestPermissions() call in flight and throws for a second
+  /// concurrent one - rather than let that surface as a false "denied", a
+  /// second call while the first is still resolving just awaits the same
+  /// result instead of starting its own platform request.
+  Future<bool> ensurePermission() {
+    final pending = _pendingEnsurePermission;
+    if (pending != null) return pending;
+
+    final result = _ensurePermissionUncached();
+    _pendingEnsurePermission = result;
+    result.whenComplete(() => _pendingEnsurePermission = null);
+    return result;
+  }
+
+  Future<bool> _ensurePermissionUncached() async {
+    if (await hasPermission()) return true;
+    return requestPermissions();
+  }
+
+  /// Opens the OS Settings screen for this app - for when permission was
+  /// already denied and [ensurePermission] would be a no-op.
+  Future<void> openSettings() => openAppSettings();
 
   /// Request notification permissions (Android 13+, iOS)
   Future<bool> requestPermissions() async {

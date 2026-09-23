@@ -1,0 +1,6 @@
+appId: com.example.go_hard_app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Welcome to GoHard"
+- assertVisible: "Continue"

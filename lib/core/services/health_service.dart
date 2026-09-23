@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'secure_storage_options.dart';
 
 /// Service for integrating with Apple Health / Google Fit
 /// Provides read/write access to health and fitness data
@@ -12,7 +13,9 @@ class HealthService extends ChangeNotifier {
   HealthService._internal();
 
   final Health _health = Health();
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+    aOptions: kAndroidSecureOptions,
+  );
 
   static const String _healthEnabledKey = 'health_integration_enabled';
 

@@ -3,28 +3,20 @@
 class ApiConfig {
   ApiConfig._(); // Private constructor to prevent instantiation
 
-  /// Base URL for the GoHardAPI backend
-  /// Production: https://gohardapi-production.up.railway.app/api/v1
-  static String get baseUrl {
-    // Production URL - hosted on Railway
-    return 'https://gohardapi-production.up.railway.app/api/v1/';
+  /// API host, override for local/QA testing with e.g.:
+  ///   --dart-define=API_HOST=http://10.0.2.2:5121   (Android emulator)
+  ///   --dart-define=API_HOST=http://localhost:5121  (iOS/macOS)
+  /// Defaults to production so ordinary builds are unaffected.
+  static const String _host = String.fromEnvironment(
+    'API_HOST',
+    defaultValue: 'https://gohardapi-production.up.railway.app',
+  );
 
-    // For local development, uncomment the appropriate line below:
-    // iOS/macOS: return 'http://localhost:5121/api/v1/';
-    // Android Emulator: return 'http://10.0.2.2:5121/api/v1/';
-    // Physical device on WiFi: return 'http://YOUR_IP:5121/api/v1/';
-  }
+  /// Base URL for the GoHardAPI backend
+  static String get baseUrl => '$_host/api/v1/';
 
   /// Server URL without /api suffix (for static files like profile photos)
-  static String get serverUrl {
-    // Production URL - hosted on Railway
-    return 'https://gohardapi-production.up.railway.app';
-
-    // For local development, uncomment the appropriate line below:
-    // iOS/macOS: return 'http://localhost:5121';
-    // Android Emulator: return 'http://10.0.2.2:5121';
-    // Physical device on WiFi: return 'http://YOUR_IP:5121';
-  }
+  static String get serverUrl => _host;
 
   /// Get full URL for a profile photo
   /// Converts relative paths like '/uploads/profiles/user_5.jpg'
@@ -60,6 +52,7 @@ class ApiConfig {
   static const String exerciseTemplates = 'exercisetemplates';
   static const String profile = 'profile';
   static const String profilePhoto = 'profile/photo';
+  static const String account = 'account';
   static const String chatConversations = 'chat/conversations';
   static const String chatWorkoutPlan = 'chat/workout-plan';
   static const String chatMealPlan = 'chat/meal-plan';

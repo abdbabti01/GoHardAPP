@@ -55,8 +55,11 @@ extension ThemeColors on BuildContext {
   /// Secondary text color (subtitles, descriptions)
   Color get textSecondary => colorScheme.onSurfaceVariant;
 
-  /// Tertiary/hint text color (placeholders, disabled)
-  Color get textTertiary => isDarkMode ? AppColors.stone : AppColors.pewter;
+  /// Tertiary/hint text color (placeholders, disabled). Both values meet
+  /// WCAG AA (4.5:1) for normal text on their theme's page background
+  /// (dark: pewter ~6.5:1 on obsidian; light: stone ~5:1 on snow) - the old
+  /// stone-on-dark (3.7:1) and pewter-on-light (3.1:1) pair did not.
+  Color get textTertiary => isDarkMode ? AppColors.pewter : AppColors.stone;
 
   /// Text on primary color buttons/surfaces
   Color get textOnPrimary => colorScheme.onPrimary;

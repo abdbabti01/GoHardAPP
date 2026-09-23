@@ -64,6 +64,18 @@
 		<string>location</string>
 		<string>remote-notification</string>
 		<string>fetch</string>
+		<string>audio</string>
 	</array>
+	<!-- Populated from ios/Flutter/Secrets.xcconfig at build time - see
+	     AppDelegate.swift for the runtime check and Secrets.xcconfig.example
+	     for local setup instructions. -->
+	<key>GMSApiKey</key>
+	<string>$(GOOGLE_MAPS_API_KEY)</string>
+	<!-- HealthKit: only the two read/write scopes this app actually uses
+	     (see lib/core/services/health_service.dart's _readTypes/_writeTypes) -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>GoHard reads your steps, heart rate, active calories, and workouts from Apple Health to show your full activity picture in one place.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>GoHard adds the workouts and calories you log to Apple Health so they're saved alongside your other health data.</string>
 </dict>
 </plist>

@@ -485,7 +485,7 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       _errorMessage = 'Failed to load running data: $e';
       debugPrint('Load dashboard error: $e');
     } finally {
-      if (_sessionEpoch.isCurrent(token)) {
+      if (!_disposed && _sessionEpoch.isCurrent(token)) {
         _isLoading = false;
         notifyListeners();
       }
@@ -545,7 +545,7 @@ class RunningProvider extends ChangeNotifier with WidgetsBindingObserver {
       _errorMessage = 'Failed to load run: $e';
       debugPrint('Load run error: $e');
     } finally {
-      if (_sessionEpoch.isCurrent(token)) {
+      if (!_disposed && _sessionEpoch.isCurrent(token)) {
         _isLoading = false;
         notifyListeners();
       }

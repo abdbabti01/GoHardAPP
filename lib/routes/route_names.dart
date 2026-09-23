@@ -28,6 +28,7 @@ class RouteNames {
 
   // Settings routes
   static const String settings = '/settings';
+  static const String deleteAccount = '/delete-account';
 
   // Goals routes
   static const String goals = '/goals';

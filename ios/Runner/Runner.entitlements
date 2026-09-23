@@ -4,5 +4,9 @@
 <dict>
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Matches lib/core/services/health_service.dart's actual usage (steps,
+	     heart rate, active energy, workouts) - no clinical-record access. -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
 </dict>
 </plist>

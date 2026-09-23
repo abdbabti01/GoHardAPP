@@ -135,6 +135,23 @@ class MockAuthService extends _i1.Mock implements _i8.AuthService {
           as _i4.Future<String?>);
 
   @override
+  _i4.Future<void> saveUsername(String? username) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveUsername, [username]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
+  _i4.Future<String?> getUsername() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUsername, []),
+            returnValue: _i4.Future<String?>.value(),
+          )
+          as _i4.Future<String?>);
+
+  @override
   _i4.Future<String?> getUserEmail() =>
       (super.noSuchMethod(
             Invocation.method(#getUserEmail, []),

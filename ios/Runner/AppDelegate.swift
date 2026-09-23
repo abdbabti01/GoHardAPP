@@ -13,8 +13,17 @@ import FirebaseMessaging
     // Initialize Firebase
     FirebaseApp.configure()
 
-    // Initialize Google Maps
-    GMSServices.provideAPIKey("AIzaSyBsE86Hl9nhzJFEP6SgfydJ0jOiSfJD7d0")
+    // Initialize Google Maps. The key comes from ios/Flutter/Secrets.xcconfig
+    // (gitignored, see Secrets.xcconfig.example) via the GMSApiKey Info.plist
+    // entry - never hardcoded in source. Fails loudly rather than silently
+    // shipping a build with no map tiles if the local secret isn't set up.
+    if let mapsApiKey = Bundle.main.object(forInfoDictionaryKey: "GMSApiKey") as? String,
+       !mapsApiKey.isEmpty,
+       mapsApiKey != "YOUR_GOOGLE_MAPS_IOS_API_KEY" {
+      GMSServices.provideAPIKey(mapsApiKey)
+    } else {
+      print("⚠️ GoHard: Google Maps API key is not configured. Copy ios/Flutter/Secrets.xcconfig.example to ios/Flutter/Secrets.xcconfig and fill in a real key. Map features will not work until this is fixed.")
+    }
 
     GeneratedPluginRegistrant.register(with: self)
 

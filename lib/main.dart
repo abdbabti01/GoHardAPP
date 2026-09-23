@@ -6,11 +6,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'app.dart';
 import 'core/services/firebase_availability.dart';
 import 'core/services/firebase_bootstrap.dart';
+import 'core/services/secure_storage_options.dart';
 import 'core/services/session_cleanup_initializer.dart';
 import 'core/services/session_request_coordinator.dart';
 import 'core/services/user_session_epoch.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/api_service.dart';
+import 'data/repositories/account_repository.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/session_repository.dart';
 import 'data/repositories/exercise_repository.dart';
@@ -32,6 +34,7 @@ import 'core/services/sync_service_initializer.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/background_service.dart';
 import 'core/services/tab_navigation_service.dart';
+import 'providers/account_deletion_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/sessions_provider.dart';
 import 'providers/active_workout_provider.dart';
@@ -120,7 +123,7 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
   await BackgroundService.initialize();
 
   // Initialize secure storage
-  const secureStorage = FlutterSecureStorage();
+  const secureStorage = FlutterSecureStorage(aOptions: kAndroidSecureOptions);
 
   // Single shared session-identity instance for the whole app process.
   // Depends on nothing (see UserSessionEpoch's own doc comment), so it is
@@ -165,6 +168,9 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
         // Repositories
         ProxyProvider<ApiService, AuthRepository>(
           update: (_, apiService, __) => AuthRepository(apiService),
+        ),
+        ProxyProvider<ApiService, AccountRepository>(
+          update: (_, apiService, __) => AccountRepository(apiService),
         ),
         ProxyProvider4<
           ApiService,
@@ -527,6 +533,23 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                     context.read<UserSessionEpoch>(),
                     context.read<SessionRequestCoordinator>(),
                   ),
+        ),
+        ChangeNotifierProxyProvider3<
+          AccountRepository,
+          AuthProvider,
+          LocalDatabaseService,
+          AccountDeletionProvider
+        >(
+          create:
+              (context) => AccountDeletionProvider(
+                context.read<AccountRepository>(),
+                context.read<AuthProvider>(),
+                context.read<LocalDatabaseService>(),
+              ),
+          update:
+              (context, accountRepo, authProvider, localDb, previous) =>
+                  previous ??
+                  AccountDeletionProvider(accountRepo, authProvider, localDb),
         ),
         ChangeNotifierProxyProvider2<
           SessionRepository,

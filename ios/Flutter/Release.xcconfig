@@ -1,1 +1,11 @@
 #include "Generated.xcconfig"
+#include? "Secrets.xcconfig"
+
+// Default entitlements file for the Release configuration - the
+// App-Store-bound production/aps-environment=production file. A CI-only,
+// gitignored Signing.xcconfig (see build-ios-signed in the mobile workflow)
+// overrides this to Runner-Development.entitlements for the
+// Development-signed physical-device test build, without ever touching
+// this default or Runner-Release.entitlements itself.
+GOHARD_CODE_SIGN_ENTITLEMENTS = Runner-Release.entitlements
+#include? "Signing.xcconfig"

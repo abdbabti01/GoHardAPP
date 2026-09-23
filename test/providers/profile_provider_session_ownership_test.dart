@@ -237,4 +237,21 @@ void main() {
       expect(provider.errorMessage, isNull);
     });
   });
+
+  // App/widget teardown can dispose the provider while a load for a STILL
+  // current session is in flight; completing it must not notify a disposed
+  // ChangeNotifier ("used after being disposed").
+  group('disposed while a load is in flight', () {
+    test('loadUserProfile completes without notifying after dispose', () async {
+      epoch.activate(1);
+      final gate = Completer<User>();
+      when(repo.getProfile()).thenAnswer((_) => gate.future);
+
+      final pending = provider.loadUserProfile();
+      provider.dispose();
+      gate.complete(user(1));
+
+      await expectLater(pending, completes);
+    });
+  });
 }

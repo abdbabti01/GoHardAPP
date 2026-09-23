@@ -15,6 +15,7 @@ import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/models/food_item.dart';
 import 'package:go_hard_app/data/models/nutrition_goal.dart';
 import 'package:go_hard_app/data/repositories/nutrition_repository.dart';
+import 'package:go_hard_app/data/services/api_exception.dart';
 
 // Reuses the mocks already generated for the sibling consumed-totals test -
 // same [ApiService]/[AuthService]/[ConnectivityService] interfaces, so no
@@ -1207,5 +1208,63 @@ void main() {
         ),
       );
     });
+  });
+
+  // BUG-6: on logout the token is cleared, so in-flight "today" loads got a
+  // 401 and the catch-all fell through to "offline" - fabricating a local
+  // pending_create meal log for the ended session even though the server
+  // already had one. On the next login that row POSTed and got
+  // 400 "A meal log already exists for this date".
+  group('getTodaysMealLog - session ended while the request was in flight', () {
+    final localDate = DateTime(2026, 3, 10);
+
+    test('a failure after the session ended creates NO local meal log and '
+        'reports the session as gone', () async {
+      when(mockConnectivity.isOnline).thenReturn(true);
+      when(
+        mockApiService.get<Map<String, dynamic>>(
+          any,
+          queryParameters: anyNamed('queryParameters'),
+        ),
+      ).thenAnswer((_) async {
+        sessionEpoch.invalidate();
+        throw ApiException(
+          'Unauthorized - please login again',
+          statusCode: 401,
+        );
+      });
+
+      await expectLater(
+        repository.getTodaysMealLog(date: localDate),
+        throwsA(
+          predicate((e) => e.toString().contains('User not authenticated')),
+        ),
+      );
+
+      expect(await isar.localMealLogs.count(), 0);
+      expect(await isar.localMealEntrys.count(), 0);
+    });
+
+    test(
+      'a genuine offline failure with the session still current STILL '
+      'falls back to a local pending_create log (offline-first preserved)',
+      () async {
+        when(mockConnectivity.isOnline).thenReturn(true);
+        when(
+          mockApiService.get<Map<String, dynamic>>(
+            any,
+            queryParameters: anyNamed('queryParameters'),
+          ),
+        ).thenThrow(ApiException('Network error - cannot connect to server'));
+
+        final result = await repository.getTodaysMealLog(date: localDate);
+
+        expect(result.userId, userId);
+        final rows = await isar.localMealLogs.where().findAll();
+        expect(rows, hasLength(1));
+        expect(rows.single.syncStatus, 'pending_create');
+        expect(rows.single.userId, userId);
+      },
+    );
   });
 }

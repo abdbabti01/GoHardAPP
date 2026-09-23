@@ -4,8 +4,9 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i3;
-import 'dart:ui' as _i5;
+import 'dart:ui' as _i6;
 
+import 'package:go_hard_app/core/services/user_session_epoch.dart' as _i5;
 import 'package:go_hard_app/providers/auth_provider.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i4;
@@ -244,6 +245,13 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
           as _i3.Future<void>);
 
   @override
+  void applyUpdatedUsername(String? username, _i5.UserSessionToken? token) =>
+      super.noSuchMethod(
+        Invocation.method(#applyUpdatedUsername, [username, token]),
+        returnValueForMissingStub: null,
+      );
+
+  @override
   void clearError() => super.noSuchMethod(
     Invocation.method(#clearError, []),
     returnValueForMissingStub: null,
@@ -274,13 +282,13 @@ class MockAuthProvider extends _i1.Mock implements _i2.AuthProvider {
   );
 
   @override
-  void addListener(_i5.VoidCallback? listener) => super.noSuchMethod(
+  void addListener(_i6.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#addListener, [listener]),
     returnValueForMissingStub: null,
   );
 
   @override
-  void removeListener(_i5.VoidCallback? listener) => super.noSuchMethod(
+  void removeListener(_i6.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#removeListener, [listener]),
     returnValueForMissingStub: null,
   );

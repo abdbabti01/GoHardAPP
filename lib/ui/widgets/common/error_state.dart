@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/theme_colors.dart';
+
 /// Reusable error state widget
 /// Provides consistent error UI across the app
 class ErrorState extends StatelessWidget {
@@ -35,7 +37,7 @@ class ErrorState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+              ).textTheme.bodyMedium?.copyWith(color: context.textSecondary),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 24),

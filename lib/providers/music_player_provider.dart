@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 import '../core/services/music_player_service.dart';
@@ -6,6 +8,11 @@ import '../core/services/music_player_service.dart';
 /// Provides reactive updates for UI components
 class MusicPlayerProvider extends ChangeNotifier {
   final MusicPlayerService _musicService = MusicPlayerService();
+
+  // Stream listeners must not outlive the provider: their events call
+  // notifyListeners(), which throws once the ChangeNotifier is disposed.
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
+  bool _disposed = false;
 
   bool _isInitialized = false;
   bool _isPlaying = false;
@@ -32,24 +39,31 @@ class MusicPlayerProvider extends ChangeNotifier {
 
     try {
       await _musicService.initialize();
+      if (_disposed) return;
 
       // Listen to player state changes
-      _musicService.playerStateStream.listen((state) {
-        _isPlaying = state.playing;
-        notifyListeners();
-      });
+      _subscriptions.add(
+        _musicService.playerStateStream.listen((state) {
+          _isPlaying = state.playing;
+          notifyListeners();
+        }),
+      );
 
       // Listen to position changes
-      _musicService.positionStream.listen((pos) {
-        _position = pos;
-        notifyListeners();
-      });
+      _subscriptions.add(
+        _musicService.positionStream.listen((pos) {
+          _position = pos;
+          notifyListeners();
+        }),
+      );
 
       // Listen to duration changes
-      _musicService.audioPlayer.durationStream.listen((dur) {
-        _duration = dur ?? Duration.zero;
-        notifyListeners();
-      });
+      _subscriptions.add(
+        _musicService.audioPlayer.durationStream.listen((dur) {
+          _duration = dur ?? Duration.zero;
+          notifyListeners();
+        }),
+      );
 
       _currentTrack = _musicService.currentTrack;
       _isInitialized = true;
@@ -180,6 +194,11 @@ class MusicPlayerProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
     _musicService.dispose();
     super.dispose();
   }
