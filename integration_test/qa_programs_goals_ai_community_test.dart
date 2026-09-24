@@ -124,6 +124,16 @@ void main() {
     );
     await tester.tap(find.text('View plan'));
     await pumpUntilFound(tester, find.byType(BackButton));
+    // Bounded pump through the push transition (ProgramsScreen animates
+    // forever, so pumpAndSettle never settles), then prove the My Plan page
+    // itself is showing before checking its content. Train also shows the
+    // plan title, so the title check alone would not prove navigation.
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(BackButton), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('My Plan')),
+      findsOneWidget,
+    );
     expect(find.textContaining('QA Seeded Program'), findsWidgets);
     await tester.pageBack();
     await tester.pump(const Duration(seconds: 1));

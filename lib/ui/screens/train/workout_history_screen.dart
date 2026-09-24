@@ -66,7 +66,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
               (context) => AlertDialog(
                 title: const Text('Cannot Delete'),
                 content: const Text(
-                  'This is a completed program workout. Would you like to archive it instead?',
+                  'This is a completed plan workout. Would you like to archive it instead?',
                 ),
                 actions: [
                   TextButton(

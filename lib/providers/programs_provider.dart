@@ -511,7 +511,7 @@ class ProgramsProvider extends ChangeNotifier {
     } catch (e) {
       if (!owns() || errorGen != _errorGen) return;
       _errorMessage =
-          'Failed to load programs: ${e.toString().replaceAll('Exception: ', '')}';
+          'Failed to load plans: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Load programs error: $e');
     } finally {
       // `_isLoading` means "did MY fetch finish". Guard on [_loadGen] (bumped
