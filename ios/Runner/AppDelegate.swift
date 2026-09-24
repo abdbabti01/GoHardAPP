@@ -15,14 +15,19 @@ import FirebaseMessaging
 
     // Initialize Google Maps. The key comes from ios/Flutter/Secrets.xcconfig
     // (gitignored, see Secrets.xcconfig.example) via the GMSApiKey Info.plist
-    // entry - never hardcoded in source. Fails loudly rather than silently
-    // shipping a build with no map tiles if the local secret isn't set up.
+    // entry - never hardcoded in source. A missing key is NOT harmless: the
+    // Maps SDK aborts the app (GMSServices checkServicePreconditions) the
+    // first time a map is created. The "Check Google Maps key" build phase
+    // (ios/scripts/check_maps_key.sh) fails keyless builds, so reaching the
+    // else-branch means an explicit compile-only build
+    // (GOHARD_ALLOW_MISSING_MAPS_KEY = YES) that must never be installed for
+    // testing or distributed.
     if let mapsApiKey = Bundle.main.object(forInfoDictionaryKey: "GMSApiKey") as? String,
        !mapsApiKey.isEmpty,
        mapsApiKey != "YOUR_GOOGLE_MAPS_IOS_API_KEY" {
       GMSServices.provideAPIKey(mapsApiKey)
     } else {
-      print("⚠️ GoHard: Google Maps API key is not configured. Copy ios/Flutter/Secrets.xcconfig.example to ios/Flutter/Secrets.xcconfig and fill in a real key. Map features will not work until this is fixed.")
+      print("🛑 GoHard: Google Maps API key is NOT configured. This is a compile-only build: opening Running (any map) will CRASH the app. Copy ios/Flutter/Secrets.xcconfig.example to ios/Flutter/Secrets.xcconfig and set a real iOS key before installing on a device.")
     }
 
     GeneratedPluginRegistrant.register(with: self)

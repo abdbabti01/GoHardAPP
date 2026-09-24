@@ -650,13 +650,46 @@ flutter build appbundle --release
 
 Output: `build/app/outputs/bundle/release/app-release.aab`
 
+### iOS Google Maps key (required for every iOS build)
+
+The Google Maps iOS SDK aborts the app the first time a map is created
+(Running) if no key was provided. To stop such a build from ever being
+installed, the Runner target's **Check Google Maps key** build phase
+(`ios/scripts/check_maps_key.sh`) fails any iOS build that has no usable key.
+
+Local Mac setup:
+
+1. Copy `ios/Flutter/Secrets.xcconfig.example` to `ios/Flutter/Secrets.xcconfig`.
+2. Set `GOOGLE_MAPS_API_KEY` to a real Google Maps **iOS** key, restricted to
+   iOS apps with bundle ID `ca.gohardapp` and to the "Maps SDK for iOS" API.
+3. `Secrets.xcconfig` is gitignored. Never commit it or paste its value anywhere.
+
+**Compile-only opt-out:** to check that the project compiles without a key,
+put `GOHARD_ALLOW_MISSING_MAPS_KEY = YES` in `ios/Flutter/Secrets.xcconfig`.
+It overrides the check (even for the placeholder value), and the build
+prints a warning. The resulting app **crashes when Running opens a map**:
+never install it on a device for testing and never distribute it.
+
+CI (`.github/workflows/build-flutter-mobile.yml`):
+
+- **Unsigned build (every push/PR):** with the `IOS_GOOGLE_MAPS_API_KEY`
+  secret it writes `Secrets.xcconfig`, builds, and uploads the unsigned IPA.
+  Without the secret it builds compile-only via the opt-out and uploads **no**
+  IPA.
+- **Signed build (manual):** requires `IOS_GOOGLE_MAPS_API_KEY` and rejects an
+  empty, placeholder or unresolved value before building; the opt-out is never
+  used.
+- The script and these CI rules are tested by `sh ios/scripts/test_check_maps_key.sh`
+  (dummy values only), which runs in the CI test job.
+
 ### iOS (unsigned, for testing)
 
 ```bash
 flutter build ios --release --no-codesign
 ```
 
-For signed iOS builds, configure code signing in Xcode.
+This needs the Maps key above. For signed iOS builds, configure code signing
+in Xcode.
 
 ## 🔧 Development Guidelines
 
@@ -750,9 +783,11 @@ flutter pub run build_runner build --delete-conflicting-outputs
 ### Issue: Build Failed on iOS
 
 **Solution**:
-1. Run `pod install` in the `ios/` directory
-2. Clean build: `flutter clean && flutter pub get`
-3. Update CocoaPods: `sudo gem install cocoapods`
+1. If the error mentions `GOOGLE_MAPS_API_KEY`, set up `ios/Flutter/Secrets.xcconfig`
+   (see "iOS Google Maps key" above)
+2. Run `pod install` in the `ios/` directory
+3. Clean build: `flutter clean && flutter pub get`
+4. Update CocoaPods: `sudo gem install cocoapods`
 
 ### Issue: Tests Failing
 
