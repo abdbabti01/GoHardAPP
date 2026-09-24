@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/colors.dart';
@@ -17,6 +18,11 @@ import '../../widgets/music/music_control_widget.dart';
 /// Active workout screen with timer and exercise management
 /// Matches ActiveWorkoutPage.xaml from MAUI app
 class ActiveWorkoutScreen extends StatefulWidget {
+  /// Timer debug controls ship only in debug builds. Tests flip this to
+  /// cover release behaviour, because tests always run with kDebugMode.
+  @visibleForTesting
+  static bool showDebugControls = kDebugMode;
+
   final int sessionId;
 
   const ActiveWorkoutScreen({super.key, required this.sessionId});
@@ -697,9 +703,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             const SizedBox(height: 28),
             // Control button
             _buildControlButton(provider, isDraft, isRunning),
-            // DEBUG: Timer debug info (tap to toggle)
-            const SizedBox(height: 16),
-            _buildDebugToggle(provider),
+            if (ActiveWorkoutScreen.showDebugControls) ...[
+              // DEBUG: Timer debug info (tap to toggle)
+              const SizedBox(height: 16),
+              _buildDebugToggle(provider),
+            ],
           ],
         ),
       ),

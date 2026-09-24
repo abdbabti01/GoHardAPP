@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
@@ -154,4 +155,24 @@ void main() {
       verifyNever(mockRepo.getSession(any));
     },
   );
+
+  testWidgets('release builds show no timer debug controls', (tester) async {
+    ActiveWorkoutScreen.showDebugControls = false;
+    addTearDown(() => ActiveWorkoutScreen.showDebugControls = kDebugMode);
+
+    await _pumpActiveWorkoutScreen(tester, mockRepo);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Show Debug'), findsNothing);
+  });
+
+  testWidgets('debug builds keep the timer debug toggle', (tester) async {
+    ActiveWorkoutScreen.showDebugControls = true;
+    addTearDown(() => ActiveWorkoutScreen.showDebugControls = kDebugMode);
+
+    await _pumpActiveWorkoutScreen(tester, mockRepo);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Show Debug'), findsOneWidget);
+  });
 }
