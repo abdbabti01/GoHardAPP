@@ -434,49 +434,55 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                 Expanded(child: _buildBody(provider)),
               ],
             ),
-            floatingActionButton: ScaleTapAnimation(
-              onTap: _handleAddExercise,
-              child: Container(
-                height: 56,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  gradient: context.primaryGradient,
-                  boxShadow: [
-                    BoxShadow(
-                      color: context.accent.withValues(alpha: 0.4),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.add_rounded,
-                        color: AppColors.goHardBlack,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Add Exercise',
-                        style: TextStyle(
-                          color: AppColors.goHardBlack,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
+            // The zero-exercise empty state carries its own "Add Exercise"
+            // button, so the FAB is omitted there to avoid two overlapping
+            // CTAs.
+            floatingActionButton:
+                _showsEmptyExercisesState(provider)
+                    ? null
+                    : ScaleTapAnimation(
+                      onTap: _handleAddExercise,
+                      child: Container(
+                        height: 56,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          gradient: context.primaryGradient,
+                          boxShadow: [
+                            BoxShadow(
+                              color: context.accent.withValues(alpha: 0.4),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.add_rounded,
+                                color: AppColors.goHardBlack,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Add Exercise',
+                                style: TextStyle(
+                                  color: AppColors.goHardBlack,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+                    ),
           );
         },
       ),
@@ -577,6 +583,13 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       ],
     );
   }
+
+  /// True exactly when [_buildBody] renders the "No Exercises Yet" empty
+  /// state (loaded, no error, zero exercises).
+  bool _showsEmptyExercisesState(ActiveWorkoutProvider provider) =>
+      !provider.isLoading &&
+      (provider.errorMessage == null || provider.errorMessage!.isEmpty) &&
+      provider.exercises.isEmpty;
 
   Widget _buildBody(ActiveWorkoutProvider provider) {
     if (provider.isLoading) {
