@@ -192,8 +192,13 @@ class SessionCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      // Meta info row - smaller text for hierarchy
-                      Row(
+                      // Meta info - smaller text for hierarchy. A Wrap (not a
+                      // Row) so the optional duration segment flows to a
+                      // second line instead of overflowing in narrow slots or
+                      // at larger text scales.
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        runSpacing: 2,
                         children: [
                           // Date
                           Text(

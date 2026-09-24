@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/workout_stats.dart';
 
 class VolumeChart extends StatelessWidget {
@@ -38,7 +39,7 @@ class VolumeChart extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Last ${data.length} workouts',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: context.textSecondary),
             ),
             const SizedBox(height: 20),
             SizedBox(

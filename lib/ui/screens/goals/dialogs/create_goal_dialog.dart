@@ -755,7 +755,7 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
       mainAxisSize: MainAxisSize.min,
       children: [
         DropdownButtonFormField<String>(
-          value: _selectedGoalType,
+          initialValue: _selectedGoalType,
           decoration: const InputDecoration(
             labelText: 'Goal Type',
             prefixIcon: Icon(Icons.flag),
@@ -857,7 +857,7 @@ class _CreateGoalDialogState extends State<CreateGoalDialog> {
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          value: _selectedUnit,
+          initialValue: _selectedUnit,
           decoration: const InputDecoration(
             labelText: 'Unit',
             prefixIcon: Icon(Icons.straighten),

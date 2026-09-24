@@ -9,6 +9,22 @@ class WelcomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The content is taller than the space this page gets on compact phones
+    // or with larger system text (it shares the screen with the page
+    // indicator and Continue button). Keep the centered Spacer layout when it
+    // fits; scroll only when it does not.
+    return LayoutBuilder(
+      builder:
+          (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(child: _buildContent(context)),
+            ),
+          ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
@@ -114,10 +130,12 @@ class WelcomePage extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  'Swipe to get started',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: context.textTertiary,
+                Flexible(
+                  child: Text(
+                    'Swipe to get started',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: context.textTertiary,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),

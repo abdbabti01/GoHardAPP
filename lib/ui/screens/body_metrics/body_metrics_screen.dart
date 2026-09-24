@@ -74,14 +74,17 @@ class _BodyMetricsScreenState extends State<BodyMetricsScreen> {
                       color: Colors.grey,
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'No body metrics logged',
-                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: context.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Tap + to log your first measurement',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: context.textSecondary),
                     ),
                   ],
                 ),
@@ -612,7 +615,7 @@ class _AddBodyMetricDialogState extends State<AddBodyMetricDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _selectedActivityLevel,
+                initialValue: _selectedActivityLevel,
                 decoration: const InputDecoration(
                   labelText: 'Activity Level',
                   prefixIcon: Icon(Icons.directions_run),

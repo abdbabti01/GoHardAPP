@@ -1,8 +1,10 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'secure_storage_options.dart';
+
 /// Storage service for onboarding preferences
 class OnboardingStorage {
-  static const _storage = FlutterSecureStorage();
+  static const _storage = FlutterSecureStorage(aOptions: kAndroidSecureOptions);
 
   // Storage keys
   static const _keyOnboardingCompleted = 'onboarding_completed';

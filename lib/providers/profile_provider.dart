@@ -353,8 +353,19 @@ class ProfileProvider extends ChangeNotifier {
     debugPrint('🧹 ProfileProvider cleared');
   }
 
+  // A load/update still in flight when app teardown disposes this provider
+  // must not notify it afterwards (ChangeNotifier asserts on that).
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     _connectivitySubscription?.cancel();
     super.dispose();
   }

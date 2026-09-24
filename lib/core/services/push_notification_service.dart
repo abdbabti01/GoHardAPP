@@ -60,7 +60,22 @@ class PushNotificationService {
   /// Get current FCM token
   String? get fcmToken => _fcmToken;
 
-  /// Initialize the push notification service
+  /// Initialize the push notification service.
+  ///
+  /// Deliberately never calls `_messaging.requestPermission()` - this used
+  /// to request the OS notification permission unconditionally right after
+  /// login (this method runs from main_screen.dart on every authenticated
+  /// app open), which is the same contextless-request problem as the local
+  /// reminder notifications had. Permission acquisition and token
+  /// registration are separate operations: APNs/FCM token generation does
+  /// not require alert-permission to have been granted (this app's
+  /// AppDelegate already calls `registerForRemoteNotifications()`
+  /// unconditionally on launch), so token setup and message handling
+  /// proceed regardless of permission state. The OS permission dialog is
+  /// requested exactly once in this whole app, contextually, through
+  /// NotificationService.ensurePermission() (Settings reminder toggles /
+  /// goal reminders) - granting it there also makes push alerts visible,
+  /// since local and push notifications share one OS permission.
   Future<void> initialize(ApiService apiService) async {
     if (_isInitialized) return;
 
@@ -72,56 +87,76 @@ class PushNotificationService {
         _firebaseMessagingBackgroundHandler,
       );
 
-      // Request permission
-      final settings = await _messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-      );
+      // Token fetch/registration is isolated in its own try/catch (see
+      // _registerTokenIfAvailable's doc comment) - its failure must not
+      // abort the message listener setup below.
+      await _registerTokenIfAvailable();
 
-      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-          settings.authorizationStatus == AuthorizationStatus.provisional) {
-        debugPrint('🔔 Push notification permission granted');
+      // Listen for token refresh
+      _messaging.onTokenRefresh.listen((newToken) async {
+        debugPrint('🔔 FCM Token refreshed: $newToken');
+        _fcmToken = newToken;
+        await _registerTokenWithServer(newToken);
+      });
 
-        // Get FCM token
-        _fcmToken = await _messaging.getToken();
-        debugPrint('🔔 FCM Token: $_fcmToken');
+      // Set up local notifications for foreground messages. Channel/plugin
+      // setup only (requestAlertPermission etc. are false below) - display
+      // is silently suppressed by the OS until permission is granted.
+      await _setupLocalNotifications();
 
-        // Send token to server
-        if (_fcmToken != null) {
-          await _registerTokenWithServer(_fcmToken!);
-        }
+      // Handle foreground messages
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-        // Listen for token refresh
-        _messaging.onTokenRefresh.listen((newToken) async {
-          debugPrint('🔔 FCM Token refreshed: $newToken');
-          _fcmToken = newToken;
-          await _registerTokenWithServer(newToken);
-        });
+      // Handle notification tap when app is in background/terminated
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
 
-        // Set up local notifications for foreground messages
-        await _setupLocalNotifications();
-
-        // Handle foreground messages
-        FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-        // Handle notification tap when app is in background/terminated
-        FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
-
-        // Check if app was opened from a notification
-        final initialMessage = await _messaging.getInitialMessage();
-        if (initialMessage != null) {
-          _handleNotificationTap(initialMessage);
-        }
-
-        _isInitialized = true;
-        debugPrint('🔔 Push notification service initialized');
-      } else {
-        debugPrint('🔔 Push notification permission denied');
+      // Check if app was opened from a notification
+      final initialMessage = await _messaging.getInitialMessage();
+      if (initialMessage != null) {
+        _handleNotificationTap(initialMessage);
       }
+
+      _isInitialized = true;
+      debugPrint('🔔 Push notification service initialized');
     } catch (e) {
       debugPrint('🔔 Error initializing push notifications: $e');
+    }
+  }
+
+  /// Fetches and registers the FCM token, tolerating failure without
+  /// aborting the rest of initialize() (message listeners, local-notification
+  /// setup still need to run either way).
+  ///
+  /// On iOS, `getToken()` can throw ("No APNS token specified") if called
+  /// before the async APNs handshake completes - AppDelegate.swift's
+  /// unconditional `registerForRemoteNotifications()` call kicks that off,
+  /// but doesn't block on it, so briefly wait for the APNs token first.
+  Future<void> _registerTokenIfAvailable() async {
+    try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        await _waitForApnsToken();
+      }
+
+      _fcmToken = await _messaging.getToken();
+      debugPrint('🔔 FCM Token: $_fcmToken');
+
+      if (_fcmToken != null) {
+        await _registerTokenWithServer(_fcmToken!);
+      }
+    } catch (e) {
+      debugPrint(
+        '🔔 Could not fetch/register FCM token yet (will retry on next '
+        'token refresh or app open): $e',
+      );
+    }
+  }
+
+  /// Polls briefly for the APNs token to become available. A harmless no-op
+  /// once it's already set; gives up after ~3s rather than waiting forever.
+  Future<void> _waitForApnsToken() async {
+    for (var i = 0; i < 6; i++) {
+      if (await _messaging.getAPNSToken() != null) return;
+      await Future.delayed(const Duration(milliseconds: 500));
     }
   }
 

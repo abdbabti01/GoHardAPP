@@ -9,7 +9,7 @@ class StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final badgeData = _getBadgeData(status);
+    final badgeData = _getBadgeData(context, status);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -53,7 +53,15 @@ class StatusBadge extends StatelessWidget {
     );
   }
 
-  _BadgeData _getBadgeData(String status) {
+  _BadgeData _getBadgeData(BuildContext context, String status) {
+    // Fixed grey shades don't self-adjust for theme brightness the way
+    // Material's dynamic colors do: shade700 (dark enough to pass 4.5:1 AA
+    // on the light theme's near-white background) measures only 2.81:1 on
+    // the dark theme's near-black one, so the "unlabeled status" shade
+    // is picked per brightness instead of a single fixed value.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final neutralGrey = isDark ? Colors.grey.shade400 : Colors.grey.shade700;
+
     switch (status.toLowerCase()) {
       case 'completed':
         return _BadgeData(
@@ -74,11 +82,11 @@ class StatusBadge extends StatelessWidget {
           icon: Icons.event,
         );
       case 'draft':
-        return _BadgeData(label: 'Draft', color: Colors.grey, icon: Icons.edit);
+        return _BadgeData(label: 'Draft', color: neutralGrey, icon: Icons.edit);
       default:
         return _BadgeData(
           label: status,
-          color: Colors.grey,
+          color: neutralGrey,
           icon: Icons.circle,
         );
     }

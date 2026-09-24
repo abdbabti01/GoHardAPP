@@ -111,9 +111,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     'Track your fitness journey',
                     textAlign: TextAlign.center,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyLarge?.copyWith(color: Colors.grey),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 48),
 
@@ -153,6 +153,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       hintText: 'Enter your password',
                       prefixIcon: const Icon(Icons.lock_outlined),
                       suffixIcon: IconButton(
+                        tooltip:
+                            _obscurePassword
+                                ? 'Show password'
+                                : 'Hide password',
                         icon: Icon(
                           _obscurePassword
                               ? Icons.visibility_outlined

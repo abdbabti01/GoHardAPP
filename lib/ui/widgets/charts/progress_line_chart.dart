@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/workout_stats.dart';
 import 'package:intl/intl.dart';
 
@@ -51,7 +52,7 @@ class ProgressLineChart extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Last ${data.length} sessions',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: context.textSecondary),
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -203,14 +204,18 @@ class ProgressLineChart extends StatelessWidget {
             const SizedBox(height: 12),
 
             // Progress indicator
-            _buildProgressIndicator(minValue, maxValue),
+            _buildProgressIndicator(context, minValue, maxValue),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildProgressIndicator(double minValue, double maxValue) {
+  Widget _buildProgressIndicator(
+    BuildContext context,
+    double minValue,
+    double maxValue,
+  ) {
     final firstValue = data.first.value;
     final lastValue = data.last.value;
     final change = lastValue - firstValue;
@@ -243,7 +248,7 @@ class ProgressLineChart extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             'from first to last session',
-            style: TextStyle(color: Colors.grey[600], fontSize: 11),
+            style: TextStyle(color: context.textSecondary, fontSize: 11),
           ),
         ],
       ),

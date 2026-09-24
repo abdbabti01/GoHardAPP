@@ -640,7 +640,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<Gender>(
-              value: _gender,
+              initialValue: _gender,
               decoration: const InputDecoration(
                 labelText: 'Gender',
                 prefixIcon: Icon(Icons.wc),
@@ -718,7 +718,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Column(
           children: [
             DropdownButtonFormField<ExperienceLevel>(
-              value: _experienceLevel,
+              initialValue: _experienceLevel,
               decoration: const InputDecoration(
                 labelText: 'Experience Level',
                 prefixIcon: Icon(Icons.star),
@@ -736,7 +736,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<FitnessGoal>(
-              value: _primaryGoal,
+              initialValue: _primaryGoal,
               decoration: const InputDecoration(
                 labelText: 'Primary Goal',
                 prefixIcon: Icon(Icons.track_changes),

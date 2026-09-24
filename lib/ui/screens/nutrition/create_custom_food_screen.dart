@@ -279,7 +279,7 @@ class _CreateCustomFoodScreenState extends State<CreateCustomFoodScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _servingUnit,
+                    initialValue: _servingUnit,
                     decoration: const InputDecoration(
                       labelText: 'Unit',
                       border: OutlineInputBorder(),
@@ -491,7 +491,7 @@ class _CreateCustomFoodScreenState extends State<CreateCustomFoodScreen> {
 
               // Category dropdown
               DropdownButtonFormField<String>(
-                value: _category,
+                initialValue: _category,
                 decoration: const InputDecoration(
                   labelText: 'Category',
                   border: OutlineInputBorder(),

@@ -140,7 +140,7 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
 
                     // Experience Level
                     DropdownButtonFormField<String>(
-                      value: _experienceLevel,
+                      initialValue: _experienceLevel,
                       // Without this, the selected item's Row sizes itself
                       // to its own content (MainAxisSize.min) instead of
                       // the available field width, so it can overflow at
@@ -206,7 +206,7 @@ class _WorkoutPlanFormScreenState extends State<WorkoutPlanFormScreen> {
 
                     // Equipment
                     DropdownButtonFormField<String>(
-                      value: _equipment,
+                      initialValue: _equipment,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Available Equipment',

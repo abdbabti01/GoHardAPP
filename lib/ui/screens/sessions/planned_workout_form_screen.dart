@@ -356,7 +356,7 @@ class _PlannedWorkoutFormScreenState extends State<PlannedWorkoutFormScreen> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _selectedType,
+              initialValue: _selectedType,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 hintText: 'Select type (optional)',

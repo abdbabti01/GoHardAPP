@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'secure_storage_options.dart';
+
 /// Service for managing goal reminder preferences
 /// Stores reminder settings locally on the device
 class GoalReminderPreferences {
@@ -9,7 +11,9 @@ class GoalReminderPreferences {
   factory GoalReminderPreferences() => _instance;
   GoalReminderPreferences._internal();
 
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+    aOptions: kAndroidSecureOptions,
+  );
   static const String _keyPrefix = 'goal_reminder_';
 
   /// Save reminder preference for a goal

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../core/services/secure_storage_options.dart';
+
 /// Service for managing authentication tokens and user data in secure storage
 /// Matches the AuthService.cs from MAUI app
 class AuthService {
@@ -10,7 +12,7 @@ class AuthService {
   // Android: Use encryptedSharedPreferences for better compatibility
   static const _storage = FlutterSecureStorage(
     iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: kAndroidSecureOptions,
   );
 
   static const String _tokenKey = 'jwt_token';
@@ -117,10 +119,11 @@ class AuthService {
 
   /// Clear all authentication data from secure storage.
   ///
-  /// Kept for the legacy (unreachable/dead - no ProviderScope is ever
-  /// mounted) Riverpod auth_notifier.dart call site. The live logout path
-  /// (AuthProvider) uses [clearSessionCredentials] below instead, which
-  /// also removes the cached profile payload this method omits.
+  /// Not used by the live logout path (AuthProvider uses
+  /// [clearSessionCredentials] below instead, which also removes the cached
+  /// profile payload this method omits) - retained for
+  /// `sync_service_create_soft_error_test.dart`'s guard that a soft sync
+  /// error never triggers a hard credential wipe.
   Future<void> clearToken() async {
     await Future.wait([
       _storage.delete(key: _tokenKey),

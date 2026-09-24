@@ -48,7 +48,7 @@ class AppTheme {
       ),
 
       // Card - Clean with subtle shadow
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.lightSurface,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -163,8 +163,10 @@ class AppTheme {
           color: AppColors.goHardBlack,
         ),
         bodyLarge: TextStyle(fontSize: 17, color: AppColors.goHardBlack),
-        bodyMedium: TextStyle(fontSize: 15, color: AppColors.iosGray6),
-        bodySmall: TextStyle(fontSize: 13, color: AppColors.iosGray5),
+        // Muted body text on the light theme must still reach 4.5:1 (AA);
+        // iosGray6/iosGray5 measured 3.1:1/2.2:1 on the light background.
+        bodyMedium: TextStyle(fontSize: 15, color: AppColors.stone),
+        bodySmall: TextStyle(fontSize: 13, color: AppColors.stone),
       ),
 
       // Divider
@@ -187,7 +189,7 @@ class AppTheme {
       ),
 
       // Dialog
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: AppColors.lightSurface,
         elevation: 16,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -251,7 +253,7 @@ class AppTheme {
       ),
 
       // Card - Dark surface with subtle border
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.darkSurface,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -405,7 +407,7 @@ class AppTheme {
       ),
 
       // Dialog - Dark with subtle shadow
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: AppColors.darkSurface,
         elevation: 24,
         shadowColor: Colors.black.withValues(alpha: 0.3),

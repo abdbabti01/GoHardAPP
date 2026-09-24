@@ -508,11 +508,9 @@ void main() {
         isNull,
         reason: 'a superseded send must not surface an error',
       );
-      expect(
-        provider.getMessagesForFriend(7).map((m) => m.id).toList(),
-        [20],
-        reason: 'only the newest send to friend 7 is reflected',
-      );
+      expect(provider.getMessagesForFriend(7).map((m) => m.id).toList(), [
+        20,
+      ], reason: 'only the newest send to friend 7 is reflected');
       expect(
         notifyCount,
         notifiesAfterS2,

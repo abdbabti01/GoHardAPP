@@ -3645,4 +3645,39 @@ void main() {
       expect(provider.recentRuns.single.id, 2);
     });
   });
+
+  // The provider can be disposed (app/widget teardown) while a load is still
+  // in flight for a session that is STILL current. The `finally` must not
+  // notify a disposed ChangeNotifier ("used after being disposed").
+  group('disposed while a load is in flight', () {
+    test(
+      'loadDashboardData completes without notifying after dispose',
+      () async {
+        final gate = Completer<List<RunSession>>();
+        when(
+          mockRepo.getRecentRuns(limit: anyNamed('limit')),
+        ).thenAnswer((_) => gate.future);
+        when(
+          mockRepo.getWeeklyStats(),
+        ).thenAnswer((_) async => <String, dynamic>{});
+
+        final pending = provider.loadDashboardData();
+        provider.dispose();
+        gate.complete(<RunSession>[]);
+
+        await expectLater(pending, completes);
+      },
+    );
+
+    test('loadRun completes without notifying after dispose', () async {
+      final gate = Completer<RunSession?>();
+      when(mockRepo.getRunSession(1)).thenAnswer((_) => gate.future);
+
+      final pending = provider.loadRun(1);
+      provider.dispose();
+      gate.complete(null);
+
+      await expectLater(pending, completes);
+    });
+  });
 }

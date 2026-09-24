@@ -4,10 +4,12 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../core/services/health_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../providers/settings_provider.dart';
 import '../../../providers/profile_provider.dart';
 import '../../../core/enums/profile_enums.dart';
 import '../../../data/models/profile_update_request.dart';
+import '../../../routes/route_names.dart';
 import '../../widgets/common/loading_indicator.dart';
 
 /// Settings screen for managing app preferences
@@ -52,6 +54,14 @@ class SettingsScreen extends StatelessWidget {
               _buildSectionHeader(context, 'Appearance'),
               const SizedBox(height: 8),
               _buildAccentColorCard(context, settings),
+              const SizedBox(height: 24),
+
+              // Account Section - deliberately last and visually quiet
+              // (a plain list tile, not a card), discoverable but not
+              // dominant; the destructive screen it opens is unmissable.
+              _buildSectionHeader(context, 'Account'),
+              const SizedBox(height: 8),
+              _buildDeleteAccountTile(context),
             ],
           );
         },
@@ -89,8 +99,11 @@ class SettingsScreen extends StatelessWidget {
               subtitle:
                   'Daily workout reminder at ${settings.morningReminderTime.formatted}',
               enabled: settings.morningReminderEnabled,
-              onChanged: (value) {
-                settings.setMorningReminderEnabled(value);
+              onChanged: (value) async {
+                final ok = await settings.setMorningReminderEnabled(value);
+                if (!ok && context.mounted) {
+                  _showNotificationPermissionDeniedSnackBar(context);
+                }
               },
             ),
             if (settings.morningReminderEnabled) ...[
@@ -113,8 +126,11 @@ class SettingsScreen extends StatelessWidget {
               subtitle:
                   'Reminder to complete your workout at ${settings.eveningReminderTime.formatted}',
               enabled: settings.eveningReminderEnabled,
-              onChanged: (value) {
-                settings.setEveningReminderEnabled(value);
+              onChanged: (value) async {
+                final ok = await settings.setEveningReminderEnabled(value);
+                if (!ok && context.mounted) {
+                  _showNotificationPermissionDeniedSnackBar(context);
+                }
               },
             ),
             if (settings.eveningReminderEnabled) ...[
@@ -139,8 +155,11 @@ class SettingsScreen extends StatelessWidget {
                       ? 'Reminds at ${settings.nutritionReminderTime.formatted} if goals not met'
                       : 'Get reminded only when nutrition goals are under 80%',
               enabled: settings.nutritionReminderEnabled,
-              onChanged: (value) {
-                settings.setNutritionReminderEnabled(value);
+              onChanged: (value) async {
+                final ok = await settings.setNutritionReminderEnabled(value);
+                if (!ok && context.mounted) {
+                  _showNotificationPermissionDeniedSnackBar(context);
+                }
               },
             ),
             if (settings.nutritionReminderEnabled) ...[
@@ -190,6 +209,25 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  /// Shown when a reminder toggle couldn't be enabled because OS
+  /// notification permission is denied - re-requesting would be a no-op, so
+  /// this routes straight to the system Settings screen instead.
+  void _showNotificationPermissionDeniedSnackBar(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Notifications are turned off for GoHard. Enable them in Settings to use reminders.',
+        ),
+        action: SnackBarAction(
+          label: 'Open Settings',
+          onPressed: () {
+            NotificationService().openSettings();
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildNotificationToggle(
     BuildContext context, {
     required String title,
@@ -206,7 +244,7 @@ class SettingsScreen extends StatelessWidget {
       subtitle: Text(subtitle),
       value: enabled,
       onChanged: onChanged,
-      activeColor: Theme.of(context).primaryColor,
+      activeThumbColor: Theme.of(context).primaryColor,
     );
   }
 
@@ -311,7 +349,7 @@ class SettingsScreen extends StatelessWidget {
                         : 'Sync workouts with $platformName',
                   ),
                   value: healthService.isEnabled,
-                  activeColor: context.accent,
+                  activeThumbColor: context.accent,
                   onChanged: (value) async {
                     if (value) {
                       final success = await healthService.enable();
@@ -703,6 +741,44 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeleteAccountTile(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.border),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.pushNamed(context, RouteNames.deleteAccount),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(
+                Icons.delete_outline_rounded,
+                color: AppColors.errorRed,
+                size: 22,
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'Delete Account',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.errorRed,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right, color: AppColors.errorRed, size: 20),
+            ],
+          ),
         ),
       ),
     );

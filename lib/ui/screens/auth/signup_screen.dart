@@ -107,9 +107,9 @@ class _SignupScreenState extends State<SignupScreen> {
                   Text(
                     'Create your account to get started',
                     textAlign: TextAlign.center,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyLarge?.copyWith(color: Colors.grey),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 32),
 
@@ -203,6 +203,10 @@ class _SignupScreenState extends State<SignupScreen> {
                       hintText: 'Create a password',
                       prefixIcon: const Icon(Icons.lock_outlined),
                       suffixIcon: IconButton(
+                        tooltip:
+                            _obscurePassword
+                                ? 'Show password'
+                                : 'Hide password',
                         icon: Icon(
                           _obscurePassword
                               ? Icons.visibility_outlined
@@ -241,6 +245,10 @@ class _SignupScreenState extends State<SignupScreen> {
                       hintText: 'Re-enter your password',
                       prefixIcon: const Icon(Icons.lock_outlined),
                       suffixIcon: IconButton(
+                        tooltip:
+                            _obscureConfirmPassword
+                                ? 'Show password'
+                                : 'Hide password',
                         icon: Icon(
                           _obscureConfirmPassword
                               ? Icons.visibility_outlined

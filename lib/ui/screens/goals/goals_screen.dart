@@ -704,9 +704,7 @@ class _GoalsScreenState extends State<GoalsScreen>
                             'weekly',
                             'biweekly',
                           ].map(
-                            (freq) => RadioListTile<String>(
-                              title: Text(_getFrequencyDisplay(freq)),
-                              value: freq,
+                            (freq) => RadioGroup<String>(
                               groupValue: selectedFrequency,
                               onChanged: (value) {
                                 if (value != null) {
@@ -715,6 +713,10 @@ class _GoalsScreenState extends State<GoalsScreen>
                                   });
                                 }
                               },
+                              child: RadioListTile<String>(
+                                title: Text(_getFrequencyDisplay(freq)),
+                                value: freq,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -773,15 +775,25 @@ class _GoalsScreenState extends State<GoalsScreen>
                         );
 
                         if (reminderEnabled) {
-                          // Request notification permissions if not granted
+                          // Request notification permission only if not
+                          // already granted/decided (see
+                          // NotificationService.ensurePermission's doc
+                          // comment - same gate the Settings screen's
+                          // reminder toggles use).
                           final hasPermission =
-                              await notificationService.requestPermissions();
+                              await notificationService.ensurePermission();
                           if (!hasPermission) {
                             if (!mounted) return;
                             messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Notification permissions not granted. Please enable in settings.',
+                              SnackBar(
+                                content: const Text(
+                                  'Notifications are turned off for GoHard. Enable them in Settings to use reminders.',
+                                ),
+                                action: SnackBarAction(
+                                  label: 'Open Settings',
+                                  onPressed: () {
+                                    notificationService.openSettings();
+                                  },
                                 ),
                               ),
                             );

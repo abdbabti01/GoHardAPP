@@ -396,7 +396,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                         ),
                         const SizedBox(height: 16),
                         DropdownButtonFormField<int?>(
-                          value: selectedGoalId,
+                          initialValue: selectedGoalId,
                           decoration: const InputDecoration(
                             labelText: 'Link to Goal (optional)',
                             border: OutlineInputBorder(),

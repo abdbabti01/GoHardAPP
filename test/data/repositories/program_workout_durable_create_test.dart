@@ -2396,11 +2396,10 @@ void main() {
               .findAll();
       expect(firstExercises.length, 2);
       expect(secondExercises.length, 2);
-      expect(
-        firstExercises.map((e) => e.serverId).toSet(),
-        {9001, 9002},
-        reason: 'first Session\'s exercises attached to the FIRST server ids',
-      );
+      expect(firstExercises.map((e) => e.serverId).toSet(), {
+        9001,
+        9002,
+      }, reason: 'first Session\'s exercises attached to the FIRST server ids');
       expect(
         secondExercises.map((e) => e.serverId).toSet(),
         {9101, 9102},

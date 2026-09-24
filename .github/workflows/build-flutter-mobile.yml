@@ -6,6 +6,21 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      export_method:
+        description: 'iOS export method for the SIGNED IPA job (build-ios-signed). Ignored by every other job.'
+        type: choice
+        default: 'development'
+        options:
+          - development
+          - ad-hoc
+          - app-store
+
+# Least-privilege default: every job here only checks out code, builds, and
+# uploads artifacts - none of it needs write access to repo contents, issues,
+# PRs, etc. Overrides whatever broader default the repository settings grant.
+permissions:
+  contents: read
 
 jobs:
   # Run tests first
@@ -26,7 +41,7 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.29.2'
+        flutter-version: '3.47.5'
         channel: 'stable'
 
     - name: Get dependencies
@@ -80,7 +95,7 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.29.2'
+        flutter-version: '3.47.5'
         channel: 'stable'
 
     - name: Get dependencies
@@ -115,7 +130,7 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.29.2'
+        flutter-version: '3.47.5'
         channel: 'stable'
 
     - name: Get dependencies
@@ -144,11 +159,28 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.29.2'
+        flutter-version: '3.47.5'
         channel: 'stable'
 
     - name: Get dependencies
       run: flutter pub get
+
+    # Best-effort, not fail-fast: this job is a compile-smoke-test on every
+    # push/PR, including from contributors who haven't configured secrets.
+    # Without this file, AppDelegate.swift already skips Maps init cleanly
+    # (see its own guard) rather than crashing, so the build still succeeds -
+    # it just ships without working Maps, same as a local dev build with no
+    # Secrets.xcconfig. The signed release job below fails fast instead,
+    # since a missing key there would silently ship a broken feature.
+    - name: Create Google Maps secrets file (best-effort)
+      env:
+        MAPS_KEY: ${{ secrets.IOS_GOOGLE_MAPS_API_KEY }}
+      run: |
+        if [ -z "$MAPS_KEY" ]; then
+          echo "::warning::IOS_GOOGLE_MAPS_API_KEY secret not set - building without Google Maps support (Info.plist GMSApiKey will be empty)."
+        else
+          echo "GOOGLE_MAPS_API_KEY=$MAPS_KEY" > ios/Flutter/Secrets.xcconfig
+        fi
 
     - name: Build iOS (no codesign)
       run: flutter build ios --release --no-codesign
@@ -167,11 +199,255 @@ jobs:
         path: build/ios/iphoneos/app-unsigned.ipa
         retention-days: 30
 
+  # Build iOS (SIGNED) - manual trigger only. Never runs on push/PR, so a
+  # repository with no Apple signing secrets configured yet is completely
+  # unaffected; this job only exists to be dispatched once you're ready.
+  build-ios-signed:
+    name: Build iOS (Signed IPA)
+    runs-on: macos-latest
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.47.5'
+        channel: 'stable'
+
+    # Single source of truth for every later step, instead of each one
+    # re-deriving export_method/entitlements/cert-type independently.
+    # 'development' is the only fully-realized path today (see the mobile
+    # workflow's own history/report for why): a Development certificate +
+    # Development-provisioned-device profile + Runner-Development.entitlements
+    # (aps-environment=development, HealthKit). ad-hoc/app-store fall back to
+    # the untouched Runner-Release.entitlements (production) - correct for a
+    # future TestFlight/App Store path, not yet validated end-to-end here.
+    - name: Resolve build configuration
+      run: |
+        EXPORT_METHOD="${{ github.event.inputs.export_method || 'development' }}"
+        echo "EXPORT_METHOD=$EXPORT_METHOD" >> "$GITHUB_ENV"
+        if [ "$EXPORT_METHOD" = "development" ]; then
+          echo "ENTITLEMENTS_FILE=Runner-Development.entitlements" >> "$GITHUB_ENV"
+          echo "EXPECTED_APS_ENVIRONMENT=development" >> "$GITHUB_ENV"
+          echo "EXPECTED_CERT_KIND=Development" >> "$GITHUB_ENV"
+          echo "REQUIRE_HEALTHKIT=1" >> "$GITHUB_ENV"
+        else
+          echo "ENTITLEMENTS_FILE=Runner-Release.entitlements" >> "$GITHUB_ENV"
+          echo "EXPECTED_APS_ENVIRONMENT=production" >> "$GITHUB_ENV"
+          echo "EXPECTED_CERT_KIND=Distribution" >> "$GITHUB_ENV"
+          echo "REQUIRE_HEALTHKIT=0" >> "$GITHUB_ENV"
+        fi
+        echo "Export method: $EXPORT_METHOD"
+
+    # Fail fast with a clear message per missing secret, rather than a
+    # cryptic Xcode/codesign error much later in the job.
+    - name: Validate required secrets are present
+      env:
+        MAPS_KEY: ${{ secrets.IOS_GOOGLE_MAPS_API_KEY }}
+        CERT_P12: ${{ secrets.IOS_SIGNING_CERTIFICATE_P12_BASE64 }}
+        CERT_PASSWORD: ${{ secrets.IOS_SIGNING_CERTIFICATE_PASSWORD }}
+        PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        TEAM_ID: ${{ secrets.IOS_DEVELOPMENT_TEAM }}
+      run: |
+        missing=0
+        check() {
+          if [ -z "$1" ]; then
+            echo "::error::Missing $2 GitHub secret. See the repository's iOS CI setup checklist."
+            missing=1
+          fi
+        }
+        check "$MAPS_KEY" "IOS_GOOGLE_MAPS_API_KEY"
+        check "$CERT_P12" "IOS_SIGNING_CERTIFICATE_P12_BASE64"
+        check "$CERT_PASSWORD" "IOS_SIGNING_CERTIFICATE_PASSWORD"
+        check "$PROFILE" "IOS_PROVISIONING_PROFILE_BASE64"
+        check "$TEAM_ID" "IOS_DEVELOPMENT_TEAM"
+        if [ "$missing" = "1" ]; then
+          exit 1
+        fi
+
+    # Not a hard failure: Firebase logs a runtime warning on a bundle-ID
+    # mismatch rather than failing the build, but a silent mismatch here is
+    # exactly the kind of mistake worth catching before shipping an IPA.
+    - name: Check GoogleService-Info.plist bundle ID matches the app
+      run: |
+        PLIST_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :BUNDLE_ID" ios/Runner/GoogleService-Info.plist)
+        EXPECTED_BUNDLE_ID="ca.gohardapp"
+        echo "GoogleService-Info.plist BUNDLE_ID: $PLIST_BUNDLE_ID"
+        if [ "$PLIST_BUNDLE_ID" != "$EXPECTED_BUNDLE_ID" ]; then
+          echo "::warning::ios/Runner/GoogleService-Info.plist is registered to '$PLIST_BUNDLE_ID', not '$EXPECTED_BUNDLE_ID'. Firebase (push notifications, etc.) will not work correctly until this file is replaced with one downloaded for the $EXPECTED_BUNDLE_ID app in Firebase Console."
+        fi
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Create Google Maps secrets file
+      env:
+        MAPS_KEY: ${{ secrets.IOS_GOOGLE_MAPS_API_KEY }}
+      run: echo "GOOGLE_MAPS_API_KEY=$MAPS_KEY" > ios/Flutter/Secrets.xcconfig
+
+    # Temporary, job-scoped keychain - the password never needs to be a
+    # stored secret since nothing outside this job ever needs it, and the
+    # keychain is destroyed in the cleanup step regardless of outcome.
+    - name: Import signing certificate into a temporary keychain
+      env:
+        CERT_P12: ${{ secrets.IOS_SIGNING_CERTIFICATE_P12_BASE64 }}
+        CERT_PASSWORD: ${{ secrets.IOS_SIGNING_CERTIFICATE_PASSWORD }}
+      run: |
+        KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+        echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
+        KEYCHAIN_PATH="$RUNNER_TEMP/ci-signing.keychain-db"
+        echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+        echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security import "$RUNNER_TEMP/certificate.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+        rm -f "$RUNNER_TEMP/certificate.p12"
+
+        SIGNING_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | head -n1 | sed -E 's/.*"(.*)"/\1/')
+        if [ -z "$SIGNING_IDENTITY" ]; then
+          echo "::error::No usable code-signing identity found in the imported certificate. Confirm IOS_SIGNING_CERTIFICATE_P12_BASE64/IOS_SIGNING_CERTIFICATE_PASSWORD are correct."
+          exit 1
+        fi
+        echo "SIGNING_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+        # Certificate-type guard: a Distribution certificate cannot sign
+        # against a Development profile and vice versa - catch the mismatch
+        # here with a clear message rather than a cryptic codesign failure.
+        case "$SIGNING_IDENTITY" in
+          *"$EXPECTED_CERT_KIND"*) ;;
+          *)
+            echo "::error::export_method='$EXPORT_METHOD' needs an Apple $EXPECTED_CERT_KIND certificate, but the imported certificate is '$SIGNING_IDENTITY'. Provide a matching IOS_SIGNING_CERTIFICATE_P12_BASE64."
+            exit 1
+            ;;
+        esac
+
+    - name: Install provisioning profile
+      env:
+        PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        TEAM_ID: ${{ secrets.IOS_DEVELOPMENT_TEAM }}
+      run: |
+        PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+        mkdir -p "$PROFILES_DIR"
+        echo "$PROFILE" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+
+        security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+        PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$RUNNER_TEMP/profile.plist")
+        PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$RUNNER_TEMP/profile.plist")
+        PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$RUNNER_TEMP/profile.plist")
+        PROFILE_TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.developer.team-identifier" "$RUNNER_TEMP/profile.plist" 2>/dev/null || echo "")
+        PROFILE_APS_ENV=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:aps-environment" "$RUNNER_TEMP/profile.plist" 2>/dev/null || echo "")
+        PROFILE_HAS_HEALTHKIT=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.developer.healthkit" "$RUNNER_TEMP/profile.plist" 2>/dev/null || echo "")
+
+        if [[ "$PROFILE_APP_ID" != *"ca.gohardapp"* ]]; then
+          echo "::error::The provisioning profile's application identifier ('$PROFILE_APP_ID') does not match ca.gohardapp. Download/create a profile for the ca.gohardapp App ID."
+          exit 1
+        fi
+
+        if [ -n "$PROFILE_TEAM_ID" ] && [ "$PROFILE_TEAM_ID" != "$TEAM_ID" ]; then
+          echo "::error::The provisioning profile belongs to Team ID '$PROFILE_TEAM_ID', but IOS_DEVELOPMENT_TEAM is '$TEAM_ID'. These must match."
+          exit 1
+        fi
+
+        if [ "$EXPORT_METHOD" = "development" ]; then
+          # PlistBuddy prints "Array {" as the first line, then one UDID per
+          # line - require 8+ consecutive hex chars so "Array {" (a lone
+          # hex-like 'A' followed by non-hex 'r') is never miscounted as a
+          # device.
+          DEVICE_COUNT=$(/usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" "$RUNNER_TEMP/profile.plist" 2>/dev/null | grep -cE '^[[:space:]]*[0-9A-Fa-f]{8}' || true)
+          if [ "$DEVICE_COUNT" -lt 1 ]; then
+            echo "::error::export_method='development' needs a Development provisioning profile with at least one registered device UDID, but this profile has none (or is not a Development profile at all). Register your iPhone's UDID in the Apple Developer portal and regenerate the profile."
+            exit 1
+          fi
+          echo "Profile has $DEVICE_COUNT registered device(s)."
+        fi
+
+        if [ "$PROFILE_APS_ENV" != "$EXPECTED_APS_ENVIRONMENT" ]; then
+          echo "::error::The provisioning profile's aps-environment is '$PROFILE_APS_ENV', but this build expects '$EXPECTED_APS_ENVIRONMENT'. Enable Push Notifications on the ca.gohardapp App ID for the correct environment and regenerate the profile."
+          exit 1
+        fi
+
+        if [ "$REQUIRE_HEALTHKIT" = "1" ] && [ -z "$PROFILE_HAS_HEALTHKIT" ]; then
+          echo "::error::This build's entitlements ($ENTITLEMENTS_FILE) require HealthKit, but the provisioning profile does not grant it. Enable HealthKit on the ca.gohardapp App ID in the Apple Developer portal and regenerate the profile."
+          exit 1
+        fi
+
+        cp "$RUNNER_TEMP/profile.mobileprovision" "$PROFILES_DIR/$PROFILE_UUID.mobileprovision"
+        echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+        echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
+        echo "Installed profile '$PROFILE_NAME' ($PROFILE_UUID) for $PROFILE_APP_ID"
+
+    - name: Configure Xcode signing for this build
+      env:
+        TEAM_ID: ${{ secrets.IOS_DEVELOPMENT_TEAM }}
+      run: |
+        cat > ios/Flutter/Signing.xcconfig <<EOF
+        DEVELOPMENT_TEAM = $TEAM_ID
+        CODE_SIGN_STYLE = Manual
+        CODE_SIGN_IDENTITY = $SIGNING_IDENTITY
+        PROVISIONING_PROFILE_SPECIFIER = $PROFILE_NAME
+        GOHARD_CODE_SIGN_ENTITLEMENTS = $ENTITLEMENTS_FILE
+        EOF
+
+    - name: Generate ExportOptions.plist
+      env:
+        TEAM_ID: ${{ secrets.IOS_DEVELOPMENT_TEAM }}
+      run: |
+        cat > ios/ExportOptions.plist <<EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>method</key>
+          <string>$EXPORT_METHOD</string>
+          <key>teamID</key>
+          <string>$TEAM_ID</string>
+          <key>signingStyle</key>
+          <string>manual</string>
+          <key>provisioningProfiles</key>
+          <dict>
+            <key>ca.gohardapp</key>
+            <string>$PROFILE_NAME</string>
+          </dict>
+        </dict>
+        </plist>
+        EOF
+
+    - name: Build signed IPA
+      run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+
+    - name: Upload signed IPA artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ios-ipa-signed-${{ github.run_number }}
+        path: build/ios/ipa/*.ipa
+        retention-days: 30
+
+    - name: Clean up signing material
+      if: always()
+      run: |
+        if [ -n "$KEYCHAIN_PATH" ] && [ -f "$KEYCHAIN_PATH" ]; then
+          security delete-keychain "$KEYCHAIN_PATH" || true
+        fi
+        if [ -n "$PROFILE_UUID" ]; then
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+        fi
+        rm -f ios/Flutter/Secrets.xcconfig ios/Flutter/Signing.xcconfig ios/ExportOptions.plist
+        rm -f "$RUNNER_TEMP/profile.mobileprovision" "$RUNNER_TEMP/profile.plist"
+
   # Summary job
   build-summary:
     name: Build Summary
     runs-on: ubuntu-latest
-    needs: [test, build-android-apk, build-android-aab, build-ios]
+    needs: [test, build-android-apk, build-android-aab, build-ios, build-ios-signed]
     if: always()
 
     steps:
@@ -182,6 +458,7 @@ jobs:
         echo "- Tests: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- Android APK: ${{ needs.build-android-apk.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- Android AAB: ${{ needs.build-android-aab.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "- iOS IPA: ${{ needs.build-ios.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- iOS IPA (unsigned): ${{ needs.build-ios.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- iOS IPA (signed, manual trigger only): ${{ needs.build-ios-signed.result }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "Build artifacts are available for download in the Actions tab." >> $GITHUB_STEP_SUMMARY

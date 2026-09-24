@@ -1588,6 +1588,13 @@ class SessionRepository {
     // Checkpoint: immediately before entering the write transaction.
     if (!_sessionEpoch.isCurrent(token)) return;
 
+    // Set below when the race branch fires, so the just-attached serverId
+    // can be pushed right away instead of waiting for the next periodic
+    // SyncService pass (BUG-11: a status change - e.g. Start, or Finish -
+    // applied while this CREATE was still in flight would otherwise sit as
+    // `pending_update` for up to `SyncService._syncInterval`, and the server
+    // would meanwhile still show the stale just-created status).
+    LocalSession? raced;
     await db.writeTxn(() async {
       await _runTestHook(insideBackgroundWriteTxnForTesting);
       // Checkpoint: first statement inside the write transaction.
@@ -1623,6 +1630,7 @@ class SessionRepository {
         existing.isSynced = false;
         existing.syncStatus = 'pending_update';
         await db.localSessions.put(existing);
+        raced = existing;
         return;
       }
 
@@ -1634,6 +1642,39 @@ class SessionRepository {
       );
       await db.localSessions.put(updated);
     });
+
+    final racedRow = raced;
+    if (racedRow != null &&
+        !_isConflicted(racedRow) &&
+        _connectivity.isOnline) {
+      final serverIdForPush = racedRow.serverId!;
+      // The server only knows whatever status THIS create POST told it
+      // (`session.status`, snapshotted before any later edit) - if that
+      // wasn't already 'in_progress'/'completed' and the row is now
+      // 'completed', the server needs the same in_progress bridge
+      // [updateSessionStatus] applies, or it will reject the completion.
+      final needsBridge =
+          racedRow.status == 'completed' &&
+          session.status != 'in_progress' &&
+          session.status != 'completed';
+      _backgroundSync(
+        () =>
+            needsBridge
+                ? _syncBridgedCompletionToServer(
+                  db,
+                  localId,
+                  serverIdForPush,
+                  context,
+                )
+                : _syncSessionStatusToServer(
+                  db,
+                  localId,
+                  serverIdForPush,
+                  context,
+                ),
+        'Pushed post-create-race edit to server',
+      );
+    }
   }
 
   /// Background sync: dispatch the durable `POST /sessions/from-program-workout`
@@ -2021,6 +2062,17 @@ class SessionRepository {
       throw Exception(_unauthenticated);
     }
 
+    // BUG-11: ActiveWorkoutScreen's "Finish" action is reachable on a
+    // still-draft/planned session (unlike the mutually-exclusive Start
+    // control, it is never gated on the session having actually started),
+    // so this can be asked to jump straight from 'draft'/'planned' to
+    // 'completed'. The server's SessionStatus.IsValidTransition correctly
+    // rejects that direct jump - captured BEFORE the local write below
+    // overwrites `localSession.status`.
+    final needsBridgeThroughInProgress =
+        status == 'completed' &&
+        (localSession.status == 'draft' || localSession.status == 'planned');
+
     // ALWAYS update locally first for instant response
     await _updateLocalSessionStatus(
       db,
@@ -2039,12 +2091,20 @@ class SessionRepository {
     // explicitly resolved.
     if (_shouldPushAfterEdit(localSession)) {
       _backgroundSync(
-        () => _syncSessionStatusToServer(
-          db,
-          localSession.localId,
-          localSession.serverId!,
-          context,
-        ),
+        () =>
+            needsBridgeThroughInProgress
+                ? _syncBridgedCompletionToServer(
+                  db,
+                  localSession.localId,
+                  localSession.serverId!,
+                  context,
+                )
+                : _syncSessionStatusToServer(
+                  db,
+                  localSession.localId,
+                  localSession.serverId!,
+                  context,
+                ),
         'Updated session status on server',
       );
     } else if (_isConflicted(localSession)) {
@@ -2055,6 +2115,47 @@ class SessionRepository {
 
     // Return session with exercises using helper
     return await _localSessionToSessionWithExercises(db, localSession);
+  }
+
+  /// Sends the two server-side PATCHes required to converge a session that
+  /// [updateSessionStatus] is completing directly from 'draft'/'planned'
+  /// (see its `needsBridgeThroughInProgress` doc comment). Dispatched as ONE
+  /// `_backgroundSync` operation - awaited sequentially inside a single
+  /// async function - specifically so the two HTTP calls are strictly
+  /// ordered: two independently fire-and-forgotten `_backgroundSync` calls
+  /// have no such guarantee and could reach the server as
+  /// completed-before-in_progress, which the server's state machine would
+  /// then reject exactly the same way. If the bridging PATCH itself fails,
+  /// this throws without attempting the completed PATCH, and the row is
+  /// retried as a whole on the next pass (same `_backgroundSync` error
+  /// handling as every other session sync).
+  Future<void> _syncBridgedCompletionToServer(
+    Isar db,
+    int sessionLocalId,
+    int serverId,
+    SessionRequestContext context,
+  ) async {
+    final token = context.epochToken;
+
+    // Snapshot the already-'completed' row for its startedAt (set by
+    // [_updateLocalSessionStatus]'s matching bridging branch).
+    final source = await _ownedSessionByLocalId(db, sessionLocalId, token);
+    if (source == null) return;
+
+    await _dispatchBackgroundHttp(
+      () => _apiService.patch<void>(
+        ApiConfig.sessionStatus(serverId),
+        data: {
+          'status': 'in_progress',
+          if (source.startedAt != null)
+            'startedAt': source.startedAt!.toUtc().toIso8601String(),
+        },
+        sessionContext: context,
+      ),
+    );
+    if (!_sessionEpoch.isCurrent(token)) return;
+
+    await _syncSessionStatusToServer(db, sessionLocalId, serverId, context);
   }
 
   /// Background sync: Update session status on server. Bound to [context]:
@@ -2153,8 +2254,12 @@ class SessionRepository {
         localSession.isSynced = false;
       }
 
-      // Set startedAt when status changes to 'in_progress'
-      if (status == 'in_progress' && localSession.startedAt == null) {
+      // Set startedAt when status changes to 'in_progress', and also when
+      // completing directly from 'draft'/'planned' (BUG-11: the session
+      // never actually went through in_progress, so it would otherwise be
+      // 'completed' with a permanently null startedAt).
+      if ((status == 'in_progress' || status == 'completed') &&
+          localSession.startedAt == null) {
         final timestampToUse = startedAtUtc ?? DateTime.now().toUtc();
         localSession.startedAt = timestampToUse;
         localSession.pausedAt = null;

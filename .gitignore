@@ -52,3 +52,7 @@ tmpclaude-*
 /isar.dll
 /libisar.so
 /libisar.dylib
+
+# Local iOS build secrets (e.g. Google Maps API key) - see
+# ios/Flutter/Secrets.xcconfig.example for setup instructions.
+/ios/Flutter/Secrets.xcconfig
