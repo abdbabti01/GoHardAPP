@@ -1523,6 +1523,11 @@ class ProgramsProvider extends ChangeNotifier {
     );
   }
 
+  /// Calendar date (local, date-only) [workout] falls on in [program] - the
+  /// same rule Today uses, so Train's week view never disagrees with Today.
+  DateTime scheduledDateOf(Program program, ProgramWorkout workout) =>
+      _scheduledDateOf(program, workout);
+
   /// Get all program workouts scheduled for today from active programs
   /// Returns a list of (Program, ProgramWorkout) tuples
   List<({Program program, ProgramWorkout workout})> getTodaysWorkouts() {
