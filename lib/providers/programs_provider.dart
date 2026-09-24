@@ -511,7 +511,7 @@ class ProgramsProvider extends ChangeNotifier {
     } catch (e) {
       if (!owns() || errorGen != _errorGen) return;
       _errorMessage =
-          'Failed to load programs: ${e.toString().replaceAll('Exception: ', '')}';
+          'Failed to load plans: ${e.toString().replaceAll('Exception: ', '')}';
       debugPrint('Load programs error: $e');
     } finally {
       // `_isLoading` means "did MY fetch finish". Guard on [_loadGen] (bumped
@@ -1522,6 +1522,11 @@ class ProgramsProvider extends ChangeNotifier {
       Duration(days: (workout.weekNumber - 1) * 7 + (workout.dayNumber - 1)),
     );
   }
+
+  /// Calendar date (local, date-only) [workout] falls on in [program] - the
+  /// same rule Today uses, so Train's week view never disagrees with Today.
+  DateTime scheduledDateOf(Program program, ProgramWorkout workout) =>
+      _scheduledDateOf(program, workout);
 
   /// Get all program workouts scheduled for today from active programs
   /// Returns a list of (Program, ProgramWorkout) tuples

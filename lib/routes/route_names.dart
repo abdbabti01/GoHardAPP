@@ -13,6 +13,7 @@ class RouteNames {
 
   // Session routes
   static const String sessions = '/sessions';
+  static const String workoutHistory = '/workout-history';
   static const String sessionDetail = '/session-detail';
   static const String activeWorkout = '/active-workout';
   static const String planWorkout = '/plan-workout';

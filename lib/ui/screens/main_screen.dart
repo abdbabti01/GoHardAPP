@@ -10,7 +10,6 @@ import '../../core/services/push_notification_bootstrap.dart';
 import '../../core/services/push_notification_service.dart';
 import '../../core/theme/theme_colors.dart';
 import '../../data/services/api_service.dart';
-import '../../providers/sessions_provider.dart';
 import '../../providers/messages_provider.dart';
 import '../../routes/route_names.dart';
 import '../widgets/common/curved_navigation_bar.dart';
@@ -41,6 +40,15 @@ class _MainScreenState extends State<MainScreen> {
           widget.initialTab!,
           subTabIndex: widget.initialSubTab,
         );
+        // Train no longer has sub-tabs: open the screen that replaced the
+        // requested one (legacy "Programs" -> My Plan, and so on).
+        final legacyRoute =
+            widget.initialTab == 1
+                ? TrainScreen.routeForLegacySubTab(widget.initialSubTab)
+                : null;
+        if (legacyRoute != null && mounted) {
+          Navigator.of(context).pushNamed(legacyRoute);
+        }
       });
     }
 
@@ -51,7 +59,7 @@ class _MainScreenState extends State<MainScreen> {
 
     _screens = [
       const TodayScreen(),
-      TrainScreen(initialTab: widget.initialSubTab),
+      const TrainScreen(),
       const NutritionDashboardScreen(),
       const MeScreen(),
     ];
@@ -99,26 +107,6 @@ class _MainScreenState extends State<MainScreen> {
     _showQuickActionsMenu(context);
   }
 
-  Future<void> _startWorkout(BuildContext context) async {
-    final sessionsProvider = context.read<SessionsProvider>();
-    final tabService = context.read<TabNavigationService>();
-    final navigator = Navigator.of(context);
-
-    final workoutName = await showDialog<String>(
-      context: context,
-      builder: (context) => const WorkoutNameDialog(),
-    );
-
-    if (workoutName == null || !mounted) return;
-
-    final session = await sessionsProvider.startNewWorkout(name: workoutName);
-
-    if (session != null && mounted) {
-      tabService.switchTab(1); // Switch to Train tab
-      navigator.pushNamed(RouteNames.activeWorkout, arguments: session.id);
-    }
-  }
-
   void _showQuickActionsMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -161,7 +149,7 @@ class _MainScreenState extends State<MainScreen> {
                   label: 'Start Workout',
                   onTap: () {
                     Navigator.pop(context);
-                    _startWorkout(context);
+                    startCustomWorkout(context);
                   },
                 ),
                 _QuickActionItem(
