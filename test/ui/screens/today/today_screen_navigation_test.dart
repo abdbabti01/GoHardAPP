@@ -174,9 +174,9 @@ void main() {
     // re-arms the watch with a fresh controller) fully resolve. This count
     // is tied to loadSessions()'s current shape (exactly one await -
     // getSessions() - before _installWatch); see the matching comment in
-    // train_screen_sync_issues_test.dart for why an insufficient count
-    // would target the wrong watch generation without necessarily failing
-    // this specific test's assertions.
+    // workout_history_screen_sync_issues_test.dart for why an insufficient
+    // count would target the wrong watch generation without necessarily
+    // failing this specific test's assertions.
     await tester.pump();
     await tester.pump();
 
