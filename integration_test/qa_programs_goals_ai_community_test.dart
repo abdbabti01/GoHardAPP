@@ -115,16 +115,18 @@ void main() {
       reason: 'seed program: ${programResp.data}',
     );
 
-    // ---- Programs: verify the seeded program displays ----
+    // ---- My Plan: seeded plan shows on Train and on the My Plan page ----
     await tester.tap(find.text('Train'));
-    await pumpUntilFound(tester, find.text('Programs'));
-    await tester.tap(find.text('Programs'));
     await pumpUntilFound(
       tester,
       find.textContaining('QA Seeded Program'),
       timeout: const Duration(seconds: 15),
     );
+    await tester.tap(find.text('View plan'));
+    await pumpUntilFound(tester, find.byType(BackButton));
     expect(find.textContaining('QA Seeded Program'), findsWidgets);
+    await tester.pageBack();
+    await tester.pump();
 
     // ---- Goals: verify the seeded goal displays ----
     await tester.tap(find.text('Me'));
