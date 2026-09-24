@@ -126,7 +126,7 @@ void main() {
     await pumpUntilFound(tester, find.byType(BackButton));
     expect(find.textContaining('QA Seeded Program'), findsWidgets);
     await tester.pageBack();
-    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
 
     // ---- Goals: verify the seeded goal displays ----
     await tester.tap(find.text('Me'));
