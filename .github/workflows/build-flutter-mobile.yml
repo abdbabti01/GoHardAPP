@@ -32,6 +32,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    # Plain shell, no toolchain needed: the iOS Maps key build check and the
+    # iOS CI jobs' use of it (dummy values only).
+    - name: Test iOS Maps key build contract
+      run: sh ios/scripts/test_check_maps_key.sh
+
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
@@ -165,27 +170,34 @@ jobs:
     - name: Get dependencies
       run: flutter pub get
 
-    # Best-effort, not fail-fast: this job is a compile-smoke-test on every
-    # push/PR, including from contributors who haven't configured secrets.
-    # Without this file, AppDelegate.swift already skips Maps init cleanly
-    # (see its own guard) rather than crashing, so the build still succeeds -
-    # it just ships without working Maps, same as a local dev build with no
-    # Secrets.xcconfig. The signed release job below fails fast instead,
-    # since a missing key there would silently ship a broken feature.
-    - name: Create Google Maps secrets file (best-effort)
+    # A build without a Maps key is NOT safe: it installs and launches, then
+    # the Google Maps SDK aborts the app the moment Running opens a map. The
+    # Xcode "Check Google Maps key" build phase (ios/scripts/check_maps_key.sh)
+    # therefore fails keyless builds. This job runs on every push/PR,
+    # including from contributors without secrets, so with no secret it opts
+    # into the explicit compile-only path and uploads NO IPA - a keyless
+    # build must never be handed out for installation. The key value is only
+    # written to the gitignored Secrets.xcconfig, never printed.
+    - name: Configure Google Maps key
+      id: maps
       env:
         MAPS_KEY: ${{ secrets.IOS_GOOGLE_MAPS_API_KEY }}
       run: |
         if [ -z "$MAPS_KEY" ]; then
-          echo "::warning::IOS_GOOGLE_MAPS_API_KEY secret not set - building without Google Maps support (Info.plist GMSApiKey will be empty)."
+          echo "::warning::IOS_GOOGLE_MAPS_API_KEY secret not set - compile-only iOS build; no IPA will be uploaded."
+          echo "GOHARD_ALLOW_MISSING_MAPS_KEY = YES" > ios/Flutter/Secrets.xcconfig
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "- iOS (unsigned): compile-only, no Maps key secret - no IPA uploaded." >> "$GITHUB_STEP_SUMMARY"
         else
           echo "GOOGLE_MAPS_API_KEY=$MAPS_KEY" > ios/Flutter/Secrets.xcconfig
+          echo "configured=true" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Build iOS (no codesign)
       run: flutter build ios --release --no-codesign
 
     - name: Create IPA archive
+      if: steps.maps.outputs.configured == 'true'
       run: |
         cd build/ios/iphoneos
         mkdir Payload
@@ -193,6 +205,7 @@ jobs:
         zip -r app-unsigned.ipa Payload
 
     - name: Upload IPA artifact
+      if: steps.maps.outputs.configured == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: ios-ipa-unsigned-${{ github.run_number }}
@@ -265,6 +278,14 @@ jobs:
         check "$CERT_PASSWORD" "IOS_SIGNING_CERTIFICATE_PASSWORD"
         check "$PROFILE" "IOS_PROVISIONING_PROFILE_BASE64"
         check "$TEAM_ID" "IOS_DEVELOPMENT_TEAM"
+        # Same contract as the Xcode build phase, minus the compile-only
+        # escape hatch: a signed IPA is installable, so the key must also
+        # not be empty/whitespace, the placeholder, or an unresolved
+        # reference. The script never prints the value.
+        if ! env -u GOHARD_ALLOW_MISSING_MAPS_KEY GOOGLE_MAPS_API_KEY="$MAPS_KEY" /bin/sh ios/scripts/check_maps_key.sh; then
+          echo "::error::IOS_GOOGLE_MAPS_API_KEY is not a usable Google Maps iOS key (see the error above)."
+          missing=1
+        fi
         if [ "$missing" = "1" ]; then
           exit 1
         fi
