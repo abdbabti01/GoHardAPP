@@ -295,14 +295,12 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
 
       // Navigate to the Programs tab (Sessions screen, tab index 1)
       if (mounted) {
-        // Pop all screens and go to main with Programs tab selected
+        // Land on Train › My Plan, where ProgramsScreen auto-selects the new plan
         navigator.pushNamedAndRemoveUntil(
           RouteNames.main,
           (route) => false,
-          arguments: {
-            'tab': 0,
-            'subTab': 1,
-          }, // Sessions tab (0), Programs sub-tab (1)
+          // Train tab + legacy "Programs" sub-tab -> MainScreen opens My Plan.
+          arguments: {'tab': 1, 'subTab': 1},
         );
 
         // Show success message
