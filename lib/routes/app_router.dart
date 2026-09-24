@@ -225,7 +225,11 @@ class AppRouter {
       // Analytics routes
       case RouteNames.analytics:
         return MaterialPageRoute(
-          builder: (_) => const AnalyticsScreen(),
+          builder:
+              (_) => Scaffold(
+                appBar: AppBar(title: const Text('Progress')),
+                body: const AnalyticsScreen(),
+              ),
           settings: settings,
         );
 
@@ -312,7 +316,11 @@ class AppRouter {
       // Program routes
       case RouteNames.programs:
         return MaterialPageRoute(
-          builder: (_) => const ProgramsScreen(),
+          builder:
+              (_) => Scaffold(
+                appBar: AppBar(title: const Text('My Plan')),
+                body: const ProgramsScreen(),
+              ),
           settings: settings,
         );
 
