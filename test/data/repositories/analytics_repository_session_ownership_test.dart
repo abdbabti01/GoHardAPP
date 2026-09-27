@@ -560,6 +560,30 @@ void main() {
       },
     );
 
+    test(
+      'offline getVolumeOverTime: value is the raw reps x stored weight and '
+      'the label claims no unit (stored weights have no known unit)',
+      () async {
+        await ownedGraph(
+          uid: userA,
+          reps: 8,
+          weight: 102.5,
+          date: DateTime.now().subtract(const Duration(days: 2)),
+        );
+
+        loginAs(userA);
+        when(mockConnectivity.isOnline).thenReturn(false);
+
+        final point = (await repository.getVolumeOverTime()).single;
+        expect(point.value, 820); // no kg<->lb conversion
+        expect(point.label, '820');
+        expect(
+          point.label,
+          isNot(matches(RegExp(r'kg|lb', caseSensitive: false))),
+        );
+      },
+    );
+
     test('a live AuthService user-id change after entry cannot change the '
         'operation owner', () async {
       await ownedGraph(uid: userA, reps: 10, weight: 100);

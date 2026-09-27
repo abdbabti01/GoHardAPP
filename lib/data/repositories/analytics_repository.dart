@@ -579,7 +579,8 @@ class AnalyticsRepository {
           ProgressDataPoint(
             date: session.date,
             value: totalVolume,
-            label: '${totalVolume.toStringAsFixed(0)} kg',
+            // Unitless: stored set weights have no reliably known unit.
+            label: totalVolume.toStringAsFixed(0),
           ),
         );
       }

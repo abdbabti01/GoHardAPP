@@ -125,7 +125,7 @@ class AchievementDefinition {
     AchievementDefinition(
       id: 'volume_1000',
       name: 'Ton Lifter',
-      description: 'Lift 1,000 kg total',
+      description: 'Reach 1,000 total volume',
       icon: '⚡',
       tier: AchievementTier.bronze,
       category: AchievementCategory.volume,
@@ -134,7 +134,7 @@ class AchievementDefinition {
     AchievementDefinition(
       id: 'volume_10000',
       name: 'Heavy Hitter',
-      description: 'Lift 10,000 kg total',
+      description: 'Reach 10,000 total volume',
       icon: '💥',
       tier: AchievementTier.silver,
       category: AchievementCategory.volume,
@@ -143,7 +143,7 @@ class AchievementDefinition {
     AchievementDefinition(
       id: 'volume_50000',
       name: 'Iron Giant',
-      description: 'Lift 50,000 kg total',
+      description: 'Reach 50,000 total volume',
       icon: '🦾',
       tier: AchievementTier.gold,
       category: AchievementCategory.volume,
@@ -152,7 +152,7 @@ class AchievementDefinition {
     AchievementDefinition(
       id: 'volume_100000',
       name: 'Legendary',
-      description: 'Lift 100,000 kg total',
+      description: 'Reach 100,000 total volume',
       icon: '🌟',
       tier: AchievementTier.platinum,
       category: AchievementCategory.volume,

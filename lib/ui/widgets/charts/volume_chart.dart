@@ -1,7 +1,20 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../data/models/workout_stats.dart';
+
+final _axisDate = DateFormat.Md();
+final _tooltipDate = DateFormat.MMMd();
+
+/// Tooltip copy for one volume point. Stored set weights have no reliably known
+/// unit (entry has always said lbs; history may mix units), so volume is shown
+/// unitless. `point.label` is deliberately not used: older API builds send it
+/// with a hard-coded "kg".
+@visibleForTesting
+String volumeTooltipText(ProgressDataPoint point) =>
+    '${_tooltipDate.format(point.date)}\n'
+    'Volume ${(point.value / 1000).toStringAsFixed(1)}k';
 
 class VolumeChart extends StatelessWidget {
   final List<ProgressDataPoint> data;
@@ -93,7 +106,7 @@ class VolumeChart extends StatelessWidget {
                           return Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                              point.label ?? '',
+                              _axisDate.format(point.date),
                               style: const TextStyle(fontSize: 10),
                             ),
                           );
@@ -154,7 +167,7 @@ class VolumeChart extends StatelessWidget {
                           if (spot.spotIndex >= data.length) return null;
                           final point = data[spot.spotIndex];
                           return LineTooltipItem(
-                            '${point.label}\n${(point.value / 1000).toStringAsFixed(1)}k kg',
+                            volumeTooltipText(point),
                             const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
