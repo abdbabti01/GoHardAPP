@@ -203,6 +203,23 @@ class MockAuthService extends _i1.Mock implements _i8.AuthService {
           as _i4.Future<String?>);
 
   @override
+  _i4.Future<void> saveUnitPreference(String? unitPreference) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveUnitPreference, [unitPreference]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
+  _i4.Future<String?> getUnitPreference() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUnitPreference, []),
+            returnValue: _i4.Future<String?>.value(),
+          )
+          as _i4.Future<String?>);
+
+  @override
   _i4.Future<void> saveCachedProfile(String? profileJson) =>
       (super.noSuchMethod(
             Invocation.method(#saveCachedProfile, [profileJson]),

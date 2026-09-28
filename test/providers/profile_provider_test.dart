@@ -42,6 +42,8 @@ void main() {
 
     when(mockAuthService.getThemePreference()).thenAnswer((_) async => null);
     when(mockAuthService.saveThemePreference(any)).thenAnswer((_) async {});
+    when(mockAuthService.getUnitPreference()).thenAnswer((_) async => null);
+    when(mockAuthService.saveUnitPreference(any)).thenAnswer((_) async {});
 
     provider = ProfileProvider(
       mockProfileRepository,
@@ -433,6 +435,7 @@ void main() {
         'dark fallback', () async {
       final authService = MockAuthService();
       when(authService.getThemePreference()).thenAnswer((_) async => 'system');
+      when(authService.getUnitPreference()).thenAnswer((_) async => null);
       final fresh = ProfileProvider(
         mockProfileRepository,
         authService,
@@ -446,6 +449,7 @@ void main() {
     test('a saved "light" preference maps to ThemeMode.light', () async {
       final authService = MockAuthService();
       when(authService.getThemePreference()).thenAnswer((_) async => 'light');
+      when(authService.getUnitPreference()).thenAnswer((_) async => null);
       final fresh = ProfileProvider(
         mockProfileRepository,
         authService,

@@ -72,6 +72,8 @@ void main() {
     epoch = UserSessionEpoch()..activate(7);
     when(authService.getThemePreference()).thenAnswer((_) async => null);
     when(authService.saveThemePreference(any)).thenAnswer((_) async {});
+    when(authService.getUnitPreference()).thenAnswer((_) async => null);
+    when(authService.saveUnitPreference(any)).thenAnswer((_) async {});
     profile = ProfileProvider(repo, authService, epoch);
   });
 

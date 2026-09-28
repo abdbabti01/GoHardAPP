@@ -98,6 +98,8 @@ void main() {
 
     when(authService.getThemePreference()).thenAnswer((_) async => null);
     when(authService.saveThemePreference(any)).thenAnswer((_) async {});
+    when(authService.getUnitPreference()).thenAnswer((_) async => null);
+    when(authService.saveUnitPreference(any)).thenAnswer((_) async {});
 
     provider = ProfileProvider(repo, authService, epoch);
   });

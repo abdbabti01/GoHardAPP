@@ -321,6 +321,7 @@ void main() {
 
     // Constructor-time calls that must be stubbed before construction.
     when(mockAuthService.getThemePreference()).thenAnswer((_) async => null);
+    when(mockAuthService.getUnitPreference()).thenAnswer((_) async => null);
     when(mockMessagesRepo.getUnreadCount()).thenAnswer((_) async => 0);
 
     sessionEpoch = UserSessionEpoch()..activate(1);

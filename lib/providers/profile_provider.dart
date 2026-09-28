@@ -6,6 +6,7 @@ import '../data/models/profile_update_request.dart';
 import '../data/repositories/profile_repository.dart';
 import '../data/services/api_exception.dart';
 import '../data/services/auth_service.dart';
+import '../core/enums/profile_enums.dart';
 import '../core/services/connectivity_service.dart';
 import '../core/services/user_session_epoch.dart';
 
@@ -61,6 +62,7 @@ class ProfileProvider extends ChangeNotifier {
   PhotoUploadError _photoError = PhotoUploadError.none;
   ProfileFieldsError _fieldsError = ProfileFieldsError.none;
   String? _cachedThemePreference; // Theme loaded from local storage
+  String? _cachedUnitPreference; // Unit preference loaded from local storage
 
   StreamSubscription<bool>? _connectivitySubscription;
 
@@ -76,6 +78,9 @@ class ProfileProvider extends ChangeNotifier {
     // survive across accounts, unlike every other field this provider
     // holds.
     _loadCachedTheme();
+    // Same rationale for unit preference: cached offline, and survives
+    // logout/account switching (see AuthService.saveUnitPreference).
+    _loadCachedUnitPreference();
 
     // Listen for connectivity changes and refresh when going online. This
     // callback can fire at any point in the app's lifetime, including
@@ -102,6 +107,12 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load unit preference from local storage (fast, offline-first)
+  Future<void> _loadCachedUnitPreference() async {
+    _cachedUnitPreference = await _authService.getUnitPreference();
+    notifyListeners();
+  }
+
   // Getters
   User? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
@@ -114,6 +125,15 @@ class ProfileProvider extends ChangeNotifier {
 
   /// Classified reason the last [updateProfile] failed (or [none]).
   ProfileFieldsError get fieldsError => _fieldsError;
+
+  /// The user's unit preference ('Metric'/'Imperial'), available offline.
+  /// Server value takes priority when a profile is loaded; otherwise falls
+  /// back to the locally cached value from the last successful
+  /// load/update/toggle; defaults to 'Metric' when neither is available.
+  String get unitPreference =>
+      UnitPreference.fromString(
+        _currentUser?.unitPreference ?? _cachedUnitPreference,
+      ).serverValue;
 
   /// Get current theme mode based on user preference
   /// Uses cached theme from local storage first (offline-first)
@@ -159,6 +179,12 @@ class ProfileProvider extends ChangeNotifier {
         _cachedThemePreference = _currentUser!.themePreference;
         await _authService.saveThemePreference(_currentUser!.themePreference!);
       }
+
+      // Save unit preference to local storage for offline access
+      if (_currentUser?.unitPreference != null) {
+        _cachedUnitPreference = _currentUser!.unitPreference;
+        await _authService.saveUnitPreference(_currentUser!.unitPreference!);
+      }
     } catch (e) {
       if (!_sessionEpoch.isCurrent(token)) return;
       _errorMessage =
@@ -195,6 +221,13 @@ class ProfileProvider extends ChangeNotifier {
       if (_currentUser?.themePreference != null) {
         _cachedThemePreference = _currentUser!.themePreference;
         await _authService.saveThemePreference(_currentUser!.themePreference!);
+        if (!_sessionEpoch.isCurrent(token)) return false;
+      }
+
+      // Save unit preference to local storage if updated
+      if (_currentUser?.unitPreference != null) {
+        _cachedUnitPreference = _currentUser!.unitPreference;
+        await _authService.saveUnitPreference(_currentUser!.unitPreference!);
         if (!_sessionEpoch.isCurrent(token)) return false;
       }
 
