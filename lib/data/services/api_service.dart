@@ -128,6 +128,9 @@ class ApiService {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          // Declares this client's lifted-weight contract on every request -
+          // see ApiConfig.liftedWeightUnitHeader's doc comment.
+          ApiConfig.liftedWeightUnitHeader: ApiConfig.liftedWeightCanonicalUnit,
         },
       ),
     );

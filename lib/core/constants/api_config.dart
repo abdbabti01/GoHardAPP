@@ -38,6 +38,18 @@ class ApiConfig {
   /// AI models like Claude can take 60-120 seconds for complex workout plan generation
   static const Duration receiveTimeout = Duration(seconds: 180);
 
+  /// Canonical lifted-weight contract (Task 5/7). Every request this app
+  /// sends declares that it always sends/expects lifted-weight fields (Log
+  /// Sets, analytics) in kg - see `UnitConverter`'s lifted-weight boundary,
+  /// the ONLY place conversion happens. The server enables enforcement via
+  /// `LiftedWeight.RequireCanonicalClient`; sent unconditionally by
+  /// [ApiService]'s `BaseOptions.headers` regardless of that flag's state.
+  static const String liftedWeightUnitHeader = 'X-Lifted-Weight-Unit';
+  static const String liftedWeightCanonicalUnit = 'kg';
+
+  /// `GET api/v1/liftedweightcontract` -> `{ "canonicalHistory": bool }`.
+  static const String liftedWeightContract = 'liftedweightcontract';
+
   /// API endpoints
   static const String authLogin = 'auth/login';
   static const String authSignup = 'auth/signup';
