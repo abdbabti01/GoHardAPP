@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/theme/theme_colors.dart';
 import '../../../providers/analytics_provider.dart';
+import '../../../providers/profile_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../data/models/workout_stats.dart';
 import '../../widgets/charts/volume_chart.dart';
@@ -174,6 +175,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _buildChartCard(BuildContext context, List<ProgressDataPoint> data) {
+    final unitPreference = context.select<ProfileProvider, String>(
+      (p) => p.unitPreference,
+    );
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -223,7 +227,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          VolumeChart(data: data, lineColor: AppColors.goHardBlue),
+          VolumeChart(
+            data: data,
+            lineColor: AppColors.goHardBlue,
+            unitPreference: unitPreference,
+          ),
         ],
       ),
     );
