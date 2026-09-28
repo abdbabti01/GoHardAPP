@@ -173,7 +173,7 @@ Full step-by-step runbook: `GoHardAPI/Scripts/Phase2C_WorkoutHistoryReset.md`
 4. Canonical clients purge + resume uploads on their next online sync.
    Legacy clients get the update-required message on set writes.
 
-Guarantees: no legacy write after reset (guard precedes reset); AI never told
+Guarantees: no legacy set write after reset (guard precedes reset; see §10); AI never told
 history is kg before verification (flag after verification); compatible users are
 never locked out (local logging continues, uploads resume at cutover).
 
