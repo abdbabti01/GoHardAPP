@@ -141,6 +141,9 @@ templates, nutrition, body metrics, run sessions, all other chats.
 
 ## 9. Rollout (documented, not executed)
 
+Full step-by-step runbook: `GoHardAPI/Scripts/Phase2C_WorkoutHistoryReset.md`
+§"End-to-end rollout".
+
 1. Ship API build (both flags false) — behaviour identical to today; new
    endpoint returns `canonicalHistory: false`.
 2. Ship the canonical app build through store review **ahead of cutover** (safe:
