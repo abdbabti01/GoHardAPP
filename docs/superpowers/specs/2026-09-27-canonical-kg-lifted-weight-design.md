@@ -94,7 +94,13 @@ Owner decision: **unsynced legacy workout history on devices is intentionally
 discarded.** Without this, a pending legacy (lb-semantic) set would be uploaded by
 the upgraded app *with* the kg header and silently accepted.
 
-State (secure storage, key `lifted_weight_contract_v1`, JSON):
+State (file `lifted_weight_contract_v1.json` beside the Isar database, written
+to a temp file with `flush: true` (fsync) then atomically renamed; platform
+key-value stores are not used because e.g. Android SharedPreferences writes
+asynchronously, so a successful call does not prove durability; after the rename
+the file is fsync'd again, but Dart cannot fsync the directory entry itself, so an
+OS crash / power loss within seconds of a state write remains a narrow residual —
+process crashes and every observable storage error fail closed), JSON:
 `{ status: "pending" | "complete", cutoffs: { sessions, exercises, sets, programs, programWorkouts } }`
 
 1. **Snapshot (startup, before `runApp`, offline-safe).** If the key is absent,
@@ -103,8 +109,7 @@ State (secure storage, key `lifted_weight_contract_v1`, JSON):
    **Isar localIds are not monotonic:** the id counter is `max(existing id) + 1`
    when the database opens, so after the top rows are deleted (user delete,
    download reconciliation) and the app restarts, after `clear()` (account
-   deletion), or after an iOS reinstall that wipes Isar but keeps the Keychain
-   state, new canonical rows can receive ids at or below a stored cutoff.
+   deletion), new canonical rows can receive ids at or below a stored cutoff.
    Therefore, on every startup while `pending` (and right after account
    deletion's `clearAll`), each cutoff is tightened to
    `min(storedCutoff, currentMaxLocalId)` and persisted. This is safe: rows
@@ -132,10 +137,26 @@ State (secure storage, key `lifted_weight_contract_v1`, JSON):
 4. **Idempotency.** Re-running a purge is harmless (same predicate, rows already
    gone). A crash between the Isar commit and the status write repeats the purge
    on next start. `complete` is terminal; the key is never cleared by logout.
-   A fresh install with an empty Isar ends up with zero cutoffs - either snapped
-   fresh, or (iOS reinstall with a surviving Keychain `pending` state) tightened
-   to 0 at startup - and purges nothing but server-backed rows. A reinstall
-   whose surviving Keychain state is `complete` stays complete (terminal).
+   A fresh install (the state file is wiped with Isar) snapshots zero cutoffs and
+   purges nothing but server-backed rows.
+
+5. **Fail closed on storage failure.** Every state write is fsync'd and verified
+   by reading it back. New local workout rows (sessions, exercises, sets) may
+   only be created in a run whose state was durably established — written and
+   read back identically, already consistent, or `complete`. If the read, write
+   or read-back fails, `SessionRepository` / `ExerciseRepository` refuse to
+   create them (`LiftedWeightStateUnavailableException`, "Workout logging is
+   temporarily unavailable. Please restart GoHard.") until a later startup
+   succeeds, so a storage failure can never let a canonical row take a reused
+   id that a later purge would classify as legacy. Uploads open only after the
+   `complete` state is durable.
+6. **Never create a child the purge would cascade away.** While the purge is
+   pending, a new exercise or set may not be added under a session/exercise the
+   purge would delete (at or below its cutoff, or server-backed — which includes
+   canonical rows downloaded after a purge whose `complete` write failed). The
+   repositories refuse with "This workout was recorded before GoHard's unit
+   update and can't be changed until the update finishes. Start a new workout
+   instead." New workouts (new local parents) are unaffected.
 
 ## 8. Production reset (separate manual operation, never automatic)
 
@@ -182,10 +203,10 @@ never locked out (local logging continues, uploads resume at cutover).
 - Between installing the canonical build and its purge, legacy local/downloaded
   rows are rendered as if they were kg. Minimised by releasing the app at
   cutover (step 3d).
-- Edits made while gated to a server-backed row (e.g. a program, or a set added
-  to an in-progress legacy session) are discarded by the purge together with the
-  legacy row. Unsynced rows created after the snapshot under unaffected parents
-  survive.
+- Edits (not creations) made while gated to a row the purge deletes — e.g.
+  completing or renaming a legacy or server-backed session/set, or program
+  edits — are discarded with that row. Adding NEW exercises/sets under such a
+  row is refused instead (§7.6), so no newly created canonical row is purged.
 - Workouts logged while gated exist only on the device until cutover.
 - Old builds keep their unsynced sets in a failing retry loop after the guard is
   on; that history is disposable by owner decision.

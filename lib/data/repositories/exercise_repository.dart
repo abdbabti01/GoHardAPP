@@ -130,6 +130,15 @@ class ExerciseRepository {
       _connectivity.isOnline &&
       (_liftedWeightMigration?.workoutUploadsAllowed ?? true);
 
+  /// Fail closed: refuse to create a new local set unless the lifted-weight
+  /// state was durably established this run (see
+  /// [LiftedWeightContractMigration.workoutWritesAllowed]).
+  void _ensureWorkoutWritesAllowed() {
+    if (!(_liftedWeightMigration?.workoutWritesAllowed ?? true)) {
+      throw const LiftedWeightStateUnavailableException();
+    }
+  }
+
   // ============ Test-only session-race seams ============
   //
   // Each is @visibleForTesting, defaults to null, and is never assigned
@@ -616,6 +625,7 @@ class ExerciseRepository {
   /// Create a new exercise set.
   /// Offline-first: saves locally, syncs to server when online.
   Future<ExerciseSet> createExerciseSet(ExerciseSet exerciseSet) async {
+    _ensureWorkoutWritesAllowed();
     final context = await _sessionCoordinator.captureContext();
     if (context == null) throw const SessionStaleException();
     final token = context.epochToken;
@@ -629,6 +639,22 @@ class ExerciseRepository {
     if (!_sessionEpoch.isCurrent(token)) throw const SessionStaleException();
     if (exercise == null) {
       throw Exception('Exercise not found: ${exerciseSet.exerciseId}');
+    }
+    // Fail closed: never create a set under an exercise (or session) the
+    // pending purge will delete - it would be cascaded away.
+    final migration = _liftedWeightMigration;
+    if (migration != null) {
+      final session = await db.localSessions.get(exercise.sessionLocalId);
+      if (!_sessionEpoch.isCurrent(token)) throw const SessionStaleException();
+      if (migration.wouldPurge(
+            'exercises',
+            exercise.localId,
+            exercise.serverId,
+          ) ||
+          session == null ||
+          migration.wouldPurge('sessions', session.localId, session.serverId)) {
+        throw const LiftedWeightStateUnavailableException.legacyParent();
+      }
     }
 
     if (_canUploadWorkouts && _hasServerId(exercise.serverId)) {

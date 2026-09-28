@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
@@ -101,21 +103,19 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
   // Lifted-weight contract (spec §7): record the legacy cutoffs once, before
   // anything can write workout rows. Offline-safe; the purge itself runs
   // later inside SyncService, only once the server reports canonical history.
-  const liftedWeightStorage = FlutterSecureStorage(
-    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
-    aOptions: kAndroidSecureOptions,
+  // State lives in an fsync'd file beside the Isar database (durable writes;
+  // wiped together with Isar on reinstall) - see
+  // LiftedWeightContractMigration.fileStore.
+  final liftedWeightStore = LiftedWeightContractMigration.fileStore(
+    File(
+      '${localDb.database.directory}/'
+      '${LiftedWeightContractMigration.storageKey}.json',
+    ),
   );
   final liftedWeightMigration = LiftedWeightContractMigration(
     database: () => localDb.database,
-    readState:
-        () => liftedWeightStorage.read(
-          key: LiftedWeightContractMigration.storageKey,
-        ),
-    writeState:
-        (json) => liftedWeightStorage.write(
-          key: LiftedWeightContractMigration.storageKey,
-          value: json,
-        ),
+    readState: liftedWeightStore.read,
+    writeState: liftedWeightStore.write,
   );
   await liftedWeightMigration.snapshotIfNeeded();
 

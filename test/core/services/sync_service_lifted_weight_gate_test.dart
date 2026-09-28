@@ -27,6 +27,7 @@ import 'package:go_hard_app/data/local/models/local_program_workout.dart';
 import 'package:go_hard_app/data/local/models/local_session.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/models/exercise_set.dart';
+import 'package:go_hard_app/data/models/program_workout.dart';
 import 'package:go_hard_app/data/models/session.dart';
 import 'package:go_hard_app/data/repositories/exercise_repository.dart';
 import 'package:go_hard_app/data/repositories/session_repository.dart';
@@ -351,8 +352,272 @@ void main() {
       expect((setPost.data as Map<String, dynamic>)['weight'], canonicalKg);
     });
 
-    test('pending + online: writes against server-backed (legacy) parents are '
-        'withheld too; the same calls upload when ungated', () async {
+    test('state not durably persisted (id reuse + failed write): creating '
+        'workout rows fails closed and writes nothing; after a restart with '
+        'working storage the canonical rows are created, survive the purge '
+        'with exact kg, and upload', () async {
+      Future<void> restart() async {
+        await isar.close();
+        isar = await Isar.open(
+          [
+            LocalSessionSchema,
+            LocalExerciseSchema,
+            LocalExerciseSetSchema,
+            LocalExerciseTemplateSchema,
+            LocalProgramSchema,
+            LocalProgramWorkoutSchema,
+            LocalGoalSchema,
+            LocalNutritionGoalSchema,
+            LocalFoodTemplateSchema,
+            LocalMealLogSchema,
+            LocalMealEntrySchema,
+            LocalFoodItemSchema,
+          ],
+          directory: tempDir.path,
+          inspector: false,
+        );
+        localDb.setTestDatabase(isar);
+      }
+
+      // Run 1: legacy rows (a synced session/exercise, two pending sets).
+      final legacySession = LocalSession(
+        serverId: 10,
+        userId: userId,
+        date: now,
+        lastModifiedLocal: now,
+      );
+      await isar.writeTxn(() => isar.localSessions.put(legacySession));
+      final legacyExercise = LocalExercise(
+        serverId: 20,
+        sessionLocalId: legacySession.localId,
+        name: 'Bench',
+        lastModifiedLocal: now,
+      );
+      await isar.writeTxn(() => isar.localExercises.put(legacyExercise));
+      LocalExerciseSet legacySet() => LocalExerciseSet(
+        exerciseLocalId: legacyExercise.localId,
+        setNumber: 1,
+        weight: 135,
+        isSynced: false,
+        syncStatus: 'pending_create',
+        lastModifiedLocal: now,
+      );
+      await isar.writeTxn(() => isar.localExerciseSets.put(legacySet()));
+      final top = legacySet();
+      await isar.writeTxn(() => isar.localExerciseSets.put(top));
+      await newMigration().snapshotIfNeeded();
+      await isar.writeTxn(() => isar.localExerciseSets.delete(top.localId));
+
+      // Run 2: restart; the tightened state cannot be persisted.
+      await restart();
+      final failing = LiftedWeightContractMigration(
+        database: () => isar,
+        readState: () async => state,
+        writeState: (json) async => throw Exception('keychain write failed'),
+      );
+      await failing.snapshotIfNeeded();
+      expect(failing.workoutWritesAllowed, isFalse);
+      final setsBefore = await isar.localExerciseSets.count();
+      final sessionsBefore = await isar.localSessions.count();
+
+      await expectLater(
+        sessionRepo(failing).createSession(
+          Session(id: 0, userId: userId, date: now, name: 'Blocked'),
+        ),
+        throwsA(isA<LiftedWeightStateUnavailableException>()),
+      );
+      await expectLater(
+        sessionRepo(failing).addExerciseToSession(legacySession.serverId!, 1),
+        throwsA(isA<LiftedWeightStateUnavailableException>()),
+      );
+      await expectLater(
+        exerciseRepo(failing).createExerciseSet(
+          ExerciseSet(
+            id: 0,
+            exerciseId: legacyExercise.serverId!,
+            setNumber: 2,
+            reps: 5,
+            weight: canonicalKg,
+          ),
+        ),
+        throwsA(isA<LiftedWeightStateUnavailableException>()),
+      );
+      await pumpEventQueue();
+      expect(await isar.localExerciseSets.count(), setsBefore);
+      expect(await isar.localSessions.count(), sessionsBefore);
+      expect(await isar.localExercises.count(), 1);
+      expect(writes(), isEmpty);
+
+      // Run 3: restart with working storage; the state is tightened durably.
+      await restart();
+      final migration = newMigration();
+      await migration.snapshotIfNeeded();
+      expect(migration.workoutWritesAllowed, isTrue);
+      final session = await sessionRepo(migration).createSession(
+        Session(id: 0, userId: userId, date: now, name: 'Canonical'),
+      );
+      final exercise = await sessionRepo(
+        migration,
+      ).addExerciseToSession(session.id, 1);
+      final created = await exerciseRepo(migration).createExerciseSet(
+        ExerciseSet(
+          id: 0,
+          exerciseId: exercise.id,
+          setNumber: 1,
+          reps: 5,
+          weight: canonicalKg,
+        ),
+      );
+      final canonicalLocalId = -created.id;
+      expect(canonicalLocalId, top.localId, reason: 'Isar reused the id');
+
+      // CanonicalHistory becomes true: purge, then upload.
+      adapter.responder = (options) async {
+        final p = options.path;
+        if (p.endsWith(ApiConfig.liftedWeightContract)) {
+          return _json({'canonicalHistory': true});
+        }
+        if (options.method != 'POST') return _json({});
+        if (p.endsWith('exercises')) return _json({'id': 901});
+        if (p.endsWith(ApiConfig.exerciseSets)) return _json({'id': 902});
+        return _json({
+          'id': 900,
+          'userId': userId,
+          'date': now.toIso8601String(),
+          'name': 'Canonical',
+          'status': 'draft',
+          'version': 1,
+        });
+      };
+      await newSyncService(migration).sync();
+
+      expect(await migration.isComplete(), isTrue);
+      final survivor = (await isar.localExerciseSets.where().findAll()).single;
+      expect(survivor.localId, canonicalLocalId);
+      expect(survivor.weight, canonicalKg);
+      expect(survivor.serverId, 902);
+      final setPost = adapter.capturedRequests.singleWhere(
+        (r) => r.method == 'POST' && r.path.endsWith(ApiConfig.exerciseSets),
+      );
+      expect((setPost.data as Map<String, dynamic>)['weight'], canonicalKg);
+    });
+
+    test('purge ran but the complete write was lost: canonical rows '
+        'downloaded afterwards cannot get new children (the re-purge would '
+        'cascade them); new local rows are created and survive the re-purge '
+        'with exact kg', () async {
+      var failWrite = false;
+      final migration = LiftedWeightContractMigration(
+        database: () => isar,
+        readState: () async => state,
+        writeState: (json) async {
+          if (failWrite) throw Exception('state write failed');
+          state = json;
+        },
+      );
+      await migration.snapshotIfNeeded();
+      failWrite = true;
+      expect(await migration.ensureMigrated(() async => true), isFalse);
+      expect(await migration.isComplete(), isFalse);
+
+      // Download of the reset server's canonical rows (server-backed).
+      final dl = LocalSession(
+        serverId: 500,
+        userId: userId,
+        date: now,
+        isSynced: true,
+        syncStatus: 'synced',
+        version: 1,
+        lastModifiedLocal: now,
+      );
+      await isar.writeTxn(() => isar.localSessions.put(dl));
+      final dlExercise = LocalExercise(
+        serverId: 501,
+        sessionLocalId: dl.localId,
+        sessionServerId: 500,
+        name: 'Bench',
+        isSynced: true,
+        syncStatus: 'synced',
+        lastModifiedLocal: now,
+      );
+      await isar.writeTxn(() => isar.localExercises.put(dlExercise));
+
+      await expectLater(
+        sessionRepo(migration).addExerciseToSession(500, 1),
+        throwsA(isA<LiftedWeightStateUnavailableException>()),
+      );
+      await expectLater(
+        exerciseRepo(migration).createExerciseSet(
+          ExerciseSet(
+            id: 0,
+            exerciseId: 501,
+            setNumber: 1,
+            weight: canonicalKg,
+          ),
+        ),
+        throwsA(isA<LiftedWeightStateUnavailableException>()),
+      );
+      expect(await isar.localExerciseSets.count(), 0);
+
+      final session = await sessionRepo(migration).createSession(
+        Session(id: 0, userId: userId, date: now, name: 'Canonical'),
+      );
+      final exercise = await sessionRepo(
+        migration,
+      ).addExerciseToSession(session.id, 1);
+      await exerciseRepo(migration).createExerciseSet(
+        ExerciseSet(
+          id: 0,
+          exerciseId: exercise.id,
+          setNumber: 1,
+          reps: 5,
+          weight: canonicalKg,
+        ),
+      );
+
+      failWrite = false;
+      expect(await migration.ensureMigrated(() async => true), isTrue);
+      final kept = (await isar.localExerciseSets.where().findAll()).single;
+      expect(kept.weight, canonicalKg);
+      expect(
+        (await isar.localSessions.where().findAll()).single.name,
+        'Canonical',
+      );
+    });
+
+    test('createSessionFromProgramWorkout fails closed when the state was '
+        'not durably established', () async {
+      final failing = LiftedWeightContractMigration(
+        database: () => isar,
+        readState: () async => state,
+        writeState: (json) async => throw Exception('write failed'),
+      );
+      await failing.snapshotIfNeeded();
+      await expectLater(
+        sessionRepo(failing).createSessionFromProgramWorkout(
+          7,
+          ProgramWorkout(
+            id: 7,
+            programId: 3,
+            weekNumber: 1,
+            dayNumber: 1,
+            workoutName: 'W',
+            exercisesJson: '[]',
+            isCompleted: false,
+            orderIndex: 0,
+          ),
+          now,
+          3,
+        ),
+        throwsA(isA<LiftedWeightStateUnavailableException>()),
+      );
+      expect(await isar.localSessions.count(), 0);
+      expect(writes(), isEmpty);
+    });
+
+    test('pending + online: new children under server-backed (legacy) parents '
+        'are refused (the purge would cascade them), completing a legacy set '
+        'is local-only; the same calls upload when ungated', () async {
       expect(ConnectivityService.instance.isOnline, isTrue);
       Future<void> seedServerBacked() async {
         await isar.writeTxn(() async {
@@ -405,8 +670,21 @@ void main() {
       await seedServerBacked();
       final migration = newMigration();
       await migration.snapshotIfNeeded();
-      await exercise(migration);
+      await expectLater(
+        sessionRepo(migration).addExerciseToSession(10, 1),
+        throwsA(isA<LiftedWeightStateUnavailableException>()),
+      );
+      await expectLater(
+        exerciseRepo(migration).createExerciseSet(
+          ExerciseSet(id: 0, exerciseId: 20, setNumber: 2, weight: 60),
+        ),
+        throwsA(isA<LiftedWeightStateUnavailableException>()),
+      );
+      await exerciseRepo(migration).completeExerciseSet(30);
+      await pumpEventQueue();
       expect(writes(), isEmpty, reason: '${dispatchedPaths()}');
+      expect(await isar.localExercises.count(), 1);
+      expect(await isar.localExerciseSets.count(), 1);
 
       await seedServerBacked();
       adapter.capturedRequests.clear();

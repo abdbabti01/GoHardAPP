@@ -419,6 +419,206 @@ void main() {
     });
   });
 
+  group('fail closed when the state cannot be durably persisted', () {
+    Future<void> reopen() async {
+      await isar.close();
+      isar = await Isar.open(
+        [
+          LocalSessionSchema,
+          LocalExerciseSchema,
+          LocalExerciseSetSchema,
+          LocalProgramSchema,
+          LocalProgramWorkoutSchema,
+        ],
+        directory: tempDir.path,
+        inspector: false,
+      );
+    }
+
+    test('before any snapshot, new workout rows may not be created', () {
+      expect(migration.workoutWritesAllowed, isFalse);
+    });
+
+    test('a durable first snapshot allows new workout rows', () async {
+      await seedLegacy();
+      await migration.snapshotIfNeeded();
+      expect(decoded()['status'], 'pending');
+      expect(migration.workoutWritesAllowed, isTrue);
+    });
+
+    test('first snapshot write fails: no state, new rows blocked; the next '
+        'startup snapshots durably and allows them', () async {
+      await seedLegacy();
+      failNextWrite = true;
+      await migration.snapshotIfNeeded();
+      expect(state, isNull);
+      expect(migration.workoutWritesAllowed, isFalse);
+
+      await migration.snapshotIfNeeded();
+      expect(decoded()['status'], 'pending');
+      expect(migration.workoutWritesAllowed, isTrue);
+    });
+
+    test('state read fails: new rows blocked (the stored cutoffs cannot be '
+        'checked against the reused-id counter)', () async {
+      await seedLegacy();
+      await migration.snapshotIfNeeded();
+      final broken = LiftedWeightContractMigration(
+        database: () => isar,
+        readState: () async => throw Exception('keychain unavailable'),
+        writeState: (json) async => state = json,
+      );
+      await broken.snapshotIfNeeded();
+      expect(broken.workoutWritesAllowed, isFalse);
+    });
+
+    test('a write that reports success but does not persist (read-back '
+        'mismatch) blocks new rows', () async {
+      await seedLegacy();
+      final lossy = LiftedWeightContractMigration(
+        database: () => isar,
+        readState: () async => state,
+        writeState: (json) async {}, // silently dropped
+      );
+      await lossy.snapshotIfNeeded();
+      expect(state, isNull);
+      expect(lossy.workoutWritesAllowed, isFalse);
+    });
+
+    test(
+      'id reuse + failed tighten write: new rows blocked and the stale '
+      'cutoff stays; restart with working storage tightens durably, the '
+      'canonical row reusing the id is created and survives the purge',
+      () async {
+        final s = await session(serverId: 10);
+        final e = await exercise(s.localId, serverId: 20);
+        await set(e.localId, sync: 'pending_create');
+        final top = await set(e.localId, sync: 'pending_create');
+        await migration.snapshotIfNeeded();
+        await isar.writeTxn(() => isar.localExerciseSets.delete(top.localId));
+
+        await reopen(); // restart, tighten write fails
+        failNextWrite = true;
+        await migration.snapshotIfNeeded();
+        expect(migration.workoutWritesAllowed, isFalse);
+        expect(
+          (decoded()['cutoffs'] as Map)['sets'],
+          2,
+          reason: 'stale cutoff',
+        );
+
+        await reopen(); // restart, storage works
+        await migration.snapshotIfNeeded();
+        expect(migration.workoutWritesAllowed, isTrue);
+        expect((decoded()['cutoffs'] as Map)['sets'], 1);
+        final ks = await session(sync: 'pending_create');
+        final ke = await exercise(ks.localId, sync: 'pending_create');
+        final kept = await set(
+          ke.localId,
+          sync: 'pending_create',
+          weight: 61.23496995,
+        );
+        expect(kept.localId, top.localId, reason: 'Isar reused the id');
+
+        expect(await migration.ensureMigrated(() async => true), isTrue);
+        expect(
+          (await isar.localExerciseSets.get(kept.localId))!.weight,
+          61.23496995,
+        );
+      },
+    );
+
+    test('complete state allows new rows without writing', () async {
+      await seedLegacy();
+      await migration.snapshotIfNeeded();
+      state = jsonEncode({...decoded(), 'status': 'complete'});
+      final fresh = LiftedWeightContractMigration(
+        database: () => isar,
+        readState: () async => state,
+        writeState: (json) async => fail('complete must not be rewritten'),
+      );
+      await fresh.snapshotIfNeeded();
+      expect(fresh.workoutWritesAllowed, isTrue);
+      expect(fresh.workoutUploadsAllowed, isTrue);
+    });
+
+    test(
+      'file state store: writes are flushed and atomically replaced; a '
+      'write that cannot reach disk throws and the snapshot fails closed',
+      () async {
+        final file = File('${tempDir.path}/state/lifted.json');
+        await file.parent.create();
+        final store = LiftedWeightContractMigration.fileStore(file);
+        expect(await store.read(), isNull);
+        await store.write('{"a":1}');
+        await store.write('{"a":2}');
+        expect(await store.read(), '{"a":2}');
+        expect(await File('${file.path}.tmp').exists(), isFalse);
+
+        final missing = LiftedWeightContractMigration.fileStore(
+          File('${tempDir.path}/does-not-exist/lifted.json'),
+        );
+        await expectLater(
+          missing.write('{}'),
+          throwsA(isA<FileSystemException>()),
+        );
+        final m = LiftedWeightContractMigration(
+          database: () => isar,
+          readState: missing.read,
+          writeState: missing.write,
+        );
+        await m.snapshotIfNeeded();
+        expect(m.workoutWritesAllowed, isFalse);
+      },
+    );
+
+    test('wouldPurge: pending state marks legacy (<= cutoff) and '
+        'server-backed rows; new local rows are safe; unknown state fails '
+        'closed; complete purges nothing', () async {
+      final s = await session(sync: 'pending_create'); // id 1 (legacy)
+      expect(
+        migration.wouldPurge('sessions', 99, null),
+        isTrue,
+        reason: 'unknown state',
+      );
+      await migration.snapshotIfNeeded();
+      expect(migration.wouldPurge('sessions', s.localId, null), isTrue);
+      expect(migration.wouldPurge('sessions', 5, 77), isTrue);
+      expect(migration.wouldPurge('sessions', 5, null), isFalse);
+      expect(
+        migration.wouldPurge('sets', 1, null),
+        isFalse,
+        reason: 'cutoff 0',
+      );
+
+      expect(await migration.ensureMigrated(() async => true), isTrue);
+      expect(migration.wouldPurge('sessions', 1, 77), isFalse);
+    });
+
+    test('purge whose complete-state write is lost does not open uploads; '
+        'the retry completes and opens them', () async {
+      await seedLegacy();
+      await migration.snapshotIfNeeded();
+      var dropWrites = true;
+      final lossy = LiftedWeightContractMigration(
+        database: () => isar,
+        readState: () async => state,
+        writeState: (json) async {
+          if (!dropWrites) state = json;
+        },
+      );
+      await lossy.snapshotIfNeeded(); // no tightening needed: no write
+      expect(await lossy.ensureMigrated(() async => true), isFalse);
+      expect(lossy.workoutUploadsAllowed, isFalse);
+      expect(decoded()['status'], 'pending');
+
+      dropWrites = false;
+      expect(await lossy.ensureMigrated(() async => true), isTrue);
+      expect(lossy.workoutUploadsAllowed, isTrue);
+      expect(lossy.workoutWritesAllowed, isTrue);
+    });
+  });
+
   test('no snapshot state: stays gated without calling fetch', () async {
     var called = false;
     expect(await migration.ensureMigrated(() async => called = true), isFalse);

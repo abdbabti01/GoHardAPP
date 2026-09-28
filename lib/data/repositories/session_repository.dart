@@ -227,6 +227,28 @@ class SessionRepository {
       _connectivity.isOnline &&
       (_liftedWeightMigration?.workoutUploadsAllowed ?? true);
 
+  /// Fail closed: refuse to create a new local session/exercise unless the
+  /// lifted-weight state was durably established this run (see
+  /// [LiftedWeightContractMigration.workoutWritesAllowed]).
+  void _ensureWorkoutWritesAllowed() {
+    if (!(_liftedWeightMigration?.workoutWritesAllowed ?? true)) {
+      throw const LiftedWeightStateUnavailableException();
+    }
+  }
+
+  /// Fail closed: never create a child under a session the pending purge
+  /// will delete (legacy or server-backed) - it would be cascaded away.
+  void _ensureParentSurvivesPurge(LocalSession session) {
+    if (_liftedWeightMigration?.wouldPurge(
+          'sessions',
+          session.localId,
+          session.serverId,
+        ) ??
+        false) {
+      throw const LiftedWeightStateUnavailableException.legacyParent();
+    }
+  }
+
   static const String _unauthenticated = 'User not authenticated';
 
   /// Canonical UUID v4 text for a new generic-CREATE operation key. `uuid`'s
@@ -1092,6 +1114,7 @@ class SessionRepository {
   /// Create new session
   /// Optimistic update: saves locally first, syncs to server if online
   Future<Session> createSession(Session session) async {
+    _ensureWorkoutWritesAllowed();
     final context = await _sessionCoordinator.captureContext();
     if (context == null) {
       throw Exception(_unauthenticated);
@@ -1275,6 +1298,7 @@ class SessionRepository {
     DateTime programStartDate,
     int programId, // Use actual programId instead of programWorkout.programId
   ) async {
+    _ensureWorkoutWritesAllowed();
     final context = await _sessionCoordinator.captureContext();
     if (context == null) {
       throw Exception(_unauthenticated);
@@ -2970,6 +2994,7 @@ class SessionRepository {
     int sessionId,
     int exerciseTemplateId,
   ) async {
+    _ensureWorkoutWritesAllowed();
     final context = await _sessionCoordinator.captureContext();
     if (context == null) {
       throw Exception(_unauthenticated);
@@ -2985,6 +3010,7 @@ class SessionRepository {
     if (!_sessionEpoch.isCurrent(token)) {
       throw Exception(_unauthenticated);
     }
+    _ensureParentSurvivesPurge(localSession);
 
     if (_canUploadWorkouts && localSession.serverId != null) {
       try {
