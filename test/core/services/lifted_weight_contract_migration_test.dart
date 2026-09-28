@@ -299,6 +299,126 @@ void main() {
     expect(pendingRestart.workoutUploadsAllowed, isFalse);
   });
 
+  group('Isar localId reuse (ids are NOT monotonic)', () {
+    Future<void> reopen() async {
+      await isar.close();
+      isar = await Isar.open(
+        [
+          LocalSessionSchema,
+          LocalExerciseSchema,
+          LocalExerciseSetSchema,
+          LocalProgramSchema,
+          LocalProgramWorkoutSchema,
+        ],
+        directory: tempDir.path,
+        inspector: false,
+      );
+    }
+
+    test('deleting the top legacy row then restarting: the pending cutoff is '
+        'tightened, so the canonical row reusing that id survives the purge '
+        'with its exact weight', () async {
+      final s = await session(serverId: 10);
+      final e = await exercise(s.localId, serverId: 20);
+      await set(e.localId, sync: 'pending_create');
+      final top = await set(e.localId, sync: 'pending_create');
+      await migration.snapshotIfNeeded();
+      expect((decoded()['cutoffs'] as Map)['sets'], 2);
+
+      await isar.writeTxn(() => isar.localExerciseSets.delete(top.localId));
+      await reopen();
+      await migration.snapshotIfNeeded();
+
+      final keptSession = await session(sync: 'pending_create');
+      final keptExercise = await exercise(
+        keptSession.localId,
+        sync: 'pending_create',
+      );
+      final kept = await set(
+        keptExercise.localId,
+        sync: 'pending_create',
+        weight: 61.23496995,
+      );
+      expect(kept.localId, top.localId, reason: 'Isar reused the id');
+
+      expect(await migration.ensureMigrated(() async => true), isTrue);
+
+      expect(await ids(isar.localExerciseSets, (r) => r.localId), [
+        kept.localId,
+      ]);
+      expect(
+        (await isar.localExerciseSets.get(kept.localId))!.weight,
+        61.23496995,
+      );
+      expect((decoded()['cutoffs'] as Map)['sets'], 1);
+    });
+
+    test('stale pending state over an emptied Isar (reinstall / clear): '
+        'cutoffs drop to 0 and new rows survive the purge', () async {
+      await seedLegacy();
+      await migration.snapshotIfNeeded();
+      await isar.writeTxn(() => isar.clear());
+      await reopen();
+
+      await migration.snapshotIfNeeded();
+      expect(decoded(), {
+        'status': 'pending',
+        'cutoffs': {
+          'sessions': 0,
+          'exercises': 0,
+          'sets': 0,
+          'programs': 0,
+          'programWorkouts': 0,
+        },
+      });
+
+      final s = await session(sync: 'pending_create');
+      final e = await exercise(s.localId, sync: 'pending_create');
+      final kept = await set(
+        e.localId,
+        sync: 'pending_create',
+        weight: 61.23496995,
+      );
+      final p = await program(sync: 'pending_create');
+      await programWorkout(p.localId, sync: 'pending_create');
+
+      expect(await migration.ensureMigrated(() async => true), isTrue);
+      expect(await isar.localSessions.count(), 1);
+      expect(await isar.localExercises.count(), 1);
+      expect(await isar.localPrograms.count(), 1);
+      expect(await isar.localProgramWorkouts.count(), 1);
+      expect(
+        (await isar.localExerciseSets.get(kept.localId))!.weight,
+        61.23496995,
+      );
+    });
+
+    test('a complete state is never modified by tightening', () async {
+      await seedLegacy();
+      await migration.snapshotIfNeeded();
+      state = jsonEncode({...decoded(), 'status': 'complete'});
+      final complete = state;
+      final writes = writeCount;
+      await isar.writeTxn(() => isar.clear());
+
+      await migration.snapshotIfNeeded();
+      expect(state, complete);
+      expect(writeCount, writes);
+    });
+
+    test('pending cutoffs at or below the current max are left unchanged '
+        '(no write)', () async {
+      await seedLegacy();
+      await migration.snapshotIfNeeded();
+      final first = state;
+      await session(sync: 'pending_create');
+
+      await migration.snapshotIfNeeded();
+      expect(state, first);
+      expect(writeCount, 1);
+    });
+  });
+
   test('no snapshot state: stays gated without calling fetch', () async {
     var called = false;
     expect(await migration.ensureMigrated(() async => called = true), isFalse);

@@ -100,6 +100,18 @@ State (secure storage, key `lifted_weight_contract_v1`, JSON):
 1. **Snapshot (startup, before `runApp`, offline-safe).** If the key is absent,
    record the current max Isar `localId` of each collection and `status: pending`.
    Rows at or below a cutoff predate the canonical build.
+   **Isar localIds are not monotonic:** the id counter is `max(existing id) + 1`
+   when the database opens, so after the top rows are deleted (user delete,
+   download reconciliation) and the app restarts, after `clear()` (account
+   deletion), or after an iOS reinstall that wipes Isar but keeps the Keychain
+   state, new canonical rows can receive ids at or below a stored cutoff.
+   Therefore, on every startup while `pending` (and right after account
+   deletion's `clearAll`), each cutoff is tightened to
+   `min(storedCutoff, currentMaxLocalId)` and persisted. This is safe: rows
+   created after the snapshot always get ids above the stored cutoff, so if any
+   exists the max cannot be below the cutoff (no change); if the max dropped,
+   every surviving row is at or below it and therefore legacy. A `complete`
+   state is never modified.
 2. **Gate.** While `pending`, `SyncService` skips the Sessions, Exercises, Sets,
    Programs and ProgramWorkouts upload phases (other phases run normally).
    Local logging keeps working — new rows are canonical kg and are preserved.
@@ -120,8 +132,10 @@ State (secure storage, key `lifted_weight_contract_v1`, JSON):
 4. **Idempotency.** Re-running a purge is harmless (same predicate, rows already
    gone). A crash between the Isar commit and the status write repeats the purge
    on next start. `complete` is terminal; the key is never cleared by logout.
-   Fresh installs snapshot empty cutoffs and purge nothing but server-backed rows,
-   of which there are none before the first download.
+   A fresh install with an empty Isar ends up with zero cutoffs - either snapped
+   fresh, or (iOS reinstall with a surviving Keychain `pending` state) tightened
+   to 0 at startup - and purges nothing but server-backed rows. A reinstall
+   whose surviving Keychain state is `complete` stays complete (terminal).
 
 ## 8. Production reset (separate manual operation, never automatic)
 
@@ -177,6 +191,10 @@ never locked out (local logging continues, uploads resume at cutover).
   on; that history is disposable by owner decision.
 - Program `ExercisesJson.weight` already stored (seed/AI) is unitless; it is shown
   as before and not converted.
+- After the reset, legacy clients (no kg header) can still create empty
+  sessions/exercises, re-mark program-workout completion, and post shared
+  workouts / workout templates whose `ExercisesJson` carries lb-typed weights.
+  None of these is displayed with a unit today; accepted.
 
 ## 11. Testing
 

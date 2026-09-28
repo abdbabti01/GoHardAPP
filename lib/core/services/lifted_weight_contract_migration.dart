@@ -71,60 +71,49 @@ class LiftedWeightContractMigration {
   /// locally exactly as if offline; `SyncService` uploads it after the purge.
   bool get workoutUploadsAllowed => _workoutUploadsAllowed;
 
-  /// Startup, offline-safe. Records cutoffs once; no-op if state exists
-  /// (beyond initialising [workoutUploadsAllowed] from it).
+  /// Startup, offline-safe. Records cutoffs once (as `pending`); a `complete`
+  /// state is never modified (beyond initialising [workoutUploadsAllowed]
+  /// from it). Must run with no workout writes in flight (before `runApp`,
+  /// or right after `LocalDatabaseService.clearAll`).
+  ///
+  /// **Isar reuses localIds**: its id counter is `max(existing id) + 1` when
+  /// the database is opened, so after the top rows are deleted (user delete,
+  /// download reconciliation) and the app restarts, or after `clear()` /
+  /// an iOS reinstall that wipes Isar but keeps this Keychain state, new
+  /// canonical rows can get ids at or below a stored cutoff and would be
+  /// purged as legacy. So while `pending`, each cutoff is tightened to
+  /// `min(storedCutoff, currentMaxLocalId)` and persisted. This is correct:
+  /// rows created after the snapshot always receive ids above the stored
+  /// cutoff (the counter cannot drop below existing rows), so if any such
+  /// row exists the current max is not below the cutoff and nothing
+  /// changes; if the max did drop below the cutoff, every surviving row is
+  /// at or below it and is therefore legacy.
+  ///
   /// Never throws: a failure leaves no state, which keeps workouts gated
   /// ([ensureMigrated] returns false) until a later startup snapshots.
   Future<void> snapshotIfNeeded() async {
     try {
       final existing = await _readJson();
-      if (existing != null) {
-        _workoutUploadsAllowed = existing['status'] == 'complete';
+      if (existing != null && existing['status'] == 'complete') {
+        _workoutUploadsAllowed = true;
         return;
       }
-      final db = _database();
-      await _writeState(
-        jsonEncode({
-          'status': 'pending',
-          'cutoffs': {
-            'sessions':
-                await db.localSessions
-                    .where(sort: Sort.desc)
-                    .anyLocalId()
-                    .localIdProperty()
-                    .findFirst() ??
-                0,
-            'exercises':
-                await db.localExercises
-                    .where(sort: Sort.desc)
-                    .anyLocalId()
-                    .localIdProperty()
-                    .findFirst() ??
-                0,
-            'sets':
-                await db.localExerciseSets
-                    .where(sort: Sort.desc)
-                    .anyLocalId()
-                    .localIdProperty()
-                    .findFirst() ??
-                0,
-            'programs':
-                await db.localPrograms
-                    .where(sort: Sort.desc)
-                    .anyLocalId()
-                    .localIdProperty()
-                    .findFirst() ??
-                0,
-            'programWorkouts':
-                await db.localProgramWorkouts
-                    .where(sort: Sort.desc)
-                    .anyLocalId()
-                    .localIdProperty()
-                    .findFirst() ??
-                0,
-          },
-        }),
-      );
+      _workoutUploadsAllowed = false;
+      final current = await _maxLocalIds();
+      if (existing == null) {
+        await _writeState(
+          jsonEncode({'status': 'pending', 'cutoffs': current}),
+        );
+        return;
+      }
+      final stored = Map<String, dynamic>.from(existing['cutoffs'] as Map);
+      final tightened = {
+        for (final e in current.entries)
+          e.key: e.value < (stored[e.key] as int) ? e.value : stored[e.key],
+      };
+      if (tightened.entries.any((e) => e.value != stored[e.key])) {
+        await _writeState(jsonEncode({...existing, 'cutoffs': tightened}));
+      }
     } catch (e) {
       debugPrint('⚠️ Lifted-weight snapshot failed (workouts stay gated): $e');
     }
@@ -162,6 +151,47 @@ class LiftedWeightContractMigration {
       debugPrint('⚠️ Lifted-weight migration not completed (stays gated): $e');
       return false;
     }
+  }
+
+  Future<Map<String, int>> _maxLocalIds() async {
+    final db = _database();
+    return {
+      'sessions':
+          await db.localSessions
+              .where(sort: Sort.desc)
+              .anyLocalId()
+              .localIdProperty()
+              .findFirst() ??
+          0,
+      'exercises':
+          await db.localExercises
+              .where(sort: Sort.desc)
+              .anyLocalId()
+              .localIdProperty()
+              .findFirst() ??
+          0,
+      'sets':
+          await db.localExerciseSets
+              .where(sort: Sort.desc)
+              .anyLocalId()
+              .localIdProperty()
+              .findFirst() ??
+          0,
+      'programs':
+          await db.localPrograms
+              .where(sort: Sort.desc)
+              .anyLocalId()
+              .localIdProperty()
+              .findFirst() ??
+          0,
+      'programWorkouts':
+          await db.localProgramWorkouts
+              .where(sort: Sort.desc)
+              .anyLocalId()
+              .localIdProperty()
+              .findFirst() ??
+          0,
+    };
   }
 
   Future<Map<String, dynamic>?> _readJson() async {

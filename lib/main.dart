@@ -570,11 +570,17 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                 context.read<AccountRepository>(),
                 context.read<AuthProvider>(),
                 context.read<LocalDatabaseService>(),
+                liftedWeightMigration: liftedWeightMigration,
               ),
           update:
               (context, accountRepo, authProvider, localDb, previous) =>
                   previous ??
-                  AccountDeletionProvider(accountRepo, authProvider, localDb),
+                  AccountDeletionProvider(
+                    accountRepo,
+                    authProvider,
+                    localDb,
+                    liftedWeightMigration: liftedWeightMigration,
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           SessionRepository,
