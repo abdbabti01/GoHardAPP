@@ -126,11 +126,13 @@ Script: `GoHardAPI/Scripts/Phase2C_WorkoutHistoryReset.sql` + runbook
 transaction, verification, rollback. Tested only on a disposable Postgres.
 
 Erases: `Sessions` (cascade → `Exercises` → `ExerciseSets`),
-`SessionCreateOperations`, `ChatConversations` of type `progress_analysis`
+`ChatConversations` of type `progress_analysis`
 (+ `ChatMessages`), `SharedWorkouts` (+ likes / saves / comments).
 Resets: `ProgramWorkouts` completion/skip markers, `Programs.CurrentWeek/CurrentDay`,
 completed programs → active.
-Preserves: users, goals, `GoalProgressHistory`, programs + workouts + exercise JSON,
+Preserves: `SessionCreateOperations` (FK → SET NULL, so each becomes a tombstone and
+a legacy client's retried create returns 410 instead of recreating a session),
+users, goals, `GoalProgressHistory`, programs + workouts + exercise JSON,
 templates, nutrition, body metrics, run sessions, all other chats.
 
 ## 9. Rollout (documented, not executed)
