@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'app.dart';
 import 'core/services/firebase_availability.dart';
 import 'core/services/firebase_bootstrap.dart';
+import 'core/services/lifted_weight_contract_migration.dart';
 import 'core/services/secure_storage_options.dart';
 import 'core/services/session_cleanup_initializer.dart';
 import 'core/services/session_request_coordinator.dart';
@@ -96,6 +97,27 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
   // Initialize local database before app starts
   final localDb = LocalDatabaseService.instance;
   await localDb.initialize();
+
+  // Lifted-weight contract (spec §7): record the legacy cutoffs once, before
+  // anything can write workout rows. Offline-safe; the purge itself runs
+  // later inside SyncService, only once the server reports canonical history.
+  const liftedWeightStorage = FlutterSecureStorage(
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+    aOptions: kAndroidSecureOptions,
+  );
+  final liftedWeightMigration = LiftedWeightContractMigration(
+    database: () => localDb.database,
+    readState:
+        () => liftedWeightStorage.read(
+          key: LiftedWeightContractMigration.storageKey,
+        ),
+    writeState:
+        (json) => liftedWeightStorage.write(
+          key: LiftedWeightContractMigration.storageKey,
+          value: json,
+        ),
+  );
+  await liftedWeightMigration.snapshotIfNeeded();
 
   debugPrint('✅ Local database initialized successfully');
   debugPrint('📊 Database path: ${localDb.database.directory}');
@@ -496,6 +518,7 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                     sessionEpoch: context.read<UserSessionEpoch>(),
                     sessionCoordinator:
                         context.read<SessionRequestCoordinator>(),
+                    liftedWeightMigration: liftedWeightMigration,
                   ),
         ),
 
