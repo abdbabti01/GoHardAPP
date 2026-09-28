@@ -1,16 +1,35 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/utils/unit_converter.dart';
 import '../../../data/models/workout_stats.dart';
+
+final _axisDate = DateFormat.Md();
+final _tooltipDate = DateFormat.MMMd();
+
+/// Tooltip copy for one volume point. [point.value] is canonical kg; this
+/// converts to [unitPreference] at the display boundary, same as Log Sets
+/// (Task 4). `point.label` is deliberately not used: older API builds send it
+/// with a hard-coded "kg".
+@visibleForTesting
+String volumeTooltipText(ProgressDataPoint point, String unitPreference) {
+  final display = UnitConverter.liftedKgToDisplay(point.value, unitPreference);
+  final unit = UnitConverter.liftedUnitLabel(unitPreference);
+  return '${_tooltipDate.format(point.date)}\n'
+      'Volume ${(display / 1000).toStringAsFixed(1)}k $unit';
+}
 
 class VolumeChart extends StatelessWidget {
   final List<ProgressDataPoint> data;
   final Color lineColor;
+  final String unitPreference;
 
   const VolumeChart({
     super.key,
     required this.data,
     this.lineColor = Colors.blue,
+    this.unitPreference = 'Metric',
   });
 
   @override
@@ -93,7 +112,7 @@ class VolumeChart extends StatelessWidget {
                           return Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                              point.label ?? '',
+                              _axisDate.format(point.date),
                               style: const TextStyle(fontSize: 10),
                             ),
                           );
@@ -119,7 +138,13 @@ class VolumeChart extends StatelessWidget {
                               .asMap()
                               .entries
                               .map(
-                                (e) => FlSpot(e.key.toDouble(), e.value.value),
+                                (e) => FlSpot(
+                                  e.key.toDouble(),
+                                  UnitConverter.liftedKgToDisplay(
+                                    e.value.value,
+                                    unitPreference,
+                                  ),
+                                ),
                               )
                               .toList(),
                       isCurved: true,
@@ -154,7 +179,7 @@ class VolumeChart extends StatelessWidget {
                           if (spot.spotIndex >= data.length) return null;
                           final point = data[spot.spotIndex];
                           return LineTooltipItem(
-                            '${point.label}\n${(point.value / 1000).toStringAsFixed(1)}k kg',
+                            volumeTooltipText(point, unitPreference),
                             const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,

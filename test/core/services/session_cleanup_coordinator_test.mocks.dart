@@ -2889,6 +2889,23 @@ class MockAuthService extends _i1.Mock implements _i49.AuthService {
           as _i25.Future<String?>);
 
   @override
+  _i25.Future<void> saveUnitPreference(String? unitPreference) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveUnitPreference, [unitPreference]),
+            returnValue: _i25.Future<void>.value(),
+            returnValueForMissingStub: _i25.Future<void>.value(),
+          )
+          as _i25.Future<void>);
+
+  @override
+  _i25.Future<String?> getUnitPreference() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUnitPreference, []),
+            returnValue: _i25.Future<String?>.value(),
+          )
+          as _i25.Future<String?>);
+
+  @override
   _i25.Future<void> saveCachedProfile(String? profileJson) =>
       (super.noSuchMethod(
             Invocation.method(#saveCachedProfile, [profileJson]),

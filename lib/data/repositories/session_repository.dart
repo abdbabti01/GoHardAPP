@@ -3,6 +3,7 @@ import 'package:isar/isar.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
+import '../../core/services/lifted_weight_contract_migration.dart';
 import '../../core/services/session_request_coordinator.dart';
 import '../../core/services/user_session_epoch.dart';
 import '../models/session.dart';
@@ -204,14 +205,49 @@ class SessionRepository {
   /// other consumer (see main.dart); never constructed privately.
   final SessionRequestCoordinator _sessionCoordinator;
 
+  /// Lifted-weight purge gate (spec §7). `null` = ungated (current
+  /// behaviour). See [_canUploadWorkouts].
+  final LiftedWeightContractMigration? _liftedWeightMigration;
+
   SessionRepository(
     this._apiService,
     this._localDb,
     this._connectivity,
     this._authService,
     this._sessionEpoch,
-    this._sessionCoordinator,
-  );
+    this._sessionCoordinator, [
+    this._liftedWeightMigration,
+  ]);
+
+  /// Online AND not held back by a pending legacy-workout purge. Gates every
+  /// direct (non-SyncService) workout WRITE upload; a gated write stays
+  /// pending locally exactly as if offline and `SyncService` uploads it
+  /// after the purge. Reads/downloads keep using `_connectivity.isOnline`.
+  bool get _canUploadWorkouts =>
+      _connectivity.isOnline &&
+      (_liftedWeightMigration?.workoutUploadsAllowed ?? true);
+
+  /// Fail closed: refuse to create a new local session/exercise unless the
+  /// lifted-weight state was durably established this run (see
+  /// [LiftedWeightContractMigration.workoutWritesAllowed]).
+  void _ensureWorkoutWritesAllowed() {
+    if (!(_liftedWeightMigration?.workoutWritesAllowed ?? true)) {
+      throw const LiftedWeightStateUnavailableException();
+    }
+  }
+
+  /// Fail closed: never create a child under a session the pending purge
+  /// will delete (legacy or server-backed) - it would be cascaded away.
+  void _ensureParentSurvivesPurge(LocalSession session) {
+    if (_liftedWeightMigration?.wouldPurge(
+          'sessions',
+          session.localId,
+          session.serverId,
+        ) ??
+        false) {
+      throw const LiftedWeightStateUnavailableException.legacyParent();
+    }
+  }
 
   static const String _unauthenticated = 'User not authenticated';
 
@@ -467,7 +503,7 @@ class SessionRepository {
   /// operation, never by a routine edit or the periodic sync loop.
   bool _shouldPushAfterEdit(LocalSession localSession) =>
       !_isConflicted(localSession) &&
-      _connectivity.isOnline &&
+      _canUploadWorkouts &&
       localSession.serverId != null;
 
   /// Mark a local session as needing sync (pending_update if server ID
@@ -1078,6 +1114,7 @@ class SessionRepository {
   /// Create new session
   /// Optimistic update: saves locally first, syncs to server if online
   Future<Session> createSession(Session session) async {
+    _ensureWorkoutWritesAllowed();
     final context = await _sessionCoordinator.captureContext();
     if (context == null) {
       throw Exception(_unauthenticated);
@@ -1112,7 +1149,7 @@ class SessionRepository {
 
     // Then sync to server in background if online (don't block). Bound to
     // the context captured at entry.
-    if (_connectivity.isOnline) {
+    if (_canUploadWorkouts) {
       // Pin the exact local revision the background CREATE will serialize
       // BEFORE scheduling it, re-read from the row just persisted. `session`
       // is immutable and was copied verbatim into this row by
@@ -1261,6 +1298,7 @@ class SessionRepository {
     DateTime programStartDate,
     int programId, // Use actual programId instead of programWorkout.programId
   ) async {
+    _ensureWorkoutWritesAllowed();
     final context = await _sessionCoordinator.captureContext();
     if (context == null) {
       throw Exception(_unauthenticated);
@@ -1444,7 +1482,7 @@ class SessionRepository {
 
     // Dispatch to server in background if online (never inline/blocking) -
     // bound to the context captured at entry, exactly like [createSession].
-    if (_connectivity.isOnline) {
+    if (_canUploadWorkouts) {
       // Pin the exact local revision the background CREATE will serialize BY
       // RE-READING the just-persisted row, not the raw `createdAt` value used
       // to construct it - Isar's own DateTime round-trip precision can
@@ -1644,9 +1682,7 @@ class SessionRepository {
     });
 
     final racedRow = raced;
-    if (racedRow != null &&
-        !_isConflicted(racedRow) &&
-        _connectivity.isOnline) {
+    if (racedRow != null && !_isConflicted(racedRow) && _canUploadWorkouts) {
       final serverIdForPush = racedRow.serverId!;
       // The server only knows whatever status THIS create POST told it
       // (`session.status`, snapshotted before any later edit) - if that
@@ -2499,7 +2535,7 @@ class SessionRepository {
     final serverId = localSession.serverId;
     final operationId = localSession.clientOperationId;
 
-    if (_connectivity.isOnline && serverId != null) {
+    if (_canUploadWorkouts && serverId != null) {
       try {
         final success = await _apiService.delete(
           ApiConfig.sessionById(serverId),
@@ -2535,7 +2571,7 @@ class SessionRepository {
       // never silently reverted back to visible. See [_markForDeletion]'s
       // doc comment.
       await _markForDeletion(db, localSession, token);
-      if (!_sessionEpoch.isCurrent(token) || !_connectivity.isOnline) {
+      if (!_sessionEpoch.isCurrent(token) || !_canUploadWorkouts) {
         // Intent is already durable either way - a later sync pass (or a
         // resumed session) dispatches the cancellation.
         return true;
@@ -2958,6 +2994,7 @@ class SessionRepository {
     int sessionId,
     int exerciseTemplateId,
   ) async {
+    _ensureWorkoutWritesAllowed();
     final context = await _sessionCoordinator.captureContext();
     if (context == null) {
       throw Exception(_unauthenticated);
@@ -2973,8 +3010,9 @@ class SessionRepository {
     if (!_sessionEpoch.isCurrent(token)) {
       throw Exception(_unauthenticated);
     }
+    _ensureParentSurvivesPurge(localSession);
 
-    if (_connectivity.isOnline && localSession.serverId != null) {
+    if (_canUploadWorkouts && localSession.serverId != null) {
       try {
         final data = await _apiService.post<Map<String, dynamic>>(
           ApiConfig.sessionExercises(localSession.serverId!),

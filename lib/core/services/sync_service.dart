@@ -28,6 +28,7 @@ import '../../data/local/models/local_nutrition_goal.dart';
 import '../../data/local/models/local_food_template.dart';
 import '../../core/constants/api_config.dart';
 import 'connectivity_service.dart';
+import 'lifted_weight_contract_migration.dart';
 import 'session_request_coordinator.dart';
 import 'user_session_epoch.dart';
 
@@ -180,6 +181,10 @@ class SyncService {
   final UserSessionEpoch _sessionEpoch;
   final SessionRequestCoordinator _sessionCoordinator;
 
+  /// Legacy -> canonical-kg purge gate (spec §7). `null` = no gate (tests
+  /// that predate it); see [_runSyncPhases].
+  final LiftedWeightContractMigration? _liftedWeightMigration;
+
   Timer? _periodicSyncTimer;
   StreamSubscription<bool>? _connectivitySubscription;
   Timer? _debounceTimer;
@@ -225,6 +230,7 @@ class SyncService {
     this._connectivity,
     this._sessionEpoch,
     this._sessionCoordinator,
+    this._liftedWeightMigration,
   );
 
   /// Factory constructor to create/get singleton instance.
@@ -243,6 +249,7 @@ class SyncService {
     required ConnectivityService connectivity,
     required UserSessionEpoch sessionEpoch,
     required SessionRequestCoordinator sessionCoordinator,
+    LiftedWeightContractMigration? liftedWeightMigration,
   }) {
     _instance ??= SyncService._(
       apiService,
@@ -250,6 +257,7 @@ class SyncService {
       connectivity,
       sessionEpoch,
       sessionCoordinator,
+      liftedWeightMigration,
     );
     return _instance!;
   }
@@ -550,27 +558,46 @@ class SyncService {
     // phase" are the same check applied uniformly here.
     await _runTestHook(beforePhaseCheckForTesting);
     _assertCurrent(context);
-    await _syncSessions(db, context);
 
-    await _runTestHook(beforePhaseCheckForTesting);
-    _assertCurrent(context);
-    await _syncExercises(db, context);
+    // Lifted-weight gate (spec §7): until the legacy local workout purge has
+    // run - which needs the server to report canonical-kg history - the five
+    // workout phases are skipped so no legacy (lb-semantic) row is ever
+    // uploaded under the kg header. Other phases run as usual.
+    final workoutsReady =
+        _liftedWeightMigration == null ||
+        await _liftedWeightMigration.ensureMigrated(() async {
+          final data = await _apiService.get<Map<String, dynamic>>(
+            ApiConfig.liftedWeightContract,
+            sessionContext: context,
+          );
+          return data['canonicalHistory'] == true;
+        });
 
-    await _runTestHook(beforePhaseCheckForTesting);
-    _assertCurrent(context);
-    await _syncExerciseSets(db, context);
+    if (workoutsReady) {
+      await _syncSessions(db, context);
 
-    await _runTestHook(beforePhaseCheckForTesting);
-    _assertCurrent(context);
-    await _syncPrograms(db, context);
+      await _runTestHook(beforePhaseCheckForTesting);
+      _assertCurrent(context);
+      await _syncExercises(db, context);
+
+      await _runTestHook(beforePhaseCheckForTesting);
+      _assertCurrent(context);
+      await _syncExerciseSets(db, context);
+
+      await _runTestHook(beforePhaseCheckForTesting);
+      _assertCurrent(context);
+      await _syncPrograms(db, context);
+    }
 
     await _runTestHook(beforePhaseCheckForTesting);
     _assertCurrent(context);
     await _syncGoals(db, context);
 
-    await _runTestHook(beforePhaseCheckForTesting);
-    _assertCurrent(context);
-    await _syncProgramWorkouts(db, context);
+    if (workoutsReady) {
+      await _runTestHook(beforePhaseCheckForTesting);
+      _assertCurrent(context);
+      await _syncProgramWorkouts(db, context);
+    }
 
     await _runTestHook(beforePhaseCheckForTesting);
     _assertCurrent(context);

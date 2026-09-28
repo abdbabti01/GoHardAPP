@@ -1,3 +1,5 @@
+import '../enums/profile_enums.dart';
+
 class UnitConverter {
   // Weight conversion constants
   static const double kgToLbsMultiplier = 2.20462;
@@ -154,5 +156,41 @@ class UnitConverter {
     } else {
       return metricValue;
     }
+  }
+
+  // ====================
+  // Lifted-weight conversion boundary (Task 4)
+  //
+  // The ONLY conversion API for lifted set weights (Log Sets, analytics).
+  // Canonical storage is always kg; these methods are the sole input/display
+  // boundary. Deliberately separate from the body-weight helpers above,
+  // which are unchanged and untouched by this boundary.
+  // ====================
+
+  /// 1 lb in kg (exact, international definition). The ONLY lifted-weight
+  /// conversion constant in the app.
+  static const double kgPerLb = 0.45359237;
+
+  static bool isImperial(String? pref) =>
+      UnitPreference.fromString(pref) == UnitPreference.imperial;
+
+  /// Input boundary: what the user typed -> canonical kg.
+  static double liftedInputToKg(double input, String? pref) =>
+      isImperial(pref) ? input * kgPerLb : input;
+
+  /// Display boundary: canonical kg (or kg-volume) -> the user's unit.
+  static double liftedKgToDisplay(double kg, String? pref) =>
+      isImperial(pref) ? kg / kgPerLb : kg;
+
+  static String liftedUnitLabel(String? pref) => isImperial(pref) ? 'lb' : 'kg';
+
+  static String formatLifted(double kg, String? pref) {
+    final v = liftedKgToDisplay(kg, pref);
+    final rounded = (v * 10).round() / 10;
+    final text =
+        rounded == rounded.roundToDouble()
+            ? rounded.toStringAsFixed(0)
+            : rounded.toStringAsFixed(1);
+    return '$text ${liftedUnitLabel(pref)}';
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'app.dart';
 import 'core/services/firebase_availability.dart';
 import 'core/services/firebase_bootstrap.dart';
+import 'core/services/lifted_weight_contract_migration.dart';
 import 'core/services/secure_storage_options.dart';
 import 'core/services/session_cleanup_initializer.dart';
 import 'core/services/session_request_coordinator.dart';
@@ -96,6 +99,25 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
   // Initialize local database before app starts
   final localDb = LocalDatabaseService.instance;
   await localDb.initialize();
+
+  // Lifted-weight contract (spec §7): record the legacy cutoffs once, before
+  // anything can write workout rows. Offline-safe; the purge itself runs
+  // later inside SyncService, only once the server reports canonical history.
+  // State lives in an fsync'd file beside the Isar database (durable writes;
+  // wiped together with Isar on reinstall) - see
+  // LiftedWeightContractMigration.fileStore.
+  final liftedWeightStore = LiftedWeightContractMigration.fileStore(
+    File(
+      '${localDb.database.directory}/'
+      '${LiftedWeightContractMigration.storageKey}.json',
+    ),
+  );
+  final liftedWeightMigration = LiftedWeightContractMigration(
+    database: () => localDb.database,
+    readState: liftedWeightStore.read,
+    writeState: liftedWeightStore.write,
+  );
+  await liftedWeightMigration.snapshotIfNeeded();
 
   debugPrint('✅ Local database initialized successfully');
   debugPrint('📊 Database path: ${localDb.database.directory}');
@@ -194,6 +216,7 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                     // below).
                     context.read<UserSessionEpoch>(),
                     context.read<SessionRequestCoordinator>(),
+                    liftedWeightMigration,
                   ),
         ),
         ProxyProvider3<
@@ -215,6 +238,7 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                     // parameters (matches SessionRepository's wiring above).
                     context.read<UserSessionEpoch>(),
                     context.read<SessionRequestCoordinator>(),
+                    liftedWeightMigration,
                   ),
         ),
         ProxyProvider<ApiService, UserRepository>(
@@ -496,6 +520,7 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                     sessionEpoch: context.read<UserSessionEpoch>(),
                     sessionCoordinator:
                         context.read<SessionRequestCoordinator>(),
+                    liftedWeightMigration: liftedWeightMigration,
                   ),
         ),
 
@@ -545,11 +570,17 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                 context.read<AccountRepository>(),
                 context.read<AuthProvider>(),
                 context.read<LocalDatabaseService>(),
+                liftedWeightMigration: liftedWeightMigration,
               ),
           update:
               (context, accountRepo, authProvider, localDb, previous) =>
                   previous ??
-                  AccountDeletionProvider(accountRepo, authProvider, localDb),
+                  AccountDeletionProvider(
+                    accountRepo,
+                    authProvider,
+                    localDb,
+                    liftedWeightMigration: liftedWeightMigration,
+                  ),
         ),
         ChangeNotifierProxyProvider2<
           SessionRepository,

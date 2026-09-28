@@ -470,7 +470,7 @@ class _WorkoutCompleteCelebrationState extends State<WorkoutCompleteCelebration>
                   widget.totalVolume != null
                       ? '${(widget.totalVolume! / 1000).toStringAsFixed(1)}k'
                       : '-',
-                  'Volume (kg)',
+                  'Volume',
                   Icons.show_chart_rounded,
                   AppColors.accentAmber,
                 ),

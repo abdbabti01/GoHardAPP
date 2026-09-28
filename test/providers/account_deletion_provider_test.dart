@@ -1,9 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:isar/isar.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
+import 'package:go_hard_app/core/services/lifted_weight_contract_migration.dart';
+import 'package:go_hard_app/data/local/models/local_exercise.dart';
+import 'package:go_hard_app/data/local/models/local_exercise_set.dart';
+import 'package:go_hard_app/data/local/models/local_program.dart';
+import 'package:go_hard_app/data/local/models/local_program_workout.dart';
+import 'package:go_hard_app/data/local/models/local_session.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/repositories/account_repository.dart';
 import 'package:go_hard_app/providers/account_deletion_provider.dart';
@@ -110,5 +119,74 @@ void main() {
     await first;
 
     verify(mockAccountRepository.deleteAccount(any)).called(1);
+  });
+
+  test('success: after clearAll, a PENDING lifted-weight migration has its '
+      'cutoffs re-tightened to the emptied Isar (0), so rows created with '
+      'restarted ids are never purged as legacy', () async {
+    await Isar.initializeIsarCore(download: true);
+    final dir = await Directory.systemTemp.createTemp('account_delete_lw_');
+    final isar = await Isar.open(
+      [
+        LocalSessionSchema,
+        LocalExerciseSchema,
+        LocalExerciseSetSchema,
+        LocalProgramSchema,
+        LocalProgramWorkoutSchema,
+      ],
+      directory: dir.path,
+      inspector: false,
+    );
+    addTearDown(() async {
+      if (isar.isOpen) await isar.close();
+      await dir.delete(recursive: true);
+    });
+    final now = DateTime.utc(2026, 9, 1);
+    await isar.writeTxn(
+      () => isar.localSessions.putAll([
+        for (var i = 0; i < 3; i++)
+          LocalSession(
+            userId: 1,
+            date: now,
+            isSynced: false,
+            syncStatus: 'pending_create',
+            lastModifiedLocal: now,
+          ),
+      ]),
+    );
+    String? state;
+    final migration = LiftedWeightContractMigration(
+      database: () => isar,
+      readState: () async => state,
+      writeState: (json) async => state = json,
+    );
+    await migration.snapshotIfNeeded();
+    expect((jsonDecode(state!)['cutoffs'] as Map)['sessions'], 3);
+
+    when(
+      mockAccountRepository.deleteAccount(any),
+    ).thenAnswer((_) async => AccountDeletionOutcome.success);
+    when(
+      mockLocalDb.clearAll(),
+    ).thenAnswer((_) => isar.writeTxn(() => isar.clear()));
+    provider = AccountDeletionProvider(
+      mockAccountRepository,
+      mockAuthProvider,
+      mockLocalDb,
+      liftedWeightMigration: migration,
+    );
+
+    expect(await provider.deleteAccount('correct'), isTrue);
+
+    expect(jsonDecode(state!), {
+      'status': 'pending',
+      'cutoffs': {
+        'sessions': 0,
+        'exercises': 0,
+        'sets': 0,
+        'programs': 0,
+        'programWorkouts': 0,
+      },
+    });
   });
 }

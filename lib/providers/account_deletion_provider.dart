@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../core/services/lifted_weight_contract_migration.dart';
 import '../data/local/services/local_database_service.dart';
 import '../data/repositories/account_repository.dart';
 import 'auth_provider.dart';
@@ -21,11 +22,18 @@ class AccountDeletionProvider extends ChangeNotifier {
   final AuthProvider _authProvider;
   final LocalDatabaseService _localDb;
 
+  /// Optional: after [LocalDatabaseService.clearAll] (Isar ids restart at 1),
+  /// re-runs [LiftedWeightContractMigration.snapshotIfNeeded] so a still
+  /// `pending` purge's cutoffs drop to 0 and new rows are never purged as
+  /// legacy. A `complete` state is left untouched.
+  final LiftedWeightContractMigration? _liftedWeightMigration;
+
   AccountDeletionProvider(
     this._accountRepository,
     this._authProvider,
-    this._localDb,
-  );
+    this._localDb, {
+    LiftedWeightContractMigration? liftedWeightMigration,
+  }) : _liftedWeightMigration = liftedWeightMigration;
 
   bool _isDeleting = false;
   String? _errorMessage;
@@ -72,6 +80,8 @@ class AccountDeletionProvider extends ChangeNotifier {
       } catch (e) {
         debugPrint('⚠️ Failed to clear local data after account deletion: $e');
       }
+      // Never throws (see its doc).
+      await _liftedWeightMigration?.snapshotIfNeeded();
 
       return true;
     } catch (e) {

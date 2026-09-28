@@ -21,6 +21,7 @@ class AuthService {
   static const String _userUsernameKey = 'user_username';
   static const String _userEmailKey = 'user_email';
   static const String _themePreferenceKey = 'theme_preference';
+  static const String _unitPreferenceKey = 'unit_preference';
   static const String _cachedProfileKey = 'cached_user_profile';
 
   /// Top-level field names of the owner-tagged profile-cache envelope written
@@ -194,6 +195,28 @@ class AuthService {
       return await _storage.read(key: _themePreferenceKey);
     } catch (e) {
       return null; // Default to system theme
+    }
+  }
+
+  /// Save unit preference ('Metric'/'Imperial') to secure storage, so it is
+  /// available offline the same way [saveThemePreference] caches theme.
+  /// Deliberately NOT in [_sessionCredentialKeys]: like the theme
+  /// preference, this is a device-wide UI preference, not user-identifying
+  /// data, and survives logout/account switching.
+  Future<void> saveUnitPreference(String unitPreference) async {
+    try {
+      await _storage.write(key: _unitPreferenceKey, value: unitPreference);
+    } catch (e) {
+      // Fail silently - unit preference cache is not critical
+    }
+  }
+
+  /// Get unit preference from secure storage
+  Future<String?> getUnitPreference() async {
+    try {
+      return await _storage.read(key: _unitPreferenceKey);
+    } catch (e) {
+      return null;
     }
   }
 

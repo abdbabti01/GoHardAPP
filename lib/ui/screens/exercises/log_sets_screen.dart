@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/utils/unit_converter.dart';
 import '../../../providers/log_sets_provider.dart';
+import '../../../providers/profile_provider.dart';
 import '../../../data/models/exercise_set.dart';
 
 /// Log sets screen for adding and managing exercise sets
@@ -62,10 +64,16 @@ class _LogSetsScreenState extends State<LogSetsScreen> {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     final focusScope = FocusScope.of(context);
 
+    // Input boundary: the typed value is in the user's unit; convert to
+    // canonical kg here, once, before it ever reaches the provider/repo/sync
+    // layers - see UnitConverter's lifted-weight conversion boundary doc.
+    final pref = context.read<ProfileProvider>().unitPreference;
+    final weightKg = UnitConverter.liftedInputToKg(weight, pref);
+
     final success = await context.read<LogSetsProvider>().addSet(
       exerciseId: widget.exerciseId,
       reps: reps,
-      weight: weight,
+      weight: weightKg,
     );
 
     if (success && mounted) {
@@ -130,6 +138,13 @@ class _LogSetsScreenState extends State<LogSetsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Display boundary: label + list rendering follow the live unit
+    // preference - see UnitConverter's lifted-weight conversion boundary
+    // doc. select() so a preference toggle rebuilds this screen without
+    // re-fetching or re-persisting any set.
+    final pref = context.select<ProfileProvider, String>(
+      (p) => p.unitPreference,
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('Log Sets')),
       body: Consumer<LogSetsProvider>(
@@ -178,7 +193,8 @@ class _LogSetsScreenState extends State<LogSetsScreen> {
                                 decimal: true,
                               ),
                               decoration: InputDecoration(
-                                labelText: 'Weight (lbs)',
+                                labelText:
+                                    'Weight (${UnitConverter.liftedUnitLabel(pref)})',
                                 hintText: '100',
                                 prefixIcon: const Icon(Icons.scale),
                                 border: OutlineInputBorder(
@@ -269,7 +285,7 @@ class _LogSetsScreenState extends State<LogSetsScreen> {
                         ? const Center(child: CircularProgressIndicator())
                         : provider.sets.isEmpty
                         ? _buildEmptyState()
-                        : _buildSetsList(provider),
+                        : _buildSetsList(provider, pref),
               ),
             ],
           );
@@ -302,7 +318,7 @@ class _LogSetsScreenState extends State<LogSetsScreen> {
     );
   }
 
-  Widget _buildSetsList(LogSetsProvider provider) {
+  Widget _buildSetsList(LogSetsProvider provider, String pref) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: provider.sets.length,
@@ -330,7 +346,7 @@ class _LogSetsScreenState extends State<LogSetsScreen> {
                       ),
             ),
             title: Text(
-              '${set.reps} reps × ${set.weight} lbs',
+              '${set.reps} reps × ${set.weight == null ? '—' : UnitConverter.formatLifted(set.weight!, pref)}',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 decoration:
