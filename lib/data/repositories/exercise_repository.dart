@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import '../../core/constants/api_config.dart';
 import '../../core/services/connectivity_service.dart';
+import '../../core/services/lifted_weight_contract_migration.dart';
 import '../../core/services/session_request_coordinator.dart';
 import '../../core/services/user_session_epoch.dart';
 import '../models/exercise_template.dart';
@@ -108,13 +109,26 @@ class ExerciseRepository {
   /// privately.
   final SessionRequestCoordinator _sessionCoordinator;
 
+  /// Lifted-weight purge gate (spec §7). `null` = ungated (current
+  /// behaviour). See [_canUploadWorkouts].
+  final LiftedWeightContractMigration? _liftedWeightMigration;
+
   ExerciseRepository(
     this._apiService,
     this._localDb,
     this._connectivity,
     this._sessionEpoch,
-    this._sessionCoordinator,
-  );
+    this._sessionCoordinator, [
+    this._liftedWeightMigration,
+  ]);
+
+  /// Online AND not held back by a pending legacy-workout purge. Gates every
+  /// direct (non-SyncService) set WRITE upload; a gated write stays pending
+  /// locally exactly as if offline and `SyncService` uploads it after the
+  /// purge. Reads/downloads keep using `_connectivity.isOnline`.
+  bool get _canUploadWorkouts =>
+      _connectivity.isOnline &&
+      (_liftedWeightMigration?.workoutUploadsAllowed ?? true);
 
   // ============ Test-only session-race seams ============
   //
@@ -617,7 +631,7 @@ class ExerciseRepository {
       throw Exception('Exercise not found: ${exerciseSet.exerciseId}');
     }
 
-    if (_connectivity.isOnline && _hasServerId(exercise.serverId)) {
+    if (_canUploadWorkouts && _hasServerId(exercise.serverId)) {
       Map<String, dynamic> data;
       try {
         // Normalize the parent id to the resolved exercise's server id - never
@@ -770,6 +784,13 @@ class ExerciseRepository {
         !_hasServerId(localSet.exerciseServerId)) {
       throw Exception('Exercise set not found: $id');
     }
+    // No offline/pending path here: while the legacy purge is pending (the
+    // row can only be a legacy server-backed set) the write is refused.
+    if (!(_liftedWeightMigration?.workoutUploadsAllowed ?? true)) {
+      throw Exception(
+        'Exercise set update unavailable until workout sync resumes',
+      );
+    }
 
     // The server's PUT requires `body.id == {path id}` and returns 204 No
     // Content on success (see ExerciseSetsController). Normalize the body ids
@@ -812,7 +833,7 @@ class ExerciseRepository {
     if (localSet == null) throw Exception('Exercise set not found: $id');
     final setLocalId = localSet.localId;
 
-    if (_connectivity.isOnline && _hasServerId(localSet.serverId)) {
+    if (_canUploadWorkouts && _hasServerId(localSet.serverId)) {
       try {
         // The server returns 204 No Content on success - `patch` maps that to
         // `null`. A null/empty body is SUCCESS here, never an error.
@@ -942,7 +963,7 @@ class ExerciseRepository {
     final setLocalId = localSet.localId;
     final hadServerId = _hasServerId(localSet.serverId);
 
-    if (_connectivity.isOnline && hadServerId) {
+    if (_canUploadWorkouts && hadServerId) {
       bool serverDeleted;
       try {
         serverDeleted = await _apiService.delete(

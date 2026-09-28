@@ -216,6 +216,7 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                     // below).
                     context.read<UserSessionEpoch>(),
                     context.read<SessionRequestCoordinator>(),
+                    liftedWeightMigration,
                   ),
         ),
         ProxyProvider3<
@@ -237,6 +238,7 @@ Future<void> _startApp(FirebaseAvailability firebaseAvailability) async {
                     // parameters (matches SessionRepository's wiring above).
                     context.read<UserSessionEpoch>(),
                     context.read<SessionRequestCoordinator>(),
+                    liftedWeightMigration,
                   ),
         ),
         ProxyProvider<ApiService, UserRepository>(

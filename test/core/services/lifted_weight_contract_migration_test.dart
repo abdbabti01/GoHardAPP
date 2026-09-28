@@ -10,6 +10,7 @@ import 'package:go_hard_app/data/local/models/local_exercise_set.dart';
 import 'package:go_hard_app/data/local/models/local_program.dart';
 import 'package:go_hard_app/data/local/models/local_program_workout.dart';
 import 'package:go_hard_app/data/local/models/local_session.dart';
+import 'package:go_hard_app/data/services/rate_limited_exception.dart';
 import 'package:go_hard_app/data/services/session_request_exceptions.dart';
 
 /// Task 7: the versioned, one-time legacy workout purge. Real Isar in a temp
@@ -258,7 +259,44 @@ void main() {
       ),
       throwsA(isA<RequestCancelledException>()),
     );
+    await expectLater(
+      migration.ensureMigrated(() async => throw const RateLimitedException()),
+      throwsA(isA<RateLimitedException>()),
+    );
     expect(decoded()['status'], 'pending');
+    expect(migration.workoutUploadsAllowed, isFalse);
+  });
+
+  test('workoutUploadsAllowed: false while pending (and before any state), '
+      'true once complete - also on a fresh process whose state already '
+      'says complete', () async {
+    expect(migration.workoutUploadsAllowed, isFalse);
+    await migration.snapshotIfNeeded();
+    expect(migration.workoutUploadsAllowed, isFalse);
+    await migration.ensureMigrated(() async => false);
+    expect(migration.workoutUploadsAllowed, isFalse);
+
+    await migration.ensureMigrated(() async => true);
+    expect(migration.workoutUploadsAllowed, isTrue);
+
+    final restarted = LiftedWeightContractMigration(
+      database: () => isar,
+      readState: () async => state,
+      writeState: (json) async => state = json,
+    );
+    expect(restarted.workoutUploadsAllowed, isFalse);
+    await restarted.snapshotIfNeeded();
+    expect(restarted.workoutUploadsAllowed, isTrue);
+
+    // Fresh process still pending -> stays gated.
+    state = jsonEncode({...decoded(), 'status': 'pending'});
+    final pendingRestart = LiftedWeightContractMigration(
+      database: () => isar,
+      readState: () async => state,
+      writeState: (json) async => state = json,
+    );
+    await pendingRestart.snapshotIfNeeded();
+    expect(pendingRestart.workoutUploadsAllowed, isFalse);
   });
 
   test('no snapshot state: stays gated without calling fetch', () async {

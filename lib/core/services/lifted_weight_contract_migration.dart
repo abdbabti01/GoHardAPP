@@ -8,6 +8,7 @@ import '../../data/local/models/local_exercise_set.dart';
 import '../../data/local/models/local_program.dart';
 import '../../data/local/models/local_program_workout.dart';
 import '../../data/local/models/local_session.dart';
+import '../../data/services/rate_limited_exception.dart';
 import '../../data/services/session_request_exceptions.dart';
 
 /// One-time purge of legacy local workout data at the legacy -> canonical-kg
@@ -23,7 +24,10 @@ import '../../data/services/session_request_exceptions.dart';
 ///    programWorkouts once, as `status: pending`. Rows at or below a cutoff
 ///    predate this build.
 /// 2. While pending, `SyncService` skips the five workout upload phases
-///    (other phases run). Local logging keeps working in kg.
+///    (other phases run), and `SessionRepository` / `ExerciseRepository`
+///    withhold their direct online workout write uploads
+///    ([workoutUploadsAllowed] is false), leaving those rows pending exactly
+///    as if offline. Local logging keeps working in kg.
 /// 3. [ensureMigrated], at sync-pass start, asks the server whether its
 ///    history has been reset to canonical kg. Only on `true` it deletes, in
 ///    one Isar transaction, every row at or below its cutoff (including
@@ -58,12 +62,26 @@ class LiftedWeightContractMigration {
   final Future<String?> Function() _readState;
   final Future<void> Function(String json) _writeState;
 
-  /// Startup, offline-safe. Records cutoffs once; no-op if state exists.
+  bool _workoutUploadsAllowed = false;
+
+  /// Synchronous gate for the repositories' direct (online, non-SyncService)
+  /// workout write uploads: `false` until the purge has completed, `true`
+  /// once the state is `complete` (read by [snapshotIfNeeded] at startup,
+  /// set by [ensureMigrated]). A gated repository keeps the row pending
+  /// locally exactly as if offline; `SyncService` uploads it after the purge.
+  bool get workoutUploadsAllowed => _workoutUploadsAllowed;
+
+  /// Startup, offline-safe. Records cutoffs once; no-op if state exists
+  /// (beyond initialising [workoutUploadsAllowed] from it).
   /// Never throws: a failure leaves no state, which keeps workouts gated
   /// ([ensureMigrated] returns false) until a later startup snapshots.
   Future<void> snapshotIfNeeded() async {
     try {
-      if (await _readState() != null) return;
+      final existing = await _readJson();
+      if (existing != null) {
+        _workoutUploadsAllowed = existing['status'] == 'complete';
+        return;
+      }
       final db = _database();
       await _writeState(
         jsonEncode({
@@ -119,22 +137,26 @@ class LiftedWeightContractMigration {
   /// Call at sync-pass start. If pending: asks [fetchCanonicalHistory];
   /// purges and returns true only when it reports true. Never throws for a
   /// failed/negative check (returns false, stays pending) - except the
-  /// session-lifecycle [SessionStaleException] / [RequestCancelledException],
-  /// which propagate so the sync pass aborts exactly as any phase would.
+  /// session-lifecycle [SessionStaleException] / [RequestCancelledException]
+  /// and [RateLimitedException], which propagate so the sync pass aborts
+  /// (and arms its cooldown) exactly as any phase would.
   Future<bool> ensureMigrated(
     Future<bool> Function() fetchCanonicalHistory,
   ) async {
     try {
       final state = await _readJson();
       if (state == null) return false;
-      if (state['status'] == 'complete') return true;
-      if (!await fetchCanonicalHistory()) return false;
-      await _purge(Map<String, dynamic>.from(state['cutoffs'] as Map));
-      await _writeState(jsonEncode({...state, 'status': 'complete'}));
-      return true;
+      if (state['status'] != 'complete') {
+        if (!await fetchCanonicalHistory()) return false;
+        await _purge(Map<String, dynamic>.from(state['cutoffs'] as Map));
+        await _writeState(jsonEncode({...state, 'status': 'complete'}));
+      }
+      return _workoutUploadsAllowed = true;
     } on SessionStaleException {
       rethrow;
     } on RequestCancelledException {
+      rethrow;
+    } on RateLimitedException {
       rethrow;
     } catch (e) {
       debugPrint('⚠️ Lifted-weight migration not completed (stays gated): $e');

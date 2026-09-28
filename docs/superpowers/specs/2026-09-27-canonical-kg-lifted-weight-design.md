@@ -103,6 +103,10 @@ State (secure storage, key `lifted_weight_contract_v1`, JSON):
 2. **Gate.** While `pending`, `SyncService` skips the Sessions, Exercises, Sets,
    Programs and ProgramWorkouts upload phases (other phases run normally).
    Local logging keeps working — new rows are canonical kg and are preserved.
+   `SessionRepository` / `ExerciseRepository` likewise withhold their direct
+   online workout write uploads while pending (the migration's synchronous
+   `workoutUploadsAllowed` flag), leaving those rows pending as if offline, so
+   no canonical row can gain a server identity before the purge.
 3. **Purge.** At the start of a sync pass, if `pending` and online, call
    `GET liftedweightcontract`. Only when `canonicalHistory == true`, in one Isar
    transaction delete, for sessions / exercises / sets / programs /
