@@ -40,7 +40,7 @@ materialization. Later plan edits never mutate an existing session. No display-s
 | field | type | meaning |
 |---|---|---|
 | `name` | string | display name (unchanged) |
-| `exerciseTemplateId` | int, optional | **explicit part of this contract**: the resolved *system* template id (§4). Omitted/null = unresolved identity |
+| `exerciseTemplateId` | int, optional | **explicit part of this contract**: the resolved *system* template id (§4): integer when resolved; null or omitted means unresolved. |
 | `sets` | int, optional | target sets |
 | `reps` | int, optional | target reps — lower bound, or exact |
 | `repsMax` | int, optional, **new** | target reps upper bound; omitted/null = exact |
@@ -153,7 +153,7 @@ New pure API service `ExerciseTemplateResolver.Resolve(name, systemTemplates) �
 ```
 AI exercise name
  → ExerciseTemplateResolver.Resolve                     (API, at draft creation)
- → ProgramWorkout.exercisesJson[i].exerciseTemplateId    (BuildProgramWorkouts writes it; null omitted)
+ → ProgramWorkout.exercisesJson[i].exerciseTemplateId    (BuildProgramWorkouts writes it: integer when resolved; null or omitted means unresolved)
  → materialized Exercise.ExerciseTemplateId             (API materializer §2)
  → LocalExercise.exerciseTemplateId                     (APP local materializer from cached JSON,
                                                          then overwritten by server value on reconcile)
