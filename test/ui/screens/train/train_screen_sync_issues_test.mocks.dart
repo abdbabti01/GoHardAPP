@@ -4,11 +4,11 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i7;
-import 'dart:ui' as _i12;
+import 'dart:ui' as _i13;
 
-import 'package:go_hard_app/core/services/connectivity_service.dart' as _i11;
+import 'package:go_hard_app/core/services/connectivity_service.dart' as _i12;
 import 'package:go_hard_app/data/models/exercise.dart' as _i3;
-import 'package:go_hard_app/data/models/exercise_guidance.dart' as _i13;
+import 'package:go_hard_app/data/models/exercise_guidance.dart' as _i11;
 import 'package:go_hard_app/data/models/exercise_set.dart' as _i5;
 import 'package:go_hard_app/data/models/exercise_template.dart' as _i4;
 import 'package:go_hard_app/data/models/program_workout.dart' as _i8;
@@ -422,12 +422,12 @@ class MockExerciseRepository extends _i1.Mock
           as _i7.Future<List<_i5.ExerciseSet>>);
 
   @override
-  _i7.Future<_i13.ExerciseGuidance?> getExerciseGuidance(int? exerciseId) =>
+  _i7.Future<_i11.ExerciseGuidance?> getExerciseGuidance(int? exerciseId) =>
       (super.noSuchMethod(
             Invocation.method(#getExerciseGuidance, [exerciseId]),
-            returnValue: _i7.Future<_i13.ExerciseGuidance?>.value(),
+            returnValue: _i7.Future<_i11.ExerciseGuidance?>.value(),
           )
-          as _i7.Future<_i13.ExerciseGuidance?>);
+          as _i7.Future<_i11.ExerciseGuidance?>);
 
   @override
   _i7.Future<_i5.ExerciseSet> createExerciseSet(_i5.ExerciseSet? exerciseSet) =>
@@ -484,7 +484,7 @@ class MockExerciseRepository extends _i1.Mock
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockConnectivityService extends _i1.Mock
-    implements _i11.ConnectivityService {
+    implements _i12.ConnectivityService {
   MockConnectivityService() {
     _i1.throwOnMissingStub(this);
   }
@@ -546,13 +546,13 @@ class MockConnectivityService extends _i1.Mock
   );
 
   @override
-  void addListener(_i12.VoidCallback? listener) => super.noSuchMethod(
+  void addListener(_i13.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#addListener, [listener]),
     returnValueForMissingStub: null,
   );
 
   @override
-  void removeListener(_i12.VoidCallback? listener) => super.noSuchMethod(
+  void removeListener(_i13.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#removeListener, [listener]),
     returnValueForMissingStub: null,
   );

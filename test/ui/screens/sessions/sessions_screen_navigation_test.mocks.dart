@@ -4,16 +4,16 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i16;
-import 'dart:ui' as _i20;
+import 'dart:ui' as _i21;
 
-import 'package:go_hard_app/core/services/connectivity_service.dart' as _i19;
+import 'package:go_hard_app/core/services/connectivity_service.dart' as _i20;
 import 'package:go_hard_app/data/models/exercise.dart' as _i3;
+import 'package:go_hard_app/data/models/exercise_guidance.dart' as _i19;
 import 'package:go_hard_app/data/models/exercise_set.dart' as _i5;
 import 'package:go_hard_app/data/models/exercise_template.dart' as _i4;
-import 'package:go_hard_app/data/models/exercise_guidance.dart' as _i24;
 import 'package:go_hard_app/data/models/food_item.dart' as _i10;
 import 'package:go_hard_app/data/models/food_template.dart' as _i11;
-import 'package:go_hard_app/data/models/gps_point.dart' as _i23;
+import 'package:go_hard_app/data/models/gps_point.dart' as _i24;
 import 'package:go_hard_app/data/models/meal_log.dart' as _i9;
 import 'package:go_hard_app/data/models/nutrition_goal.dart' as _i12;
 import 'package:go_hard_app/data/models/nutrition_summary.dart' as _i13;
@@ -24,8 +24,8 @@ import 'package:go_hard_app/data/models/session.dart' as _i2;
 import 'package:go_hard_app/data/repositories/exercise_repository.dart' as _i18;
 import 'package:go_hard_app/data/repositories/nutrition_repository.dart'
     as _i14;
-import 'package:go_hard_app/data/repositories/programs_repository.dart' as _i21;
-import 'package:go_hard_app/data/repositories/running_repository.dart' as _i22;
+import 'package:go_hard_app/data/repositories/programs_repository.dart' as _i22;
+import 'package:go_hard_app/data/repositories/running_repository.dart' as _i23;
 import 'package:go_hard_app/data/repositories/session_repository.dart' as _i15;
 import 'package:go_hard_app/data/repositories/session_sync_diagnostics.dart'
     as _i17;
@@ -488,12 +488,12 @@ class MockExerciseRepository extends _i1.Mock
           as _i16.Future<List<_i5.ExerciseSet>>);
 
   @override
-  _i16.Future<_i24.ExerciseGuidance?> getExerciseGuidance(int? exerciseId) =>
+  _i16.Future<_i19.ExerciseGuidance?> getExerciseGuidance(int? exerciseId) =>
       (super.noSuchMethod(
             Invocation.method(#getExerciseGuidance, [exerciseId]),
-            returnValue: _i16.Future<_i24.ExerciseGuidance?>.value(),
+            returnValue: _i16.Future<_i19.ExerciseGuidance?>.value(),
           )
-          as _i16.Future<_i24.ExerciseGuidance?>);
+          as _i16.Future<_i19.ExerciseGuidance?>);
 
   @override
   _i16.Future<_i5.ExerciseSet> createExerciseSet(
@@ -552,7 +552,7 @@ class MockExerciseRepository extends _i1.Mock
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockConnectivityService extends _i1.Mock
-    implements _i19.ConnectivityService {
+    implements _i20.ConnectivityService {
   MockConnectivityService() {
     _i1.throwOnMissingStub(this);
   }
@@ -614,13 +614,13 @@ class MockConnectivityService extends _i1.Mock
   );
 
   @override
-  void addListener(_i20.VoidCallback? listener) => super.noSuchMethod(
+  void addListener(_i21.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#addListener, [listener]),
     returnValueForMissingStub: null,
   );
 
   @override
-  void removeListener(_i20.VoidCallback? listener) => super.noSuchMethod(
+  void removeListener(_i21.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#removeListener, [listener]),
     returnValueForMissingStub: null,
   );
@@ -636,7 +636,7 @@ class MockConnectivityService extends _i1.Mock
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockProgramsRepository extends _i1.Mock
-    implements _i21.ProgramsRepository {
+    implements _i22.ProgramsRepository {
   MockProgramsRepository() {
     _i1.throwOnMissingStub(this);
   }
@@ -861,7 +861,7 @@ class MockProgramsRepository extends _i1.Mock
 /// A class which mocks [RunningRepository].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockRunningRepository extends _i1.Mock implements _i22.RunningRepository {
+class MockRunningRepository extends _i1.Mock implements _i23.RunningRepository {
   MockRunningRepository() {
     _i1.throwOnMissingStub(this);
   }
@@ -1014,7 +1014,7 @@ class MockRunningRepository extends _i1.Mock implements _i22.RunningRepository {
     required double? distance,
     double? averagePace,
     int? calories,
-    List<_i23.GpsPoint>? route,
+    List<_i24.GpsPoint>? route,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
@@ -1048,7 +1048,7 @@ class MockRunningRepository extends _i1.Mock implements _i22.RunningRepository {
           as _i16.Future<_i8.RunSession>);
 
   @override
-  _i16.Future<void> updateRoute(int? localId, List<_i23.GpsPoint>? route) =>
+  _i16.Future<void> updateRoute(int? localId, List<_i24.GpsPoint>? route) =>
       (super.noSuchMethod(
             Invocation.method(#updateRoute, [localId, route]),
             returnValue: _i16.Future<void>.value(),

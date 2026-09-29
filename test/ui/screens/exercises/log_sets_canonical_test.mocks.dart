@@ -4,18 +4,18 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i6;
-import 'dart:io' as _i9;
+import 'dart:io' as _i10;
 
-import 'package:go_hard_app/data/models/exercise_guidance.dart' as _i12;
+import 'package:go_hard_app/data/models/exercise_guidance.dart' as _i7;
 import 'package:go_hard_app/data/models/exercise_set.dart' as _i3;
 import 'package:go_hard_app/data/models/exercise_template.dart' as _i2;
-import 'package:go_hard_app/data/models/profile_update_request.dart' as _i8;
+import 'package:go_hard_app/data/models/profile_update_request.dart' as _i9;
 import 'package:go_hard_app/data/models/user.dart' as _i4;
 import 'package:go_hard_app/data/repositories/exercise_repository.dart' as _i5;
-import 'package:go_hard_app/data/repositories/profile_repository.dart' as _i7;
-import 'package:go_hard_app/data/services/auth_service.dart' as _i11;
+import 'package:go_hard_app/data/repositories/profile_repository.dart' as _i8;
+import 'package:go_hard_app/data/services/auth_service.dart' as _i12;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i10;
+import 'package:mockito/src/dummies.dart' as _i11;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -129,12 +129,12 @@ class MockExerciseRepository extends _i1.Mock
           as _i6.Future<List<_i3.ExerciseSet>>);
 
   @override
-  _i6.Future<_i12.ExerciseGuidance?> getExerciseGuidance(int? exerciseId) =>
+  _i6.Future<_i7.ExerciseGuidance?> getExerciseGuidance(int? exerciseId) =>
       (super.noSuchMethod(
             Invocation.method(#getExerciseGuidance, [exerciseId]),
-            returnValue: _i6.Future<_i12.ExerciseGuidance?>.value(),
+            returnValue: _i6.Future<_i7.ExerciseGuidance?>.value(),
           )
-          as _i6.Future<_i12.ExerciseGuidance?>);
+          as _i6.Future<_i7.ExerciseGuidance?>);
 
   @override
   _i6.Future<_i3.ExerciseSet> createExerciseSet(_i3.ExerciseSet? exerciseSet) =>
@@ -190,7 +190,7 @@ class MockExerciseRepository extends _i1.Mock
 /// A class which mocks [ProfileRepository].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockProfileRepository extends _i1.Mock implements _i7.ProfileRepository {
+class MockProfileRepository extends _i1.Mock implements _i8.ProfileRepository {
   MockProfileRepository() {
     _i1.throwOnMissingStub(this);
   }
@@ -206,7 +206,7 @@ class MockProfileRepository extends _i1.Mock implements _i7.ProfileRepository {
           as _i6.Future<_i4.User>);
 
   @override
-  _i6.Future<_i4.User> updateProfile(_i8.ProfileUpdateRequest? request) =>
+  _i6.Future<_i4.User> updateProfile(_i9.ProfileUpdateRequest? request) =>
       (super.noSuchMethod(
             Invocation.method(#updateProfile, [request]),
             returnValue: _i6.Future<_i4.User>.value(
@@ -216,11 +216,11 @@ class MockProfileRepository extends _i1.Mock implements _i7.ProfileRepository {
           as _i6.Future<_i4.User>);
 
   @override
-  _i6.Future<String> uploadProfilePhoto(_i9.File? imageFile) =>
+  _i6.Future<String> uploadProfilePhoto(_i10.File? imageFile) =>
       (super.noSuchMethod(
             Invocation.method(#uploadProfilePhoto, [imageFile]),
             returnValue: _i6.Future<String>.value(
-              _i10.dummyValue<String>(
+              _i11.dummyValue<String>(
                 this,
                 Invocation.method(#uploadProfilePhoto, [imageFile]),
               ),
@@ -240,7 +240,7 @@ class MockProfileRepository extends _i1.Mock implements _i7.ProfileRepository {
 /// A class which mocks [AuthService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockAuthService extends _i1.Mock implements _i11.AuthService {
+class MockAuthService extends _i1.Mock implements _i12.AuthService {
   MockAuthService() {
     _i1.throwOnMissingStub(this);
   }
