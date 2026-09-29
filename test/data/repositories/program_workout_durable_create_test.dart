@@ -18,6 +18,7 @@ import 'package:go_hard_app/data/local/models/local_exercise_template.dart';
 import 'package:go_hard_app/data/local/models/local_session.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/models/program_workout.dart';
+import 'package:go_hard_app/data/repositories/exercise_repository.dart';
 import 'package:go_hard_app/data/repositories/session_repository.dart';
 import 'package:go_hard_app/data/services/api_service.dart';
 
@@ -3569,6 +3570,178 @@ void main() {
           b2.targetRepsMax,
         ),
         (9003, 1, 2, 2, 5, 5),
+      );
+    });
+
+    test('E2E: fixture plan entry -> local materialization -> reconcile -> '
+        'Isar -> previous performance', () async {
+      final fixture =
+          jsonDecode(
+                File(
+                  'test/fixtures/phase2d_plan_session_contract.json',
+                ).readAsStringSync(),
+              )
+              as Map<String, dynamic>;
+      // Drift guard: the fixture is duplicated (no cross-repo
+      // infrastructure) from GoHardAPI.Tests/Fixtures/
+      // phase2d_plan_session_contract.json - this equality check makes any
+      // accidental divergence between the two copies fail LOUDLY, in
+      // behavior, rather than silently drifting apart.
+      expect(
+        fixture,
+        equals(<String, dynamic>{
+          'aiExerciseName': 'Bench Press',
+          'systemTemplateId': 1,
+          'programWorkoutExercise': <String, dynamic>{
+            'name': 'Bench Press',
+            'exerciseTemplateId': 1,
+            'sets': 3,
+            'reps': 8,
+            'repsMax': 10,
+          },
+          'sessionExercise': <String, dynamic>{
+            'name': 'Bench Press',
+            'sortOrder': 0,
+            'exerciseTemplateId': 1,
+            'targetSets': 3,
+            'targetRepsMin': 8,
+            'targetRepsMax': 10,
+          },
+        }),
+        reason:
+            'the fixture must stay byte-for-byte identical to '
+            'GoHardAPI.Tests/Fixtures/phase2d_plan_session_contract.json - '
+            'this repo has no cross-repo infrastructure to enforce that '
+            'automatically, so drift must be caught here instead',
+      );
+
+      final planEntry = {
+        ...(fixture['programWorkoutExercise'] as Map<String, dynamic>),
+        'occurrenceKey': 'e2e-key',
+      };
+      final serverExercise = fixture['sessionExercise'] as Map<String, dynamic>;
+      final templateId = fixture['systemTemplateId'] as int;
+
+      loginAs(userA);
+
+      // A prior completed canonical session with the same template.
+      final priorSessionId = await isar.writeTxn(
+        () => isar.localSessions.put(
+          LocalSession(
+            userId: userA,
+            date: DateTime.utc(2031, 6, 1),
+            name: 'Prior',
+            type: 'Strength',
+            status: 'completed',
+            completedAt: DateTime.utc(2031, 6, 1),
+            lastModifiedLocal: DateTime.utc(2031, 6, 1),
+          ),
+        ),
+      );
+      final priorExerciseId = await isar.writeTxn(
+        () => isar.localExercises.put(
+          LocalExercise(
+            sessionLocalId: priorSessionId,
+            name: 'Bench Press',
+            exerciseTemplateId: templateId,
+            lastModifiedLocal: DateTime.utc(2031, 6, 1),
+          ),
+        ),
+      );
+      await isar.writeTxn(
+        () => isar.localExerciseSets.put(
+          LocalExerciseSet(
+            exerciseLocalId: priorExerciseId,
+            setNumber: 1,
+            reps: 10,
+            weight: 61.235,
+            isCompleted: true,
+            lastModifiedLocal: DateTime.utc(2031, 6, 1),
+          ),
+        ),
+      );
+
+      final held = Completer<ResponseBody>();
+      adapter.responder = (o) => held.future;
+      Future<void>? settled;
+      repository.onBackgroundSyncScheduledForTesting = (s) => settled = s;
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        workout(exercisesJson: jsonEncode([planEntry])),
+        DateTime(2031, 1, 1),
+        5,
+      );
+      repository.onBackgroundSyncScheduledForTesting = null;
+
+      var local =
+          (await isar.localExercises
+                  .filter()
+                  .sessionLocalIdEqualTo(created.id)
+                  .findAll())
+              .single;
+      expect(
+        local.exerciseTemplateId,
+        templateId,
+        reason: 'local materializer copies plan identity',
+      );
+
+      held.complete(
+        jsonResponse(
+          sessionJson(
+            id: 900,
+            exercises: [
+              {
+                ...exerciseJson(
+                  9001,
+                  sessionId: 900,
+                  exerciseTemplateId: templateId,
+                  occurrenceKey: 'e2e-key',
+                ),
+                ...serverExercise,
+              },
+            ],
+          ),
+        ),
+      );
+      await settled;
+
+      local =
+          (await isar.localExercises
+                  .filter()
+                  .sessionLocalIdEqualTo(created.id)
+                  .findAll())
+              .single;
+      expect(
+        (
+          local.serverId,
+          local.exerciseTemplateId,
+          local.sortOrder,
+          local.targetSets,
+          local.targetRepsMin,
+          local.targetRepsMax,
+        ),
+        (
+          9001,
+          serverExercise['exerciseTemplateId'],
+          serverExercise['sortOrder'],
+          serverExercise['targetSets'],
+          serverExercise['targetRepsMin'],
+          serverExercise['targetRepsMax'],
+        ),
+      );
+
+      final exercises = ExerciseRepository(
+        apiService,
+        localDb,
+        mockConnectivity,
+        sessionEpoch,
+        sessionCoordinator,
+      );
+      final guidance = await exercises.getExerciseGuidance(9001);
+      expect(guidance!.previous!.sets.single.weight, 61.235);
+      expect(
+        (guidance.targetSets, guidance.targetRepsMin, guidance.targetRepsMax),
+        (3, 8, 10),
       );
     });
   });
