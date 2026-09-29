@@ -99,8 +99,8 @@ void main() {
       exerciseRepo.getExerciseGuidance(any),
     ).thenAnswer((_) async => guidance);
     await pumpScreen(tester, await buildProfileProvider(tester, 'Metric'));
-    expect(find.text('Target  3 × 8–10'), findsOneWidget);
-    expect(find.text('61.2 kg × 10'), findsOneWidget);
+    expect(find.text('Target 3 × 8–10'), findsOneWidget);
+    expect(find.text('Last time: 61.2 kg × 10'), findsOneWidget);
   });
 
   testWidgets('Imperial changes only display; stored kg value untouched', (
@@ -110,7 +110,10 @@ void main() {
       exerciseRepo.getExerciseGuidance(any),
     ).thenAnswer((_) async => guidance);
     await pumpScreen(tester, await buildProfileProvider(tester, 'Imperial'));
-    expect(find.text('135 lb × 10'), findsOneWidget); // 61.235 kg -> 135 lb
+    expect(
+      find.text('Last time: 135 lb × 10'),
+      findsOneWidget,
+    ); // 61.235 kg -> 135 lb
     expect(guidance.previous!.sets.single.weight, 61.235);
     verifyNever(exerciseRepo.updateExerciseSet(any, any));
     verifyNever(exerciseRepo.createExerciseSet(any));
@@ -119,6 +122,70 @@ void main() {
   testWidgets('no guidance renders nothing extra', (tester) async {
     when(exerciseRepo.getExerciseGuidance(any)).thenAnswer((_) async => null);
     await pumpScreen(tester, await buildProfileProvider(tester, 'Metric'));
-    expect(find.text('Last time'), findsNothing);
+    expect(find.textContaining('Last time'), findsNothing);
+  });
+
+  testWidgets('a previous set with no weight and reps renders "N reps"', (
+    tester,
+  ) async {
+    when(exerciseRepo.getExerciseGuidance(any)).thenAnswer(
+      (_) async => ExerciseGuidance(
+        targetSets: 3,
+        targetRepsMin: 8,
+        targetRepsMax: 10,
+        previous: PreviousPerformance(
+          sessionLocalId: 1,
+          performedAt: DateTime.utc(2026, 1, 1),
+          sets: [
+            ExerciseSet(
+              id: 1,
+              exerciseId: 1,
+              setNumber: 1,
+              reps: 5,
+              weight: null,
+              isCompleted: true,
+            ),
+          ],
+        ),
+      ),
+    );
+    await pumpScreen(tester, await buildProfileProvider(tester, 'Metric'));
+    expect(find.text('Last time: 5 reps'), findsOneWidget);
+  });
+
+  testWidgets('multiple previous sets render on one line, comma-separated', (
+    tester,
+  ) async {
+    when(exerciseRepo.getExerciseGuidance(any)).thenAnswer(
+      (_) async => ExerciseGuidance(
+        targetSets: 3,
+        targetRepsMin: 8,
+        targetRepsMax: 10,
+        previous: PreviousPerformance(
+          sessionLocalId: 1,
+          performedAt: DateTime.utc(2026, 1, 1),
+          sets: [
+            ExerciseSet(
+              id: 1,
+              exerciseId: 1,
+              setNumber: 1,
+              reps: 10,
+              weight: 61.235,
+              isCompleted: true,
+            ),
+            ExerciseSet(
+              id: 2,
+              exerciseId: 1,
+              setNumber: 2,
+              reps: 9,
+              weight: 61.235,
+              isCompleted: true,
+            ),
+          ],
+        ),
+      ),
+    );
+    await pumpScreen(tester, await buildProfileProvider(tester, 'Metric'));
+    expect(find.text('Last time: 61.2 kg × 10, 61.2 kg × 9'), findsOneWidget);
   });
 }

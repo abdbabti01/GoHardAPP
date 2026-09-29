@@ -17,6 +17,7 @@ import 'package:go_hard_app/data/local/models/local_exercise_set.dart';
 import 'package:go_hard_app/data/local/models/local_exercise_template.dart';
 import 'package:go_hard_app/data/local/models/local_session.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
+import 'package:go_hard_app/data/models/exercise_guidance.dart';
 import 'package:go_hard_app/data/models/program_workout.dart';
 import 'package:go_hard_app/data/repositories/exercise_repository.dart';
 import 'package:go_hard_app/data/repositories/session_repository.dart';
@@ -3423,6 +3424,60 @@ void main() {
       expect(adapter.captured, isEmpty);
     });
 
+    test('offline addExerciseToSession appends after every existing local '
+        'exercise (max sortOrder + 1) and never shifts the program\'s '
+        'strict ordinal pairing', () async {
+      loginAs(userA);
+      when(mockConnectivity.isOnline).thenReturn(false);
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        workout(exercisesJson: targetsJson),
+        DateTime(2031, 1, 1),
+        5,
+      );
+
+      // [Bench 0 (b1), Row 1 (r1), Bench 2 (b2)] - sanity-check the program's
+      // second Bench Press is, before any offline add, the second same-
+      // template occurrence.
+      final beforeRows = await localRows(created.id);
+      final b2Before = beforeRows.singleWhere((e) => e.occurrenceKey == 'b2');
+      final sameTemplateBefore =
+          beforeRows.where((e) => e.exerciseTemplateId == 1).toList();
+      expect(
+        PreviousPerformanceRules.ordinalOf(sameTemplateBefore, b2Before),
+        1,
+      );
+
+      // Offline-added Bench Press (same template, exerciseTemplateId 1).
+      final added = await repository.addExerciseToSession(created.id, 1);
+
+      final afterRows = await localRows(created.id);
+      expect(
+        afterRows.map((e) => e.sortOrder),
+        [0, 1, 2, 3],
+        reason:
+            'the offline-added exercise must get max(existing sortOrder) + '
+            '1, never colliding with the program\'s strict 0..n-1 ordinals',
+      );
+      expect(
+        added.sortOrder,
+        3,
+        reason: 'the returned Exercise must carry the same sortOrder',
+      );
+
+      final b2After = afterRows.singleWhere((e) => e.occurrenceKey == 'b2');
+      final sameTemplateAfter =
+          afterRows.where((e) => e.exerciseTemplateId == 1).toList();
+      expect(
+        PreviousPerformanceRules.ordinalOf(sameTemplateAfter, b2After),
+        1,
+        reason:
+            'the program\'s second Bench Press must still be the second '
+            'same-template occurrence after the offline add - a sortOrder-0 '
+            'collision would have shifted it',
+      );
+    });
+
     test('targets survive app restart (Isar close/reopen)', () async {
       loginAs(userA);
       when(mockConnectivity.isOnline).thenReturn(false);
@@ -3609,10 +3664,11 @@ void main() {
           },
         }),
         reason:
-            'the fixture must stay byte-for-byte identical to '
-            'GoHardAPI.Tests/Fixtures/phase2d_plan_session_contract.json - '
-            'this repo has no cross-repo infrastructure to enforce that '
-            'automatically, so drift must be caught here instead',
+            'the fixture must stay value-for-value identical (decoded JSON '
+            'equality, not a byte comparison) to GoHardAPI.Tests/Fixtures/'
+            'phase2d_plan_session_contract.json - this repo has no '
+            'cross-repo infrastructure to enforce that automatically, so '
+            'drift must be caught here instead',
       );
 
       final planEntry = {
@@ -3683,6 +3739,32 @@ void main() {
         local.exerciseTemplateId,
         templateId,
         reason: 'local materializer copies plan identity',
+      );
+
+      // BEFORE the server response is ever seen: the local materializer
+      // must already have computed the same (sortOrder, targets, identity)
+      // values the fixture's `sessionExercise` records for the API side -
+      // proving both sides independently compute the same thing from the
+      // same plan entry, not merely that "the server wins" once reconcile
+      // runs.
+      expect(
+        (
+          local.sortOrder,
+          local.targetSets,
+          local.targetRepsMin,
+          local.targetRepsMax,
+          local.exerciseTemplateId,
+        ),
+        (
+          serverExercise['sortOrder'],
+          serverExercise['targetSets'],
+          serverExercise['targetRepsMin'],
+          serverExercise['targetRepsMax'],
+          serverExercise['exerciseTemplateId'],
+        ),
+        reason:
+            'local materialization must independently match the fixture\'s '
+            'sessionExercise values before any server response arrives',
       );
 
       held.complete(

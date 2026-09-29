@@ -38,4 +38,29 @@ void main() {
       expect(p({'sets': 3, 'repsMax': 10}), (null, 3, null, null));
     },
   );
+
+  test('ints outside Int32 range (mirrors the API\'s TryGetInt32) are treated '
+      'as not-an-integer -> null', () {
+    expect(p({'sets': 3000000000, 'reps': 8}), (null, null, 8, 8));
+    expect(p({'exerciseTemplateId': 3000000000, 'sets': 3, 'reps': 8}), (
+      null,
+      3,
+      8,
+      8,
+    ));
+    expect(p({'sets': 3, 'reps': 8, 'repsMax': 3000000000}), (null, 3, 8, 8));
+    expect(p({'exerciseTemplateId': -3000000000, 'sets': 3, 'reps': 8}), (
+      null,
+      3,
+      8,
+      8,
+    ));
+    // In-range boundaries still parse normally.
+    expect(p({'exerciseTemplateId': 2147483647, 'sets': 1, 'reps': 1}), (
+      2147483647,
+      1,
+      1,
+      1,
+    ));
+  });
 }
