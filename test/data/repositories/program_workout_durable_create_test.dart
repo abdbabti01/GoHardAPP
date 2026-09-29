@@ -3505,32 +3505,70 @@ void main() {
         'targetRepsMin': min,
         'targetRepsMax': max,
       };
+      // Deliberately NOT in local-materialization order (b1, r1, b2) - each
+      // server exercise sits at a DIFFERENT position than its local
+      // counterpart, so a positional-assignment bug (pairing local[i] with
+      // server[i] instead of matching by occurrenceKey) cannot masquerade
+      // as correct here.
       held.complete(
         jsonResponse(
           sessionJson(
             id: 900,
             exercises: [
+              server(9003, 'b2', 2, 1, 2, 5, 5),
               server(9001, 'b1', 0, 1, 3, 8, 10),
               server(9002, 'r1', 1, 42, 4, 12, 12), // server resolved
               // identity differently
-              server(9003, 'b2', 2, 1, 2, 5, 5),
             ],
           ),
         ),
       );
       await settled;
 
+      // Looked up by occurrenceKey, never by list position/index, so the
+      // assertions below prove correct per-occurrence ROUTING - not merely
+      // that the right values landed somewhere.
       final rows = await localRows(created.id);
-      expect(rows.map((e) => e.serverId), [9001, 9002, 9003]);
-      // Additive to the brief's spec: assert occurrenceKey alongside
-      // serverId/values so a match that silently landed server data on
-      // the WRONG local occurrence (not just "some row has the right
-      // count") would be caught here too.
-      expect(rows.map((e) => e.occurrenceKey), ['b1', 'r1', 'b2']);
-      expect(rows[1].exerciseTemplateId, 42);
+      LocalExercise byKey(String key) =>
+          rows.singleWhere((e) => e.occurrenceKey == key);
+
+      final b1 = byKey('b1');
       expect(
-        (rows[0].targetSets, rows[0].targetRepsMin, rows[0].targetRepsMax),
-        (3, 8, 10),
+        (
+          b1.serverId,
+          b1.exerciseTemplateId,
+          b1.sortOrder,
+          b1.targetSets,
+          b1.targetRepsMin,
+          b1.targetRepsMax,
+        ),
+        (9001, 1, 0, 3, 8, 10),
+      );
+
+      final r1 = byKey('r1');
+      expect(
+        (
+          r1.serverId,
+          r1.exerciseTemplateId,
+          r1.sortOrder,
+          r1.targetSets,
+          r1.targetRepsMin,
+          r1.targetRepsMax,
+        ),
+        (9002, 42, 1, 4, 12, 12), // server resolved identity differently
+      );
+
+      final b2 = byKey('b2');
+      expect(
+        (
+          b2.serverId,
+          b2.exerciseTemplateId,
+          b2.sortOrder,
+          b2.targetSets,
+          b2.targetRepsMin,
+          b2.targetRepsMax,
+        ),
+        (9003, 1, 2, 2, 5, 5),
       );
     });
   });
