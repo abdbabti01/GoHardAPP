@@ -419,19 +419,30 @@ class _GuidanceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (target != null) Text('Target  $target', style: style),
-          if (previous.isNotEmpty) ...[
-            Text('Last time', style: style),
-            for (final s in previous)
-              Text(
-                s.weight != null && s.weight! > 0
-                    ? '${UnitConverter.formatLifted(s.weight!, pref)} × ${s.reps ?? '—'}'
-                    : '${s.reps ?? '—'} reps',
-                style: style,
-              ),
-          ],
+          if (target != null) Text('Target $target', style: style),
+          if (previous.isNotEmpty)
+            Text(
+              'Last time: '
+              '${previous.map((s) => _describeSet(s, pref)).join(', ')}',
+              style: style,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
         ],
       ),
     );
+  }
+
+  static String _describeSet(ExerciseSet s, String pref) {
+    if (s.weight != null && s.weight! > 0) {
+      return '${UnitConverter.formatLifted(s.weight!, pref)} × ${s.reps ?? '—'}';
+    }
+    if (s.reps != null) {
+      return '${s.reps} reps';
+    }
+    if ((s.duration ?? 0) > 0) {
+      return '${s.duration}s';
+    }
+    return '—';
   }
 }

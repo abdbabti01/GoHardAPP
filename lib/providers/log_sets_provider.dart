@@ -93,6 +93,7 @@ class LogSetsProvider extends ChangeNotifier {
     if (token == null) return;
     final myGen = ++_guidanceGen;
     _guidance = null;
+    notifyListeners();
     bool owns() => _sessionEpoch.isCurrent(token) && _guidanceGen == myGen;
     try {
       final guidance = await _exerciseRepository.getExerciseGuidance(
