@@ -16,19 +16,32 @@ class PlanExercisePrescription {
     this.targetRepsMax,
   });
 
+  // Mirrors the API's `JsonElement.TryGetInt32` (GoHardAPI.Services
+  // .ProgramWorkoutSessionMaterializer.IntOrNull): an int outside Int32's
+  // range is treated as not-an-integer, i.e. null - never clamped, never
+  // parsed as a double.
+  static const _int32Min = -2147483648;
+  static const _int32Max = 2147483647;
+
   factory PlanExercisePrescription.fromPlanEntry(Map<String, dynamic> entry) {
-    int? positive(Object? v) => v is int && v >= 1 ? v : null;
-    final templateId = entry['exerciseTemplateId'];
+    int? asInt32(Object? v) =>
+        v is int && v >= _int32Min && v <= _int32Max ? v : null;
+    int? positive(Object? v) {
+      final i = asInt32(v);
+      return i != null && i >= 1 ? i : null;
+    }
+
+    final templateId = asInt32(entry['exerciseTemplateId']);
     final repsMin = positive(entry['reps']);
-    final repsMax = entry['repsMax'];
+    final repsMax = asInt32(entry['repsMax']);
     return PlanExercisePrescription(
-      exerciseTemplateId: templateId is int ? templateId : null,
+      exerciseTemplateId: templateId,
       targetSets: positive(entry['sets']),
       targetRepsMin: repsMin,
       targetRepsMax:
           repsMin == null
               ? null
-              : (repsMax is int && repsMax >= repsMin ? repsMax : repsMin),
+              : (repsMax != null && repsMax >= repsMin ? repsMax : repsMin),
     );
   }
 }

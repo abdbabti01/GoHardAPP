@@ -3102,6 +3102,7 @@ class SessionRepository {
     }
 
     int localId = 0;
+    int nextSortOrder = 0;
 
     await _runTestHook(beforeWriteTxnForTesting);
     await db.writeTxn(() async {
@@ -3111,6 +3112,23 @@ class SessionRepository {
       final current = await db.localSessions.get(localSession.localId);
       if (current == null || current.userId != token.userId) return;
 
+      // Program sessions materialize exercises with strict ordinal
+      // sortOrder 0..n-1 (Phase 2D spec §2). An offline-added exercise must
+      // never collide with/shift that ordering, so it goes after every
+      // existing local exercise in this session rather than defaulting to 0.
+      final siblings =
+          await db.localExercises
+              .filter()
+              .sessionLocalIdEqualTo(localSession.localId)
+              .findAll();
+      nextSortOrder =
+          siblings.isEmpty
+              ? 0
+              : siblings
+                      .map((e) => e.sortOrder)
+                      .reduce((a, b) => a > b ? a : b) +
+                  1;
+
       final tempExercise = Exercise(
         id: 0,
         sessionId: sessionId,
@@ -3119,6 +3137,7 @@ class SessionRepository {
         duration: null,
         restTime: null,
         notes: null,
+        sortOrder: nextSortOrder,
         exerciseSets: [],
       );
 
@@ -3140,6 +3159,7 @@ class SessionRepository {
       duration: null,
       restTime: null,
       notes: null,
+      sortOrder: nextSortOrder,
       exerciseSets: [],
     );
 
