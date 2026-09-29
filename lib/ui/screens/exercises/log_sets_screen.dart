@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/utils/rep_target_format.dart';
 import '../../../core/utils/unit_converter.dart';
 import '../../../providers/log_sets_provider.dart';
 import '../../../providers/profile_provider.dart';
+import '../../../data/models/exercise_guidance.dart';
 import '../../../data/models/exercise_set.dart';
 
 /// Log sets screen for adding and managing exercise sets
@@ -26,6 +28,7 @@ class _LogSetsScreenState extends State<LogSetsScreen> {
     // Load sets on first build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<LogSetsProvider>().loadSets(widget.exerciseId);
+      context.read<LogSetsProvider>().loadGuidance(widget.exerciseId);
     });
   }
 
@@ -151,6 +154,7 @@ class _LogSetsScreenState extends State<LogSetsScreen> {
         builder: (context, provider, child) {
           return Column(
             children: [
+              _GuidanceCard(guidance: provider.guidance, pref: pref),
               // Add set form
               Card(
                 margin: const EdgeInsets.all(16),
@@ -390,5 +394,44 @@ class _LogSetsScreenState extends State<LogSetsScreen> {
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
+  }
+}
+
+class _GuidanceCard extends StatelessWidget {
+  final ExerciseGuidance? guidance;
+  final String pref;
+  const _GuidanceCard({required this.guidance, required this.pref});
+
+  @override
+  Widget build(BuildContext context) {
+    final g = guidance;
+    if (g == null) return const SizedBox.shrink();
+    final target = formatRepTarget(
+      sets: g.targetSets,
+      repsMin: g.targetRepsMin,
+      repsMax: g.targetRepsMax,
+    );
+    final previous = g.previous?.sets ?? const [];
+    if (target == null && previous.isEmpty) return const SizedBox.shrink();
+    final style = Theme.of(context).textTheme.bodyMedium;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (target != null) Text('Target  $target', style: style),
+          if (previous.isNotEmpty) ...[
+            Text('Last time', style: style),
+            for (final s in previous)
+              Text(
+                s.weight != null && s.weight! > 0
+                    ? '${UnitConverter.formatLifted(s.weight!, pref)} × ${s.reps ?? '—'}'
+                    : '${s.reps ?? '—'} reps',
+                style: style,
+              ),
+          ],
+        ],
+      ),
+    );
   }
 }

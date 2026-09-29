@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import '../core/services/user_session_epoch.dart';
+import '../data/models/exercise_guidance.dart';
 import '../data/models/exercise_set.dart';
 import '../data/repositories/exercise_repository.dart';
 
@@ -73,12 +74,38 @@ class LogSetsProvider extends ChangeNotifier {
   final Map<int, int> _addGens = {}; // keyed by exerciseId
   final Map<int, int> _setMutationGens = {}; // keyed by set id
 
+  ExerciseGuidance? _guidance;
+  int _guidanceGen = 0;
+
   LogSetsProvider(this._exerciseRepository, this._sessionEpoch);
 
   // Getters
   List<ExerciseSet> get sets => UnmodifiableListView(_sets);
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  /// Target + previous performance for the exercise being logged (Phase 2D).
+  /// Optional: a failure leaves it null and never blocks logging.
+  ExerciseGuidance? get guidance => _guidance;
+
+  Future<void> loadGuidance(int exerciseId) async {
+    final token = _sessionEpoch.capture();
+    if (token == null) return;
+    final myGen = ++_guidanceGen;
+    _guidance = null;
+    bool owns() => _sessionEpoch.isCurrent(token) && _guidanceGen == myGen;
+    try {
+      final guidance = await _exerciseRepository.getExerciseGuidance(
+        exerciseId,
+      );
+      if (!owns()) return;
+      _guidance = guidance;
+      notifyListeners();
+    } catch (e) {
+      if (!owns()) return;
+      debugPrint('Load guidance error: $e');
+    }
+  }
 
   /// Load sets for an exercise
   Future<void> loadSets(int exerciseId) async {
@@ -262,6 +289,7 @@ class LogSetsProvider extends ChangeNotifier {
   void _invalidateGenerations() {
     _loadGen++;
     _setsRev++;
+    _guidanceGen++;
     _addGens.updateAll((_, value) => value + 1);
     _setMutationGens.updateAll((_, value) => value + 1);
   }
@@ -286,6 +314,7 @@ class LogSetsProvider extends ChangeNotifier {
     _sets.clear();
     _isLoading = false;
     _errorMessage = null;
+    _guidance = null;
     notifyListeners();
     debugPrint('🧹 LogSetsProvider cleared');
   }
