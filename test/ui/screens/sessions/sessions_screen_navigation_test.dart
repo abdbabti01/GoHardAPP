@@ -43,9 +43,10 @@ import 'sessions_screen_navigation_test.mocks.dart';
 /// public id equal to the tapped row's localId, and vice versa).
 ///
 /// NOTE ON REACHABILITY: unlike `TrainScreen` (the real bottom-nav workouts
-/// surface, see `train_screen_sync_issues_test.dart`) and `TodayScreen` (the
-/// home dashboard), `SessionsScreen` is currently NOT wired into any live
-/// navigation path - `RouteNames.sessions` is registered in
+/// surface, see `workout_history_screen_sync_issues_test.dart`) and
+/// `TodayScreen` (the home dashboard), `SessionsScreen` is currently NOT
+/// wired into any live navigation path - `RouteNames.sessions` is
+/// registered in
 /// `AppRouter.generateRoute` and referenced by a couple of `popUntil`
 /// predicates, but nothing in `lib/` ever `pushNamed`s it. This test still
 /// mounts the real widget via the real `MaterialApp`/`Navigator`/
@@ -119,7 +120,7 @@ void main() {
     // each catch any repository failure internally and simply leave their
     // state at its default (empty/null) - left unstubbed deliberately,
     // exactly like the established ExerciseRepository/ProgramsRepository
-    // pattern in the sibling TrainScreen test.
+    // pattern in the sibling WorkoutHistoryScreen test.
 
     epoch = UserSessionEpoch()..activate(1);
     sessionsProvider = SessionsProvider(sessionRepo, epoch, connectivity);
@@ -206,9 +207,9 @@ void main() {
     // re-arms the watch with a fresh controller) fully resolve. This count
     // is tied to loadSessions()'s current shape (exactly one await -
     // getSessions() - before _installWatch); see the matching comment in
-    // train_screen_sync_issues_test.dart for why an insufficient count
-    // would target the wrong watch generation without necessarily failing
-    // this specific test's assertions.
+    // workout_history_screen_sync_issues_test.dart for why an insufficient
+    // count would target the wrong watch generation without necessarily
+    // failing this specific test's assertions.
     await tester.pump();
     await tester.pump();
 

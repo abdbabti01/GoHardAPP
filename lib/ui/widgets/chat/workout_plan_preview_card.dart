@@ -397,7 +397,7 @@ class _WorkoutPlanPreviewCardState extends State<WorkoutPlanPreviewCard> {
             child: ElevatedButton.icon(
               onPressed: widget.onCreateProgram,
               icon: const Icon(Icons.add_circle_outline, size: 18),
-              label: const Text('Create Program'),
+              label: const Text('Create Plan'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,

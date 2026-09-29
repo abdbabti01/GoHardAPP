@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/constants/workout_names.dart';
+import '../../../core/services/tab_navigation_service.dart';
+import '../../../providers/sessions_provider.dart';
+import '../../../routes/route_names.dart';
 
 /// Dialog for selecting a workout name from predefined options
 class WorkoutNameDialog extends StatefulWidget {
@@ -132,5 +136,25 @@ class _WorkoutNameDialogState extends State<WorkoutNameDialog> {
         ),
       ],
     );
+  }
+}
+
+/// Asks for a name, starts an empty workout and opens it. Shared by the
+/// Quick Actions "Start Workout" and Train › Tools › "Custom workout".
+Future<void> startCustomWorkout(BuildContext context) async {
+  final sessionsProvider = context.read<SessionsProvider>();
+  final tabService = context.read<TabNavigationService>();
+  final navigator = Navigator.of(context);
+
+  final workoutName = await showDialog<String>(
+    context: context,
+    builder: (context) => const WorkoutNameDialog(),
+  );
+  if (workoutName == null || !context.mounted) return;
+
+  final session = await sessionsProvider.startNewWorkout(name: workoutName);
+  if (session != null && context.mounted) {
+    tabService.switchTab(1); // Train
+    navigator.pushNamed(RouteNames.activeWorkout, arguments: session.id);
   }
 }

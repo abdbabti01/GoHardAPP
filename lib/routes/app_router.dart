@@ -4,6 +4,7 @@ import '../ui/screens/main_screen.dart';
 import '../ui/screens/auth/login_screen.dart';
 import '../ui/screens/auth/signup_screen.dart';
 import '../ui/screens/sessions/sessions_screen.dart';
+import '../ui/screens/train/workout_history_screen.dart';
 import '../ui/screens/sessions/session_detail_screen.dart';
 import '../ui/screens/sessions/active_workout_screen.dart';
 import '../ui/screens/sessions/planned_workout_form_screen.dart';
@@ -89,6 +90,12 @@ class AppRouter {
       case RouteNames.sessions:
         return MaterialPageRoute(
           builder: (_) => const SessionsScreen(),
+          settings: settings,
+        );
+
+      case RouteNames.workoutHistory:
+        return MaterialPageRoute(
+          builder: (_) => const WorkoutHistoryScreen(),
           settings: settings,
         );
 
@@ -218,7 +225,11 @@ class AppRouter {
       // Analytics routes
       case RouteNames.analytics:
         return MaterialPageRoute(
-          builder: (_) => const AnalyticsScreen(),
+          builder:
+              (_) => Scaffold(
+                appBar: AppBar(title: const Text('Progress')),
+                body: const AnalyticsScreen(),
+              ),
           settings: settings,
         );
 
@@ -305,7 +316,11 @@ class AppRouter {
       // Program routes
       case RouteNames.programs:
         return MaterialPageRoute(
-          builder: (_) => const ProgramsScreen(),
+          builder:
+              (_) => Scaffold(
+                appBar: AppBar(title: const Text('My Plan')),
+                body: const ProgramsScreen(),
+              ),
           settings: settings,
         );
 
