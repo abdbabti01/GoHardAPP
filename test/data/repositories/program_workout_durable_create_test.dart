@@ -3365,6 +3365,175 @@ void main() {
       expect(setAfter.isSynced, isFalse);
     });
   });
+
+  // ==========================================================================
+  // Phase 2D: local materialization of prescription/identity/sortOrder, and
+  // reconcile adopting the server's authoritative values per-occurrence.
+  // ==========================================================================
+
+  group('Phase 2D targets / identity / sortOrder', () {
+    const targetsJson =
+        '[{"name":"Bench Press","exerciseTemplateId":1,"sets":3,"reps":8,"repsMax":10,"occurrenceKey":"b1"},'
+        '{"name":"Row","sets":4,"reps":12,"occurrenceKey":"r1"},'
+        '{"name":"Bench Press","exerciseTemplateId":1,"sets":2,"reps":5,"occurrenceKey":"b2"}]';
+
+    Future<List<LocalExercise>> localRows(int sessionLocalId) async =>
+        (await isar.localExercises
+              .filter()
+              .sessionLocalIdEqualTo(sessionLocalId)
+              .findAll())
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+    test('offline materialization snapshots targets, template id and '
+        'positional sortOrder', () async {
+      loginAs(userA);
+      when(mockConnectivity.isOnline).thenReturn(false);
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        workout(exercisesJson: targetsJson),
+        DateTime(2031, 1, 1),
+        5,
+      );
+
+      final rows = await localRows(created.id);
+      expect(rows.map((e) => e.sortOrder), [0, 1, 2]);
+      expect(
+        (
+          rows[0].exerciseTemplateId,
+          rows[0].targetSets,
+          rows[0].targetRepsMin,
+          rows[0].targetRepsMax,
+        ),
+        (1, 3, 8, 10),
+      );
+      expect(
+        (
+          rows[1].exerciseTemplateId,
+          rows[1].targetSets,
+          rows[1].targetRepsMin,
+          rows[1].targetRepsMax,
+        ),
+        (null, 4, 12, 12),
+      );
+      expect(
+        (rows[2].targetSets, rows[2].targetRepsMin, rows[2].targetRepsMax),
+        (2, 5, 5),
+      );
+      expect(adapter.captured, isEmpty);
+    });
+
+    test('targets survive app restart (Isar close/reopen)', () async {
+      loginAs(userA);
+      when(mockConnectivity.isOnline).thenReturn(false);
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        workout(exercisesJson: targetsJson),
+        DateTime(2031, 1, 1),
+        5,
+      );
+      final dir = isar.directory!;
+      await isar.close();
+      isar = await openIsar(dir);
+      localDb.setTestDatabase(isar);
+      final rows = await localRows(created.id);
+      expect(
+        (rows[0].targetSets, rows[0].targetRepsMin, rows[0].targetRepsMax),
+        (3, 8, 10),
+      );
+    });
+
+    test(
+      'plan edited after materialization does not change the session',
+      () async {
+        loginAs(userA);
+        when(mockConnectivity.isOnline).thenReturn(false);
+        final created = await repository.createSessionFromProgramWorkout(
+          10,
+          workout(exercisesJson: targetsJson),
+          DateTime(2031, 1, 1),
+          5,
+        );
+        // A later call with an edited plan returns the SAME existing active
+        // session.
+        await repository.createSessionFromProgramWorkout(
+          10,
+          workout(
+            exercisesJson:
+                '[{"name":"Bench Press","sets":5,"reps":3,"occurrenceKey":"b1"}]',
+          ),
+          DateTime(2031, 1, 1),
+          5,
+        );
+        final rows = await localRows(created.id);
+        expect((rows[0].targetSets, rows[0].targetRepsMin), (3, 8));
+      },
+    );
+
+    test('reconcile adopts the authoritative server template id, targets and '
+        'sortOrder', () async {
+      loginAs(userA);
+      final held = Completer<ResponseBody>();
+      adapter.responder = (o) => held.future;
+      Future<void>? settled;
+      repository.onBackgroundSyncScheduledForTesting = (s) => settled = s;
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        workout(exercisesJson: targetsJson),
+        DateTime(2031, 1, 1),
+        5,
+      );
+      repository.onBackgroundSyncScheduledForTesting = null;
+
+      Map<String, dynamic> server(
+        int id,
+        String key,
+        int sort,
+        int? tpl,
+        int sets,
+        int min,
+        int max,
+      ) => {
+        ...exerciseJson(
+          id,
+          sessionId: 900,
+          name: key,
+          exerciseTemplateId: tpl,
+          occurrenceKey: key,
+        ),
+        'sortOrder': sort,
+        'targetSets': sets,
+        'targetRepsMin': min,
+        'targetRepsMax': max,
+      };
+      held.complete(
+        jsonResponse(
+          sessionJson(
+            id: 900,
+            exercises: [
+              server(9001, 'b1', 0, 1, 3, 8, 10),
+              server(9002, 'r1', 1, 42, 4, 12, 12), // server resolved
+              // identity differently
+              server(9003, 'b2', 2, 1, 2, 5, 5),
+            ],
+          ),
+        ),
+      );
+      await settled;
+
+      final rows = await localRows(created.id);
+      expect(rows.map((e) => e.serverId), [9001, 9002, 9003]);
+      // Additive to the brief's spec: assert occurrenceKey alongside
+      // serverId/values so a match that silently landed server data on
+      // the WRONG local occurrence (not just "some row has the right
+      // count") would be caught here too.
+      expect(rows.map((e) => e.occurrenceKey), ['b1', 'r1', 'b2']);
+      expect(rows[1].exerciseTemplateId, 42);
+      expect(
+        (rows[0].targetSets, rows[0].targetRepsMin, rows[0].targetRepsMax),
+        (3, 8, 10),
+      );
+    });
+  });
 }
 
 /// Fake Dio transport: records every request and lets a test answer via a
