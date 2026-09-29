@@ -19,6 +19,7 @@ import 'package:go_hard_app/data/local/services/local_database_service.dart';
 import 'package:go_hard_app/data/local/services/model_mapper.dart';
 import 'package:go_hard_app/data/repositories/exercise_repository.dart';
 import 'package:go_hard_app/data/services/api_service.dart';
+import 'package:go_hard_app/data/services/session_request_exceptions.dart';
 
 import 'session_repository_session_ownership_test.mocks.dart';
 
@@ -192,16 +193,34 @@ void main() {
     },
   );
 
-  test(
-    'a completed current session never sees sessions completed after it',
-    () async {
-      final current = await exercise(await session());
-      await sets(current, [(8, 60.0)]);
-      final later = await exercise(await session());
-      await sets(later, [(8, 70.0)]);
-      expect(await lastTime(repo(), current), isNull);
-    },
-  );
+  test('authenticated-user isolation: another user\'s exercise id resolves to '
+      'nothing, not that user\'s history', () async {
+    final foreign = await exercise(await session(userId: other));
+    await sets(foreign, [(5, 100.0)]);
+    final g = await repo().getExerciseGuidance(publicId(foreign));
+    expect(g, isNull);
+  });
+
+  test('a session invalidated before the call throws SessionStaleException - '
+      'never a null/empty result for a stale session', () async {
+    final current = await exercise(await session(status: 'in_progress'));
+    epoch.invalidate();
+    await expectLater(
+      repo().getExerciseGuidance(publicId(current)),
+      throwsA(isA<SessionStaleException>()),
+    );
+  });
+
+  test('a completed current session never sees sessions completed after it, '
+      'but still sees an older completed session', () async {
+    final older = await exercise(await session());
+    await sets(older, [(9, 55.0)]);
+    final current = await exercise(await session());
+    await sets(current, [(8, 60.0)]);
+    final later = await exercise(await session());
+    await sets(later, [(8, 70.0)]);
+    expect(await lastTime(repo(), current), [(9, 55.0)]);
+  });
 
   test('no history -> null previous; targets still returned', () async {
     final current = await exercise(
@@ -300,7 +319,8 @@ void main() {
       expect(await lastTime(repo(), c2), [(10, 70.0)]);
     });
 
-    test('conflict / pending_delete exercises never occupy a slot', () async {
+    test('conflict / pending_delete exercises never occupy a slot; a '
+        'pending_delete set is excluded even when it carries values', () async {
       final priorSession = await session();
       final ghost = await exercise(
         priorSession,
@@ -308,8 +328,31 @@ void main() {
         syncStatus: 'conflict',
       );
       await sets(ghost, [(1, 1.0)]);
-      final real = await exercise(priorSession, sortOrder: 1);
+      final deletedExercise = await exercise(
+        priorSession,
+        sortOrder: 1,
+        syncStatus: 'pending_delete',
+      );
+      await sets(deletedExercise, [(2, 2.0)]);
+      final real = await exercise(priorSession, sortOrder: 2);
       await sets(real, [(10, 70.0)]);
+      // A pending_delete set WITH values on the real (counted) occurrence
+      // must still be excluded from the result - isLoggedSet ignores
+      // values entirely once syncStatus is pending_delete.
+      await isar.writeTxn(
+        () => isar.localExerciseSets.put(
+          LocalExerciseSet(
+            exerciseLocalId: real,
+            setNumber: 2,
+            reps: 5,
+            weight: 999.0,
+            isCompleted: false,
+            isSynced: false,
+            syncStatus: 'pending_delete',
+            lastModifiedLocal: clock,
+          ),
+        ),
+      );
       final current = await exercise(await session(status: 'in_progress'));
       expect(await lastTime(repo(), current), [(10, 70.0)]);
     });

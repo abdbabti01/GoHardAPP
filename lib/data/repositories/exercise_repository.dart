@@ -628,7 +628,11 @@ class ExerciseRepository {
     if (k < 0) return null;
 
     final allSessions =
-        await db.localSessions.filter().userIdEqualTo(token.userId).findAll();
+        await db.localSessions
+            .filter()
+            .userIdEqualTo(token.userId)
+            .statusEqualTo('completed')
+            .findAll();
     if (!_sessionEpoch.isCurrent(token)) return null;
 
     final candidates =
@@ -666,7 +670,12 @@ class ExerciseRepository {
                   .findAll())
               .where(PreviousPerformanceRules.isLoggedSet)
               .toList()
-            ..sort((a, b) => a.setNumber.compareTo(b.setNumber));
+            ..sort((a, b) {
+              final bySetNumber = a.setNumber.compareTo(b.setNumber);
+              return bySetNumber != 0
+                  ? bySetNumber
+                  : a.localId.compareTo(b.localId);
+            });
       if (logged.isEmpty) continue;
 
       return PreviousPerformance(
