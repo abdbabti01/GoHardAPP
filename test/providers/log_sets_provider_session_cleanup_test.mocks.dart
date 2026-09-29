@@ -5,6 +5,7 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i5;
 
+import 'package:go_hard_app/data/models/exercise_guidance.dart' as _i6;
 import 'package:go_hard_app/data/models/exercise_set.dart' as _i3;
 import 'package:go_hard_app/data/models/exercise_template.dart' as _i2;
 import 'package:go_hard_app/data/repositories/exercise_repository.dart' as _i4;
@@ -115,6 +116,14 @@ class MockExerciseRepository extends _i1.Mock
             ),
           )
           as _i5.Future<List<_i3.ExerciseSet>>);
+
+  @override
+  _i5.Future<_i6.ExerciseGuidance?> getExerciseGuidance(int? exerciseId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getExerciseGuidance, [exerciseId]),
+            returnValue: _i5.Future<_i6.ExerciseGuidance?>.value(),
+          )
+          as _i5.Future<_i6.ExerciseGuidance?>);
 
   @override
   _i5.Future<_i3.ExerciseSet> createExerciseSet(_i3.ExerciseSet? exerciseSet) =>

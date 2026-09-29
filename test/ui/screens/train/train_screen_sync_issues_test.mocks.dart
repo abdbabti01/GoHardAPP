@@ -8,6 +8,7 @@ import 'dart:ui' as _i12;
 
 import 'package:go_hard_app/core/services/connectivity_service.dart' as _i11;
 import 'package:go_hard_app/data/models/exercise.dart' as _i3;
+import 'package:go_hard_app/data/models/exercise_guidance.dart' as _i13;
 import 'package:go_hard_app/data/models/exercise_set.dart' as _i5;
 import 'package:go_hard_app/data/models/exercise_template.dart' as _i4;
 import 'package:go_hard_app/data/models/program_workout.dart' as _i8;
@@ -419,6 +420,14 @@ class MockExerciseRepository extends _i1.Mock
             ),
           )
           as _i7.Future<List<_i5.ExerciseSet>>);
+
+  @override
+  _i7.Future<_i13.ExerciseGuidance?> getExerciseGuidance(int? exerciseId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getExerciseGuidance, [exerciseId]),
+            returnValue: _i7.Future<_i13.ExerciseGuidance?>.value(),
+          )
+          as _i7.Future<_i13.ExerciseGuidance?>);
 
   @override
   _i7.Future<_i5.ExerciseSet> createExerciseSet(_i5.ExerciseSet? exerciseSet) =>

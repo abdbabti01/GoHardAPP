@@ -10,6 +10,7 @@ import 'package:go_hard_app/core/services/connectivity_service.dart' as _i19;
 import 'package:go_hard_app/data/models/exercise.dart' as _i3;
 import 'package:go_hard_app/data/models/exercise_set.dart' as _i5;
 import 'package:go_hard_app/data/models/exercise_template.dart' as _i4;
+import 'package:go_hard_app/data/models/exercise_guidance.dart' as _i24;
 import 'package:go_hard_app/data/models/food_item.dart' as _i10;
 import 'package:go_hard_app/data/models/food_template.dart' as _i11;
 import 'package:go_hard_app/data/models/gps_point.dart' as _i23;
@@ -485,6 +486,14 @@ class MockExerciseRepository extends _i1.Mock
             ),
           )
           as _i16.Future<List<_i5.ExerciseSet>>);
+
+  @override
+  _i16.Future<_i24.ExerciseGuidance?> getExerciseGuidance(int? exerciseId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getExerciseGuidance, [exerciseId]),
+            returnValue: _i16.Future<_i24.ExerciseGuidance?>.value(),
+          )
+          as _i16.Future<_i24.ExerciseGuidance?>);
 
   @override
   _i16.Future<_i5.ExerciseSet> createExerciseSet(
