@@ -178,6 +178,11 @@ void main() {
     // The new field reads null for a row that predates it.
     expect(upgraded.occurrenceKey, isNull);
 
+    // Phase 2D: additive nullable target fields read as null on legacy rows.
+    expect(upgraded.targetSets, isNull);
+    expect(upgraded.targetRepsMin, isNull);
+    expect(upgraded.targetRepsMax, isNull);
+
     // The second legacy row is also present, still sharing the same
     // exerciseTemplateId (legitimate pre-occurrenceKey duplication) - the
     // upgrade does not invent or collapse anything.

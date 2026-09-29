@@ -511,6 +511,72 @@ void main() {
     });
   });
 
+  group('ModelMapper - Phase 2D exercise targets/sortOrder', () {
+    final api = Exercise.fromJson({
+      'id': 9001,
+      'sessionId': 900,
+      'name': 'Bench Press',
+      'sortOrder': 2,
+      'exerciseTemplateId': 1,
+      'occurrenceKey': 'k-1',
+      'targetSets': 3,
+      'targetRepsMin': 8,
+      'targetRepsMax': 10,
+      'exerciseSets': <dynamic>[],
+      'version': 1,
+    });
+
+    test('fromJson reads the server target fields', () {
+      expect(
+        (api.targetSets, api.targetRepsMin, api.targetRepsMax, api.sortOrder),
+        (3, 8, 10, 2),
+      );
+    });
+
+    test('exerciseToLocal carries targets, template id and sortOrder', () {
+      final local = ModelMapper.exerciseToLocal(api, sessionLocalId: 1);
+      expect(
+        (
+          local.targetSets,
+          local.targetRepsMin,
+          local.targetRepsMax,
+          local.sortOrder,
+          local.exerciseTemplateId,
+        ),
+        (3, 8, 10, 2, 1),
+      );
+    });
+
+    test('localToExercise carries them back', () {
+      final back = ModelMapper.localToExercise(
+        ModelMapper.exerciseToLocal(api, sessionLocalId: 1),
+      );
+      expect(
+        (
+          back.targetSets,
+          back.targetRepsMin,
+          back.targetRepsMax,
+          back.sortOrder,
+        ),
+        (3, 8, 10, 2),
+      );
+    });
+
+    test('legacy server JSON without target fields maps to nulls', () {
+      final legacy = Exercise.fromJson({
+        'id': 1,
+        'sessionId': 1,
+        'name': 'X',
+        'exerciseSets': <dynamic>[],
+      });
+      final local = ModelMapper.exerciseToLocal(legacy, sessionLocalId: 1);
+      expect(
+        (local.targetSets, local.targetRepsMin, local.targetRepsMax),
+        (null, null, null),
+      );
+    });
+  });
+
   group('ModelMapper - ExerciseSet Conversion', () {
     test(
       'exerciseSetToLocal should convert API ExerciseSet to LocalExerciseSet',

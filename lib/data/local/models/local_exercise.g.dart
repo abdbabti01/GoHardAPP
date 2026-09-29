@@ -78,6 +78,21 @@ const LocalExerciseSchema = CollectionSchema(
       name: r'syncStatus',
       type: IsarType.string,
     ),
+    r'targetRepsMax': PropertySchema(
+      id: 17,
+      name: r'targetRepsMax',
+      type: IsarType.long,
+    ),
+    r'targetRepsMin': PropertySchema(
+      id: 18,
+      name: r'targetRepsMin',
+      type: IsarType.long,
+    ),
+    r'targetSets': PropertySchema(
+      id: 19,
+      name: r'targetSets',
+      type: IsarType.long,
+    ),
   },
   estimateSize: _localExerciseEstimateSize,
   serialize: _localExerciseSerialize,
@@ -185,6 +200,9 @@ void _localExerciseSerialize(
   writer.writeString(offsets[14], object.syncError);
   writer.writeLong(offsets[15], object.syncRetryCount);
   writer.writeString(offsets[16], object.syncStatus);
+  writer.writeLong(offsets[17], object.targetRepsMax);
+  writer.writeLong(offsets[18], object.targetRepsMin);
+  writer.writeLong(offsets[19], object.targetSets);
 }
 
 LocalExercise _localExerciseDeserialize(
@@ -211,6 +229,9 @@ LocalExercise _localExerciseDeserialize(
     syncError: reader.readStringOrNull(offsets[14]),
     syncRetryCount: reader.readLongOrNull(offsets[15]) ?? 0,
     syncStatus: reader.readStringOrNull(offsets[16]) ?? 'pending_create',
+    targetRepsMax: reader.readLongOrNull(offsets[17]),
+    targetRepsMin: reader.readLongOrNull(offsets[18]),
+    targetSets: reader.readLongOrNull(offsets[19]),
   );
   object.localId = id;
   return object;
@@ -257,6 +278,12 @@ P _localExerciseDeserializeProp<P>(
       return (reader.readLongOrNull(offset) ?? 0) as P;
     case 16:
       return (reader.readStringOrNull(offset) ?? 'pending_create') as P;
+    case 17:
+      return (reader.readLongOrNull(offset)) as P;
+    case 18:
+      return (reader.readLongOrNull(offset)) as P;
+    case 19:
+      return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -2110,6 +2137,225 @@ extension LocalExerciseQueryFilter
       );
     });
   }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMaxIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'targetRepsMax'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMaxIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'targetRepsMax'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMaxEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'targetRepsMax', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMaxGreaterThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'targetRepsMax',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMaxLessThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'targetRepsMax',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMaxBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'targetRepsMax',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMinIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'targetRepsMin'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMinIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'targetRepsMin'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMinEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'targetRepsMin', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMinGreaterThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'targetRepsMin',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMinLessThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'targetRepsMin',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetRepsMinBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'targetRepsMin',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetSetsIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'targetSets'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetSetsIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'targetSets'),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetSetsEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'targetSets', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetSetsGreaterThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'targetSets',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetSetsLessThan(int? value, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'targetSets',
+          value: value,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterFilterCondition>
+  targetSetsBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'targetSets',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
 }
 
 extension LocalExerciseQueryObject
@@ -2344,6 +2590,47 @@ extension LocalExerciseQuerySortBy
   sortBySyncStatusDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'syncStatus', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  sortByTargetRepsMax() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetRepsMax', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  sortByTargetRepsMaxDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetRepsMax', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  sortByTargetRepsMin() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetRepsMin', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  sortByTargetRepsMinDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetRepsMin', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy> sortByTargetSets() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetSets', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  sortByTargetSetsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetSets', Sort.desc);
     });
   }
 }
@@ -2588,6 +2875,47 @@ extension LocalExerciseQuerySortThenBy
       return query.addSortBy(r'syncStatus', Sort.desc);
     });
   }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  thenByTargetRepsMax() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetRepsMax', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  thenByTargetRepsMaxDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetRepsMax', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  thenByTargetRepsMin() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetRepsMin', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  thenByTargetRepsMinDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetRepsMin', Sort.desc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy> thenByTargetSets() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetSets', Sort.asc);
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QAfterSortBy>
+  thenByTargetSetsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'targetSets', Sort.desc);
+    });
+  }
 }
 
 extension LocalExerciseQueryWhereDistinct
@@ -2712,6 +3040,26 @@ extension LocalExerciseQueryWhereDistinct
       return query.addDistinctBy(r'syncStatus', caseSensitive: caseSensitive);
     });
   }
+
+  QueryBuilder<LocalExercise, LocalExercise, QDistinct>
+  distinctByTargetRepsMax() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'targetRepsMax');
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QDistinct>
+  distinctByTargetRepsMin() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'targetRepsMin');
+    });
+  }
+
+  QueryBuilder<LocalExercise, LocalExercise, QDistinct> distinctByTargetSets() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'targetSets');
+    });
+  }
 }
 
 extension LocalExerciseQueryProperty
@@ -2827,6 +3175,24 @@ extension LocalExerciseQueryProperty
   QueryBuilder<LocalExercise, String, QQueryOperations> syncStatusProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'syncStatus');
+    });
+  }
+
+  QueryBuilder<LocalExercise, int?, QQueryOperations> targetRepsMaxProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'targetRepsMax');
+    });
+  }
+
+  QueryBuilder<LocalExercise, int?, QQueryOperations> targetRepsMinProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'targetRepsMin');
+    });
+  }
+
+  QueryBuilder<LocalExercise, int?, QQueryOperations> targetSetsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'targetSets');
     });
   }
 }
