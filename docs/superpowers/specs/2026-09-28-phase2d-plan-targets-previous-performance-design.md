@@ -35,8 +35,19 @@ Source of truth at workout time: the materialized session exercise. The plan is 
 materialization. Later plan edits never mutate an existing session. No display-string parsing.
 
 ### Plan JSON entry (additive, backward compatible)
-`sets` (int), `reps` (int, lower bound or exact), **new optional `repsMax`** (int, upper bound;
-omitted/null = exact). Existing entries without `repsMax` remain valid.
+`ProgramWorkout.exercisesJson` entry fields relevant to this contract:
+
+| field | type | meaning |
+|---|---|---|
+| `name` | string | display name (unchanged) |
+| `exerciseTemplateId` | int, optional | **explicit part of this contract**: the resolved *system* template id (§4). Omitted/null = unresolved identity |
+| `sets` | int, optional | target sets |
+| `reps` | int, optional | target reps — lower bound, or exact |
+| `repsMax` | int, optional, **new** | target reps upper bound; omitted/null = exact |
+| `occurrenceKey` | string | unchanged (per-workout occurrence identity) |
+
+Existing entries without `exerciseTemplateId` / `repsMax` remain valid. Neither field is ever
+derived from `name` or any display string at materialization time.
 
 ### Session exercise (API `Exercise`, APP `Exercise` + `LocalExercise`)
 New nullable ints: `targetSets`, `targetRepsMin`, `targetRepsMax` (JSON camelCase, nullable,
@@ -49,6 +60,19 @@ omitted-if-null on the Dart side like existing fields).
   (null when `targetRepsMin` is null). Exact prescription ⇒ min == max.
 - Non-number JSON kinds (strings like `"8-10"`, floats) ⇒ null. Never parsed.
 - `targetSets` is independent of reps ("3 × to failure" ⇒ sets 3, reps null).
+- `exerciseTemplateId` = JSON `exerciseTemplateId` if an integer number, else null (a non-integer
+  kind no longer throws). Both materializers already copy this field today; this spec makes it
+  contractual and adds the integer-kind guard on the API side.
+- `sortOrder` = the entry's index in the JSON array (0-based), on both sides — see §3 ordinal
+  rule. Today both materializers leave it 0.
+
+### Reconciliation
+The server's materialized exercise is authoritative. `_reconcileProgramWorkoutCreateExercises`
+already replaces each paired local row with the server row via `ModelMapper.exerciseToLocal`;
+that mapping must carry `exerciseTemplateId`, `targetSets`, `targetRepsMin`, `targetRepsMax` and
+`sortOrder` (sortOrder is currently NOT mapped by ModelMapper in either direction — fixed here),
+so after reconcile every one of these equals the server value. The same mapping serves the full
+history download, so downloaded sessions carry the same fields.
 
 Sessions materialized before this change keep null targets (no backfill; data is disposable).
 No exercise update endpoint exists, so targets are immutable server-side after creation.
@@ -81,12 +105,27 @@ Exercise identity: same non-null `exerciseTemplateId`. Null template id ⇒ `nul
 A candidate exercise qualifies only if it has ≥ 1 *logged* set: `reps != null` or
 `duration > 0` or `weight > 0`. Set-level `isCompleted` is not required (matches analytics).
 
-Ordering (deterministic): sessions by `completedAt ?? date` desc, then `date` desc, then
-`localId` desc; the first session with ≥ 1 qualifying exercise wins.
+Session ordering (deterministic): `completedAt ?? date` desc, then `date` desc, then `localId`
+desc.
 
-Duplicate occurrences (ordinal pairing): the current exercise's rank `k` among same-template
-exercises in its session, ordered by (`sortOrder`, `localId`); in the winning prior session the
-qualifying same-template exercises are ordered the same way and index `min(k, n-1)` is returned.
+Strict ordinal pairing (handles an exercise appearing more than once in a workout):
+1. Order exercises within a session by (`sortOrder`, `localId`). Ordinal `k` (1-based) of the
+   current exercise = its position among ALL exercises in the current session with the same
+   `exerciseTemplateId`.
+2. Walk candidate sessions in session order. In each, order ALL same-template exercises the same
+   way (qualifying or not — an unlogged occurrence #1 must not shift a logged #2 into slot #1)
+   and take position `k`.
+3. If position `k` exists AND qualifies (≥ 1 logged set), return it. Otherwise this session
+   yields nothing for `k`; **continue to the next older session**. Never fall back to a
+   different ordinal.
+4. Exhausting all candidates ⇒ null.
+
+Example: current session has Bench #1 and Bench #2. Last session had only one Bench; the session
+before had two. Bench #1 ⇒ last session's Bench. Bench #2 ⇒ the older session's Bench #2. If no
+session ever had a qualifying Bench #2 ⇒ null for #2.
+
+Ordinal ordering depends on `sortOrder`: a user drag-reorder changes ordinals for that session
+(intended — ordinals follow the order the user performed/arranged).
 
 Edge cases: no history ⇒ null; bodyweight ⇒ sets with null/0 weight returned as-is; incomplete
 prior session (some sets unlogged) ⇒ only logged sets returned; purged/legacy history ⇒ excluded
@@ -107,15 +146,33 @@ New pure API service `ExerciseTemplateResolver.Resolve(name, systemTemplates) �
   `chinup`→Chin-ups).
 - Multiple matches (seed duplicates) ⇒ lowest `Id`. No match ⇒ null; name kept; logged.
 - No substring/prefix stripping/word overlap; custom templates never considered (no cross-user
-  exposure, no ambiguity). Resolved id flows plan → session via the existing field.
+  exposure, no ambiguity).
 - Plan creation needs the network anyway (AI), so resolution has no offline implication.
+
+### Propagation (explicit contract)
+```
+AI exercise name
+ → ExerciseTemplateResolver.Resolve                     (API, at draft creation)
+ → ProgramWorkout.exercisesJson[i].exerciseTemplateId    (BuildProgramWorkouts writes it; null omitted)
+ → materialized Exercise.ExerciseTemplateId             (API materializer §2)
+ → LocalExercise.exerciseTemplateId                     (APP local materializer from cached JSON,
+                                                         then overwritten by server value on reconcile)
+ → previous-performance identity (§3)
+```
+Programs created before this change keep no template ids in their JSON (no backfill; disposable
+data). Their sessions therefore get no previous performance — identical to today.
+
+`exerciseTemplateId` in plan JSON is only written by the server-side AI writer. Plan JSON can
+also arrive via `PUT programs/workouts/{id}`; the materializer copies whatever integer is there.
+A non-existent id fails the session insert on the FK (pre-existing behavior, not widened here);
+validating visibility of client-supplied ids is out of scope and listed as a risk (§8).
 
 ## 5. Minimal UI proof
 
 Log Sets screen: one line "Target 3 × 8–10" (when present) and one line "Last time" listing the
 previous sets, weight rendered through the existing `UnitConverter` + unit preference.
 
-## 6. Out of scope
+## 6. Out of scope (see also §8)
 
 Active Workout redesign, progression, target weight, backfill of old sessions, the dead
 `create-sessions` endpoint, duplicate-seed cleanup, cross-week occurrence identity,
@@ -124,9 +181,61 @@ AI progress prompt unit assumptions, Phase 2C reset, Railway.
 ## 7. Tests
 
 API: materializer targets (exact, range, invalid kinds, two occurrences independent, plan edit
-after materialization), keyed + legacy create paths, AI writer emits `repsMax` + resolved
-template ids, resolver (known, alias, duplicate→lowest id, unresolved, custom ignored,
-no substring match e.g. "DB Bench Press" ≠ Bench Press), migration up/down SQL.
-APP: local materialization targets (same cases), reconcile preserves server targets, Isar
-round-trip (restart), ModelMapper both directions, previous-performance query (all §3 rules,
-metric/imperial invariance, offline), log-sets target/last-time rendering.
+after materialization), `sortOrder` = JSON index, non-integer `exerciseTemplateId` ⇒ null,
+keyed + legacy create paths, AI writer emits `repsMax` + resolved `exerciseTemplateId`,
+resolver (known, alias, duplicate→lowest id, unresolved, custom ignored, no substring match e.g.
+"DB Bench Press" ≠ Bench Press), migration up/down SQL.
+
+APP: local materialization targets + `exerciseTemplateId` + `sortOrder` (same cases), reconcile
+adopts server targets/template id/sortOrder, Isar round-trip (restart), ModelMapper both
+directions, previous-performance query (all §3 rules, metric/imperial invariance, offline),
+log-sets target/last-time rendering.
+
+Strict ordinal cases:
+- current occurrence #2, previous session has only occurrence #1 ⇒ skip it;
+- an older session has occurrence #2 ⇒ returned;
+- no historical occurrence #2 ⇒ null (occurrence #1 still resolves normally);
+- prior session with unlogged #1 and logged #2 ⇒ current #1 skips that session, current #2
+  gets its #2.
+
+End-to-end identity (two halves joined by one shared contract fixture, because the API and APP
+run in different test processes):
+- API half: AI extraction payload with "Bench Press" → `CreateDraftProgramFromWorkoutData` →
+  stored `exercisesJson[i].exerciseTemplateId` == system Bench Press id → keyed
+  `POST sessions/from-program-workout` → response exercise `exerciseTemplateId` == same id.
+  The resulting program-workout JSON and session response are asserted against a checked-in
+  fixture (`test/fixtures/phase2d_plan_session_contract.json` in APP, mirrored in API tests).
+- APP half: that fixture's program workout → `createSessionFromProgramWorkout` (offline) →
+  `LocalExercise.exerciseTemplateId` → reconcile with the fixture's server response → still the
+  same id in Isar → complete a prior session with the same template → previous-performance query
+  returns it.
+
+## 8. Rollout dependency and risks
+
+**Phase 2C dependency (blocking for production behavior, not for implementation).**
+Deployed state: `LiftedWeight__RequireCanonicalClient=true`, `LiftedWeight__CanonicalHistory`
+intentionally absent/false. With it false, the Phase 2C app design keeps every client's
+lifted-weight migration `pending` indefinitely, which:
+- withholds all workout uploads (sessions, exercises, sets) — locally created sessions,
+  including Phase 2D program-workout sessions, stay `pending_create` and never reach the server;
+  server-side materialization/reconcile (§2) therefore does not run in production;
+- marks every server-backed row purge-eligible, so previous performance (§3) sees only sessions
+  logged locally on the canonical build, on that device.
+
+Phase 2D does NOT change Phase 2C, Railway configuration, or run the Phase 2C reset. Phase 2D is
+implemented and tested independently (unit/integration tests exercise the `complete` migration
+state as well as `pending`). Until the Phase 2C migration completes in production, it must not be
+claimed that production workout sync or full cross-device previous performance is operational —
+only local, on-device targets and previous performance are.
+
+**Other risks.**
+- Programs created before this change have no `exerciseTemplateId` / targets in their JSON and
+  sessions created before it have no targets (no backfill; data disposable).
+- Duplicate seed template names split history for five curl variants; the resolver picks the
+  lowest id, while manual template picks may use the other id. Seed cleanup is out of scope.
+- Client-supplied `exerciseTemplateId` in plan JSON (via `PUT programs/workouts/{id}`) is not
+  validated for existence/visibility (pre-existing).
+- `GET exercisetemplates` may list other users' custom templates (pre-existing, observed during
+  forensics; not changed here).
+- Ordinals follow `sortOrder`; exercises materialized before this change all have `sortOrder` 0
+  and fall back to `localId` order.
