@@ -7,6 +7,7 @@ import '../../core/services/session_request_coordinator.dart';
 import '../../core/services/user_session_epoch.dart';
 import '../models/exercise_template.dart';
 import '../models/exercise_set.dart';
+import '../models/exercise_guidance.dart';
 import '../services/api_service.dart';
 import '../services/session_request_context.dart';
 import '../services/session_request_exceptions.dart';
@@ -560,6 +561,130 @@ class ExerciseRepository {
     if (!_sessionEpoch.isCurrent(token)) throw const SessionStaleException();
     if (published == null) throw Exception('Exercise not found: $exerciseId');
     return await _ownedLocalSets(db, exercise.localId);
+  }
+
+  /// Target (snapshotted on the session exercise) plus most recent prior
+  /// logged performance for [exerciseId] - Phase 2D spec §3. Purely local:
+  /// identical online and offline, never calls the API. Weights are raw kg.
+  /// `null` when [exerciseId] is not an owned exercise.
+  Future<ExerciseGuidance?> getExerciseGuidance(int exerciseId) async {
+    final context = await _sessionCoordinator.captureContext();
+    if (context == null) throw const SessionStaleException();
+    final token = context.epochToken;
+    final Isar db = _localDb.database;
+
+    final current = await _resolveOwnedExercise(db, exerciseId, token);
+    if (!_sessionEpoch.isCurrent(token)) throw const SessionStaleException();
+    if (current == null) return null;
+
+    final previous = await _previousPerformance(db, current, token);
+    if (!_sessionEpoch.isCurrent(token)) throw const SessionStaleException();
+
+    return ExerciseGuidance(
+      targetSets: current.targetSets,
+      targetRepsMin: current.targetRepsMin,
+      targetRepsMax: current.targetRepsMax,
+      previous: previous,
+    );
+  }
+
+  Future<List<LocalExercise>> _sameTemplateExercises(
+    Isar db,
+    int sessionLocalId,
+    int templateId,
+  ) =>
+      db.localExercises
+          .filter()
+          .sessionLocalIdEqualTo(sessionLocalId)
+          .exerciseTemplateIdEqualTo(templateId)
+          .findAll();
+
+  /// Strict same-template ordinal pairing (spec §3): the current exercise's
+  /// position k among same-template exercises in its session is matched to
+  /// position k in each older canonical completed session, newest first; a
+  /// missing or unlogged slot k moves on to the next older session and never
+  /// falls back to another occurrence. Candidate selection
+  /// ([PreviousPerformanceRules.isEligibleCandidate]) and ordinal pairing
+  /// ([PreviousPerformanceRules.ordinalOf] / `.occurrenceAt`) are pure
+  /// helpers so they can be unit-tested directly; this method only wires
+  /// them to Isar.
+  Future<PreviousPerformance?> _previousPerformance(
+    Isar db,
+    LocalExercise current,
+    UserSessionToken token,
+  ) async {
+    final templateId = current.exerciseTemplateId;
+    if (templateId == null) return null;
+
+    final currentSession = await db.localSessions.get(current.sessionLocalId);
+    if (currentSession == null) return null;
+
+    final currentOccurrences = await _sameTemplateExercises(
+      db,
+      currentSession.localId,
+      templateId,
+    );
+    final k = PreviousPerformanceRules.ordinalOf(currentOccurrences, current);
+    if (k < 0) return null;
+
+    final allSessions =
+        await db.localSessions
+            .filter()
+            .userIdEqualTo(token.userId)
+            .statusEqualTo('completed')
+            .findAll();
+    if (!_sessionEpoch.isCurrent(token)) return null;
+
+    final candidates =
+        allSessions
+            .where(
+              (s) => PreviousPerformanceRules.isEligibleCandidate(
+                currentSession,
+                s,
+                token.userId,
+                canonical:
+                    !(_liftedWeightMigration?.wouldPurge(
+                          'sessions',
+                          s.localId,
+                          s.serverId,
+                        ) ??
+                        false),
+              ),
+            )
+            .toList()
+          ..sort(PreviousPerformanceRules.compareSessionsNewestFirst);
+
+    for (final session in candidates) {
+      final occurrences = await _sameTemplateExercises(
+        db,
+        session.localId,
+        templateId,
+      );
+      final occ = PreviousPerformanceRules.occurrenceAt(occurrences, k);
+      if (occ == null) continue;
+
+      final logged =
+          (await db.localExerciseSets
+                  .filter()
+                  .exerciseLocalIdEqualTo(occ.localId)
+                  .findAll())
+              .where(PreviousPerformanceRules.isLoggedSet)
+              .toList()
+            ..sort((a, b) {
+              final bySetNumber = a.setNumber.compareTo(b.setNumber);
+              return bySetNumber != 0
+                  ? bySetNumber
+                  : a.localId.compareTo(b.localId);
+            });
+      if (logged.isEmpty) continue;
+
+      return PreviousPerformance(
+        sessionLocalId: session.localId,
+        performedAt: session.completedAt ?? session.date,
+        sets: logged.map(ModelMapper.localToExerciseSet).toList(),
+      );
+    }
+    return null;
   }
 
   Future<_Ack> _refreshCache(

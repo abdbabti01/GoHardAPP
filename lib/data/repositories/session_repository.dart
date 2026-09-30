@@ -8,6 +8,7 @@ import '../../core/services/session_request_coordinator.dart';
 import '../../core/services/user_session_epoch.dart';
 import '../models/session.dart';
 import '../models/exercise.dart';
+import '../models/plan_exercise_prescription.dart';
 import 'session_sync_diagnostics.dart';
 import '../models/program_workout.dart';
 import '../services/api_service.dart';
@@ -1427,9 +1428,16 @@ class SessionRepository {
 
       sessionLocalId = await db.localSessions.put(localSession);
 
-      for (final exerciseData in exercisesData) {
+      for (var i = 0; i < exercisesData.length; i++) {
+        final exerciseData = exercisesData[i];
         final exerciseName = exerciseData['name'] as String? ?? 'Exercise';
-        final exerciseTemplateId = exerciseData['exerciseTemplateId'] as int?;
+        // Same rules as the server materializer (Phase 2D §2): integer-only
+        // identity/targets, positional sortOrder. The server row replaces
+        // this one on reconcile, so both sides must agree.
+        final prescription = PlanExercisePrescription.fromPlanEntry(
+          exerciseData,
+        );
+        final exerciseTemplateId = prescription.exerciseTemplateId;
         final notes = exerciseData['notes'] as String?;
         final restTime = exerciseData['rest'] as int?;
         // Copied verbatim from the cached template entry, exactly as the
@@ -1447,6 +1455,10 @@ class SessionRepository {
           notes: notes,
           exerciseTemplateId: exerciseTemplateId,
           occurrenceKey: occurrenceKey,
+          sortOrder: i,
+          targetSets: prescription.targetSets,
+          targetRepsMin: prescription.targetRepsMin,
+          targetRepsMax: prescription.targetRepsMax,
           isSynced: false,
           syncStatus: 'pending_create',
           lastModifiedLocal: createdAt,
@@ -1470,6 +1482,10 @@ class SessionRepository {
             notes: notes,
             restTime: restTime,
             duration: null,
+            sortOrder: i,
+            targetSets: prescription.targetSets,
+            targetRepsMin: prescription.targetRepsMin,
+            targetRepsMax: prescription.targetRepsMax,
             exerciseSets: const [],
           ),
         );
@@ -3086,6 +3102,7 @@ class SessionRepository {
     }
 
     int localId = 0;
+    int nextSortOrder = 0;
 
     await _runTestHook(beforeWriteTxnForTesting);
     await db.writeTxn(() async {
@@ -3095,6 +3112,23 @@ class SessionRepository {
       final current = await db.localSessions.get(localSession.localId);
       if (current == null || current.userId != token.userId) return;
 
+      // Program sessions materialize exercises with strict ordinal
+      // sortOrder 0..n-1 (Phase 2D spec §2). An offline-added exercise must
+      // never collide with/shift that ordering, so it goes after every
+      // existing local exercise in this session rather than defaulting to 0.
+      final siblings =
+          await db.localExercises
+              .filter()
+              .sessionLocalIdEqualTo(localSession.localId)
+              .findAll();
+      nextSortOrder =
+          siblings.isEmpty
+              ? 0
+              : siblings
+                      .map((e) => e.sortOrder)
+                      .reduce((a, b) => a > b ? a : b) +
+                  1;
+
       final tempExercise = Exercise(
         id: 0,
         sessionId: sessionId,
@@ -3103,6 +3137,7 @@ class SessionRepository {
         duration: null,
         restTime: null,
         notes: null,
+        sortOrder: nextSortOrder,
         exerciseSets: [],
       );
 
@@ -3124,6 +3159,7 @@ class SessionRepository {
       duration: null,
       restTime: null,
       notes: null,
+      sortOrder: nextSortOrder,
       exerciseSets: [],
     );
 

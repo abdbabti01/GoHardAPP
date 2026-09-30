@@ -24,6 +24,13 @@ class Exercise {
   /// starts of the same workout). `null` for an ad-hoc exercise (no
   /// program-workout source) or one materialized before this field existed.
   final String? occurrenceKey;
+
+  /// Prescription snapshotted from the source plan entry when the session
+  /// was materialized (Phase 2D). Never re-read from the plan; `null` = none.
+  /// Exact reps: [targetRepsMin] == [targetRepsMax].
+  final int? targetSets;
+  final int? targetRepsMin;
+  final int? targetRepsMax;
   final List<ExerciseSet> exerciseSets;
   final int version; // Version tracking for conflict resolution (Issue #13)
 
@@ -37,6 +44,9 @@ class Exercise {
     this.notes,
     this.exerciseTemplateId,
     this.occurrenceKey,
+    this.targetSets,
+    this.targetRepsMin,
+    this.targetRepsMax,
     this.exerciseSets = const [],
     this.version = 1,
   });
@@ -55,6 +65,9 @@ class Exercise {
     String? notes,
     int? exerciseTemplateId,
     String? occurrenceKey,
+    int? targetSets,
+    int? targetRepsMin,
+    int? targetRepsMax,
     List<ExerciseSet>? exerciseSets,
     int? version,
   }) {
@@ -68,6 +81,9 @@ class Exercise {
       notes: notes ?? this.notes,
       exerciseTemplateId: exerciseTemplateId ?? this.exerciseTemplateId,
       occurrenceKey: occurrenceKey ?? this.occurrenceKey,
+      targetSets: targetSets ?? this.targetSets,
+      targetRepsMin: targetRepsMin ?? this.targetRepsMin,
+      targetRepsMax: targetRepsMax ?? this.targetRepsMax,
       exerciseSets: exerciseSets ?? this.exerciseSets,
       version: version ?? this.version,
     );

@@ -43,6 +43,9 @@ void main() {
     when(
       exerciseRepo.createExerciseSet(any),
     ).thenAnswer((inv) async => inv.positionalArguments.first as ExerciseSet);
+    // Task 9: LogSetsScreen now also loads guidance on init; stub it so the
+    // mock doesn't throw on this unrelated call.
+    when(exerciseRepo.getExerciseGuidance(any)).thenAnswer((_) async => null);
   });
 
   // Widget tests run inside Flutter's fake-async clock: a real

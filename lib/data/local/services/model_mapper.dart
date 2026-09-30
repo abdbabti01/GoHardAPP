@@ -224,6 +224,10 @@ class ModelMapper {
       notes: apiExercise.notes,
       exerciseTemplateId: apiExercise.exerciseTemplateId,
       occurrenceKey: apiExercise.occurrenceKey,
+      sortOrder: apiExercise.sortOrder,
+      targetSets: apiExercise.targetSets,
+      targetRepsMin: apiExercise.targetRepsMin,
+      targetRepsMax: apiExercise.targetRepsMax,
       isSynced: isSynced,
       syncStatus: isSynced ? 'synced' : 'pending_create',
       lastModifiedLocal: DateTime.now(),
@@ -255,6 +259,10 @@ class ModelMapper {
       notes: localExercise.notes,
       exerciseTemplateId: localExercise.exerciseTemplateId,
       occurrenceKey: localExercise.occurrenceKey,
+      sortOrder: localExercise.sortOrder,
+      targetSets: localExercise.targetSets,
+      targetRepsMin: localExercise.targetRepsMin,
+      targetRepsMax: localExercise.targetRepsMax,
       exerciseSets: exerciseSets,
     );
   }

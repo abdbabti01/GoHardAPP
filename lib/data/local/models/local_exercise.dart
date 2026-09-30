@@ -53,6 +53,13 @@ class LocalExercise {
   @Index()
   String? occurrenceKey;
 
+  /// Prescription snapshotted from the source plan entry when the session
+  /// was materialized (Phase 2D). Never re-read from the plan; `null` = none.
+  /// Exact reps: [targetRepsMin] == [targetRepsMax].
+  int? targetSets;
+  int? targetRepsMin;
+  int? targetRepsMax;
+
   // ========== Sync Tracking Fields ==========
 
   /// Whether entity is in sync with server
@@ -90,6 +97,9 @@ class LocalExercise {
     this.notes,
     this.exerciseTemplateId,
     this.occurrenceKey,
+    this.targetSets,
+    this.targetRepsMin,
+    this.targetRepsMax,
     this.isSynced = false,
     this.syncStatus = 'pending_create',
     required this.lastModifiedLocal,

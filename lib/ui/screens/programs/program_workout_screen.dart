@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/theme_colors.dart';
+import '../../../core/utils/rep_target_format.dart';
 import '../../../data/models/program_workout.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
@@ -476,7 +477,15 @@ class _ProgramWorkoutScreenState extends State<ProgramWorkoutScreen> {
   Widget _buildExerciseCard(int number, Map<String, dynamic> exercise) {
     final name = exercise['name'] ?? 'Exercise $number';
     final sets = exercise['sets']?.toString() ?? '-';
-    final reps = exercise['reps']?.toString() ?? '-';
+    final repsMin = exercise['reps'];
+    final repsMax = exercise['repsMax'];
+    final reps =
+        repsMin is int
+            ? formatRepTarget(
+              repsMin: repsMin,
+              repsMax: repsMax is int ? repsMax : null,
+            )!.replaceAll(' reps', '')
+            : (repsMin?.toString() ?? '-');
     final rest = exercise['rest']?.toString() ?? '-';
     final weight = exercise['weight']?.toString() ?? '';
     final notes = exercise['notes']?.toString() ?? '';

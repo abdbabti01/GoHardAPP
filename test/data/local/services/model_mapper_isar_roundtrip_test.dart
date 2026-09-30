@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
 import 'package:go_hard_app/data/local/models/local_session.dart';
+import 'package:go_hard_app/data/local/models/local_exercise.dart';
 import 'package:go_hard_app/data/local/services/model_mapper.dart';
 
 /// Characterization test for the real Isar DateTime round-trip.
@@ -244,6 +245,66 @@ void main() {
             'were the true UTC values, which corrupts the instant by '
             'exactly the local UTC offset.',
       );
+    },
+  );
+
+  // This file's shared `isar`/`tempDir`/`dbName` (via setUp/tearDown) are
+  // scoped to LocalSessionSchema only, so this test opens its own separate
+  // Isar instance for LocalExerciseSchema, following the same
+  // create-temp-dir / open / close / reopen pattern as
+  // writeCloseReopenAndRead above.
+  test(
+    'Phase 2D target fields and sortOrder survive an Isar close/reopen',
+    () async {
+      final exerciseTempDir = await Directory.systemTemp.createTemp(
+        'isar_roundtrip_exercise_test_',
+      );
+      final exerciseDbName =
+          'roundtrip_exercise_${DateTime.now().microsecondsSinceEpoch}';
+      var exerciseIsar = await Isar.open(
+        [LocalExerciseSchema],
+        directory: exerciseTempDir.path,
+        name: exerciseDbName,
+      );
+
+      try {
+        final row = LocalExercise(
+          sessionLocalId: 1,
+          name: 'Bench Press',
+          sortOrder: 1,
+          exerciseTemplateId: 1,
+          targetSets: 3,
+          targetRepsMin: 8,
+          targetRepsMax: 10,
+          lastModifiedLocal: DateTime.utc(2026, 9, 28),
+        );
+        late int id;
+        await exerciseIsar.writeTxn(
+          () async => id = await exerciseIsar.localExercises.put(row),
+        );
+        await exerciseIsar.close();
+        exerciseIsar = await Isar.open(
+          [LocalExerciseSchema],
+          directory: exerciseTempDir.path,
+          name: exerciseDbName,
+          inspector: false,
+        );
+        final read = await exerciseIsar.localExercises.get(id);
+        expect(
+          (
+            read!.targetSets,
+            read.targetRepsMin,
+            read.targetRepsMax,
+            read.sortOrder,
+          ),
+          (3, 8, 10, 1),
+        );
+      } finally {
+        await exerciseIsar.close(deleteFromDisk: true);
+        if (await exerciseTempDir.exists()) {
+          await exerciseTempDir.delete(recursive: true);
+        }
+      }
     },
   );
 }

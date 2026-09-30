@@ -17,7 +17,9 @@ import 'package:go_hard_app/data/local/models/local_exercise_set.dart';
 import 'package:go_hard_app/data/local/models/local_exercise_template.dart';
 import 'package:go_hard_app/data/local/models/local_session.dart';
 import 'package:go_hard_app/data/local/services/local_database_service.dart';
+import 'package:go_hard_app/data/models/exercise_guidance.dart';
 import 'package:go_hard_app/data/models/program_workout.dart';
+import 'package:go_hard_app/data/repositories/exercise_repository.dart';
 import 'package:go_hard_app/data/repositories/session_repository.dart';
 import 'package:go_hard_app/data/services/api_service.dart';
 
@@ -3363,6 +3365,466 @@ void main() {
       );
       expect(setAfter.syncStatus, 'pending_create');
       expect(setAfter.isSynced, isFalse);
+    });
+  });
+
+  // ==========================================================================
+  // Phase 2D: local materialization of prescription/identity/sortOrder, and
+  // reconcile adopting the server's authoritative values per-occurrence.
+  // ==========================================================================
+
+  group('Phase 2D targets / identity / sortOrder', () {
+    const targetsJson =
+        '[{"name":"Bench Press","exerciseTemplateId":1,"sets":3,"reps":8,"repsMax":10,"occurrenceKey":"b1"},'
+        '{"name":"Row","sets":4,"reps":12,"occurrenceKey":"r1"},'
+        '{"name":"Bench Press","exerciseTemplateId":1,"sets":2,"reps":5,"occurrenceKey":"b2"}]';
+
+    Future<List<LocalExercise>> localRows(int sessionLocalId) async =>
+        (await isar.localExercises
+              .filter()
+              .sessionLocalIdEqualTo(sessionLocalId)
+              .findAll())
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+    test('offline materialization snapshots targets, template id and '
+        'positional sortOrder', () async {
+      loginAs(userA);
+      when(mockConnectivity.isOnline).thenReturn(false);
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        workout(exercisesJson: targetsJson),
+        DateTime(2031, 1, 1),
+        5,
+      );
+
+      final rows = await localRows(created.id);
+      expect(rows.map((e) => e.sortOrder), [0, 1, 2]);
+      expect(
+        (
+          rows[0].exerciseTemplateId,
+          rows[0].targetSets,
+          rows[0].targetRepsMin,
+          rows[0].targetRepsMax,
+        ),
+        (1, 3, 8, 10),
+      );
+      expect(
+        (
+          rows[1].exerciseTemplateId,
+          rows[1].targetSets,
+          rows[1].targetRepsMin,
+          rows[1].targetRepsMax,
+        ),
+        (null, 4, 12, 12),
+      );
+      expect(
+        (rows[2].targetSets, rows[2].targetRepsMin, rows[2].targetRepsMax),
+        (2, 5, 5),
+      );
+      expect(adapter.captured, isEmpty);
+    });
+
+    test('offline addExerciseToSession appends after every existing local '
+        'exercise (max sortOrder + 1) and never shifts the program\'s '
+        'strict ordinal pairing', () async {
+      loginAs(userA);
+      when(mockConnectivity.isOnline).thenReturn(false);
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        workout(exercisesJson: targetsJson),
+        DateTime(2031, 1, 1),
+        5,
+      );
+
+      // [Bench 0 (b1), Row 1 (r1), Bench 2 (b2)] - sanity-check the program's
+      // second Bench Press is, before any offline add, the second same-
+      // template occurrence.
+      final beforeRows = await localRows(created.id);
+      final b2Before = beforeRows.singleWhere((e) => e.occurrenceKey == 'b2');
+      final sameTemplateBefore =
+          beforeRows.where((e) => e.exerciseTemplateId == 1).toList();
+      expect(
+        PreviousPerformanceRules.ordinalOf(sameTemplateBefore, b2Before),
+        1,
+      );
+
+      // Offline-added Bench Press (same template, exerciseTemplateId 1).
+      final added = await repository.addExerciseToSession(created.id, 1);
+
+      final afterRows = await localRows(created.id);
+      expect(
+        afterRows.map((e) => e.sortOrder),
+        [0, 1, 2, 3],
+        reason:
+            'the offline-added exercise must get max(existing sortOrder) + '
+            '1, never colliding with the program\'s strict 0..n-1 ordinals',
+      );
+      expect(
+        added.sortOrder,
+        3,
+        reason: 'the returned Exercise must carry the same sortOrder',
+      );
+
+      final b2After = afterRows.singleWhere((e) => e.occurrenceKey == 'b2');
+      final sameTemplateAfter =
+          afterRows.where((e) => e.exerciseTemplateId == 1).toList();
+      expect(
+        PreviousPerformanceRules.ordinalOf(sameTemplateAfter, b2After),
+        1,
+        reason:
+            'the program\'s second Bench Press must still be the second '
+            'same-template occurrence after the offline add - a sortOrder-0 '
+            'collision would have shifted it',
+      );
+    });
+
+    test('targets survive app restart (Isar close/reopen)', () async {
+      loginAs(userA);
+      when(mockConnectivity.isOnline).thenReturn(false);
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        workout(exercisesJson: targetsJson),
+        DateTime(2031, 1, 1),
+        5,
+      );
+      final dir = isar.directory!;
+      await isar.close();
+      isar = await openIsar(dir);
+      localDb.setTestDatabase(isar);
+      final rows = await localRows(created.id);
+      expect(
+        (rows[0].targetSets, rows[0].targetRepsMin, rows[0].targetRepsMax),
+        (3, 8, 10),
+      );
+    });
+
+    test(
+      'plan edited after materialization does not change the session',
+      () async {
+        loginAs(userA);
+        when(mockConnectivity.isOnline).thenReturn(false);
+        final created = await repository.createSessionFromProgramWorkout(
+          10,
+          workout(exercisesJson: targetsJson),
+          DateTime(2031, 1, 1),
+          5,
+        );
+        // A later call with an edited plan returns the SAME existing active
+        // session.
+        await repository.createSessionFromProgramWorkout(
+          10,
+          workout(
+            exercisesJson:
+                '[{"name":"Bench Press","sets":5,"reps":3,"occurrenceKey":"b1"}]',
+          ),
+          DateTime(2031, 1, 1),
+          5,
+        );
+        final rows = await localRows(created.id);
+        expect((rows[0].targetSets, rows[0].targetRepsMin), (3, 8));
+      },
+    );
+
+    test('reconcile adopts the authoritative server template id, targets and '
+        'sortOrder', () async {
+      loginAs(userA);
+      final held = Completer<ResponseBody>();
+      adapter.responder = (o) => held.future;
+      Future<void>? settled;
+      repository.onBackgroundSyncScheduledForTesting = (s) => settled = s;
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        workout(exercisesJson: targetsJson),
+        DateTime(2031, 1, 1),
+        5,
+      );
+      repository.onBackgroundSyncScheduledForTesting = null;
+
+      Map<String, dynamic> server(
+        int id,
+        String key,
+        int sort,
+        int? tpl,
+        int sets,
+        int min,
+        int max,
+      ) => {
+        ...exerciseJson(
+          id,
+          sessionId: 900,
+          name: key,
+          exerciseTemplateId: tpl,
+          occurrenceKey: key,
+        ),
+        'sortOrder': sort,
+        'targetSets': sets,
+        'targetRepsMin': min,
+        'targetRepsMax': max,
+      };
+      // Deliberately NOT in local-materialization order (b1, r1, b2) - each
+      // server exercise sits at a DIFFERENT position than its local
+      // counterpart, so a positional-assignment bug (pairing local[i] with
+      // server[i] instead of matching by occurrenceKey) cannot masquerade
+      // as correct here.
+      held.complete(
+        jsonResponse(
+          sessionJson(
+            id: 900,
+            exercises: [
+              server(9003, 'b2', 2, 1, 2, 5, 5),
+              server(9001, 'b1', 0, 1, 3, 8, 10),
+              server(9002, 'r1', 1, 42, 4, 12, 12), // server resolved
+              // identity differently
+            ],
+          ),
+        ),
+      );
+      await settled;
+
+      // Looked up by occurrenceKey, never by list position/index, so the
+      // assertions below prove correct per-occurrence ROUTING - not merely
+      // that the right values landed somewhere.
+      final rows = await localRows(created.id);
+      LocalExercise byKey(String key) =>
+          rows.singleWhere((e) => e.occurrenceKey == key);
+
+      final b1 = byKey('b1');
+      expect(
+        (
+          b1.serverId,
+          b1.exerciseTemplateId,
+          b1.sortOrder,
+          b1.targetSets,
+          b1.targetRepsMin,
+          b1.targetRepsMax,
+        ),
+        (9001, 1, 0, 3, 8, 10),
+      );
+
+      final r1 = byKey('r1');
+      expect(
+        (
+          r1.serverId,
+          r1.exerciseTemplateId,
+          r1.sortOrder,
+          r1.targetSets,
+          r1.targetRepsMin,
+          r1.targetRepsMax,
+        ),
+        (9002, 42, 1, 4, 12, 12), // server resolved identity differently
+      );
+
+      final b2 = byKey('b2');
+      expect(
+        (
+          b2.serverId,
+          b2.exerciseTemplateId,
+          b2.sortOrder,
+          b2.targetSets,
+          b2.targetRepsMin,
+          b2.targetRepsMax,
+        ),
+        (9003, 1, 2, 2, 5, 5),
+      );
+    });
+
+    test('E2E: fixture plan entry -> local materialization -> reconcile -> '
+        'Isar -> previous performance', () async {
+      final fixture =
+          jsonDecode(
+                File(
+                  'test/fixtures/phase2d_plan_session_contract.json',
+                ).readAsStringSync(),
+              )
+              as Map<String, dynamic>;
+      // Drift guard: the fixture is duplicated (no cross-repo
+      // infrastructure) from GoHardAPI.Tests/Fixtures/
+      // phase2d_plan_session_contract.json - this equality check makes any
+      // accidental divergence between the two copies fail LOUDLY, in
+      // behavior, rather than silently drifting apart.
+      expect(
+        fixture,
+        equals(<String, dynamic>{
+          'aiExerciseName': 'Bench Press',
+          'systemTemplateId': 1,
+          'programWorkoutExercise': <String, dynamic>{
+            'name': 'Bench Press',
+            'exerciseTemplateId': 1,
+            'sets': 3,
+            'reps': 8,
+            'repsMax': 10,
+          },
+          'sessionExercise': <String, dynamic>{
+            'name': 'Bench Press',
+            'sortOrder': 0,
+            'exerciseTemplateId': 1,
+            'targetSets': 3,
+            'targetRepsMin': 8,
+            'targetRepsMax': 10,
+          },
+        }),
+        reason:
+            'the fixture must stay value-for-value identical (decoded JSON '
+            'equality, not a byte comparison) to GoHardAPI.Tests/Fixtures/'
+            'phase2d_plan_session_contract.json - this repo has no '
+            'cross-repo infrastructure to enforce that automatically, so '
+            'drift must be caught here instead',
+      );
+
+      final planEntry = {
+        ...(fixture['programWorkoutExercise'] as Map<String, dynamic>),
+        'occurrenceKey': 'e2e-key',
+      };
+      final serverExercise = fixture['sessionExercise'] as Map<String, dynamic>;
+      final templateId = fixture['systemTemplateId'] as int;
+
+      loginAs(userA);
+
+      // A prior completed canonical session with the same template.
+      final priorSessionId = await isar.writeTxn(
+        () => isar.localSessions.put(
+          LocalSession(
+            userId: userA,
+            date: DateTime.utc(2031, 6, 1),
+            name: 'Prior',
+            type: 'Strength',
+            status: 'completed',
+            completedAt: DateTime.utc(2031, 6, 1),
+            lastModifiedLocal: DateTime.utc(2031, 6, 1),
+          ),
+        ),
+      );
+      final priorExerciseId = await isar.writeTxn(
+        () => isar.localExercises.put(
+          LocalExercise(
+            sessionLocalId: priorSessionId,
+            name: 'Bench Press',
+            exerciseTemplateId: templateId,
+            lastModifiedLocal: DateTime.utc(2031, 6, 1),
+          ),
+        ),
+      );
+      await isar.writeTxn(
+        () => isar.localExerciseSets.put(
+          LocalExerciseSet(
+            exerciseLocalId: priorExerciseId,
+            setNumber: 1,
+            reps: 10,
+            weight: 61.235,
+            isCompleted: true,
+            lastModifiedLocal: DateTime.utc(2031, 6, 1),
+          ),
+        ),
+      );
+
+      final held = Completer<ResponseBody>();
+      adapter.responder = (o) => held.future;
+      Future<void>? settled;
+      repository.onBackgroundSyncScheduledForTesting = (s) => settled = s;
+      final created = await repository.createSessionFromProgramWorkout(
+        10,
+        workout(exercisesJson: jsonEncode([planEntry])),
+        DateTime(2031, 1, 1),
+        5,
+      );
+      repository.onBackgroundSyncScheduledForTesting = null;
+
+      var local =
+          (await isar.localExercises
+                  .filter()
+                  .sessionLocalIdEqualTo(created.id)
+                  .findAll())
+              .single;
+      expect(
+        local.exerciseTemplateId,
+        templateId,
+        reason: 'local materializer copies plan identity',
+      );
+
+      // BEFORE the server response is ever seen: the local materializer
+      // must already have computed the same (sortOrder, targets, identity)
+      // values the fixture's `sessionExercise` records for the API side -
+      // proving both sides independently compute the same thing from the
+      // same plan entry, not merely that "the server wins" once reconcile
+      // runs.
+      expect(
+        (
+          local.sortOrder,
+          local.targetSets,
+          local.targetRepsMin,
+          local.targetRepsMax,
+          local.exerciseTemplateId,
+        ),
+        (
+          serverExercise['sortOrder'],
+          serverExercise['targetSets'],
+          serverExercise['targetRepsMin'],
+          serverExercise['targetRepsMax'],
+          serverExercise['exerciseTemplateId'],
+        ),
+        reason:
+            'local materialization must independently match the fixture\'s '
+            'sessionExercise values before any server response arrives',
+      );
+
+      held.complete(
+        jsonResponse(
+          sessionJson(
+            id: 900,
+            exercises: [
+              {
+                ...exerciseJson(
+                  9001,
+                  sessionId: 900,
+                  exerciseTemplateId: templateId,
+                  occurrenceKey: 'e2e-key',
+                ),
+                ...serverExercise,
+              },
+            ],
+          ),
+        ),
+      );
+      await settled;
+
+      local =
+          (await isar.localExercises
+                  .filter()
+                  .sessionLocalIdEqualTo(created.id)
+                  .findAll())
+              .single;
+      expect(
+        (
+          local.serverId,
+          local.exerciseTemplateId,
+          local.sortOrder,
+          local.targetSets,
+          local.targetRepsMin,
+          local.targetRepsMax,
+        ),
+        (
+          9001,
+          serverExercise['exerciseTemplateId'],
+          serverExercise['sortOrder'],
+          serverExercise['targetSets'],
+          serverExercise['targetRepsMin'],
+          serverExercise['targetRepsMax'],
+        ),
+      );
+
+      final exercises = ExerciseRepository(
+        apiService,
+        localDb,
+        mockConnectivity,
+        sessionEpoch,
+        sessionCoordinator,
+      );
+      final guidance = await exercises.getExerciseGuidance(9001);
+      expect(guidance!.previous!.sets.single.weight, 61.235);
+      expect(
+        (guidance.targetSets, guidance.targetRepsMin, guidance.targetRepsMax),
+        (3, 8, 10),
+      );
     });
   });
 }
