@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
@@ -16,20 +17,27 @@ import 'package:go_hard_app/ui/screens/sessions/active_workout_screen.dart';
 import 'active_workout_screen_navigation_test.mocks.dart';
 
 @GenerateMocks([SessionRepository])
-Session _runningSession({DateTime? startedAt}) {
+Session _runningSession({
+  DateTime? startedAt,
+  DateTime? pausedAt,
+  List<Exercise>? exercises,
+}) {
   return Session(
     id: 1,
     userId: 1,
     date: DateTime.utc(2024, 1, 15),
     status: 'in_progress',
     startedAt: startedAt ?? DateTime.utc(2024, 1, 15, 10, 0, 0),
-    // Non-empty so the screen renders the exercise list rather than the
-    // empty-state widget, which has its own "Add Exercise" button and
-    // would make the FAB's "Add Exercise" text ambiguous to find/tap.
-    exercises: [Exercise(id: 1, sessionId: 1, name: 'Warm-up')],
+    pausedAt: pausedAt,
+    // Non-empty by default so the screen renders the exercise list (and the
+    // FAB) rather than the empty-state widget with its own "Add Exercise".
+    exercises: exercises ?? [Exercise(id: 1, sessionId: 1, name: 'Warm-up')],
     version: 1,
   );
 }
+
+/// Route names pushed through the test app's onGenerateRoute.
+final _pushedRoutes = <String?>[];
 
 /// A stand-in for AddExerciseScreen that pops `true` as soon as it is
 /// pushed - mirroring the real screen's "exercise added" success path
@@ -90,6 +98,7 @@ Future<void> _pumpActiveWorkoutScreen(
       child: MaterialApp(
         home: const ActiveWorkoutScreen(sessionId: 1),
         onGenerateRoute: (settings) {
+          _pushedRoutes.add(settings.name);
           if (settings.name == RouteNames.addExercise) {
             return MaterialPageRoute(
               builder: (_) => const _FakeAddExerciseScreenThatPopsTrue(),
@@ -109,6 +118,7 @@ void main() {
   setUp(() {
     mockRepo = MockSessionRepository();
     when(mockRepo.getSession(1)).thenAnswer((_) async => _runningSession());
+    _pushedRoutes.clear();
   });
 
   testWidgets(
@@ -154,4 +164,63 @@ void main() {
       verifyNever(mockRepo.getSession(any));
     },
   );
+
+  testWidgets('release builds show no timer debug controls', (tester) async {
+    ActiveWorkoutScreen.showDebugControls = false;
+    addTearDown(() => ActiveWorkoutScreen.showDebugControls = kDebugMode);
+
+    await _pumpActiveWorkoutScreen(tester, mockRepo);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Show Debug'), findsNothing);
+  });
+
+  testWidgets('debug builds keep the timer debug toggle', (tester) async {
+    ActiveWorkoutScreen.showDebugControls = true;
+    addTearDown(() => ActiveWorkoutScreen.showDebugControls = kDebugMode);
+
+    await _pumpActiveWorkoutScreen(tester, mockRepo);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Show Debug'), findsOneWidget);
+  });
+
+  // Regression: an empty workout rendered the empty state's "Add Exercise"
+  // AND the Scaffold FAB's "Add Exercise", overlapping at the bottom. The
+  // timer state must not matter, so cover running and paused.
+  for (final (label, pausedAt) in [
+    ('running', null),
+    ('paused', DateTime.utc(2024, 1, 15, 10, 5, 0)),
+  ]) {
+    testWidgets('empty $label workout shows exactly one Add Exercise that '
+        'opens Add Exercise', (tester) async {
+      when(mockRepo.getSession(1)).thenAnswer(
+        (_) async => _runningSession(pausedAt: pausedAt, exercises: []),
+      );
+
+      await _pumpActiveWorkoutScreen(tester, mockRepo);
+      await tester.pumpAndSettle();
+
+      expect(find.text('No Exercises Yet'), findsOneWidget);
+      expect(find.text('Add Exercise'), findsOneWidget);
+
+      await tester.tap(find.text('Add Exercise'));
+      await tester.pumpAndSettle();
+      expect(_pushedRoutes, [RouteNames.addExercise]);
+    });
+  }
+
+  testWidgets('workout with exercises keeps the Add Exercise button', (
+    tester,
+  ) async {
+    await _pumpActiveWorkoutScreen(tester, mockRepo);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Warm-up'), findsOneWidget);
+    expect(find.text('Add Exercise'), findsOneWidget);
+
+    await tester.tap(find.text('Add Exercise'));
+    await tester.pumpAndSettle();
+    expect(_pushedRoutes, [RouteNames.addExercise]);
+  });
 }

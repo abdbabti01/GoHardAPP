@@ -1,61 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/theme/theme_colors.dart';
-import '../../../core/constants/colors.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../../core/services/sync_service.dart';
-import '../../../core/utils/date_utils.dart';
-import '../../../providers/sessions_provider.dart';
-import '../../../providers/exercises_provider.dart';
-import '../../../providers/active_workout_provider.dart';
+import '../../../core/theme/theme_colors.dart';
+import '../../../core/theme/typography.dart';
+import '../../../data/models/session.dart';
 import '../../../providers/programs_provider.dart';
+import '../../../providers/sessions_provider.dart';
 import '../../../routes/route_names.dart';
-import '../../widgets/sessions/session_card.dart';
-import '../sessions/session_detail_screen.dart';
-import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/active_workout_banner.dart';
+import '../../widgets/common/offline_banner.dart';
 import '../../widgets/common/sync_issues_banner.dart';
-import '../../widgets/common/loading_indicator.dart';
-import '../programs/programs_screen.dart';
-import '../exercises/exercises_screen.dart';
+import '../../widgets/sessions/weekly_progress_card.dart';
+import '../../widgets/sessions/workout_name_dialog.dart';
+import '../sessions/session_detail_screen.dart';
+import 'plan_summary.dart';
 
-/// Train screen with tabs for Workouts, Programs, and Exercises
+const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const _months = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/// Train answers "what am I training and how am I progressing?".
+/// Today owns "what should I do now?", so Train has no Start button.
 class TrainScreen extends StatefulWidget {
-  final int? initialTab;
+  const TrainScreen({super.key});
 
-  const TrainScreen({super.key, this.initialTab});
+  /// Where a legacy `subTab` index (the removed Workouts / Programs /
+  /// Exercises tabs) now lives, or null when there is nothing to open.
+  static String? routeForLegacySubTab(int? subTab) => switch (subTab) {
+    0 => RouteNames.workoutHistory,
+    1 => RouteNames.programs,
+    2 => RouteNames.exercises,
+    _ => null,
+  };
 
   @override
   State<TrainScreen> createState() => _TrainScreenState();
 }
 
-class _TrainScreenState extends State<TrainScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  String _pastWorkoutsFilter = 'Last Month';
-
+class _TrainScreenState extends State<TrainScreen> {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-      length: 3,
-      vsync: this,
-      initialIndex: widget.initialTab ?? 0,
-    );
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {});
-      }
-    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SessionsProvider>().loadSessions();
-      context.read<ExercisesProvider>().loadExercises();
+      context.read<ProgramsProvider>().loadPrograms();
     });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   Future<void> _handleRefresh() async {
@@ -64,674 +66,412 @@ class _TrainScreenState extends State<TrainScreen>
     } catch (e) {
       debugPrint('Sync failed during refresh: $e');
     }
-    if (mounted) {
-      await context.read<SessionsProvider>().loadSessions();
-    }
-  }
-
-  Future<void> _handleDeleteSession(int sessionId) async {
-    final sessionsProvider = context.read<SessionsProvider>();
-    final activeWorkoutProvider = context.read<ActiveWorkoutProvider>();
-
-    if (activeWorkoutProvider.currentSession?.id == sessionId) {
-      activeWorkoutProvider.clear();
-    }
-
-    final success = await sessionsProvider.deleteSession(sessionId);
-
-    if (!success && mounted) {
-      if (sessionsProvider.errorMessage?.contains('Archive it instead') ==
-          true) {
-        final shouldArchive = await showDialog<bool>(
-          context: context,
-          builder:
-              (context) => AlertDialog(
-                title: const Text('Cannot Delete'),
-                content: const Text(
-                  'This is a completed program workout. Would you like to archive it instead?',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Archive'),
-                  ),
-                ],
-              ),
-        );
-
-        if (shouldArchive == true && mounted) {
-          final archived = await sessionsProvider.archiveSession(sessionId);
-          if (archived && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Workout archived successfully'),
-                backgroundColor: context.success,
-              ),
-            );
-            await sessionsProvider.loadSessions(showLoading: false);
-          }
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                sessionsProvider.errorMessage ?? 'Failed to delete',
-              ),
-              backgroundColor: context.error,
-            ),
-          );
-        }
-      }
-      sessionsProvider.clearError();
-    } else {
-      if (mounted) {
-        await sessionsProvider.loadSessions(showLoading: false);
-      }
-    }
-  }
-
-  Future<void> _handleSkipSession(int programWorkoutId) async {
-    final programsProvider = context.read<ProgramsProvider>();
-    final sessionsProvider = context.read<SessionsProvider>();
-
-    final result = await programsProvider.skipWorkout(programWorkoutId);
-
     if (!mounted) return;
-
-    if (result.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Workout skipped'),
-          backgroundColor: context.warning,
-        ),
-      );
-      await sessionsProvider.loadSessions(showLoading: false);
-    } else if (result.isBlocked) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'This workout already has a session in progress. Resume or '
-            'manage it instead of skipping.',
-          ),
-          backgroundColor: context.error,
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            programsProvider.errorMessage ?? 'Failed to skip workout',
-          ),
-          backgroundColor: context.error,
-        ),
-      );
-    }
-  }
-
-  Future<void> _handleSessionTap(
-    int sessionId,
-    String status, [
-    int? localId,
-  ]) async {
-    if (status == 'planned') {
-      final provider = context.read<SessionsProvider>();
-      final session = provider.sessions.firstWhere((s) => s.id == sessionId);
-
-      final today = DateTime(
-        DateTime.now().year,
-        DateTime.now().month,
-        DateTime.now().day,
-      );
-      final workoutDate = DateTime(
-        session.date.year,
-        session.date.month,
-        session.date.day,
-      );
-      final isScheduledForFuture = workoutDate.isAfter(today);
-
-      final shouldStart = await showDialog<bool>(
-        context: context,
-        builder:
-            (context) => AlertDialog(
-              title: Text(
-                isScheduledForFuture ? 'Start Early?' : 'Start Workout',
-              ),
-              content: Text(
-                isScheduledForFuture
-                    ? 'This workout is scheduled for later. Start it today?'
-                    : 'Do you want to start this planned workout now?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: Text(isScheduledForFuture ? 'Start Today' : 'Start'),
-                ),
-              ],
-            ),
-      );
-
-      if (shouldStart == true && mounted) {
-        if (isScheduledForFuture) {
-          await provider.updateWorkoutDate(sessionId, DateTime.now());
-        }
-        final success = await provider.startPlannedWorkout(sessionId);
-        if (success && mounted) {
-          await Navigator.of(
-            context,
-          ).pushNamed(RouteNames.activeWorkout, arguments: sessionId);
-          if (mounted) await provider.loadSessions();
-        }
-      }
-    } else if (status == 'in_progress' || status == 'draft') {
-      await Navigator.of(
-        context,
-      ).pushNamed(RouteNames.activeWorkout, arguments: sessionId);
-      if (mounted) await context.read<SessionsProvider>().loadSessions();
-    } else {
-      Navigator.of(context).pushNamed(
-        RouteNames.sessionDetail,
-        arguments: SessionDetailArgs(sessionId: sessionId, localId: localId),
-      );
-    }
-  }
-
-  int _getFilterDays(String filter) {
-    switch (filter) {
-      case 'Last Week':
-        return 7;
-      case 'Last Month':
-        return 30;
-      case 'Last 3 Months':
-        return 90;
-      case 'Last 6 Months':
-        return 180;
-      case 'Last 12 Months':
-        return 365;
-      default:
-        return 30;
-    }
-  }
-
-  Widget _buildWeekHeader(BuildContext context, String label) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 20,
-            decoration: BoxDecoration(
-              color: context.accent.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: context.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPastWorkoutsFilter(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        children: [
-          Icon(Icons.history, size: 20, color: context.accent),
-          const SizedBox(width: 8),
-          Text(
-            'Past Workouts',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: context.accent,
-            ),
-          ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: context.surfaceElevated,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: DropdownButton<String>(
-              value: _pastWorkoutsFilter,
-              underline: const SizedBox(),
-              isDense: true,
-              dropdownColor: context.surfaceElevated,
-              icon: Icon(Icons.arrow_drop_down, color: context.accent),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: context.accent,
-              ),
-              items: const [
-                DropdownMenuItem(value: 'Last Week', child: Text('Last Week')),
-                DropdownMenuItem(
-                  value: 'Last Month',
-                  child: Text('Last Month'),
-                ),
-                DropdownMenuItem(
-                  value: 'Last 3 Months',
-                  child: Text('Last 3 Months'),
-                ),
-                DropdownMenuItem(
-                  value: 'Last 6 Months',
-                  child: Text('Last 6 Months'),
-                ),
-                DropdownMenuItem(
-                  value: 'Last 12 Months',
-                  child: Text('Last 12 Months'),
-                ),
-              ],
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  setState(() => _pastWorkoutsFilter = newValue);
-                }
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(
-    BuildContext context,
-    String label,
-    IconData icon,
-    int? count,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: context.accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 18, color: context.accent),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: context.textPrimary,
-            ),
-          ),
-          if (count != null) ...[
-            const SizedBox(width: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                gradient: context.primaryGradient,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$count',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.goHardBlack,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
+    await Future.wait([
+      context.read<SessionsProvider>().loadSessions(showLoading: false),
+      context.read<ProgramsProvider>().loadPrograms(),
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Tab bar
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: context.surface,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: TabBar(
-            controller: _tabController,
-            indicator: BoxDecoration(
-              color: context.accent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            indicatorSize: TabBarIndicatorSize.tab,
-            indicatorPadding: const EdgeInsets.all(4),
-            labelColor: context.textOnPrimary,
-            unselectedLabelColor: context.textSecondary,
-            labelStyle: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-            unselectedLabelStyle: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-            dividerColor: Colors.transparent,
-            tabs: const [
-              Tab(text: 'Workouts'),
-              Tab(text: 'Programs'),
-              Tab(text: 'Exercises'),
-            ],
-          ),
-        ),
-        // Tab content
+        const ActiveWorkoutBanner(),
+        const OfflineBanner(),
+        const SyncIssuesBanner(),
         Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              // Workouts tab
-              _buildWorkoutsTab(),
-              // Programs tab
-              const ProgramsScreen(),
-              // Exercises tab
-              const ExercisesScreen(),
-            ],
+          child: RefreshIndicator(
+            onRefresh: _handleRefresh,
+            color: context.accent,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 100),
+              children: const [
+                _PlanSections(),
+                _ProgressSection(),
+                _RecentSection(),
+                _ToolsSection(),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildWorkoutsTab() {
-    return Column(
-      children: [
-        const ActiveWorkoutBanner(),
-        const OfflineBanner(),
-        const SyncIssuesBanner(),
-        Expanded(
-          child: Consumer<SessionsProvider>(
-            builder: (context, provider, child) {
-              if (provider.isLoading && provider.sessions.isEmpty) {
-                return ListView(
-                  padding: const EdgeInsets.only(top: 16),
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      height: 140,
-                      child: SkeletonLoader(
-                        width: double.infinity,
-                        height: 140,
-                        borderRadius: 20,
-                      ),
-                    ),
-                    for (int i = 0; i < 4; i++) const SkeletonCard(),
-                  ],
-                );
-              }
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
-              if (provider.errorMessage != null &&
-                  provider.errorMessage!.isNotEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.error_outline_rounded,
-                        size: 64,
-                        color: AppColors.errorRed,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Error Loading Workouts',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: context.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        provider.errorMessage!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: context.textSecondary),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _handleRefresh,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                );
-              }
+  const _SectionHeader(this.title, {this.actionLabel, this.onAction});
 
-              if (provider.sessions.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.fitness_center_rounded,
-                        size: 64,
-                        color: context.textTertiary,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No Workouts Yet',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: context.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Start your first workout!',
-                        style: TextStyle(color: context.textSecondary),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              // Organize sessions
-              final now = DateTime.now();
-              final today = DateTime(now.year, now.month, now.day);
-              final weekStart = today.subtract(
-                Duration(days: today.weekday - 1),
-              );
-
-              final todaySessions =
-                  provider.sessions
-                      .where(
-                        (s) =>
-                            (s.status != 'planned' &&
-                                DateTime(
-                                      s.date.year,
-                                      s.date.month,
-                                      s.date.day,
-                                    ) ==
-                                    today) ||
-                            s.status == 'in_progress',
-                      )
-                      .toList();
-
-              final thisWeekSessions =
-                  provider.sessions
-                      .where(
-                        (s) =>
-                            s.status != 'planned' &&
-                            s.status != 'in_progress' &&
-                            !s.date.isBefore(weekStart) &&
-                            DateTime(s.date.year, s.date.month, s.date.day) !=
-                                today,
-                      )
-                      .toList();
-
-              final upcomingSessions =
-                  provider.sessions
-                      .where(
-                        (s) =>
-                            s.status == 'planned' &&
-                            DateTime(
-                              s.date.year,
-                              s.date.month,
-                              s.date.day,
-                            ).isAfter(today),
-                      )
-                      .toList()
-                    ..sort((a, b) => a.date.compareTo(b.date));
-
-              final filterDays = _getFilterDays(_pastWorkoutsFilter);
-              final filterCutoff = today.subtract(Duration(days: filterDays));
-              final pastSessions =
-                  provider.sessions
-                      .where(
-                        (s) =>
-                            s.status != 'planned' &&
-                            s.status != 'in_progress' &&
-                            s.date.isBefore(weekStart) &&
-                            s.date.isAfter(
-                              filterCutoff.subtract(const Duration(days: 1)),
-                            ),
-                      )
-                      .toList();
-
-              final groupedPast = DateGroupingUtils.groupSessionsByWeek(
-                pastSessions,
-              );
-              final pastWeekLabels = DateGroupingUtils.getOrderedWeekLabels(
-                groupedPast,
-              );
-
-              return RefreshIndicator(
-                onRefresh: _handleRefresh,
-                color: context.accent,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.only(bottom: 80),
-                  children: [
-                    if (todaySessions.isNotEmpty) ...[
-                      _buildSectionHeader(context, 'Today', Icons.today, null),
-                      ...todaySessions.map(
-                        (s) => SessionCard(
-                          session: s,
-                          diagnostics: provider.diagnosticsFor(s),
-                          onTap:
-                              () => _handleSessionTap(
-                                s.id,
-                                s.status,
-                                provider.localIdFor(s),
-                              ),
-                          onDelete: () => _handleDeleteSession(s.id),
-                          onMarkSkipped:
-                              s.programWorkoutId == null
-                                  ? null
-                                  : () =>
-                                      _handleSkipSession(s.programWorkoutId!),
-                        ),
-                      ),
-                    ],
-                    if (thisWeekSessions.isNotEmpty) ...[
-                      _buildSectionHeader(
-                        context,
-                        'This Week',
-                        Icons.calendar_today,
-                        null,
-                      ),
-                      ...thisWeekSessions.map(
-                        (s) => SessionCard(
-                          session: s,
-                          diagnostics: provider.diagnosticsFor(s),
-                          onTap:
-                              () => _handleSessionTap(
-                                s.id,
-                                s.status,
-                                provider.localIdFor(s),
-                              ),
-                          onDelete: () => _handleDeleteSession(s.id),
-                          onMarkSkipped:
-                              s.programWorkoutId == null
-                                  ? null
-                                  : () =>
-                                      _handleSkipSession(s.programWorkoutId!),
-                        ),
-                      ),
-                    ],
-                    if (upcomingSessions.isNotEmpty) ...[
-                      _buildSectionHeader(
-                        context,
-                        'Upcoming',
-                        Icons.schedule,
-                        upcomingSessions.length,
-                      ),
-                      ...upcomingSessions.map(
-                        (s) => SessionCard(
-                          session: s,
-                          diagnostics: provider.diagnosticsFor(s),
-                          onTap:
-                              () => _handleSessionTap(
-                                s.id,
-                                s.status,
-                                provider.localIdFor(s),
-                              ),
-                          onDelete: () => _handleDeleteSession(s.id),
-                          onMarkSkipped:
-                              s.programWorkoutId == null
-                                  ? null
-                                  : () =>
-                                      _handleSkipSession(s.programWorkoutId!),
-                        ),
-                      ),
-                    ],
-                    if (pastSessions.isNotEmpty) ...[
-                      _buildPastWorkoutsFilter(context),
-                      for (final label in pastWeekLabels) ...[
-                        _buildWeekHeader(context, label),
-                        ...groupedPast[label]!.map(
-                          (s) => SessionCard(
-                            session: s,
-                            diagnostics: provider.diagnosticsFor(s),
-                            onTap:
-                                () => _handleSessionTap(
-                                  s.id,
-                                  s.status,
-                                  provider.localIdFor(s),
-                                ),
-                            onDelete: () => _handleDeleteSession(s.id),
-                            onMarkSkipped:
-                                s.programWorkoutId == null
-                                    ? null
-                                    : () =>
-                                        _handleSkipSession(s.programWorkoutId!),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ],
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 8, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text(
+                title,
+                style: AppTypography.titleLarge.copyWith(
+                  color: context.textPrimary,
                 ),
-              );
-            },
+              ),
+            ),
           ),
+          if (actionLabel != null)
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              child: Text(actionLabel!),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Note extends StatelessWidget {
+  final String text;
+
+  const _Note(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Text(
+        text,
+        style: AppTypography.bodyMedium.copyWith(color: context.textSecondary),
+      ),
+    );
+  }
+}
+
+class _RetryRow extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _RetryRow(this.message, this.onRetry);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, size: 18, color: context.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodyMedium.copyWith(
+                color: context.textPrimary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(minimumSize: const Size(64, 48)),
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// My Plan + This Week: both read the same first active plan.
+class _PlanSections extends StatelessWidget {
+  const _PlanSections();
+
+  @override
+  Widget build(BuildContext context) {
+    final programs = context.watch<ProgramsProvider>();
+    final isOnline = context.select<ConnectivityService, bool>(
+      (c) => c.isOnline,
+    );
+    void openPlan() => Navigator.pushNamed(context, RouteNames.programs);
+
+    if (programs.activePrograms.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionHeader(
+            'My Plan',
+            actionLabel: programs.programs.isEmpty ? null : 'View plan',
+            onAction: openPlan,
+          ),
+          _noPlanBody(context, programs, isOnline),
+        ],
+      );
+    }
+
+    final plan = programs.activePrograms.first;
+    final summary = PlanSummary.of(
+      plan,
+      DateTime.now(),
+      programs.scheduledDateOf,
+    );
+    final goal = plan.goal?.goalType;
+    final progressLine = [
+      'Week ${plan.currentWeek} of ${plan.totalWeeks}',
+      if (summary.due > 0) '${summary.done} of ${summary.due} workouts done',
+    ].join(' · ');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionHeader('My Plan', actionLabel: 'View plan', onAction: openPlan),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            plan.title,
+            style: AppTypography.titleMedium.copyWith(
+              color: context.textPrimary,
+            ),
+          ),
+        ),
+        if (goal != null) _Note('Goal: $goal'),
+        _Note(progressLine),
+        const _SectionHeader('This Week'),
+        if (summary.thisWeek.isEmpty)
+          const _Note('Nothing scheduled this week.')
+        else
+          for (final item in summary.thisWeek)
+            ListTile(
+              leading: SizedBox(
+                width: 40,
+                child: Text(
+                  _weekdays[item.date.weekday - 1],
+                  style: AppTypography.labelLarge.copyWith(
+                    color: context.textSecondary,
+                  ),
+                ),
+              ),
+              title: Text(
+                item.workout.workoutName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Text(
+                _stateLabel(item.state),
+                style: AppTypography.labelLarge.copyWith(
+                  color:
+                      item.state == PlanDayState.today
+                          ? context.accent
+                          : context.textSecondary,
+                ),
+              ),
+              onTap:
+                  () => Navigator.pushNamed(
+                    context,
+                    RouteNames.programWorkout,
+                    arguments: {
+                      'workoutId': item.workout.id,
+                      'programId': plan.id,
+                    },
+                  ),
+            ),
+      ],
+    );
+  }
+
+  Widget _noPlanBody(
+    BuildContext context,
+    ProgramsProvider programs,
+    bool isOnline,
+  ) {
+    if (programs.isLoading && programs.programs.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: LinearProgressIndicator(),
+      );
+    }
+    if (programs.errorMessage != null && programs.programs.isEmpty) {
+      return _RetryRow(
+        "Couldn't load your plan.",
+        () => programs.loadPrograms(),
+      );
+    }
+    // Plans are online-only today (ProgramsRepository returns [] offline),
+    // so an empty list offline means "unknown", never "no plan".
+    if (!isOnline && programs.programs.isEmpty) {
+      return const _Note("Your plan shows here when you're online.");
+    }
+    if (programs.programs.isNotEmpty) {
+      return const _Note('No active plan.');
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'No plan yet.',
+            style: AppTypography.bodyMedium.copyWith(
+              color: context.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed:
+                () => Navigator.pushNamed(context, RouteNames.workoutPlanForm),
+            icon: const Icon(Icons.add),
+            label: const Text('Create a plan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _stateLabel(PlanDayState state) => switch (state) {
+    PlanDayState.done => 'Done',
+    PlanDayState.skipped => 'Skipped',
+    PlanDayState.missed => 'Missed',
+    PlanDayState.today => 'Today',
+    PlanDayState.upcoming => '',
+  };
+}
+
+class _ProgressSection extends StatelessWidget {
+  const _ProgressSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final sessions = context.watch<SessionsProvider>().sessions;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final weekStart = today.subtract(Duration(days: today.weekday - 1));
+    final thisWeek = _between(
+      sessions,
+      weekStart,
+      weekStart.add(const Duration(days: 7)),
+    );
+    final thisMonth = _between(
+      sessions,
+      DateTime(today.year, today.month),
+      DateTime(today.year, today.month + 1),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionHeader(
+          'Progress',
+          actionLabel: 'View progress',
+          onAction: () => Navigator.pushNamed(context, RouteNames.analytics),
+        ),
+        if (thisWeek.isEmpty && thisMonth.isEmpty)
+          const _Note('Finish a workout to see your progress here.')
+        else
+          WeeklyProgressCard(
+            thisWeekSessions: thisWeek,
+            thisMonthSessions: thisMonth,
+          ),
+      ],
+    );
+  }
+
+  static List<Session> _between(
+    List<Session> sessions,
+    DateTime start,
+    DateTime end,
+  ) =>
+      sessions.where((s) {
+        final day = DateTime(s.date.year, s.date.month, s.date.day);
+        return !day.isBefore(start) && day.isBefore(end);
+      }).toList();
+}
+
+class _RecentSection extends StatelessWidget {
+  const _RecentSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<SessionsProvider>();
+    final recent =
+        provider.sessions.where((s) => s.status == 'completed').toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionHeader(
+          'Recent',
+          actionLabel: 'History',
+          onAction:
+              () => Navigator.pushNamed(context, RouteNames.workoutHistory),
+        ),
+        if (provider.isLoading && provider.sessions.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: LinearProgressIndicator(),
+          )
+        else if (provider.errorMessage != null && provider.sessions.isEmpty)
+          _RetryRow(
+            "Couldn't load your workouts.",
+            () => provider.loadSessions(),
+          )
+        else if (recent.isEmpty)
+          const _Note('No finished workouts yet.')
+        else
+          for (final s in recent.take(3))
+            ListTile(
+              title: Text(
+                s.name ?? 'Workout',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(_subtitle(s)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap:
+                  () => Navigator.pushNamed(
+                    context,
+                    RouteNames.sessionDetail,
+                    arguments: SessionDetailArgs(
+                      sessionId: s.id,
+                      localId: provider.localIdFor(s),
+                    ),
+                  ),
+            ),
+      ],
+    );
+  }
+
+  static String _subtitle(Session s) {
+    final day =
+        '${_weekdays[s.date.weekday - 1]} ${s.date.day} ${_months[s.date.month - 1]}';
+    return s.duration == null ? day : '$day · ${s.duration} min';
+  }
+}
+
+class _ToolsSection extends StatelessWidget {
+  const _ToolsSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SectionHeader('Tools'),
+        ListTile(
+          leading: const Icon(Icons.menu_book_outlined),
+          title: const Text('Exercise library'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.pushNamed(context, RouteNames.exercises),
+        ),
+        ListTile(
+          leading: const Icon(Icons.add),
+          title: const Text('Custom workout'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => startCustomWorkout(context),
         ),
       ],
     );

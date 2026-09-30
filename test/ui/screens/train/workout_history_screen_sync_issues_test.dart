@@ -9,21 +9,19 @@ import 'package:provider/provider.dart';
 import 'package:go_hard_app/core/services/connectivity_service.dart';
 import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/models/session.dart';
-import 'package:go_hard_app/data/repositories/exercise_repository.dart';
 import 'package:go_hard_app/data/repositories/session_repository.dart';
 import 'package:go_hard_app/data/repositories/session_sync_diagnostics.dart';
 import 'package:go_hard_app/providers/active_workout_provider.dart';
-import 'package:go_hard_app/providers/exercises_provider.dart';
 import 'package:go_hard_app/providers/sessions_provider.dart';
 import 'package:go_hard_app/routes/app_router.dart';
 import 'package:go_hard_app/ui/screens/sessions/session_detail_screen.dart';
-import 'package:go_hard_app/ui/screens/train/train_screen.dart';
+import 'package:go_hard_app/ui/screens/train/workout_history_screen.dart';
 import 'package:go_hard_app/ui/widgets/common/sync_issues_banner.dart';
 
-@GenerateMocks([SessionRepository, ExerciseRepository, ConnectivityService])
-import 'train_screen_sync_issues_test.mocks.dart';
+@GenerateMocks([SessionRepository, ConnectivityService])
+import 'workout_history_screen_sync_issues_test.mocks.dart';
 
-/// Proves - through the REAL `TrainScreen` workouts-tab path (the actual
+/// Proves - through the REAL `WorkoutHistoryScreen` path (the actual
 /// bottom-nav workout surface a user reaches; `SessionsScreen` is not
 /// navigated to in normal use) - that the passive sync-issues surface is
 /// genuinely reachable and correctly wired: the aggregate banner, the
@@ -31,19 +29,17 @@ import 'train_screen_sync_issues_test.mocks.dart';
 /// suppression, and the total absence of any retry/discard/resolution
 /// control. Real [UserSessionEpoch]; the joined watch is
 /// StreamController-gated (a FRESH controller per `_installWatch` call,
-/// matching production - `TrainScreen.initState` itself calls
+/// matching production - `WorkoutHistoryScreen.initState` itself calls
 /// `loadSessions()`, so a second, real re-arm happens on top of the load
 /// this test drives) - no `pumpAndSettle`, `Future.delayed`, `Timer`, or
 /// event-loop polling.
 void main() {
   late MockSessionRepository sessionRepo;
-  late MockExerciseRepository exerciseRepo;
   late MockConnectivityService connectivity;
   late UserSessionEpoch epoch;
   late List<StreamController<SessionSyncSnapshot>> watchControllers;
   late StreamController<bool> connectivityController;
   late SessionsProvider sessionsProvider;
-  late ExercisesProvider exercisesProvider;
   late ActiveWorkoutProvider activeWorkoutProvider;
 
   final today = DateTime.now();
@@ -52,10 +48,10 @@ void main() {
   // Deliberately id != localId on every fixture session (id offset by
   // +100 from its localId) - a prior version of this fixture had id ==
   // localId for all three sessions, which meant a mutant that swapped
-  // `sessionId`/`localId` (or substituted one for the other) anywhere in
-  // the TrainScreen -> SessionDetailArgs path would have been numerically
-  // invisible to every test in this file. This non-equal fixture makes
-  // that whole test file load-bearing against that mutation class.
+  // `sessionId`/`localId` (or substituted one for the other) anywhere in the
+  // WorkoutHistoryScreen -> SessionDetailArgs path would have been
+  // numerically invisible to every test in this file. This non-equal fixture
+  // makes that whole test file load-bearing against that mutation class.
   final healthySession = Session(
     id: 101,
     userId: 1,
@@ -82,7 +78,6 @@ void main() {
 
   setUp(() {
     sessionRepo = MockSessionRepository();
-    exerciseRepo = MockExerciseRepository();
     connectivity = MockConnectivityService();
     watchControllers = [];
     connectivityController = StreamController<bool>.broadcast(sync: true);
@@ -92,10 +87,10 @@ void main() {
     ).thenAnswer((_) async => visibleList);
     when(sessionRepo.watchSessionSyncSnapshot(any)).thenAnswer((_) {
       // A FRESH stream per install, exactly like the real repository (Isar's
-      // Query.watch() returns a new stream every call) - TrainScreen's own
-      // initState re-arms the watch on top of the load this test drives, so
-      // reusing a single StreamController (single-subscription) would throw
-      // "Stream has already been listened to" on the second install.
+      // Query.watch() returns a new stream every call) - WorkoutHistoryScreen's
+      // own initState re-arms the watch on top of the load this test drives,
+      // so reusing a single StreamController (single-subscription) would
+      // throw "Stream has already been listened to" on the second install.
       final c = StreamController<SessionSyncSnapshot>(sync: true);
       watchControllers.add(c);
       return c.stream;
@@ -105,22 +100,10 @@ void main() {
     when(
       connectivity.connectivityStream,
     ).thenAnswer((_) => connectivityController.stream);
-    // ExercisesProvider auto-loads on construction and again from
-    // TrainScreen.initState; stub it to a clean empty result rather than
-    // relying on the (also-safe) caught MissingStubError path, to keep test
-    // output free of unrelated noise.
-    when(
-      exerciseRepo.getExerciseTemplates(
-        category: anyNamed('category'),
-        muscleGroup: anyNamed('muscleGroup'),
-        isCustom: anyNamed('isCustom'),
-      ),
-    ).thenAnswer((_) async => []);
 
     epoch = UserSessionEpoch()..activate(1);
     sessionsProvider = SessionsProvider(sessionRepo, epoch, connectivity);
-    exercisesProvider = ExercisesProvider(exerciseRepo, connectivity);
-    // TrainScreen's workouts tab renders ActiveWorkoutBanner unconditionally,
+    // WorkoutHistoryScreen renders ActiveWorkoutBanner unconditionally,
     // which reads this provider - it renders SizedBox.shrink() while
     // currentSession is null (its default), so no extra stubbing is needed.
     activeWorkoutProvider = ActiveWorkoutProvider(
@@ -150,7 +133,6 @@ void main() {
     providers: [
       ChangeNotifierProvider<ConnectivityService>.value(value: connectivity),
       ChangeNotifierProvider<SessionsProvider>.value(value: sessionsProvider),
-      ChangeNotifierProvider<ExercisesProvider>.value(value: exercisesProvider),
       ChangeNotifierProvider<ActiveWorkoutProvider>.value(
         value: activeWorkoutProvider,
       ),
@@ -162,21 +144,21 @@ void main() {
       // SessionDetailScreen from whatever SessionDetailArgs the tapped
       // card's onTap actually built.
       onGenerateRoute: AppRouter.generateRoute,
-      home: const Scaffold(body: TrainScreen()),
+      home: const WorkoutHistoryScreen(),
     ),
   );
 
-  /// Loads sessions, mounts the real TrainScreen on its default (Workouts)
-  /// tab, then feeds the CURRENTLY-ACTIVE joined watch (the last one
-  /// installed - TrainScreen's own initState re-arms it once on top of this
+  /// Loads sessions, mounts the real WorkoutHistoryScreen, then feeds the
+  /// CURRENTLY-ACTIVE joined watch (the last one installed -
+  /// WorkoutHistoryScreen's own initState re-arms it once on top of this
   /// test's own load) a snapshot with one retrying failure and one
   /// conflict - the same fixture every test in this file starts from.
   Future<void> pumpWithIssues(WidgetTester tester) async {
     await sessionsProvider.loadSessions();
     await tester.pumpWidget(host());
-    // Let TrainScreen's postFrameCallback-triggered loadSessions() (which
-    // re-arms the watch with a fresh controller) fully resolve. This count
-    // is tied to loadSessions()'s current shape (exactly one await -
+    // Let WorkoutHistoryScreen's postFrameCallback-triggered loadSessions()
+    // (which re-arms the watch with a fresh controller) fully resolve. This
+    // count is tied to loadSessions()'s current shape (exactly one await -
     // getSessions() - before _installWatch); if that method's async
     // structure ever grows another await ahead of the re-arm, re-check this
     // margin (watchControllers.last would still resolve correctly by
@@ -215,7 +197,7 @@ void main() {
 
   testWidgets(
     'a retrying failure renders the passive aggregate banner through the '
-    'real TrainScreen workouts tab',
+    'real WorkoutHistoryScreen',
     (tester) async {
       await pumpWithIssues(tester);
 
@@ -403,8 +385,8 @@ void main() {
       // diagnostic, keyed by its real localId 41) - never the CONFLICT icon
       // that belongs to the colliding row (whose localId, 700, is the same
       // integer as displayed's public sessionId). Scoped to descendants of
-      // the pushed screen itself - the underlying TrainScreen route (still
-      // mounted beneath it) also renders a corner dot for EACH row (one
+      // the pushed screen itself - the underlying WorkoutHistoryScreen route
+      // (still mounted beneath it) also renders a corner dot for EACH row (one
       // sync_problem_rounded for displayed, one priority_high_rounded for
       // colliding), which is irrelevant to what the DETAIL screen's own
       // AppBar action shows.

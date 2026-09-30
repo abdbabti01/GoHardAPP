@@ -10,6 +10,8 @@ import 'package:go_hard_app/core/services/user_session_epoch.dart';
 import 'package:go_hard_app/data/models/program.dart';
 import 'package:go_hard_app/data/repositories/programs_repository.dart';
 import 'package:go_hard_app/providers/programs_provider.dart';
+import 'package:go_hard_app/routes/app_router.dart';
+import 'package:go_hard_app/routes/route_names.dart';
 import 'package:go_hard_app/ui/screens/programs/programs_screen.dart';
 
 @GenerateMocks([ProgramsRepository])
@@ -207,7 +209,7 @@ void main() {
       // Exactly one snackbar - call 2's success - never call 1's silence
       // nor the old primed error resurfacing.
       expect(find.byType(SnackBar), findsOneWidget);
-      expect(find.text('Program restored'), findsOneWidget);
+      expect(find.text('Plan restored'), findsOneWidget);
       expect(find.textContaining('primed failure'), findsNothing);
     },
   );
@@ -275,5 +277,67 @@ void main() {
     // different interleaving, displayed a stale message belonging to
     // neither call). onError alone is authoritative.
     expect(provider.errorMessage, isNot(contains('A failed')));
+  });
+
+  testWidgets('empty state offers "Create a plan" and opens the plan form', (
+    tester,
+  ) async {
+    when(
+      repo.getPrograms(isActive: anyNamed('isActive')),
+    ).thenAnswer((_) async => []);
+    final pushed = <String?>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChangeNotifierProvider<ProgramsProvider>.value(
+          value: provider,
+          child: const Scaffold(body: ProgramsScreen()),
+        ),
+        onGenerateRoute: (settings) {
+          pushed.add(settings.name);
+          return MaterialPageRoute(
+            builder: (_) => const Scaffold(body: Text('stub')),
+            settings: settings,
+          );
+        },
+      ),
+    );
+    await settle(tester);
+
+    expect(find.text('No plan yet'), findsOneWidget);
+    await tester.tap(find.text('Create a plan'));
+    await settle(tester);
+    expect(pushed, [RouteNames.workoutPlanForm]);
+  });
+
+  testWidgets('the My Plan route is a titled page with a back button', (
+    tester,
+  ) async {
+    when(
+      repo.getPrograms(isActive: anyNamed('isActive')),
+    ).thenAnswer((_) async => []);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ProgramsProvider>.value(
+        value: provider,
+        child: MaterialApp(
+          onGenerateRoute: AppRouter.generateRoute,
+          home: Builder(
+            builder:
+                (context) => TextButton(
+                  onPressed:
+                      () => Navigator.pushNamed(context, RouteNames.programs),
+                  child: const Text('open'),
+                ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await settle(tester);
+
+    expect(find.text('My Plan'), findsOneWidget);
+    expect(find.byType(BackButton), findsOneWidget);
+    expect(find.text('No plan yet'), findsOneWidget);
   });
 }

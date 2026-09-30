@@ -107,7 +107,7 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
     if (workout.isRestDay) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Rest day - Recovery is part of the program!'),
+          content: const Text('Rest day - Recovery is part of the plan!'),
           backgroundColor: Colors.blue.shade700,
           duration: const Duration(seconds: 2),
         ),
@@ -124,7 +124,7 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
               title: const Text('Future Workout'),
               content: Text(
                 'This workout is scheduled for ${DateFormat('MMM d, yyyy').format(selectedDay)}.\n\n'
-                'Your program is currently on Week ${widget.program.currentWeek}, '
+                'Your plan is currently on Week ${widget.program.currentWeek}, '
                 'Day ${widget.program.currentDay}.\n\n'
                 'Would you like to view this workout ahead of schedule?',
               ),
@@ -227,7 +227,7 @@ class _ProgramCalendarWidgetState extends State<ProgramCalendarWidget> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Program Calendar',
+                          'Plan Calendar',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,

@@ -159,7 +159,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
               title: const Text('Preview Unavailable'),
               content: const Text(
                 "We couldn't load the latest version of this plan. Connect to the "
-                'internet and try again — creating the program is disabled until '
+                'internet and try again — creating the plan is disabled until '
                 'the preview can be confirmed.',
               ),
               actions: [
@@ -187,7 +187,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     if (programDetails == null || !mounted) return;
 
     // Show loading
-    PremiumLoadingDialog.show(context, message: 'Creating program...');
+    PremiumLoadingDialog.show(context, message: 'Creating plan...');
 
     // Create program — this ACTIVATES the draft materialized at generation time; the server
     // no longer accepts totalWeeks/daysPerWeek overrides here (the reviewed schedule is fixed
@@ -212,7 +212,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
               title: const Text('Plan Changed'),
               content: const Text(
                 'This plan changed since you last reviewed it. Refresh to see the '
-                'latest version before creating the program.',
+                'latest version before creating the plan.',
               ),
               actions: [
                 TextButton(
@@ -249,7 +249,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
             context: context,
             builder:
                 (context) => AlertDialog(
-                  title: const Text('Program Created!'),
+                  title: const Text('Plan Created!'),
                   content: Text(
                     'Created "$programTitle" with $workoutCount workouts.\n\n'
                     'This plan also includes a meal plan. Would you like to apply it now?',
@@ -295,21 +295,19 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
 
       // Navigate to the Programs tab (Sessions screen, tab index 1)
       if (mounted) {
-        // Pop all screens and go to main with Programs tab selected
+        // Land on Train › My Plan, where ProgramsScreen auto-selects the new plan
         navigator.pushNamedAndRemoveUntil(
           RouteNames.main,
           (route) => false,
-          arguments: {
-            'tab': 0,
-            'subTab': 1,
-          }, // Sessions tab (0), Programs sub-tab (1)
+          // Train tab + legacy "Programs" sub-tab -> MainScreen opens My Plan.
+          arguments: {'tab': 1, 'subTab': 1},
         );
 
         // Show success message
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
-              'Created program "$programTitle" with $workoutCount workouts!',
+              'Created plan "$programTitle" with $workoutCount workouts!',
             ),
             backgroundColor: context.accent,
             duration: const Duration(seconds: 3),
@@ -319,9 +317,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     } else {
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text(
-            chatProvider.errorMessage ?? 'Failed to create program',
-          ),
+          content: Text(chatProvider.errorMessage ?? 'Failed to create plan'),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -372,7 +368,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
           (context) => StatefulBuilder(
             builder:
                 (context, setState) => AlertDialog(
-                  title: const Text('Create Program'),
+                  title: const Text('Create Plan'),
                   content: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -381,7 +377,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                         TextField(
                           controller: titleController,
                           decoration: const InputDecoration(
-                            labelText: 'Program Title',
+                            labelText: 'Plan Title',
                             border: OutlineInputBorder(),
                           ),
                         ),
@@ -475,7 +471,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Start Date',
                               border: OutlineInputBorder(),
-                              helperText: 'Programs always start on a Monday',
+                              helperText: 'Plans always start on a Monday',
                             ),
                             child: Text(
                               DateFormat('MMM d, y').format(startDate),
@@ -503,7 +499,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                           'draftRevision': conversation?.draftRevision,
                         });
                       },
-                      child: const Text('Create Program'),
+                      child: const Text('Create Plan'),
                     ),
                   ],
                 ),
@@ -1255,7 +1251,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                           Icons.calendar_view_week,
                                           size: 18,
                                         ),
-                                        label: const Text('Create Program'),
+                                        label: const Text('Create Plan'),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor:
                                               Theme.of(context).primaryColor,

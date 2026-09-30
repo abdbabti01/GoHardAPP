@@ -7,7 +7,6 @@ import '../../../data/models/program.dart';
 import '../../../providers/programs_provider.dart';
 import '../../../providers/sessions_provider.dart';
 import '../../../providers/goals_provider.dart';
-import '../../../core/services/tab_navigation_service.dart';
 import '../../../routes/route_names.dart';
 import '../../widgets/programs/premium_week_calendar_widget.dart';
 import '../../widgets/programs/program_calendar_widget.dart';
@@ -173,16 +172,16 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
         padding: const EdgeInsets.all(32),
         child: EmptyState(
           icon: Icons.fitness_center,
-          title: 'No Programs Yet',
+          title: 'No plan yet',
           message:
-              'Create a goal and let AI generate a personalized workout program for you',
+              'Answer a few questions and GoHard builds a training plan for you.',
           suggestions: [
             QuickSuggestion(
-              label: 'Create Goal',
-              icon: Icons.flag_outlined,
-              onTap: () {
-                context.read<TabNavigationService>().switchTab(1);
-              },
+              label: 'Create a plan',
+              icon: Icons.add,
+              onTap:
+                  () =>
+                      Navigator.pushNamed(context, RouteNames.workoutPlanForm),
             ),
           ],
         ),
@@ -375,7 +374,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Program Completed!',
+                    'Plan completed!',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -612,7 +611,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     SizedBox(width: 12),
                     Flexible(
                       child: Text(
-                        'Stop Program',
+                        'Stop plan',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -632,7 +631,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   const SizedBox(width: 12),
                   const Flexible(
                     child: Text(
-                      'Delete Program',
+                      'Delete plan',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: Colors.red),
@@ -941,7 +940,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
 
     if (!context.mounted) return;
     if (success) {
-      messenger.showSnackBar(const SnackBar(content: Text('Program restored')));
+      messenger.showSnackBar(const SnackBar(content: Text('Plan restored')));
     } else if (errorMessage != null) {
       messenger.showSnackBar(
         SnackBar(content: Text(errorMessage!), backgroundColor: context.error),
@@ -957,12 +956,12 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            title: const Text('Stop Program?'),
+            title: const Text('Stop plan?'),
             content: Text(
               'Stop following "${program.title}"? This is not the same as '
               'completing it — stopping just removes its future workout '
               'suggestions from Today. Any workout you\'ve already started '
-              'keeps its progress. You can restore this program anytime from '
+              'keeps its progress. You can restore this plan anytime from '
               'Archived.',
             ),
             actions: [
@@ -983,7 +982,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   if (!context.mounted) return;
                   if (success) {
                     messenger.showSnackBar(
-                      const SnackBar(content: Text('Program stopped')),
+                      const SnackBar(content: Text('Plan stopped')),
                     );
                   } else if (errorMessage != null) {
                     messenger.showSnackBar(
@@ -994,7 +993,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     );
                   }
                 },
-                child: const Text('Stop Program'),
+                child: const Text('Stop plan'),
               ),
             ],
           ),
@@ -1039,9 +1038,9 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            title: const Text('Complete Program?'),
+            title: const Text('Complete plan?'),
             content: Text(
-              'Mark "${program.title}" as completed? You can still view it in your completed programs.',
+              'Mark "${program.title}" as completed? You can still view it in your completed plans.',
             ),
             actions: [
               TextButton(
@@ -1061,7 +1060,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                   if (!context.mounted) return;
                   if (success) {
                     messenger.showSnackBar(
-                      const SnackBar(content: Text('Program completed!')),
+                      const SnackBar(content: Text('Plan completed!')),
                     );
                   } else if (errorMessage != null) {
                     messenger.showSnackBar(
@@ -1102,7 +1101,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              title: const Text('Delete Program?'),
+              title: const Text('Delete plan?'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1112,15 +1111,15 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
                     const SizedBox(height: 16),
                     Text(
                       (impact['warning'] as String?) ??
-                          'Your ${impact['sessionsCount']} workout session(s) are preserved as history — only the link to this program is removed.',
+                          'Your ${impact['sessionsCount']} workout session(s) are preserved as history — only the link to this plan is removed.',
                       style: TextStyle(color: context.info),
                     ),
                   ],
                   const SizedBox(height: 12),
                   Text(
-                    'The program itself cannot be recovered after deletion. '
+                    'The plan itself cannot be recovered after deletion. '
                     'If you just want to stop following it without losing it, '
-                    'use Stop Program instead.',
+                    'use Stop plan instead.',
                     style: TextStyle(
                       fontSize: 12,
                       color: context.textSecondary,
@@ -1154,9 +1153,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
         if (!mounted) return;
         if (success) {
           await sessionsProvider.loadSessions(waitForSync: true);
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Program deleted')),
-          );
+          messenger.showSnackBar(const SnackBar(content: Text('Plan deleted')));
           _loadPrograms();
         } else if (errorMessage != null) {
           messenger.showSnackBar(
@@ -1272,7 +1269,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     if (!mounted) return;
     if (success) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Program linked to goal')),
+        const SnackBar(content: Text('Plan linked to goal')),
       );
       await provider.loadPrograms();
     } else if (errorMessage != null) {
@@ -1317,7 +1314,7 @@ class _ProgramsScreenState extends State<ProgramsScreen> {
     if (!mounted) return;
     if (success) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Program unlinked from goal')),
+        const SnackBar(content: Text('Plan unlinked from goal')),
       );
       await provider.loadPrograms();
     } else if (errorMessage != null) {
